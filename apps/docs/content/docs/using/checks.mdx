@@ -1,12 +1,12 @@
 ---
 title: Checks
-description: Named claims an agent proves about its work, with a status, a note, and evidence on the task.
+description: Named questions an agent answers about its work, with a status, a value, a note, and evidence on the task.
 ---
 
 When an agent says it is done, a Check shows what that means. A Check is a
-named claim about the work, such as "All tests pass" or "UI verified". The
-agent answers each one with a status, a note, and evidence such as a log or a
-screenshot. Results live on the task, so everyone who can see the task sees
+named question about the work, such as "All tests pass", "UI verified", or
+"Merge risk". The agent answers each one with a status, an optional value, a
+note, and evidence such as a log, a screenshot, or an artifact. Results live on the task, so everyone who can see the task sees
 them, not only the person who ran the thread.
 
 For example, a bug fix task can ask for "Regression test fails before the fix,
@@ -43,6 +43,40 @@ a Check that already has a result stays on the task.
 Checks never block anything. You can still mark the task or thread done, or
 open a pull request, with failed or pending Checks. They stay visible on the
 task instead.
+
+## Values and documents
+
+A result can carry a **value**, a short answer such as `High`, `+3`, or
+`Frontend only`. The status is still required and still sets the colour, so
+write the threshold into the Check's instruction: "Report Low, Medium, or High.
+Low passes, Medium warns, High fails." Ask for levels rather than a 0 to 100
+score. A model's score is not calibrated and shifts between runs on the same
+change.
+
+```bash
+convoy threads attach <thread> --check merge-risk --failed --value "High" \
+  --note "Touches auth middleware, new branch has no test" --message-id <id> --session-id <id>
+convoy threads attach <thread> --check test-cases --passed --value "12 cases" \
+  --artifact <artifactId> --message-id <id> --session-id <id>
+```
+
+A result can also point at an **artifact** by its ID, from any task in the
+project. The row shows it as a pill that opens the artifact.
+
+Some advice for writing these Checks:
+
+- Phrase a Check as the reviewer's question ("Performance impact"), not as
+  "the diagram is attached". The agent that attaches the file also marks the
+  Check passed, so "is attached" is always true. One Check holds the status,
+  the value, and the document. The instruction says "attach the diagram, and
+  report not performed if you cannot produce one".
+- Keep values short. A short value reads on the collapsed row; a long one is
+  cut there and shown in full only when the row is open.
+- Pick a file or an artifact in the instruction. A file suits proof of one run,
+  such as a log, a screenshot, or a diagram of this revision: it never changes,
+  and a rerun adds a newer result. An artifact suits a document people keep
+  working on, such as test cases someone edits or a diagram that needs
+  comments.
 
 ## Ask an agent to run the checks
 
@@ -81,7 +115,9 @@ CLI only.
   checks** button there that opens Settings → Checks.
 - **The task sidebar** shows the same Checks next to the Checklist selector.
 
-Expand a row to see its note, its evidence, and where it was reported. Rows
+A row shows its value next to the label and its artifact pill at the end.
+Expand a row to see the full value, its note, its evidence, and where it was
+reported. Rows
 with images or video start expanded. Threads are private, so teammates see who
 reported a result and in which thread, but only the thread's owner gets a link
 to it.

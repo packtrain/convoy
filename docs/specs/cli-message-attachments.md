@@ -231,7 +231,8 @@ attach`. No task is involved. Command surface:
 - So a repeated call with the same batch is a no-op. Rerunning the CLI command is
   not: it uploads new blobs.
 - Completion and failure keep the files. A batch arriving after completion fails.
-- Optional `check` (`{ key, status, note?, label? }`, OS-2291) also records a
+- Optional `check` (`{ key, status, note?, label?, value?, artifactId? }`, OS-2291,
+  OS-2385) also records a
   Check result on the thread's task in the same transaction, pointing at this
   call's files; the batch may then be empty. Returns `checkResultId`. Rules and
   errors: [task-checks.md](task-checks.md#reporting-agent-side).

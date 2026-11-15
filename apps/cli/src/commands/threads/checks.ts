@@ -12,7 +12,7 @@ interface TaskCheck {
   label: string;
   instruction: string;
   added: boolean;
-  results: { status: string; note?: string }[];
+  results: { status: string; note?: string; value?: string; artifactId?: string }[];
 }
 
 /** The Checks that apply to a thread's task, or to a thread with no task, so an agent asked to "run the checks" can find them (docs/specs/task-checks.md). */
@@ -37,7 +37,9 @@ export const listThreadChecksCommand = addGlobalOptions(
       instruction,
       added,
       status: current?.status ?? "pending",
+      ...(current?.value ? { value: current.value } : {}),
       ...(current?.note ? { note: current.note } : {}),
+      ...(current?.artifactId ? { artifactId: current.artifactId } : {}),
     }));
 
     printOutput(resolveOutputMode(options), { taskId: thread.associatedTaskId ?? null, checks }, (value) => {
@@ -49,10 +51,12 @@ export const listThreadChecksCommand = addGlobalOptions(
       for (const check of value.checks) {
         console.log(`${chalk.bold(check.key)}  ${check.label}  ${chalk.dim(`[${check.status.replace("_", " ")}]`)}${check.added ? chalk.dim(" (added)") : ""}`);
         if (check.instruction) console.log(`  ${check.instruction}`);
+        if (check.value) console.log(`  Value: ${check.value}`);
         if (check.note) console.log(chalk.dim(`  Note: ${check.note}`));
+        if (check.artifactId) console.log(chalk.dim(`  Artifact: ${check.artifactId}`));
       }
       console.log();
-      console.log(chalk.dim("Report one with: convoy threads attach <thread> [file...] --check <key> --passed | --warning | --failed | --not-performed --note <why>"));
+      console.log(chalk.dim("Report one with: convoy threads attach <thread> [file...] --check <key> --passed | --warning | --failed | --not-performed [--value <answer>] [--artifact <id>] --note <why>"));
       console.log();
     });
   });

@@ -51,7 +51,14 @@ async function setupLiveRun({ withTask = true } = {}) {
     return { storageId, fileName, fileSize: body.length, contentType };
   };
   const attach = (
-    check: { key: string; status: "passed" | "warning" | "failed" | "not_performed"; note?: string; label?: string },
+    check: {
+      key: string;
+      status: "passed" | "warning" | "failed" | "not_performed";
+      note?: string;
+      label?: string;
+      value?: string;
+      artifactId?: string;
+    },
     attachments: Awaited<ReturnType<typeof upload>>[] = []
   ) =>
     t.mutation(api.cli.messages.attachToResponse, {
@@ -67,7 +74,7 @@ async function setupLiveRun({ withTask = true } = {}) {
   await ctx.orgMember(org._id, teammate._id, "member");
   await ctx.projectMember(project._id, teammate._id, "viewer");
 
-  return { ctx, user, project, asUser, t, task, chat, started, upload, attach, asTeammate: ctx.asUser(teammate) };
+  return { ctx, org, user, project, asUser, t, task, chat, started, upload, attach, asTeammate: ctx.asUser(teammate) };
 }
 
 describe("checks.results (OS-2291)", () => {
@@ -305,6 +312,78 @@ describe("checks on a thread with no task (OS-2293)", () => {
         ["tests", task._id],
         ["ui", task._id],
       ]);
+    });
+  });
+});
+
+describe("a result's value (OS-2385)", () => {
+  test("a report carries a trimmed value; task and thread reads return it", async () => {
+    const { task, chat, attach, asUser } = await setupLiveRun();
+    await attach({ key: "tests", status: "warning", value: "  +3  ", note: "tasks.list reads labels per row" });
+    await attach({ key: "ui", status: "passed", value: "   " });
+
+    const checks = await asUser.query(api.checks.checklists.getForTask, { taskId: task._id });
+    expect(checks?.checks.map((check) => check.results[0]?.value)).toEqual(["+3", undefined, undefined]);
+    const byThread = await asUser.query(api.checks.checklists.getForThread, { threadId: chat._id });
+    expect(byThread?.checks[0]?.results[0]?.value).toBe("+3");
+  });
+
+  test("a value does not replace a required note, and is capped at 500 characters", async () => {
+    const { t, attach } = await setupLiveRun();
+
+    await expect(attach({ key: "tests", status: "failed", value: "High" })).rejects.toThrow("A failed check needs a note");
+    await expect(attach({ key: "tests", status: "passed", value: "x".repeat(501) })).rejects.toThrow(
+      "Check value can be at most 500 characters"
+    );
+    await attach({ key: "tests", status: "passed", value: "x".repeat(500) });
+
+    await t.run(async (runCtx) => {
+      expect((await runCtx.db.query("checkResults").collect()).map((result) => result.value?.length)).toEqual([500]);
+    });
+  });
+});
+
+describe("a result's artifact (OS-2385)", () => {
+  const createArtifact = (as: Pick<ReturnType<ReturnType<typeof createTestContext>["asUser"]>, "mutation">, taskId: Id<"tasks">, name: string) =>
+    as.mutation(api.tasks.artifacts.createTaskArtifact, { taskId, name, content: "# Cases" });
+
+  test("an artifact on the result's task, or another task in the project, is recorded with its name", async () => {
+    const { ctx, user, project, task, attach, asUser } = await setupLiveRun();
+    const own = await createArtifact(asUser, task._id, "Test plan");
+    const parent = await ctx.task(project._id, user._id);
+    const shared = await createArtifact(asUser, parent._id, "Architecture");
+
+    await attach({ key: "tests", status: "passed", value: "12 cases", artifactId: own });
+    await attach({ key: "ui", status: "passed", artifactId: shared });
+
+    const checks = await asUser.query(api.checks.checklists.getForTask, { taskId: task._id });
+    expect(checks?.checks.slice(0, 2).map((check) => check.results[0])).toMatchObject([
+      { artifactId: own, artifactName: "Test plan", value: "12 cases" },
+      { artifactId: shared, artifactName: "Architecture" },
+    ]);
+  });
+
+  test("an artifact the thread owner cannot read, or from another project, is rejected", async () => {
+    const { ctx, org, user, project, t, attach, asUser } = await setupLiveRun();
+    const sibling = await ctx.project(org._id, user._id);
+    const siblingTask = await ctx.task(sibling._id, user._id);
+    const elsewhere = await createArtifact(asUser, siblingTask._id, "Elsewhere");
+    const stranger = await ctx.setupProject();
+    const strangerTask = await ctx.task(stranger.project._id, stranger.user._id);
+    const hidden = await createArtifact(stranger.asUser, strangerTask._id, "Hidden");
+    const doomedTask = await ctx.task(project._id, user._id);
+    const onDeletedTask = await createArtifact(asUser, doomedTask._id, "Gone");
+    await t.run((runCtx) => runCtx.db.patch("tasks", doomedTask._id, { isDeleted: true }));
+
+    await expect(attach({ key: "tests", status: "passed", artifactId: elsewhere })).rejects.toThrow("Artifact must belong to this project");
+    await expect(attach({ key: "tests", status: "passed", artifactId: hidden })).rejects.toThrow(`Artifact '${hidden}' was not found`);
+    await expect(attach({ key: "tests", status: "passed", artifactId: onDeletedTask })).rejects.toThrow(
+      `Artifact '${onDeletedTask}' was not found`
+    );
+    await expect(attach({ key: "tests", status: "passed", artifactId: "not-an-id" })).rejects.toThrow("Artifact 'not-an-id' was not found");
+
+    await t.run(async (runCtx) => {
+      expect(await runCtx.db.query("checkResults").collect()).toEqual([]);
     });
   });
 });

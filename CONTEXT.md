@@ -152,7 +152,7 @@ Files or an Artifact an agent attaches to its reply to show its work. Evidence m
 _Avoid_: Proof, attachment (unqualified)
 
 **Check**:
-A named claim about a Task's work from the project catalog, such as "All tests pass", with an instruction for the agent.
+A named question about a Task's work from the project catalog, such as "All tests pass" or "Merge risk", with an instruction for the agent.
 _Avoid_: Test, gate, Checkpoint
 
 **GitHub check**:
@@ -160,7 +160,7 @@ A check run or commit status GitHub reports on a pull request's head commit, suc
 _Avoid_: Check (unqualified) on the pull request page
 
 **Pull request check**:
-A Check the project asks about every pull request, answered by an agent for one head revision and published to GitHub as a check run. Not a GitHub check, which comes from CI.
+A Check the project asks about every pull request, answered by an agent for one head revision and published to GitHub as a check run. Not a GitHub check, which comes from CI. A project may still write its own risk Check, answered with a value.
 _Avoid_: PR review, verdict, risk score
 
 **Checklist**:
@@ -168,7 +168,7 @@ A named, ordered set of Checks. A task type may default to one.
 _Avoid_: List (that is a task List), check list
 
 **Check result**:
-One answer to one Check from one Thread run: passed, warning (holds, but a human should look), failed, or not performed, with a justification and Evidence.
+One answer to one Check from one Thread run: passed, warning (holds, but a human should look), failed, or not performed, with an optional value ("High", "+3"), a justification, and Evidence.
 _Avoid_: Verdict, approval
 
 **Agent**:

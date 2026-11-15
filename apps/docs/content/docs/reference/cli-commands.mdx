@@ -827,11 +827,16 @@ files per reply, 50 MB each. JSON output is
 With `--check <key>`, the files also answer one of the task's checks, and the
 file list may be empty. Pass exactly one status: `--passed`, `--warning`,
 `--failed`, or `--not-performed`. All but `--passed` need `--note <why>`. A key
-outside the project's check catalog needs `--label`. On a thread with no task,
+outside the project's check catalog needs `--label`. `--value <text>` adds a
+short answer, up to 500 characters, such as `High` or `+3`. `--artifact <artifactId>`
+shows an artifact from any task in the project with the result. Both need
+`--check`. On a thread with no task,
 the result belongs to the thread until you attach one. JSON output adds `checkResultId`.
 
 ```bash
 convoy threads attach <threadId> out.log --check tests --passed --note "412 passed" --message-id <replyId> --session-id <sessionId>
+convoy threads attach <threadId> --check merge-risk --failed --value "High" --note "Touches auth middleware" --message-id <replyId> --session-id <sessionId>
+convoy threads attach <threadId> --check test-cases --passed --value "12 cases" --artifact <artifactId> --message-id <replyId> --session-id <sessionId>
 convoy threads attach <threadId> --check spec --not-performed --note "User asked to skip" --message-id <replyId> --session-id <sessionId>
 ```
 

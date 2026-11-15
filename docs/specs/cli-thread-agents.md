@@ -200,7 +200,7 @@ Every normal run, fresh or resumed, ends its prompt with one line naming the
 command that attaches files to the reply:
 
 ```text
-To attach files (screenshots, logs, generated files) to your reply in this Convoy thread, run: convoy threads attach <threadId> <file...> --message-id <replyId> --session-id <sessionId>. For a chart or table page, attach an .html file with --inline and follow the Convoy skill's inline HTML guide. To report a check, add --check <key> and one of --passed, --warning, --failed or --not-performed (the last three need --note <why>); `convoy threads checks <threadId>` lists the checks.
+To attach files (screenshots, logs, generated files) to your reply in this Convoy thread, run: convoy threads attach <threadId> <file...> --message-id <replyId> --session-id <sessionId>. For a chart or table page, attach an .html file with --inline and follow the Convoy skill's inline HTML guide. To report a check, add --check <key> and one of --passed, --warning, --failed or --not-performed (the last three need --note <why>), plus --value <answer> or --artifact <artifactId> when the check asks for one; `convoy threads checks <threadId>` lists the checks.
 ```
 
 The last sentence (OS-2291) lets a user type "run the checks" with no other

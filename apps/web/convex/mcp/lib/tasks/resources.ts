@@ -16,6 +16,8 @@ type McpTaskCheck = {
   label: string;
   status: CheckResultStatus | "pending";
   note?: string;
+  value?: string;
+  artifactId?: Id<"taskArtifacts">;
   reportedAt?: number;
   added?: true;
 };
@@ -125,7 +127,12 @@ export async function getTaskResources(ctx: ActionCtx, apiKey: string, taskId: I
 }
 
 /** The `checks.checklists.getForTask` row fields this projection reads. */
-type TaskCheckRow = { key: string; label: string; added: boolean; results: { status: CheckResultStatus; note?: string; reportedAt: number }[] };
+type TaskCheckRow = {
+  key: string;
+  label: string;
+  added: boolean;
+  results: { status: CheckResultStatus; note?: string; value?: string; artifactId?: Id<"taskArtifacts">; reportedAt: number }[];
+};
 
 /** One Check with its current result, shared by `get_task` and `get_checks`. */
 export function toMcpTaskCheck({ key, label, added, results: [current] }: TaskCheckRow): McpTaskCheck {
@@ -134,6 +141,8 @@ export function toMcpTaskCheck({ key, label, added, results: [current] }: TaskCh
     label,
     status: current?.status ?? "pending",
     ...(current?.note !== undefined && { note: current.note }),
+    ...(current?.value !== undefined && { value: current.value }),
+    ...(current?.artifactId !== undefined && { artifactId: current.artifactId }),
     ...(current && { reportedAt: current.reportedAt }),
     ...(added && { added: true as const }),
   };

@@ -586,8 +586,8 @@ Returns `{ checks: [{ _id, key, label, instruction }] }`.
 The Checks that apply to a task, or to a thread: its task's, or its own when it
 has no task (`taskId` is then `null`). Returns
 `{ taskId, checklist, checks }`, where each Check has `key`, `label`,
-`instruction`, `status` (`pending` until reported), and the latest `note`
-and `reportedAt`. A Check reported outside the Checklist has `added: true`.
+`instruction`, `status` (`pending` until reported), and the latest `note`,
+`value`, `artifactId`, and `reportedAt`. A Check reported outside the Checklist has `added: true`.
 Agents report results with `convoy threads attach --check <key>`.
 
 | Argument | Type | Required | Notes |

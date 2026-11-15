@@ -1,11 +1,14 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useConvex } from "convex/react";
-import { ChevronRight, Circle, CircleCheck, CircleMinus, CircleX, TriangleAlert } from "lucide-react";
+import { ChevronDown, ChevronRight, Circle, CircleCheck, CircleMinus, CircleX, Copy, FileText, TriangleAlert } from "lucide-react";
+import { toast } from "sonner";
 import { ResponseAttachments } from "@/components/blocks/thread/response-attachments";
 import { Badge } from "@/components/ui/badge";
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
+import { ContextMenu, ContextMenuContent, ContextMenuItem, ContextMenuTrigger } from "@/components/ui/context-menu";
+import { Pill, PillContent, PillIcon, PillText } from "@/components/ui/pill";
 import { api } from "@/convex/_generated/api";
 import { formatAbsoluteTime, formatRelativeTime } from "@/lib/format-relative-time";
 import { AppLink, appRoute, useRouteParams } from "@/lib/navigation";
@@ -46,56 +49,116 @@ const isMedia = (file: CheckResult["files"][number]) => file.contentType.startsW
 /** `transcript` is one reply's own results, so it skips time, provenance, and history. */
 type Surface = "tab" | "task" | "transcript";
 
-function ResultTime({ at }: { at: number }) {
+/** `inSentence` lowercases the first letter, for "Reported just now". */
+function ResultTime({ at, inSentence }: { at: number; inSentence?: boolean }) {
+  const text = formatRelativeTime(at);
   return (
     <time dateTime={new Date(at).toISOString()} title={formatAbsoluteTime(at)}>
-      {formatRelativeTime(at)}
+      {inSentence ? text.charAt(0).toLowerCase() + text.slice(1) : text}
     </time>
   );
 }
 
-/** A result's files, signed through its task rather than its thread. */
+/** A result's files, signed through its task rather than its thread. Inline pages show as cards; the reply shows the page. */
 function ResultFiles({ result }: { result: CheckResult }) {
   const convex = useConvex();
   return (
     <ResponseAttachments
       messageId={result._id}
-      attachments={result.files}
+      attachments={result.files.map((file) => ({ ...file, display: undefined }))}
       loadUrls={() => convex.query(api.checks.results.getFileUrls, { resultId: result._id })}
     />
   );
 }
 
-/** Threads are private: only their owner gets a link (docs/specs/task-checks.md → Visibility). */
-function Provenance({ result, projectRoute }: { result: CheckResult; projectRoute?: ProjectRoute }) {
-  // Linking to the open thread would only reload it and drop the sidebar's URL state.
-  const viewingThreadId = useRouteParams<{ threadId?: string }>()?.threadId;
-  if (result.threadId === viewingThreadId) return <>Reported in this thread</>;
-  if (!result.reportedByViewer) {
+/** The result's artifact as a pill to its page, with Copy ID like the task's own pills. Outside a project route it is plain text. */
+function ArtifactPill({ result, projectRoute, className }: { result: CheckResult; projectRoute?: ProjectRoute; className?: string }) {
+  const params = useRouteParams<{ organizationSlug?: string; projectAlias?: string }>();
+  const organizationSlug = projectRoute?.organizationSlug ?? params?.organizationSlug;
+  const projectAlias = projectRoute?.projectAlias ?? params?.projectAlias;
+  const { artifactId } = result;
+  if (!artifactId) return null;
+  const name = result.artifactName ?? "Artifact";
+  const body = (
+    <>
+      <PillIcon>
+        <FileText className="size-3.5 text-muted-foreground" />
+      </PillIcon>
+      <PillText title={name}>{name}</PillText>
+    </>
+  );
+  if (!organizationSlug || !projectAlias) {
     return (
-      <>
-        Reported by {result.reporterName} in <span className="text-foreground">{result.threadTitle}</span>
-      </>
+      <Pill size="compact" className={className}>
+        <PillContent>{body}</PillContent>
+      </Pill>
     );
   }
   return (
-    <>
-      Reported in{" "}
-      {projectRoute ? (
-        <AppLink
-          href={appRoute.projectThreadDetail(projectRoute.organizationSlug, projectRoute.projectAlias, result.threadId)}
-          className="text-foreground underline-offset-2 hover:underline"
+    <ContextMenu>
+      <ContextMenuTrigger asChild>
+        <Pill size="compact" className={className}>
+          <PillContent asChild>
+            <AppLink href={appRoute.projectArtifact(organizationSlug, projectAlias, artifactId)}>{body}</AppLink>
+          </PillContent>
+        </Pill>
+      </ContextMenuTrigger>
+      <ContextMenuContent className="w-48">
+        <ContextMenuItem
+          onClick={() => {
+            void navigator.clipboard.writeText(artifactId);
+            toast.success("Artifact ID copied to clipboard");
+          }}
         >
-          {result.threadTitle}
-        </AppLink>
-      ) : (
-        <span className="text-foreground">{result.threadTitle}</span>
-      )}
+          <Copy className="mr-2 h-4 w-4" />
+          Copy ID
+        </ContextMenuItem>
+      </ContextMenuContent>
+    </ContextMenu>
+  );
+}
+
+/**
+ * "14m ago" in the thread being viewed, else "14m ago in “Thread”"; a teammate's adds "by Name".
+ * Threads are private: only their owner gets a link (docs/specs/task-checks.md → Visibility).
+ */
+function Reported({ result, projectRoute, inSentence }: { result: CheckResult; projectRoute?: ProjectRoute; inSentence?: boolean }) {
+  // Linking to the open thread would only reload it and drop the sidebar's URL state.
+  const viewingThreadId = useRouteParams<{ threadId?: string }>()?.threadId;
+  if (result.threadId === viewingThreadId) return <ResultTime at={result.reportedAt} inSentence={inSentence} />;
+  const title =
+    result.reportedByViewer && projectRoute ? (
+      <AppLink
+        href={appRoute.projectThreadDetail(projectRoute.organizationSlug, projectRoute.projectAlias, result.threadId)}
+        className="underline-offset-2 hover:underline"
+      >
+        {result.threadTitle}
+      </AppLink>
+    ) : (
+      result.threadTitle
+    );
+  return (
+    <>
+      <ResultTime at={result.reportedAt} inSentence={inSentence} />
+      {result.reportedByViewer ? null : ` by ${result.reporterName}`} in “{title}”
     </>
   );
 }
 
-/** One Check: status, label, and an expandable justification, evidence, and history. Rows with images or video start open. */
+/** One section of the open row's card: a small muted label over its content. */
+function Section({ title, children }: { title: string; children: React.ReactNode }) {
+  return (
+    <div className="flex min-w-0 flex-col gap-1">
+      <span className="text-xs text-muted-foreground">{title}</span>
+      {children}
+    </div>
+  );
+}
+
+/**
+ * One Check: a one-line header (status, label, value), and a card with the full value, note, attachments,
+ * when it was reported, and older results. Rows with images or video start open. Spec: docs/specs/task-checks.md → UI.
+ */
 export function CheckRow({
   label,
   added,
@@ -113,15 +176,29 @@ export function CheckRow({
   const [latest, ...history] = results;
   // Follows the current result until the user toggles, so a live image result opens too.
   const [toggled, setToggled] = useState<boolean | null>(null);
+  const [showHistory, setShowHistory] = useState(false);
   const open = toggled ?? Boolean(latest?.files.some(isMedia));
   const status: CheckGlyph = latest?.status ?? "pending";
   const table = surface === "transcript";
+  // The header value is one line; the card repeats it only if the header cut it off.
+  const valueRef = useRef<HTMLSpanElement>(null);
+  const [valueClipped, setValueClipped] = useState(false);
+  useEffect(() => {
+    const node = valueRef.current;
+    if (!node || typeof ResizeObserver === "undefined") return;
+    const observer = new ResizeObserver(() => setValueClipped(node.scrollWidth > node.clientWidth));
+    observer.observe(node);
+    return () => observer.disconnect();
+  }, [latest?.value]);
+  const hasAttachments = Boolean(latest && (latest.files.length > 0 || latest.artifactId));
+  // The transcript card is one reply's own results, so it has no Reported or history.
+  const hasCard = Boolean(latest && (!table || valueClipped || latest.note || hasAttachments));
 
   return (
     <Collapsible open={open && Boolean(latest)} onOpenChange={setToggled} disabled={!latest} className="text-sm">
       <CollapsibleTrigger
         className={cn(
-          "group/check-row flex w-full items-center gap-2 text-left enabled:cursor-pointer",
+          "group/check-row flex w-full min-w-0 items-center gap-2 text-left enabled:cursor-pointer",
           table ? "px-3 py-2 enabled:hover:bg-muted/50" : "rounded-md px-2 enabled:hover:bg-muted/60",
           surface === "tab" && "py-1.5",
           surface === "task" && "py-1"
@@ -129,6 +206,12 @@ export function CheckRow({
       >
         <StatusGlyph status={status} />
         <span className={cn("min-w-0 flex-1 truncate", !latest && "text-muted-foreground")}>{label}</span>
+        {latest?.value ? (
+          // Label and value grow from a zero basis, so the value gets at most half of the free space.
+          <span ref={valueRef} title={latest.value} className="max-w-fit min-w-0 flex-1 truncate text-xs text-muted-foreground tabular-nums">
+            {latest.value}
+          </span>
+        ) : null}
         {added ? (
           <Badge variant="outline" shape="rounded" className="text-muted-foreground">
             Added
@@ -144,43 +227,74 @@ export function CheckRow({
           <span className="size-3.5 shrink-0" />
         )}
       </CollapsibleTrigger>
-      {latest ? (
-        <CollapsibleContent className={cn("flex flex-col gap-2 pb-3", table ? "px-3 pt-0.5 pl-9" : "pt-1 pr-2 pl-8")}>
-          {latest.note ? (
-            <p className="text-xs whitespace-pre-wrap text-muted-foreground">
-              {latest.status === "passed" ? null : <span className="font-medium text-foreground">{GLYPHS[latest.status].word}: </span>}
-              {latest.note}
-            </p>
-          ) : null}
-          <ResultFiles result={latest} />
-          {table ? null : (
-            <p className="text-xs text-muted-foreground">
-              <Provenance result={latest} projectRoute={projectRoute} />
-              {surface === "task" ? (
-                <>
-                  {" · "}
-                  <ResultTime at={latest.reportedAt} />
-                </>
-              ) : null}
-            </p>
-          )}
-          {!table && history.length > 0 ? (
-            <div className="mt-1 flex flex-col gap-1 border-t border-border pt-2">
-              <span className="text-xs font-medium text-muted-foreground">Earlier</span>
-              {history.map((result) => (
-                <div key={result._id} className="flex items-start gap-2 text-xs text-muted-foreground">
-                  <StatusGlyph status={result.status} className="mt-px size-3.5" />
-                  <div className="flex min-w-0 flex-col gap-1.5">
-                    <span>
-                      <ResultTime at={result.reportedAt} /> · {result.threadTitle}
-                      {result.note ? ` — ${result.note}` : ""}
-                    </span>
-                    <ResultFiles result={result} />
-                  </div>
+      {latest && hasCard ? (
+        <CollapsibleContent>
+          {/* The transcript card is already a framed table, so there the parts stack plainly under the label. */}
+          <div
+            className={cn(
+              table ? "flex flex-col gap-3 pr-3 pb-3 pl-9" : "mt-1 mb-3 divide-y divide-border/70 rounded-md bg-muted/50 *:px-3.5 *:py-2.5"
+            )}
+          >
+            {valueClipped ? (
+              <Section title="Value">
+                <p className="break-words whitespace-pre-wrap">{latest.value}</p>
+              </Section>
+            ) : null}
+            {latest.note ? (
+              <Section title="Description">
+                <p className="whitespace-pre-wrap">{latest.note}</p>
+              </Section>
+            ) : null}
+            {hasAttachments ? (
+              <Section title="Attachments">
+                <div className="mt-0.5 flex flex-col items-start gap-2">
+                  <ArtifactPill result={latest} projectRoute={projectRoute} className="max-w-full" />
+                  <ResultFiles result={latest} />
                 </div>
-              ))}
-            </div>
-          ) : null}
+              </Section>
+            ) : null}
+            {!table && showHistory && history.length > 0 ? (
+              <Section title={history.length === 1 ? "Older result" : "Older results"}>
+                <ol className="flex flex-col gap-2.5">
+                  {history.map((result) => (
+                    <li key={result._id} className="flex items-start gap-2">
+                      <StatusGlyph status={result.status} className="mt-0.5" />
+                      <div className="flex min-w-0 flex-1 flex-col gap-1">
+                        <p className="break-words whitespace-pre-wrap">
+                          <span className="tabular-nums">{result.value ?? GLYPHS[result.status].word}</span>
+                          {result.note ? ` · ${result.note}` : null}
+                        </p>
+                        <span title={result.threadTitle} className="truncate text-muted-foreground">
+                          <Reported result={result} projectRoute={projectRoute} />
+                        </span>
+                        <ResultFiles result={result} />
+                        <ArtifactPill result={result} projectRoute={projectRoute} className="max-w-full self-start" />
+                      </div>
+                    </li>
+                  ))}
+                </ol>
+              </Section>
+            ) : null}
+            {table ? null : (
+              // A footer, not a section: who and when, with the older-results toggle.
+              <footer className="flex items-center gap-3 py-2! text-xs text-muted-foreground">
+                <span className="min-w-0 flex-1 truncate" title={latest.threadTitle}>
+                  Reported <Reported result={latest} projectRoute={projectRoute} inSentence />
+                </span>
+                {history.length > 0 ? (
+                  <button
+                    type="button"
+                    onClick={() => setShowHistory((value) => !value)}
+                    aria-expanded={showHistory}
+                    className="inline-flex shrink-0 cursor-pointer items-center gap-1 hover:text-foreground"
+                  >
+                    {history.length} older {history.length === 1 ? "result" : "results"}
+                    <ChevronDown className={cn("size-3 transition-transform", showHistory && "rotate-180")} />
+                  </button>
+                ) : null}
+              </footer>
+            )}
+          </div>
         </CollapsibleContent>
       ) : null}
     </Collapsible>

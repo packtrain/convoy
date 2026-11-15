@@ -47,7 +47,10 @@ const checkResultItemValidator = v.object({
   reportedByViewer: v.boolean(),
   status: checkResultStatusValidator,
   note: v.optional(v.string()),
+  value: v.optional(v.string()),
   files: v.array(cliMessageAttachmentValidator),
+  artifactId: v.optional(v.id("taskArtifacts")),
+  artifactName: v.optional(v.string()),
   reportedAt: v.number(),
 });
 
@@ -255,7 +258,10 @@ async function loadChecks(
       reportedByViewer: result.threadOwnerId === viewerId,
       status: result.status,
       note: result.note,
+      value: result.value,
       files: result.files,
+      artifactId: result.artifactId,
+      artifactName: result.artifactName,
       reportedAt: result.reportedAt,
     })),
   }));

@@ -478,6 +478,9 @@ export const checkReportInputValidator = v.object({
   status: checkResultStatusValidator,
   note: v.optional(v.string()),
   label: v.optional(v.string()),
+  value: v.optional(v.string()),
+  /** Raw, so a malformed ID gets the "not found" error rather than a validator error. */
+  artifactId: v.optional(v.string()),
 });
 export type CheckReportInput = Infer<typeof checkReportInputValidator>;
 

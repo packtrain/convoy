@@ -1,15 +1,16 @@
-import { v } from "convex/values";
-import type { Doc } from "../_generated/dataModel";
-import { internalMutation, query, type QueryCtx } from "../_generated/server";
+import { ConvexError, v } from "convex/values";
+import type { Doc, Id } from "../_generated/dataModel";
+import { internalMutation, query, type MutationCtx, type QueryCtx } from "../_generated/server";
 import { getOptionalAuthenticatedAccess } from "../lib/access/auth";
-import { authorizeProjectAccess, type ProjectAccessPrincipal } from "../lib/access/permissions";
+import { authorizeProjectAccess, hasProjectAccess, type ProjectAccessPrincipal } from "../lib/access/permissions";
 import { ProjectPermission } from "../../lib/authz/permissions";
 import { checkReportInputValidator, cliMessageAttachmentValidator } from "../lib/contracts/validators";
 import { ensure } from "../lib/shared/ensure";
 import { getViewableThread } from "../cli/lib/permissions";
 import { getActiveTaskById } from "../tasks/lib/tasksRepo";
+import { getArtifactById, normalizeTaskArtifactId } from "../tasks/lib/taskArtifactsRepo";
 import { errors } from "./errors";
-import { MAX_CHECK_NOTE_LENGTH } from "./lib/constants";
+import { MAX_CHECK_NOTE_LENGTH, MAX_CHECK_VALUE_LENGTH } from "./lib/constants";
 import { findCheckDefinitionByKey } from "./lib/checkDefinitionsRepo";
 import { getCheckResultById, insertCheckResult } from "./lib/checkResultsRepo";
 import { validateCheckKey, validateCheckLabel } from "./lib/naming";
@@ -37,6 +38,9 @@ export const report = internalMutation({
       ensure(note).notNull(errors.checkNoteRequired(check.status.replace("_", " ")));
     }
     ensure(note?.length ?? 0).lte(MAX_CHECK_NOTE_LENGTH, errors.checkNoteTooLong(MAX_CHECK_NOTE_LENGTH));
+    const value = check.value?.trim() || undefined;
+    ensure(value?.length ?? 0).lte(MAX_CHECK_VALUE_LENGTH, errors.checkValueTooLong(MAX_CHECK_VALUE_LENGTH));
+    const artifact = check.artifactId === undefined ? undefined : await requireReportableArtifact(ctx, check.artifactId, args);
 
     const definition = await findCheckDefinitionByKey(ctx, args.projectId, checkKey);
     if (!definition) {
@@ -44,9 +48,35 @@ export const report = internalMutation({
     }
     const label = definition?.label ?? validateCheckLabel(check.label ?? "");
 
-    return insertCheckResult(ctx, { ...args, checkKey, label, status: check.status, note });
+    return insertCheckResult(ctx, {
+      ...args,
+      checkKey,
+      label,
+      status: check.status,
+      note,
+      value,
+      artifactId: artifact?._id,
+      artifactName: artifact?.name,
+    });
   },
 });
+
+/** Any task's artifact in the result's project that the thread owner can read (docs/specs/task-checks.md → Reporting). */
+async function requireReportableArtifact(
+  ctx: MutationCtx,
+  rawId: string,
+  owner: { projectId: Id<"projects">; threadOwnerId: Id<"users"> }
+): Promise<Doc<"taskArtifacts">> {
+  const id = normalizeTaskArtifactId(ctx, rawId);
+  const artifact = id ? await getArtifactById(ctx, id) : null;
+  const task = artifact ? await getActiveTaskById(ctx, artifact.taskId) : null;
+  // Readability first, so the project error never confirms an artifact the owner cannot see.
+  if (!artifact || !task || !(await hasProjectAccess(ctx, owner.threadOwnerId, task.projectId, ProjectPermission.TASK_VIEW))) {
+    throw new ConvexError(errors.checkArtifactNotFound(rawId));
+  }
+  ensure(task.projectId === owner.projectId).isTrue(errors.CHECK_ARTIFACT_DIFFERENT_PROJECT);
+  return artifact;
+}
 
 /** Signed URLs for one result's files, gated by task access, or thread access while a thread owns it. */
 export const getFileUrls = query({

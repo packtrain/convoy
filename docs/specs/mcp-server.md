@@ -581,7 +581,7 @@ Thin wrappers over `checks.definitions.*` and `checks.checklists.*` (see
 | Tool | Params | Returns |
 |------|--------|---------|
 | `list_checks` | — | `{ checks: [{ _id, key, label, instruction }] }` |
-| `get_checks` | exactly one of `taskId` (ID or ref) or `threadId` | `{ taskId, checklist: { _id, name } \| null, checks: [{ key, label, instruction?, status, note?, reportedAt?, added? }] }`; `status` is `pending` until reported. A thread with no task returns its own Checks with `taskId: null` |
+| `get_checks` | exactly one of `taskId` (ID or ref) or `threadId` | `{ taskId, checklist: { _id, name } \| null, checks: [{ key, label, instruction?, status, note?, value?, artifactId?, reportedAt?, added? }] }`; `status` is `pending` until reported. A thread with no task returns its own Checks with `taskId: null` |
 | `create_check` | `key`, `label` (required), `instruction` (default `""`) | `{ checkId }` |
 | `update_check` | `checkId` (required), `label`, `instruction` | `{ checkId }` |
 | `delete_check` | `checkId` (required) | `{ checkId }` |

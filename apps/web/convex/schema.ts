@@ -538,7 +538,10 @@ export default defineSchema({
     label: v.string(), // snapshot; the catalog label wins while the key exists
     status: checkResultStatusValidator,
     note: v.optional(v.string()),
+    value: v.optional(v.string()), // the answer, e.g. "High" or "+3" (OS-2385)
     files: v.array(cliMessageAttachmentValidator),
+    artifactId: v.optional(v.id("taskArtifacts")), // any task in the project; never updated
+    artifactName: v.optional(v.string()), // snapshot at report time
     threadTitle: v.string(), // snapshot at report time
     threadOwnerId: v.id("users"),
     reportedAt: v.number(),

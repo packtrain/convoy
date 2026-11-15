@@ -565,7 +565,7 @@ export function getToolDefinitions(
       name: "get_checks",
       description:
         "Get the Checks that apply to a task, or to a thread (its task's, or its own when it has no task): the Checklist in effect and each Check's key, " +
-        "label, instruction, and current status (pending until reported) with its note. Pass exactly one of taskId or " +
+        "label, instruction, and current status (pending until reported) with its note, value, and artifactId. Pass exactly one of taskId or " +
         "threadId. Report a result with `convoy threads attach --check <key>`; list_checks is the project catalog instead.",
       inputSchema: {
         type: "object",

@@ -28,6 +28,11 @@ const ACTIVE_PLAYGROUNDS: PlaygroundLink[] = [
     description: "One enrolled machine offered in every project, set up on first use from the composer, on local state (OS-2241).",
   },
   {
+    href: "/playground/check-rows",
+    title: "Check rows",
+    description: "Proposed check row: one-line header, then the answer, its files and artifact as cards, and a muted footer, all in one type size (OS-2385).",
+  },
+  {
     href: "/playground/evidence",
     title: "Evidence and checks",
     description: "Evidence tab, task checks, and the compact task-sidebar checklist, on local state (OS-2216).",

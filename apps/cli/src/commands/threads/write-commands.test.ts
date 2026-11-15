@@ -478,7 +478,26 @@ describe("threads write commands", () => {
       );
     });
 
+    it("passes a trimmed value and an artifact ID with no files (OS-2385)", async () => {
+      query.mockResolvedValueOnce(threadRow);
+      mutation.mockResolvedValueOnce({ messageId: "msg_reply", storageIds: [], checkResultId: "res_1" });
+      setRun();
+      attachToResponseCommand.setOptionValue("check", "test-cases");
+      attachToResponseCommand.setOptionValue("passed", true);
+      attachToResponseCommand.setOptionValue("value", " 12 cases ");
+      attachToResponseCommand.setOptionValue("artifact", "art_1");
+
+      await invoke(attachToResponseCommand, ["thr_1", []]);
+
+      expect(mutation).toHaveBeenCalledWith(
+        api.cli.messages.attachToResponse,
+        expect.objectContaining({ attachments: [], check: { key: "test-cases", status: "passed", value: "12 cases", artifactId: "art_1" } })
+      );
+    });
+
     it.each([
+      [{ value: "High" }, ["shot.png"], "--value needs --check"],
+      [{ artifact: "art_1" }, [], "--artifact needs --check"],
       [{ check: "ui" }, ["shot.png"], "--check needs exactly one of --passed, --warning, --failed, --not-performed."],
       [{ check: "ui", passed: true, failed: true }, ["shot.png"], "--check needs exactly one of"],
       [{ check: "ui", failed: true }, ["shot.png"], "--failed needs --note with the reason."],
@@ -501,7 +520,7 @@ describe("threads write commands", () => {
         checklistId: null,
         checks: [
           { key: "tests", label: "All tests pass", instruction: "Run pnpm test", added: false, results: [] },
-          { key: "ui", label: "UI verified", instruction: "", added: false, results: [{ status: "failed", note: "Overlap" }] },
+          { key: "ui", label: "UI verified", instruction: "", added: false, results: [{ status: "failed", note: "Overlap", value: "High" }] },
         ],
       });
 
@@ -514,6 +533,7 @@ describe("threads write commands", () => {
       expect(output).toContain("[pending]");
       expect(output).toContain("[failed]");
       expect(output).toContain("Note: Overlap");
+      expect(output).toContain("Value: High");
     });
 
     it("lists a thread's own checks when it has no task (OS-2293)", async () => {

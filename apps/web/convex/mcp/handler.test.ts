@@ -6220,7 +6220,13 @@ describe("handleMcpRequest checks and checklists", () => {
     checklistId: "checklist_feature",
     checks: [
       { key: "tests", label: "All tests pass", instruction: "Run the suite", added: false, results: [] },
-      { key: "mobile", label: "Mobile layout", instruction: "", added: true, results: [{ status: "warning", note: "Tight", reportedAt: 5 }] },
+      {
+        key: "mobile",
+        label: "Mobile layout",
+        instruction: "",
+        added: true,
+        results: [{ status: "warning", note: "Tight", value: "+3", artifactId: "artifact_1", artifactName: "Plan", reportedAt: 5 }],
+      },
     ],
   };
 
@@ -6239,7 +6245,7 @@ describe("handleMcpRequest checks and checklists", () => {
       checklist: { _id: "checklist_feature", name: "Feature" },
       checks: [
         { key: "tests", label: "All tests pass", instruction: "Run the suite", status: "pending" },
-        { key: "mobile", label: "Mobile layout", status: "warning", note: "Tight", reportedAt: 5, added: true },
+        { key: "mobile", label: "Mobile layout", status: "warning", note: "Tight", value: "+3", artifactId: "artifact_1", reportedAt: 5, added: true },
       ],
     });
   });

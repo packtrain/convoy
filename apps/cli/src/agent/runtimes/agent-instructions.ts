@@ -59,7 +59,7 @@ export function withRunAttachmentInstructions(
     "To attach files (screenshots, logs, generated files) to your reply in this Convoy thread, run: " +
     `convoy threads attach ${ids.threadId} <file...> --message-id ${ids.messageId} --session-id ${ids.sessionId}` +
     ". For a chart or table page, attach an .html file with --inline and follow the Convoy skill's inline HTML guide." +
-    " To report a check, add --check <key> and one of --passed, --warning, --failed or --not-performed (the last three need --note <why>);" +
+    " To report a check, add --check <key> and one of --passed, --warning, --failed or --not-performed (the last three need --note <why>), plus --value <answer> or --artifact <artifactId> when the check asks for one;" +
     ` \`convoy threads checks ${ids.threadId}\` lists the checks.`;
   // Claude's stream-json input replaces the text prompt, so the line rides in its last frame too.
   const frames = execution.bootstrapInput as Array<{ message: { content: unknown } }> | undefined;

@@ -4,13 +4,14 @@ Status: in progress. The Checks tab's files shipped in OS-2289; the catalog,
 Checklists, the task Checklist selector, and their MCP and CLI entry points shipped
 in OS-2290; agent reporting, the transcript checks card, and results in the
 Checks tab and task sidebar shipped in OS-2291; the Checks tab's Run checks
-menu shipped in OS-2292; results on threads with no task shipped in OS-2293. Prototype: `/playground/evidence`
+menu shipped in OS-2292; results on threads with no task shipped in OS-2293;
+a result's value and artifact shipped in OS-2385. Prototype: `/playground/evidence`
 (`apps/web/app/playground/evidence/`). Design thread: OS-2216.
 
 An agent shows that its work is done by attaching evidence: screenshots,
-recordings, logs, artifacts. A Check is a named claim about the work ("All
-tests pass") that the agent answers with a status, a justification, and
-evidence. Checks live on the Task, so the whole team sees them.
+recordings, logs, artifacts. A Check is a named question about the work ("All
+tests pass", "Merge risk") that the agent answers with a status, an optional
+value, a justification, and evidence. Checks live on the Task, so the whole team sees them.
 
 ## Terms
 
@@ -21,7 +22,11 @@ evidence. Checks live on the Task, so the whole team sees them.
   suite and attach the output").
 - **Checklist**: a named, ordered set of catalog Checks ("Feature", "Bug fix").
   A Checklist references catalog Checks, it never copies them.
-- **Check result**: one answer to one Check, reported in one Thread run.
+- **Check result**: one answer to one Check, reported in one Thread run. It
+  always has a status, and may have a **value**: a short free-text answer
+  ("High", "+3", "Frontend only"). The status is the judgment and gives the
+  colour, the value is the answer, the note is the reason. The project writes
+  the threshold into the instruction ("Low passes, Medium warns, High fails").
 
 ## Statuses
 
@@ -83,6 +88,8 @@ convoy threads attach shot.png demo.mp4 --check ui --passed
 convoy threads attach --check spec --not-performed --note "User asked to skip"
 convoy threads attach --check backend --warning --note "Adds an index on tasks"
 convoy threads attach mobile.png --check mobile --label "Mobile layout" --passed
+convoy threads attach --check merge-risk --failed --value "High" --note "Touches auth middleware"
+convoy threads attach --check test-cases --passed --value "12 cases" --artifact <artifactId>
 convoy threads attach debug.png    # plain evidence, no check
 ```
 
@@ -108,11 +115,27 @@ convoy threads attach debug.png    # plain evidence, no check
   thread owner. A thread with no task owns the result (see Ownership).
 - The label is the catalog's while the key is in the catalog; `--label` is
   used only for a key outside it. The note is trimmed, up to 2000 characters.
+- `--value <text>` is trimmed, up to 500 characters; blank is no value. It
+  never replaces a required note. Convoy computes nothing from it: no number
+  type, unit, or threshold.
+- `--artifact <artifactId>` takes an ID, never a name, since names are unique
+  only within a task and the ID survives rename and move. The artifact may be
+  on any task in the result's project, not only the result's own task, and
+  its task must be readable by the thread owner. The result snapshots the
+  artifact's name, like `threadTitle`, so reads never join artifacts. A
+  renamed artifact keeps its old name on older results; a moved one still
+  resolves. Deleting the artifact or its task leaves the result alone, and
+  the pill then opens the artifact page's not-found state.
+- `--value` and `--artifact` need `--check`.
 
 | Error | When |
 |---|---|
 | `A <status> check needs a note` | `warning`, `failed`, or `not_performed` with no note |
 | `Check '<key>' is not in the catalog, so it needs a label` | Unknown key, no `--label` |
+| `--value needs --check` / `--artifact needs --check` | CLI, either flag with no `--check` |
+| `Check value can be at most 500 characters` | Value too long |
+| `Artifact '<id>' was not found` | Unknown or malformed ID, its task deleted, or the thread owner cannot read its task |
+| `Artifact must belong to this project` | A readable artifact in another project |
 | `Check key must start with a lowercase letter or digit and use only a-z, 0-9, - and _` | Bad key format |
 
 ## Requesting a run
@@ -165,12 +188,12 @@ Nothing is pushed into every prompt. Checks run when someone asks:
   access, not by thread access. `cli.messages.getMessageAttachmentUrls` stays
   owner/share gated and is not used for check evidence.
 - Each result records the reporting thread's title and owner at report time.
-  The owner sees "Reported in *thread*" with a link. Anyone else sees
-  "Reported by *name* in *thread*" as plain text, because threads are private
+  The owner sees "Reported *14m ago* in “*thread*”" with a link. Anyone else sees
+  "Reported *14m ago* by *name* in “*thread*”" as plain text, because threads are private
   (`cli-thread-sharing.md`). This matches what the task's `agentThreadWork`
-  summary already shows teammates. On that thread's own page the line reads
-  "Reported in this thread", with no link: the link would only reload the page
-  and close the sidebar's task tab.
+  summary already shows teammates. On that thread's own page the line is only
+  the time, with no link: the link would only reload the page and close the
+  sidebar's task tab.
 - Results owned by a thread are visible only to whoever can view the thread
   (owner or share). `getFileUrls` gates them the same way.
 - A read-only project role sees the Checklist selector disabled.
@@ -222,12 +245,10 @@ Files with no check render below as reply attachments do today.
   and Switch checklist sets the thread's own Checklist, with no "Default".
 - Checks section: heading, pass count (`4/7`), and the Run checks menu
   (Pending and failed, All checks, Switch checklist with the current one
-  marked). Rows are a plain list, not a table: status icon, label, "Added"
-  badge when relevant, time of the current result.
-- A row expands to the justification, evidence (images and videos as
-  thumbnails, other files as attachment cards, the artifact as a chip), "Reported
-  in…", and older results with their own files, so superseded evidence stays
-  reachable. Rows whose current evidence includes an image or video start
+  marked). Rows are a plain list, not a table: status icon, label, value,
+  "Added" badge when relevant, and time of the current result.
+- A row expands to one card; see "The open row" below. Superseded results stay
+  reachable under its older-results toggle. Rows whose current evidence includes an image or video start
   expanded, also when the result arrives while the row is on screen, until the
   user toggles the row.
 - Other files: evidence attached without a check, newest first, each group
@@ -253,6 +274,40 @@ Files with no check render below as reply attachments do today.
   message's role; refs written before OS-2289 get it from the
   `backfillCliMessageAttachmentRefRole` migration (in `migrations:runAll`),
   and until it runs their files are missing from the tab.
+
+### The row and its card (OS-2385)
+
+All three surfaces (transcript card, Checks tab, task sidebar) share
+`CheckRow`. The design was settled in `/playground/check-rows`.
+
+- The header is one button on one line: status, label, value, badge, time,
+  chevron. The value is muted with tabular numbers, truncated with an ellipsis
+  and capped at half the free space so the label keeps the rest. The full
+  value is its title.
+- Open, the row shows one card (`rounded-md bg-muted/50`, the header's radius) as wide as the row,
+  split by dividers into sections. Each has a small muted label over content in
+  the body's one type size, and shows only when it has something:
+  - **Value**: the full value, only when the header cut it off (measured with
+    a `ResizeObserver`), so a short value is never shown twice.
+  - **Description**: the note, with no "Failed:" prefix; the header's icon
+    gives the status.
+  - **Attachments**: the artifact pill, then the files. The pill opens
+    `appRoute.projectArtifact(...)` and its context menu offers Copy ID, like
+    the task's own artifact pills; outside a project route it is plain text.
+    Files use the transcript's attachment cards, and inline HTML pages show as
+    their card only (the reply shows the page).
+  - **Older results**: shown by the footer's toggle. Each is its status icon,
+    its value (or status word) and note, its reported line, then its files
+    and artifact pill.
+  - Footer, last, in small muted text: `Reported 14m ago` for a result
+    from the thread being viewed, else `Reported 14m ago in “Thread title”`
+    (the time lowercased mid-sentence: `Reported just now`). A
+    teammate's result adds `by Name`, and its title is plain text, since
+    threads are private. On the right, "N older results" toggles the section
+    above.
+- The transcript card is one reply's own results, so it has no footer or
+  Older results. It is already a framed table, so its parts stack plainly
+  under the label, without the tinted card or dividers.
 
 ### Task sidebar
 
@@ -314,7 +369,8 @@ the same permissions and errors:
   `get_task` shows the Checklist in effect and its Checks when the project
   has Checklists, instead of the raw `checklistId`.
 - MCP `get_checks` takes a `taskId` or a `threadId` and returns the Checks
-  that apply, with instructions and current status: the MCP twin of
+  that apply, with instructions and current status (with its note, value, and
+  `artifactId`): the MCP twin of
   `convoy threads checks`. Reporting stays CLI only (see Reporting).
 - CLI: `convoy tasks update <task> --checklist <id|name>` and `--no-checks`.
 
@@ -335,8 +391,8 @@ Shipped (OS-2290):
 Shipped (OS-2291):
 
 - `checkResults`: `projectId`, `taskId`, `threadId`, `messageId`, `checkKey`,
-  `label` (snapshot), `status`, `note?`, `files[]` (the reply attachment
-  metadata), `threadTitle` and `threadOwnerId` (snapshots), `reportedAt`.
+  `label` (snapshot), `status`, `note?`, `value?`, `files[]` (the reply attachment
+  metadata), `artifactId?` and `artifactName?` (snapshot, OS-2385), `threadTitle` and `threadOwnerId` (snapshots), `reportedAt`.
   Indexed `by_taskId_and_reportedAt`. Rows are never edited.
 - `checkResultFiles`: `resultId`, `storageId`, indexed by both. It exists only
   so `convex/lib/storageRepo.ts` sees a blob a result still shows: thread
@@ -361,10 +417,6 @@ Shipped (OS-2293):
 - `checks.checklists.getForThread({ threadId })` returns the same shape as
   `getForTask`. With no task, `followsTypeDefault` is false and no Checklist
   is the default.
-
-Proposed:
-
-- `artifactId?` on a result, once the CLI can name an artifact as evidence.
 
 ## Later
 
