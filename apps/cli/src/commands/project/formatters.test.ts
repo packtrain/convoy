@@ -1,0 +1,92 @@
+import { expect, it } from "vitest";
+import { projectChecks, sharedProjectChecks } from "./formatters.js";
+import type { LauncherCheck } from "./validators.js";
+
+const facts = (patch: Partial<LauncherCheck> = {}): LauncherCheck => ({ sandbox: null, holder: null, runtimes: {
+  codex: { state: "ready", home: true, loggedIn: true }, "claude-code": { state: "missing", home: false, loggedIn: false } }, ...patch });
+const native = { codex: true, "claude-code": true, cursor: true, opencode: true };
+const status = (checks: ReturnType<typeof projectChecks>) => Object.fromEntries(checks.map(check => [check.id, check.status]));
+
+it("passes a ready project and skips a runtime that is not installed", () => {
+  expect(status(projectChecks("a", facts({ holder: "service" }), "ok", native))).toEqual({
+    sandbox: "pass", "codex-installed": "pass", "codex-home": "pass", "codex-login": "pass",
+    "claude-code-installed": "skip", lease: "pass", backend: "pass" });
+});
+
+it("gives each failure its fix", () => {
+  const checks = projectChecks("a", facts({ sandbox: "Sandbox check failed: bwrap: denied.", holder: "shell", runtimes: {
+    codex: { state: "ready", home: false, loggedIn: false }, "claude-code": { state: "untrusted", home: false, loggedIn: false } } }), "rejected", native);
+  const fix = Object.fromEntries(checks.map(check => [check.id, check.fix]));
+  expect(fix.sandbox).toBe("Sandbox check failed: bwrap: denied.");
+  expect(fix["codex-home"]).toMatch(/^Reload the project once/);
+  expect(fix["codex-login"]).toBe("Run project login a --runtime codex.");
+  expect(fix["claude-code-installed"]).toMatch(/^Claude Code is installed but not root-owned.*umask 022/);
+  expect(checks.find(check => check.id === "lease")).toMatchObject({ status: "fail", label: "Project lease: held by a private project shell" });
+  expect(fix.backend).toMatch(/^Convoy rejected this project's API key/);
+});
+
+it("fails missing runtimes with their install commands when none is ready", () => {
+  const checks = projectChecks("a", facts({ runtimes: { codex: { state: "missing", home: false, loggedIn: false }, "claude-code": { state: "missing", home: false, loggedIn: false } } }), "unreachable", native);
+  expect(checks.filter(check => check.id.endsWith("-installed")).map(check => [check.status, check.fix])).toEqual([
+    ["fail", "Install it as root: sudo sh -c 'umask 022 && npm install -g --prefix /usr/local @openai/codex'."],
+    ["fail", "Install it as root: sudo sh -c 'umask 022 && npm install -g --prefix /usr/local @anthropic-ai/claude-code'."]]);
+  expect(checks.find(check => check.id === "backend")?.fix).toMatch(/network, DNS and proxy/);
+});
+
+it("skips the login check for managed credentials", () => {
+  const checks = projectChecks("a", facts({ runtimes: { codex: { state: "ready", home: true, loggedIn: false }, "claude-code": { state: "missing", home: false, loggedIn: false } } }), "ok", { codex: false, "claude-code": true, cursor: true, opencode: true });
+  expect(checks.find(check => check.id === "codex-login")).toMatchObject({ status: "skip", label: "Codex uses managed credentials" });
+});
+
+it("checks Cursor when the launcher reports it, with its own install command (OS-2017)", () => {
+  const missing = { state: "missing" as const, home: false, loggedIn: false };
+  const none = facts({ runtimes: { codex: missing, "claude-code": missing, cursor: missing } });
+  const install = projectChecks("a", none, "ok", { ...native, cursor: true }).find(check => check.id === "cursor-installed");
+  expect(install).toMatchObject({ status: "fail", label: "Cursor installed" });
+  expect(install?.fix).toContain("https://downloads.cursor.com/lab/2026.10.22-27dcf5f/linux/");
+  expect(install?.fix).toContain("tar --no-same-owner");
+  const ready = facts({ runtimes: { ...facts().runtimes, cursor: { state: "ready", home: true, loggedIn: false } } });
+  expect(projectChecks("a", ready, "ok", { ...native, cursor: true }).find(check => check.id === "cursor-login")?.fix).toBe("Run project login a --runtime cursor.");
+  expect(projectChecks("a", ready, "ok", { ...native, cursor: false }).find(check => check.id === "cursor-login")).toMatchObject({ status: "skip" });
+  // A launcher older than CLI 0.117.0 reports no Cursor facts.
+  expect(projectChecks("a", facts(), "ok", native).some(check => check.id.startsWith("cursor-"))).toBe(false);
+});
+
+it("names the install command for a missing runtime even when another one is ready (OS-2017)", () => {
+  const missing = { state: "missing" as const, home: false, loggedIn: false };
+  const checks = projectChecks("a", facts({ runtimes: { ...facts().runtimes, cursor: missing } }), "ok", native);
+  const cursor = checks.find(check => check.id === "cursor-installed");
+  expect(cursor).toMatchObject({ status: "skip", label: "Cursor not installed" });
+  expect(cursor?.fix).toMatch(/^To use it, install it as root: sudo sh -c '.*downloads\.cursor\.com\/lab\/2026\.10\.22-27dcf5f/);
+});
+
+it("checks OpenCode when the launcher reports it, with its npm install (OS-2018)", () => {
+  const missing = { state: "missing" as const, home: false, loggedIn: false };
+  const none = facts({ runtimes: { codex: missing, "claude-code": missing, opencode: missing } });
+  const install = projectChecks("a", none, "ok", { ...native, opencode: true }).find(check => check.id === "opencode-installed");
+  expect(install).toMatchObject({ status: "fail", label: "OpenCode installed" });
+  expect(install?.fix).toContain("npm install -g --prefix /usr/local opencode-ai@1.19.5");
+  const ready = facts({ runtimes: { ...facts().runtimes, opencode: { state: "ready", home: true, loggedIn: false } } });
+  expect(projectChecks("a", ready, "ok", { ...native, opencode: true }).find(check => check.id === "opencode-login")?.fix).toBe("Run project login a --runtime opencode.");
+  expect(projectChecks("a", ready, "ok", { ...native, opencode: false }).find(check => check.id === "opencode-login")).toMatchObject({ status: "skip" });
+});
+
+it("checks a shared project without a sandbox row or sudo, and never fails an unknown login (OS-2247)", () => {
+  const checks = sharedProjectChecks("a", { holder: "service", runtimes: {
+    codex: { installed: true, login: "signed-out" }, "claude-code": { installed: true, login: "unknown" },
+    cursor: { installed: false, login: "unknown" }, opencode: { installed: true, login: "signed-in" } } }, "ok");
+  expect(status(checks)).toEqual({ "codex-installed": "pass", "codex-login": "fail", "claude-code-installed": "pass", "claude-code-login": "skip",
+    "cursor-installed": "skip", "opencode-installed": "pass", "opencode-login": "pass", lease: "pass", backend: "pass" });
+  expect(checks.find(check => check.id === "codex-login")?.fix).toBe("Run codex login --device-auth once for all projects.");
+  expect(checks.find(check => check.id === "claude-code-login")?.label).toBe("Claude Code login status unknown");
+  expect(JSON.stringify(checks)).not.toMatch(/sudo|root|sandbox/i);
+});
+
+it("names a user npm install for each missing runtime in a shared project (OS-2247)", () => {
+  const missing = { installed: false, login: "unknown" as const };
+  const checks = sharedProjectChecks("a", { holder: null, runtimes: { codex: missing, "claude-code": missing, cursor: missing, opencode: missing } }, "ok");
+  expect(checks.filter(check => check.id.endsWith("-installed")).map(check => [check.status, check.fix])).toEqual([
+    ["fail", "Install it: npm install -g @openai/codex."], ["fail", "Install it: npm install -g @anthropic-ai/claude-code."],
+    ["fail", "Install it: curl https://cursor.com/install -fsS | bash."], ["fail", "Install it: npm install -g opencode-ai@1.19.5."]]);
+  expect(checks.some(check => check.id.endsWith("-login"))).toBe(false);
+});

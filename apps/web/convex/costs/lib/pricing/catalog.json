@@ -1,0 +1,1338 @@
+{
+  "snapshotVersion": "litellm-v2-31a9a99eb9b227f41350d2ce0682d44df3dc8590",
+  "sourceUrl": "https://raw.githubusercontent.com/BerriAI/litellm/31a9a99eb9b227f41350d2ce0682d44df3dc8590/model_prices_and_context_window.json",
+  "sourceRevision": "31a9a99eb9b227f41350d2ce0682d44df3dc8590",
+  "sourceSha256": "e427db8efe83e3b8aa44e82f4b5eb10095e5c8ba292316705fb155a483af033d",
+  "retrievedOn": "2026-11-09",
+  "units": "USD/token",
+  "tariffBasis": "standard-short-context-api-equivalent",
+  "models": {
+    "apac.anthropic.claude-fable-5": {
+      "input": 0.000011,
+      "cacheRead": 0.0000011,
+      "cacheWrite": 0.00001375,
+      "output": 0.000055
+    },
+    "apac.anthropic.claude-haiku-4-5-20251001-v1:0": {
+      "input": 0.0000011,
+      "cacheRead": 1.1e-7,
+      "cacheWrite": 0.000001375,
+      "output": 0.0000055
+    },
+    "apac.anthropic.claude-haiku-5-5": {
+      "input": 1.1e-7,
+      "cacheRead": 1.1e-8,
+      "cacheWrite": 1.375e-7,
+      "output": 5.5e-7
+    },
+    "apac.anthropic.claude-mythos-preview": {
+      "input": 0.0000275,
+      "cacheRead": 0.00000275,
+      "cacheWrite": 0.000034375,
+      "output": 0.0001375
+    },
+    "apac.anthropic.claude-opus-4-7": {
+      "input": 0.0000055,
+      "cacheRead": 5.5e-7,
+      "cacheWrite": 0.000006875,
+      "output": 0.0000275
+    },
+    "apac.anthropic.claude-opus-4-8": {
+      "input": 0.0000055,
+      "cacheRead": 5.5e-7,
+      "cacheWrite": 0.000006875,
+      "output": 0.0000275
+    },
+    "apac.anthropic.claude-opus-5": {
+      "input": 0.0000055,
+      "cacheRead": 5.5e-7,
+      "cacheWrite": 0.000006875,
+      "output": 0.0000275
+    },
+    "apac.anthropic.claude-opus-5-5": {
+      "input": 0.0000044,
+      "cacheRead": 2.2e-7,
+      "cacheWrite": 0.0000055,
+      "output": 0.000022
+    },
+    "apac.anthropic.claude-sonnet-4-20250514-v1:0": {
+      "input": 0.000003,
+      "cacheRead": 3e-7,
+      "cacheWrite": 0.00000375,
+      "output": 0.000015
+    },
+    "apac.anthropic.claude-sonnet-4-6": {
+      "input": 0.0000033,
+      "cacheRead": 3.3e-7,
+      "cacheWrite": 0.000004125,
+      "output": 0.0000165
+    },
+    "apac.anthropic.claude-sonnet-5": {
+      "input": 0.0000022,
+      "cacheRead": 2.2e-7,
+      "cacheWrite": 0.00000275,
+      "output": 0.000011
+    },
+    "apac.anthropic.claude-sonnet-5-5": {
+      "input": 0.0000022,
+      "cacheRead": 1.1e-7,
+      "cacheWrite": 0.00000275,
+      "output": 0.000011
+    },
+    "au.anthropic.claude-fable-5": {
+      "input": 0.000011,
+      "cacheRead": 0.0000011,
+      "cacheWrite": 0.00001375,
+      "output": 0.000055
+    },
+    "au.anthropic.claude-haiku-4-5-20251001-v1:0": {
+      "input": 0.0000011,
+      "cacheRead": 1.1e-7,
+      "cacheWrite": 0.000001375,
+      "output": 0.0000055
+    },
+    "au.anthropic.claude-haiku-5-5": {
+      "input": 1.1e-7,
+      "cacheRead": 1.1e-8,
+      "cacheWrite": 1.375e-7,
+      "output": 5.5e-7
+    },
+    "au.anthropic.claude-mythos-preview": {
+      "input": 0.0000275,
+      "cacheRead": 0.00000275,
+      "cacheWrite": 0.000034375,
+      "output": 0.0001375
+    },
+    "au.anthropic.claude-opus-4-6-v1": {
+      "input": 0.0000055,
+      "cacheRead": 5.5e-7,
+      "cacheWrite": 0.000006875,
+      "output": 0.0000275
+    },
+    "au.anthropic.claude-opus-4-7": {
+      "input": 0.0000055,
+      "cacheRead": 5.5e-7,
+      "cacheWrite": 0.000006875,
+      "output": 0.0000275
+    },
+    "au.anthropic.claude-opus-4-8": {
+      "input": 0.0000055,
+      "cacheRead": 5.5e-7,
+      "cacheWrite": 0.000006875,
+      "output": 0.0000275
+    },
+    "au.anthropic.claude-opus-5": {
+      "input": 0.0000055,
+      "cacheRead": 5.5e-7,
+      "cacheWrite": 0.000006875,
+      "output": 0.0000275
+    },
+    "au.anthropic.claude-opus-5-5": {
+      "input": 0.0000044,
+      "cacheRead": 2.2e-7,
+      "cacheWrite": 0.0000055,
+      "output": 0.000022
+    },
+    "au.anthropic.claude-sonnet-4-5-20250929-v1:0": {
+      "input": 0.0000033,
+      "cacheRead": 3.3e-7,
+      "cacheWrite": 0.000004125,
+      "output": 0.0000165
+    },
+    "au.anthropic.claude-sonnet-4-6": {
+      "input": 0.0000033,
+      "cacheRead": 3.3e-7,
+      "cacheWrite": 0.000004125,
+      "output": 0.0000165
+    },
+    "au.anthropic.claude-sonnet-5": {
+      "input": 0.0000022,
+      "cacheRead": 2.2e-7,
+      "cacheWrite": 0.00000275,
+      "output": 0.000011
+    },
+    "au.anthropic.claude-sonnet-5-5": {
+      "input": 0.0000022,
+      "cacheRead": 1.1e-7,
+      "cacheWrite": 0.00000275,
+      "output": 0.000011
+    },
+    "bedrock_mantle/anthropic.claude-haiku-4-5": {
+      "input": 0.000001,
+      "cacheRead": 1e-7,
+      "cacheWrite": 0.00000125,
+      "output": 0.000005
+    },
+    "bedrock_mantle/anthropic.claude-haiku-5-5": {
+      "input": 1.1e-7,
+      "cacheRead": 1.1e-8,
+      "cacheWrite": 1.375e-7,
+      "output": 5.5e-7
+    },
+    "bedrock_mantle/anthropic.claude-opus-5-5": {
+      "input": 0.0000044,
+      "cacheRead": 2.2e-7,
+      "cacheWrite": 0.0000055,
+      "output": 0.000022
+    },
+    "bedrock_mantle/anthropic.claude-sonnet-5-5": {
+      "input": 0.0000022,
+      "cacheRead": 1.1e-7,
+      "cacheWrite": 0.00000275,
+      "output": 0.000011
+    },
+    "bedrock_mantle/openai.gpt-5.4": {
+      "input": 0.00000275,
+      "cacheRead": 2.75e-7,
+      "output": 0.0000165
+    },
+    "bedrock_mantle/openai.gpt-5.5": {
+      "input": 0.0000055,
+      "cacheRead": 5.5e-7,
+      "output": 0.000033
+    },
+    "bedrock_mantle/openai.gpt-5.6-cyber": {
+      "input": 0.00001375,
+      "cacheRead": 0.000001375,
+      "cacheWrite": 0.0000171875,
+      "output": 0.0000825
+    },
+    "bedrock_mantle/openai.gpt-5.6-luna": {
+      "input": 2.2e-7,
+      "cacheRead": 2.2e-8,
+      "cacheWrite": 2.75e-7,
+      "output": 0.00000132
+    },
+    "bedrock_mantle/openai.gpt-5.6-sol": {
+      "input": 0.0000044,
+      "cacheRead": 4.4e-7,
+      "cacheWrite": 0.0000055,
+      "output": 0.000022
+    },
+    "bedrock_mantle/openai.gpt-5.6-terra": {
+      "input": 0.0000022,
+      "cacheRead": 2.2e-7,
+      "cacheWrite": 0.00000275,
+      "output": 0.0000132
+    },
+    "bedrock_mantle/openai.gpt-6-astra": {
+      "input": 0.000011,
+      "cacheRead": 0.0000011,
+      "cacheWrite": 0.00001375,
+      "output": 0.000055
+    },
+    "bedrock_mantle/openai.gpt-6-luna": {
+      "input": 1.1e-7,
+      "cacheRead": 1.1e-8,
+      "cacheWrite": 1.375e-7,
+      "output": 5.5e-7
+    },
+    "bedrock_mantle/openai.gpt-6-sol": {
+      "input": 0.0000022,
+      "cacheRead": 2.2e-7,
+      "cacheWrite": 0.00000275,
+      "output": 0.000011
+    },
+    "bedrock_mantle/openai.gpt-6.1-sol": {
+      "input": 0.0000022,
+      "cacheRead": 1.1e-7,
+      "cacheWrite": 0.00000275,
+      "output": 0.000011
+    },
+    "bedrock_mantle/openai.gpt-6.1-terra": {
+      "input": 0.0000011,
+      "cacheRead": 5.5e-8,
+      "cacheWrite": 0.000001375,
+      "output": 0.0000055
+    },
+    "claude-fable-5": {
+      "input": 0.00001,
+      "cacheRead": 0.000001,
+      "cacheWrite": 0.0000125,
+      "output": 0.00005
+    },
+    "claude-fable-5-1": {
+      "input": 0.00001,
+      "cacheRead": 2.5e-7,
+      "cacheWrite": 0.0000125,
+      "output": 0.00005
+    },
+    "claude-fable-5-2": {
+      "input": 0.000008,
+      "cacheRead": 2e-7,
+      "cacheWrite": 0.00001,
+      "output": 0.00004
+    },
+    "claude-haiku-4-5": {
+      "input": 0.000001,
+      "cacheRead": 1e-7,
+      "cacheWrite": 0.00000125,
+      "output": 0.000005
+    },
+    "claude-haiku-4-5-20251001": {
+      "input": 0.000001,
+      "cacheRead": 1e-7,
+      "cacheWrite": 0.00000125,
+      "output": 0.000005
+    },
+    "claude-haiku-5-5": {
+      "input": 1e-7,
+      "cacheRead": 1e-8,
+      "cacheWrite": 1.25e-7,
+      "output": 5e-7
+    },
+    "claude-mythos-5": {
+      "input": 0.00001,
+      "cacheRead": 0.000001,
+      "cacheWrite": 0.0000125,
+      "output": 0.00005
+    },
+    "claude-mythos-5-1": {
+      "input": 0.00001,
+      "cacheRead": 2.5e-7,
+      "cacheWrite": 0.0000125,
+      "output": 0.00005
+    },
+    "claude-mythos-preview": {
+      "input": 0.00001,
+      "cacheRead": 0.000001,
+      "cacheWrite": 0.0000125,
+      "output": 0.00005
+    },
+    "claude-opus-4-5": {
+      "input": 0.000005,
+      "cacheRead": 5e-7,
+      "cacheWrite": 0.00000625,
+      "output": 0.000025
+    },
+    "claude-opus-4-5-20251101": {
+      "input": 0.000005,
+      "cacheRead": 5e-7,
+      "cacheWrite": 0.00000625,
+      "output": 0.000025
+    },
+    "claude-opus-4-6": {
+      "input": 0.000005,
+      "cacheRead": 5e-7,
+      "cacheWrite": 0.00000625,
+      "output": 0.000025
+    },
+    "claude-opus-4-6-20260205": {
+      "input": 0.000005,
+      "cacheRead": 5e-7,
+      "cacheWrite": 0.00000625,
+      "output": 0.000025
+    },
+    "claude-opus-4-7": {
+      "input": 0.000005,
+      "cacheRead": 5e-7,
+      "cacheWrite": 0.00000625,
+      "output": 0.000025
+    },
+    "claude-opus-4-7-20260416": {
+      "input": 0.000005,
+      "cacheRead": 5e-7,
+      "cacheWrite": 0.00000625,
+      "output": 0.000025
+    },
+    "claude-opus-4-8": {
+      "input": 0.000005,
+      "cacheRead": 5e-7,
+      "cacheWrite": 0.00000625,
+      "output": 0.000025
+    },
+    "claude-opus-5": {
+      "input": 0.000005,
+      "cacheRead": 5e-7,
+      "cacheWrite": 0.00000625,
+      "output": 0.000025
+    },
+    "claude-opus-5-5": {
+      "input": 0.000004,
+      "cacheRead": 2e-7,
+      "cacheWrite": 0.000005,
+      "output": 0.00002
+    },
+    "claude-sonnet-4-5": {
+      "input": 0.000003,
+      "cacheRead": 3e-7,
+      "cacheWrite": 0.00000375,
+      "output": 0.000015
+    },
+    "claude-sonnet-4-5-20250929": {
+      "input": 0.000003,
+      "cacheRead": 3e-7,
+      "cacheWrite": 0.00000375,
+      "output": 0.000015
+    },
+    "claude-sonnet-4-6": {
+      "input": 0.000003,
+      "cacheRead": 3e-7,
+      "cacheWrite": 0.00000375,
+      "output": 0.000015
+    },
+    "claude-sonnet-5": {
+      "input": 0.000002,
+      "cacheRead": 2e-7,
+      "cacheWrite": 0.0000025,
+      "output": 0.00001
+    },
+    "claude-sonnet-5-5": {
+      "input": 0.000002,
+      "cacheRead": 1e-7,
+      "cacheWrite": 0.0000025,
+      "output": 0.00001
+    },
+    "eu.anthropic.claude-fable-5": {
+      "input": 0.000011,
+      "cacheRead": 0.0000011,
+      "cacheWrite": 0.00001375,
+      "output": 0.000055
+    },
+    "eu.anthropic.claude-fable-5-1": {
+      "input": 0.000011,
+      "cacheRead": 2.75e-7,
+      "cacheWrite": 0.00001375,
+      "output": 0.000055
+    },
+    "eu.anthropic.claude-fable-5-2": {
+      "input": 0.0000088,
+      "cacheRead": 2.2e-7,
+      "cacheWrite": 0.000011,
+      "output": 0.000044
+    },
+    "eu.anthropic.claude-haiku-4-5-20251001-v1:0": {
+      "input": 0.0000011,
+      "cacheRead": 1.1e-7,
+      "cacheWrite": 0.000001375,
+      "output": 0.0000055
+    },
+    "eu.anthropic.claude-haiku-5-5": {
+      "input": 1.1e-7,
+      "cacheRead": 1.1e-8,
+      "cacheWrite": 1.375e-7,
+      "output": 5.5e-7
+    },
+    "eu.anthropic.claude-mythos-5-2": {
+      "input": 0.0000088,
+      "cacheRead": 2.2e-7,
+      "cacheWrite": 0.000011,
+      "output": 0.000044
+    },
+    "eu.anthropic.claude-opus-4-1-20250805-v1:0": {
+      "input": 0.000015,
+      "cacheRead": 0.0000015,
+      "cacheWrite": 0.00001875,
+      "output": 0.000075
+    },
+    "eu.anthropic.claude-opus-4-20250514-v1:0": {
+      "input": 0.000015,
+      "cacheRead": 0.0000015,
+      "cacheWrite": 0.00001875,
+      "output": 0.000075
+    },
+    "eu.anthropic.claude-opus-4-5-20251101-v1:0": {
+      "input": 0.0000055,
+      "cacheRead": 5.5e-7,
+      "cacheWrite": 0.000006875,
+      "output": 0.0000275
+    },
+    "eu.anthropic.claude-opus-4-6-v1": {
+      "input": 0.0000055,
+      "cacheRead": 5.5e-7,
+      "cacheWrite": 0.000006875,
+      "output": 0.0000275
+    },
+    "eu.anthropic.claude-opus-4-7": {
+      "input": 0.0000055,
+      "cacheRead": 5.5e-7,
+      "cacheWrite": 0.000006875,
+      "output": 0.0000275
+    },
+    "eu.anthropic.claude-opus-4-8": {
+      "input": 0.0000055,
+      "cacheRead": 5.5e-7,
+      "cacheWrite": 0.000006875,
+      "output": 0.0000275
+    },
+    "eu.anthropic.claude-opus-5": {
+      "input": 0.0000055,
+      "cacheRead": 5.5e-7,
+      "cacheWrite": 0.000006875,
+      "output": 0.0000275
+    },
+    "eu.anthropic.claude-opus-5-5": {
+      "input": 0.0000044,
+      "cacheRead": 2.2e-7,
+      "cacheWrite": 0.0000055,
+      "output": 0.000022
+    },
+    "eu.anthropic.claude-sonnet-4-20250514-v1:0": {
+      "input": 0.000003,
+      "cacheRead": 3e-7,
+      "cacheWrite": 0.00000375,
+      "output": 0.000015
+    },
+    "eu.anthropic.claude-sonnet-4-5-20250929-v1:0": {
+      "input": 0.0000033,
+      "cacheRead": 3.3e-7,
+      "cacheWrite": 0.000004125,
+      "output": 0.0000165
+    },
+    "eu.anthropic.claude-sonnet-4-6": {
+      "input": 0.0000033,
+      "cacheRead": 3.3e-7,
+      "cacheWrite": 0.000004125,
+      "output": 0.0000165
+    },
+    "eu.anthropic.claude-sonnet-5": {
+      "input": 0.0000022,
+      "cacheRead": 2.2e-7,
+      "cacheWrite": 0.00000275,
+      "output": 0.000011
+    },
+    "eu.anthropic.claude-sonnet-5-5": {
+      "input": 0.0000022,
+      "cacheRead": 1.1e-7,
+      "cacheWrite": 0.00000275,
+      "output": 0.000011
+    },
+    "global.anthropic.claude-fable-5": {
+      "input": 0.00001,
+      "cacheRead": 0.000001,
+      "cacheWrite": 0.0000125,
+      "output": 0.00005
+    },
+    "global.anthropic.claude-fable-5-1": {
+      "input": 0.00001,
+      "cacheRead": 2.5e-7,
+      "cacheWrite": 0.0000125,
+      "output": 0.00005
+    },
+    "global.anthropic.claude-fable-5-2": {
+      "input": 0.000008,
+      "cacheRead": 2e-7,
+      "cacheWrite": 0.00001,
+      "output": 0.00004
+    },
+    "global.anthropic.claude-haiku-4-5-20251001-v1:0": {
+      "input": 0.000001,
+      "cacheRead": 1e-7,
+      "cacheWrite": 0.00000125,
+      "output": 0.000005
+    },
+    "global.anthropic.claude-haiku-5-5": {
+      "input": 1e-7,
+      "cacheRead": 1e-8,
+      "cacheWrite": 1.25e-7,
+      "output": 5e-7
+    },
+    "global.anthropic.claude-mythos-5-1": {
+      "input": 0.00001,
+      "cacheRead": 2.5e-7,
+      "cacheWrite": 0.0000125,
+      "output": 0.00005
+    },
+    "global.anthropic.claude-mythos-5-2": {
+      "input": 0.000008,
+      "cacheRead": 2e-7,
+      "cacheWrite": 0.00001,
+      "output": 0.00004
+    },
+    "global.anthropic.claude-opus-4-5-20251101-v1:0": {
+      "input": 0.000005,
+      "cacheRead": 5e-7,
+      "cacheWrite": 0.00000625,
+      "output": 0.000025
+    },
+    "global.anthropic.claude-opus-4-6-v1": {
+      "input": 0.000005,
+      "cacheRead": 5e-7,
+      "cacheWrite": 0.00000625,
+      "output": 0.000025
+    },
+    "global.anthropic.claude-opus-4-7": {
+      "input": 0.000005,
+      "cacheRead": 5e-7,
+      "cacheWrite": 0.00000625,
+      "output": 0.000025
+    },
+    "global.anthropic.claude-opus-4-8": {
+      "input": 0.000005,
+      "cacheRead": 5e-7,
+      "cacheWrite": 0.00000625,
+      "output": 0.000025
+    },
+    "global.anthropic.claude-opus-5": {
+      "input": 0.000005,
+      "cacheRead": 5e-7,
+      "cacheWrite": 0.00000625,
+      "output": 0.000025
+    },
+    "global.anthropic.claude-opus-5-5": {
+      "input": 0.000004,
+      "cacheRead": 2e-7,
+      "cacheWrite": 0.000005,
+      "output": 0.00002
+    },
+    "global.anthropic.claude-sonnet-4-20250514-v1:0": {
+      "input": 0.000003,
+      "cacheRead": 3e-7,
+      "cacheWrite": 0.00000375,
+      "output": 0.000015
+    },
+    "global.anthropic.claude-sonnet-4-5-20250929-v1:0": {
+      "input": 0.000003,
+      "cacheRead": 3e-7,
+      "cacheWrite": 0.00000375,
+      "output": 0.000015
+    },
+    "global.anthropic.claude-sonnet-4-6": {
+      "input": 0.000003,
+      "cacheRead": 3e-7,
+      "cacheWrite": 0.00000375,
+      "output": 0.000015
+    },
+    "global.anthropic.claude-sonnet-5": {
+      "input": 0.000002,
+      "cacheRead": 2e-7,
+      "cacheWrite": 0.0000025,
+      "output": 0.00001
+    },
+    "global.anthropic.claude-sonnet-5-5": {
+      "input": 0.000002,
+      "cacheRead": 1e-7,
+      "cacheWrite": 0.0000025,
+      "output": 0.00001
+    },
+    "global.openai.gpt-5.4": {
+      "input": 0.0000025,
+      "cacheRead": 2.5e-7,
+      "output": 0.000015
+    },
+    "global.openai.gpt-5.5": {
+      "input": 0.000005,
+      "cacheRead": 5e-7,
+      "output": 0.00003
+    },
+    "global.openai.gpt-5.6-luna": {
+      "input": 2e-7,
+      "cacheRead": 2e-8,
+      "cacheWrite": 2.5e-7,
+      "output": 0.0000012
+    },
+    "global.openai.gpt-5.6-sol": {
+      "input": 0.000004,
+      "cacheRead": 4e-7,
+      "cacheWrite": 0.000005,
+      "output": 0.00002
+    },
+    "global.openai.gpt-5.6-terra": {
+      "input": 0.000002,
+      "cacheRead": 2e-7,
+      "cacheWrite": 0.0000025,
+      "output": 0.000012
+    },
+    "global.openai.gpt-6-astra": {
+      "input": 0.00001,
+      "cacheRead": 0.000001,
+      "cacheWrite": 0.0000125,
+      "output": 0.00005
+    },
+    "global.openai.gpt-6-luna": {
+      "input": 1e-7,
+      "cacheRead": 1e-8,
+      "cacheWrite": 1.25e-7,
+      "output": 5e-7
+    },
+    "global.openai.gpt-6-sol": {
+      "input": 0.000002,
+      "cacheRead": 2e-7,
+      "cacheWrite": 0.0000025,
+      "output": 0.00001
+    },
+    "global.openai.gpt-6.1-sol": {
+      "input": 0.000002,
+      "cacheRead": 1e-7,
+      "cacheWrite": 0.0000025,
+      "output": 0.00001
+    },
+    "global.openai.gpt-6.1-terra": {
+      "input": 0.000001,
+      "cacheRead": 5e-8,
+      "cacheWrite": 0.00000125,
+      "output": 0.000005
+    },
+    "gpt-3.5-turbo": {
+      "input": 5e-7,
+      "output": 0.0000015
+    },
+    "gpt-3.5-turbo-0125": {
+      "input": 5e-7,
+      "output": 0.0000015
+    },
+    "gpt-3.5-turbo-1106": {
+      "input": 0.000001,
+      "output": 0.000002
+    },
+    "gpt-3.5-turbo-16k": {
+      "input": 0.000003,
+      "output": 0.000004
+    },
+    "gpt-4": {
+      "input": 0.00003,
+      "output": 0.00006
+    },
+    "gpt-4-0613": {
+      "input": 0.00003,
+      "output": 0.00006
+    },
+    "gpt-4-1106-preview": {
+      "input": 0.00001,
+      "output": 0.00003
+    },
+    "gpt-4-turbo": {
+      "input": 0.00001,
+      "output": 0.00003
+    },
+    "gpt-4-turbo-2024-04-09": {
+      "input": 0.00001,
+      "output": 0.00003
+    },
+    "gpt-4.1": {
+      "input": 0.000002,
+      "cacheRead": 5e-7,
+      "output": 0.000008
+    },
+    "gpt-4.1-2025-04-14": {
+      "input": 0.000002,
+      "cacheRead": 5e-7,
+      "output": 0.000008
+    },
+    "gpt-4.1-mini": {
+      "input": 4e-7,
+      "cacheRead": 1e-7,
+      "output": 0.0000016
+    },
+    "gpt-4.1-mini-2025-04-14": {
+      "input": 4e-7,
+      "cacheRead": 1e-7,
+      "output": 0.0000016
+    },
+    "gpt-4.1-nano": {
+      "input": 1e-7,
+      "cacheRead": 2.5e-8,
+      "output": 4e-7
+    },
+    "gpt-4.1-nano-2025-04-14": {
+      "input": 1e-7,
+      "cacheRead": 2.5e-8,
+      "output": 4e-7
+    },
+    "gpt-4o": {
+      "input": 0.0000025,
+      "cacheRead": 0.00000125,
+      "output": 0.00001
+    },
+    "gpt-4o-2024-05-13": {
+      "input": 0.000005,
+      "output": 0.000015
+    },
+    "gpt-4o-2024-08-06": {
+      "input": 0.0000025,
+      "cacheRead": 0.00000125,
+      "output": 0.00001
+    },
+    "gpt-4o-2024-11-20": {
+      "input": 0.0000025,
+      "cacheRead": 0.00000125,
+      "output": 0.00001
+    },
+    "gpt-4o-mini": {
+      "input": 1.5e-7,
+      "cacheRead": 7.5e-8,
+      "output": 6e-7
+    },
+    "gpt-4o-mini-2024-07-18": {
+      "input": 1.5e-7,
+      "cacheRead": 7.5e-8,
+      "output": 6e-7
+    },
+    "gpt-5": {
+      "input": 0.00000125,
+      "cacheRead": 1.25e-7,
+      "output": 0.00001
+    },
+    "gpt-5-2025-08-07": {
+      "input": 0.00000125,
+      "cacheRead": 1.25e-7,
+      "output": 0.00001
+    },
+    "gpt-5-chat": {
+      "input": 0.00000125,
+      "cacheRead": 1.25e-7,
+      "output": 0.00001
+    },
+    "gpt-5-chat-latest": {
+      "input": 0.00000125,
+      "cacheRead": 1.25e-7,
+      "output": 0.00001
+    },
+    "gpt-5-codex": {
+      "input": 0.00000125,
+      "cacheRead": 1.25e-7,
+      "output": 0.00001
+    },
+    "gpt-5-mini": {
+      "input": 2.5e-7,
+      "cacheRead": 2.5e-8,
+      "output": 0.000002
+    },
+    "gpt-5-mini-2025-08-07": {
+      "input": 2.5e-7,
+      "cacheRead": 2.5e-8,
+      "output": 0.000002
+    },
+    "gpt-5-nano": {
+      "input": 5e-8,
+      "cacheRead": 5e-9,
+      "output": 4e-7
+    },
+    "gpt-5-nano-2025-08-07": {
+      "input": 5e-8,
+      "cacheRead": 5e-9,
+      "output": 4e-7
+    },
+    "gpt-5-pro": {
+      "input": 0.000015,
+      "output": 0.00012
+    },
+    "gpt-5-pro-2025-10-06": {
+      "input": 0.000015,
+      "output": 0.00012
+    },
+    "gpt-5.1": {
+      "input": 0.00000125,
+      "cacheRead": 1.25e-7,
+      "output": 0.00001
+    },
+    "gpt-5.1-2025-11-13": {
+      "input": 0.00000125,
+      "cacheRead": 1.25e-7,
+      "output": 0.00001
+    },
+    "gpt-5.1-chat-latest": {
+      "input": 0.00000125,
+      "cacheRead": 1.25e-7,
+      "output": 0.00001
+    },
+    "gpt-5.1-codex": {
+      "input": 0.00000125,
+      "cacheRead": 1.25e-7,
+      "output": 0.00001
+    },
+    "gpt-5.1-codex-max": {
+      "input": 0.00000125,
+      "cacheRead": 1.25e-7,
+      "output": 0.00001
+    },
+    "gpt-5.1-codex-mini": {
+      "input": 2.5e-7,
+      "cacheRead": 2.5e-8,
+      "output": 0.000002
+    },
+    "gpt-5.2": {
+      "input": 0.00000175,
+      "cacheRead": 1.75e-7,
+      "output": 0.000014
+    },
+    "gpt-5.2-2025-12-11": {
+      "input": 0.00000175,
+      "cacheRead": 1.75e-7,
+      "output": 0.000014
+    },
+    "gpt-5.2-chat-latest": {
+      "input": 0.00000175,
+      "cacheRead": 1.75e-7,
+      "output": 0.000014
+    },
+    "gpt-5.2-codex": {
+      "input": 0.00000175,
+      "cacheRead": 1.75e-7,
+      "output": 0.000014
+    },
+    "gpt-5.2-pro": {
+      "input": 0.000021,
+      "output": 0.000168
+    },
+    "gpt-5.2-pro-2025-12-11": {
+      "input": 0.000021,
+      "output": 0.000168
+    },
+    "gpt-5.3-chat-latest": {
+      "input": 0.00000175,
+      "cacheRead": 1.75e-7,
+      "output": 0.000014
+    },
+    "gpt-5.3-codex": {
+      "input": 0.00000175,
+      "cacheRead": 1.75e-7,
+      "output": 0.000014
+    },
+    "gpt-5.4": {
+      "input": 0.0000025,
+      "cacheRead": 2.5e-7,
+      "output": 0.000015
+    },
+    "gpt-5.4-2026-03-05": {
+      "input": 0.0000025,
+      "cacheRead": 2.5e-7,
+      "output": 0.000015
+    },
+    "gpt-5.4-mini": {
+      "input": 7.5e-7,
+      "cacheRead": 7.5e-8,
+      "output": 0.0000045
+    },
+    "gpt-5.4-mini-2026-03-17": {
+      "input": 7.5e-7,
+      "cacheRead": 7.5e-8,
+      "output": 0.0000045
+    },
+    "gpt-5.4-nano": {
+      "input": 2e-7,
+      "cacheRead": 2e-8,
+      "output": 0.00000125
+    },
+    "gpt-5.4-nano-2026-03-17": {
+      "input": 2e-7,
+      "cacheRead": 2e-8,
+      "output": 0.00000125
+    },
+    "gpt-5.4-pro": {
+      "input": 0.00003,
+      "output": 0.00018
+    },
+    "gpt-5.4-pro-2026-03-05": {
+      "input": 0.00003,
+      "output": 0.00018
+    },
+    "gpt-5.5": {
+      "input": 0.000005,
+      "cacheRead": 5e-7,
+      "output": 0.00003
+    },
+    "gpt-5.5-2026-04-23": {
+      "input": 0.000005,
+      "cacheRead": 5e-7,
+      "output": 0.00003
+    },
+    "gpt-5.5-cyber": {
+      "input": 0.0000125,
+      "cacheRead": 0.00000125,
+      "output": 0.000075
+    },
+    "gpt-5.5-cyber-preview": {
+      "input": 0.0000125,
+      "cacheRead": 0.00000125,
+      "output": 0.000075
+    },
+    "gpt-5.5-pro": {
+      "input": 0.00003,
+      "output": 0.00018
+    },
+    "gpt-5.5-pro-2026-04-23": {
+      "input": 0.00003,
+      "output": 0.00018
+    },
+    "gpt-5.6": {
+      "input": 0.000004,
+      "cacheRead": 4e-7,
+      "cacheWrite": 0.000005,
+      "output": 0.00002
+    },
+    "gpt-5.6-cyber": {
+      "input": 0.0000125,
+      "cacheRead": 0.00000125,
+      "cacheWrite": 0.000015625,
+      "output": 0.000075
+    },
+    "gpt-5.6-luna": {
+      "input": 2e-7,
+      "cacheRead": 2e-8,
+      "cacheWrite": 2.5e-7,
+      "output": 0.0000012
+    },
+    "gpt-5.6-sol": {
+      "input": 0.000004,
+      "cacheRead": 4e-7,
+      "cacheWrite": 0.000005,
+      "output": 0.00002
+    },
+    "gpt-5.6-terra": {
+      "input": 0.000002,
+      "cacheRead": 2e-7,
+      "cacheWrite": 0.0000025,
+      "output": 0.000012
+    },
+    "gpt-6-astra": {
+      "input": 0.00001,
+      "cacheRead": 0.000001,
+      "cacheWrite": 0.0000125,
+      "output": 0.00005
+    },
+    "gpt-6-astra-law": {
+      "input": 0.00001,
+      "cacheRead": 0.000001,
+      "output": 0.00005
+    },
+    "gpt-6-cyber": {
+      "input": 0.00002,
+      "cacheRead": 0.000002,
+      "cacheWrite": 0.000025,
+      "output": 0.0001
+    },
+    "gpt-6-luna": {
+      "input": 1e-7,
+      "cacheRead": 1e-8,
+      "cacheWrite": 1.25e-7,
+      "output": 5e-7
+    },
+    "gpt-6-rosalind": {
+      "input": 0.000015,
+      "cacheRead": 0.0000015,
+      "cacheWrite": 0.00001875,
+      "output": 0.000075
+    },
+    "gpt-6-sol": {
+      "input": 0.000002,
+      "cacheRead": 2e-7,
+      "cacheWrite": 0.0000025,
+      "output": 0.00001
+    },
+    "gpt-6.1-sol": {
+      "input": 0.000002,
+      "cacheRead": 1e-7,
+      "cacheWrite": 0.0000025,
+      "output": 0.00001
+    },
+    "gpt-6.1-terra": {
+      "input": 0.000001,
+      "cacheRead": 5e-8,
+      "cacheWrite": 0.00000125,
+      "output": 0.000005
+    },
+    "jp.anthropic.claude-haiku-4-5-20251001-v1:0": {
+      "input": 0.0000011,
+      "cacheRead": 1.1e-7,
+      "cacheWrite": 0.000001375,
+      "output": 0.0000055
+    },
+    "jp.anthropic.claude-haiku-5-5": {
+      "input": 1.1e-7,
+      "cacheRead": 1.1e-8,
+      "cacheWrite": 1.375e-7,
+      "output": 5.5e-7
+    },
+    "jp.anthropic.claude-opus-4-7": {
+      "input": 0.0000055,
+      "cacheRead": 5.5e-7,
+      "cacheWrite": 0.000006875,
+      "output": 0.0000275
+    },
+    "jp.anthropic.claude-opus-4-8": {
+      "input": 0.0000055,
+      "cacheRead": 5.5e-7,
+      "cacheWrite": 0.000006875,
+      "output": 0.0000275
+    },
+    "jp.anthropic.claude-opus-5": {
+      "input": 0.0000055,
+      "cacheRead": 5.5e-7,
+      "cacheWrite": 0.000006875,
+      "output": 0.0000275
+    },
+    "jp.anthropic.claude-opus-5-5": {
+      "input": 0.0000044,
+      "cacheRead": 2.2e-7,
+      "cacheWrite": 0.0000055,
+      "output": 0.000022
+    },
+    "jp.anthropic.claude-sonnet-4-5-20250929-v1:0": {
+      "input": 0.0000033,
+      "cacheRead": 3.3e-7,
+      "cacheWrite": 0.000004125,
+      "output": 0.0000165
+    },
+    "jp.anthropic.claude-sonnet-4-6": {
+      "input": 0.0000033,
+      "cacheRead": 3.3e-7,
+      "cacheWrite": 0.000004125,
+      "output": 0.0000165
+    },
+    "jp.anthropic.claude-sonnet-5": {
+      "input": 0.0000022,
+      "cacheRead": 2.2e-7,
+      "cacheWrite": 0.00000275,
+      "output": 0.000011
+    },
+    "jp.anthropic.claude-sonnet-5-5": {
+      "input": 0.0000022,
+      "cacheRead": 1.1e-7,
+      "cacheWrite": 0.00000275,
+      "output": 0.000011
+    },
+    "o1": {
+      "input": 0.000015,
+      "cacheRead": 0.0000075,
+      "output": 0.00006
+    },
+    "o1-2024-12-17": {
+      "input": 0.000015,
+      "cacheRead": 0.0000075,
+      "output": 0.00006
+    },
+    "o1-pro": {
+      "input": 0.00015,
+      "output": 0.0006
+    },
+    "o1-pro-2025-03-19": {
+      "input": 0.00015,
+      "output": 0.0006
+    },
+    "o3": {
+      "input": 0.000002,
+      "cacheRead": 5e-7,
+      "output": 0.000008
+    },
+    "o3-2025-04-16": {
+      "input": 0.000002,
+      "cacheRead": 5e-7,
+      "output": 0.000008
+    },
+    "o3-mini": {
+      "input": 0.0000011,
+      "cacheRead": 5.5e-7,
+      "output": 0.0000044
+    },
+    "o3-mini-2025-01-31": {
+      "input": 0.0000011,
+      "cacheRead": 5.5e-7,
+      "output": 0.0000044
+    },
+    "o3-pro": {
+      "input": 0.00002,
+      "output": 0.00008
+    },
+    "o3-pro-2025-06-10": {
+      "input": 0.00002,
+      "output": 0.00008
+    },
+    "o4-mini": {
+      "input": 0.0000011,
+      "cacheRead": 2.75e-7,
+      "output": 0.0000044
+    },
+    "o4-mini-2025-04-16": {
+      "input": 0.0000011,
+      "cacheRead": 2.75e-7,
+      "output": 0.0000044
+    },
+    "us.anthropic.claude-3-7-sonnet-20250219-v1:0": {
+      "input": 0.000003,
+      "cacheRead": 3e-7,
+      "cacheWrite": 0.00000375,
+      "output": 0.000015
+    },
+    "us.anthropic.claude-fable-5": {
+      "input": 0.000011,
+      "cacheRead": 0.0000011,
+      "cacheWrite": 0.00001375,
+      "output": 0.000055
+    },
+    "us.anthropic.claude-fable-5-1": {
+      "input": 0.000011,
+      "cacheRead": 2.75e-7,
+      "cacheWrite": 0.00001375,
+      "output": 0.000055
+    },
+    "us.anthropic.claude-fable-5-2": {
+      "input": 0.0000088,
+      "cacheRead": 2.2e-7,
+      "cacheWrite": 0.000011,
+      "output": 0.000044
+    },
+    "us.anthropic.claude-haiku-4-5-20251001-v1:0": {
+      "input": 0.0000011,
+      "cacheRead": 1.1e-7,
+      "cacheWrite": 0.000001375,
+      "output": 0.0000055
+    },
+    "us.anthropic.claude-haiku-5-5": {
+      "input": 1.1e-7,
+      "cacheRead": 1.1e-8,
+      "cacheWrite": 1.375e-7,
+      "output": 5.5e-7
+    },
+    "us.anthropic.claude-mythos-5": {
+      "input": 0.000011,
+      "cacheRead": 0.0000011,
+      "cacheWrite": 0.00001375,
+      "output": 0.000055
+    },
+    "us.anthropic.claude-mythos-5-1": {
+      "input": 0.000011,
+      "cacheRead": 2.75e-7,
+      "cacheWrite": 0.00001375,
+      "output": 0.000055
+    },
+    "us.anthropic.claude-mythos-5-2": {
+      "input": 0.0000088,
+      "cacheRead": 2.2e-7,
+      "cacheWrite": 0.000011,
+      "output": 0.000044
+    },
+    "us.anthropic.claude-mythos-preview": {
+      "input": 0.0000275,
+      "cacheRead": 0.00000275,
+      "cacheWrite": 0.000034375,
+      "output": 0.0001375
+    },
+    "us.anthropic.claude-opus-4-1-20250805-v1:0": {
+      "input": 0.000015,
+      "cacheRead": 0.0000015,
+      "cacheWrite": 0.00001875,
+      "output": 0.000075
+    },
+    "us.anthropic.claude-opus-4-20250514-v1:0": {
+      "input": 0.000015,
+      "cacheRead": 0.0000015,
+      "cacheWrite": 0.00001875,
+      "output": 0.000075
+    },
+    "us.anthropic.claude-opus-4-5-20251101-v1:0": {
+      "input": 0.0000055,
+      "cacheRead": 5.5e-7,
+      "cacheWrite": 0.000006875,
+      "output": 0.0000275
+    },
+    "us.anthropic.claude-opus-4-6-v1": {
+      "input": 0.0000055,
+      "cacheRead": 5.5e-7,
+      "cacheWrite": 0.000006875,
+      "output": 0.0000275
+    },
+    "us.anthropic.claude-opus-4-7": {
+      "input": 0.0000055,
+      "cacheRead": 5.5e-7,
+      "cacheWrite": 0.000006875,
+      "output": 0.0000275
+    },
+    "us.anthropic.claude-opus-4-8": {
+      "input": 0.0000055,
+      "cacheRead": 5.5e-7,
+      "cacheWrite": 0.000006875,
+      "output": 0.0000275
+    },
+    "us.anthropic.claude-opus-5": {
+      "input": 0.0000055,
+      "cacheRead": 5.5e-7,
+      "cacheWrite": 0.000006875,
+      "output": 0.0000275
+    },
+    "us.anthropic.claude-opus-5-5": {
+      "input": 0.0000044,
+      "cacheRead": 2.2e-7,
+      "cacheWrite": 0.0000055,
+      "output": 0.000022
+    },
+    "us.anthropic.claude-sonnet-4-20250514-v1:0": {
+      "input": 0.000003,
+      "cacheRead": 3e-7,
+      "cacheWrite": 0.00000375,
+      "output": 0.000015
+    },
+    "us.anthropic.claude-sonnet-4-5-20250929-v1:0": {
+      "input": 0.0000033,
+      "cacheRead": 3.3e-7,
+      "cacheWrite": 0.000004125,
+      "output": 0.0000165
+    },
+    "us.anthropic.claude-sonnet-4-6": {
+      "input": 0.0000033,
+      "cacheRead": 3.3e-7,
+      "cacheWrite": 0.000004125,
+      "output": 0.0000165
+    },
+    "us.anthropic.claude-sonnet-5": {
+      "input": 0.0000022,
+      "cacheRead": 2.2e-7,
+      "cacheWrite": 0.00000275,
+      "output": 0.000011
+    },
+    "us.anthropic.claude-sonnet-5-5": {
+      "input": 0.0000022,
+      "cacheRead": 1.1e-7,
+      "cacheWrite": 0.00000275,
+      "output": 0.000011
+    },
+    "us.openai.gpt-5.4": {
+      "input": 0.00000275,
+      "cacheRead": 2.75e-7,
+      "output": 0.0000165
+    },
+    "us.openai.gpt-5.5": {
+      "input": 0.0000055,
+      "cacheRead": 5.5e-7,
+      "output": 0.000033
+    },
+    "us.openai.gpt-5.6-luna": {
+      "input": 2.2e-7,
+      "cacheRead": 2.2e-8,
+      "cacheWrite": 2.75e-7,
+      "output": 0.00000132
+    },
+    "us.openai.gpt-5.6-sol": {
+      "input": 0.0000044,
+      "cacheRead": 4.4e-7,
+      "cacheWrite": 0.0000055,
+      "output": 0.000022
+    },
+    "us.openai.gpt-5.6-terra": {
+      "input": 0.0000022,
+      "cacheRead": 2.2e-7,
+      "cacheWrite": 0.00000275,
+      "output": 0.0000132
+    },
+    "us.openai.gpt-6-astra": {
+      "input": 0.000011,
+      "cacheRead": 0.0000011,
+      "cacheWrite": 0.00001375,
+      "output": 0.000055
+    },
+    "us.openai.gpt-6-luna": {
+      "input": 1.1e-7,
+      "cacheRead": 1.1e-8,
+      "cacheWrite": 1.375e-7,
+      "output": 5.5e-7
+    },
+    "us.openai.gpt-6-sol": {
+      "input": 0.0000022,
+      "cacheRead": 2.2e-7,
+      "cacheWrite": 0.00000275,
+      "output": 0.000011
+    },
+    "us.openai.gpt-6.1-sol": {
+      "input": 0.0000022,
+      "cacheRead": 1.1e-7,
+      "cacheWrite": 0.00000275,
+      "output": 0.000011
+    },
+    "us.openai.gpt-6.1-terra": {
+      "input": 0.0000011,
+      "cacheRead": 5.5e-8,
+      "cacheWrite": 0.000001375,
+      "output": 0.0000055
+    }
+  }
+}

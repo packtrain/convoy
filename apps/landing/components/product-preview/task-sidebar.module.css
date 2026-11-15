@@ -1,0 +1,78 @@
+.sidebar { display: flex; flex-direction: column; min-width: 0; min-height: 0; height: 100%; border-left: 1px solid var(--border); background: var(--background); font-size: 14px; }
+.sidebar svg { width: 14px; height: 14px; flex-shrink: 0; }
+.tabs { display: flex; align-items: center; gap: 16px; height: 56px; flex-shrink: 0; padding: 0 12px; border-bottom: 1px solid var(--border); color: var(--muted); }
+.tabs > span { display: flex; align-items: center; gap: 6px; height: 100%; white-space: nowrap; }
+.tabs .activeTab { color: var(--foreground); border-bottom: 2px solid var(--foreground); }
+.tabs button { display: grid; place-items: center; flex-shrink: 0; width: 24px; height: 24px; margin-left: auto; border: 0; border-radius: 4px; padding: 0; background: transparent; color: var(--muted); }
+.tabs button:hover { background: var(--selected); color: var(--foreground); }
+.actions { height: 41px; flex-shrink: 0; display: flex; align-items: center; gap: 12px; padding: 0 12px; border-bottom: 1px solid var(--border); background: var(--sidebar); color: var(--muted); }
+.complete { display: inline-flex; align-items: center; gap: 6px; padding: 2px 7px; border: 1px solid var(--border); border-radius: 6px; background: var(--selected); color: var(--foreground); font-size: 11px; }
+.complete svg { width: 12px; height: 12px; }
+.pushRight { margin-left: auto; }
+.scroll { overflow-y: auto; min-height: 0; flex: 1; scrollbar-width: thin; }
+.metadata { padding: 16px; }
+.reference { margin: 0 0 6px; font-size: 11px; color: var(--muted); }
+.metadata h3 { margin: 0 0 24px; font-size: 20px; line-height: 1.4; font-weight: 600; }
+.metadata dl { display: grid; grid-template-columns: 96px minmax(0, 1fr); gap: 16px 16px; margin: 0; }
+.metadata dt { color: var(--muted); align-self:center; }
+.metadata dd { display: flex; align-items: center; gap: 7px; min-width: 0; margin: 0; }
+.metadata dd > svg { color: var(--muted); }
+.listButton { display: flex; align-items: center; gap: 7px; min-width: 0; padding: 0; border: 0; background: none; font: inherit; color: inherit; cursor: pointer; }
+.muted { color: var(--muted); }
+.badge { display: inline-flex; align-items: center; gap: 6px; padding: 2px 6px; border: 1px solid var(--border); border-radius: 6px; background:var(--background); font-size: 12px; line-height:16px; font-weight:500; white-space: nowrap; }
+.badge svg { width: 12px; height: 12px; }
+.sidebar .blue { color: #3b82f6; }
+.sidebar .yellow { color: #eab308; }
+.sidebar .green { color: #22c55e; }
+.truncate { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.description { padding: 16px; border-top: 1px solid var(--border); }
+.sidebar h4 { display: flex; align-items: center; gap: 6px; margin: 0 0 8px; font-size: 12px; font-weight: 500; }
+.editor { overflow: hidden; border: 1px solid var(--border); border-radius: 8px; }
+.toolbar { display: flex; align-items: center; gap: 11px; height: 38px; overflow: hidden; padding: 0 10px; border-bottom: 1px solid var(--border); color: var(--muted); background: color-mix(in srgb, var(--background), black 20%); }
+.toolbar > span { height: 16px; width: 1px; flex-shrink: 0; background: var(--border); }
+.editor p { min-height: 106px; margin: 0; padding: 12px; color: var(--muted); }
+.resources { padding: 8px 16px 24px; }
+.resources h4 svg { width: 12px; height: 12px; color: var(--muted); }
+.chips { display: flex; flex-wrap: wrap; gap: 6px; }
+.chip { display: flex; align-items: center; gap: 5px; max-width: 100%; padding: 2px 6px; border: 1px solid var(--border); border-radius: 6px; }
+.chip > span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.chip svg { color: var(--muted); width: 12px; height: 12px; }
+.chip small { font-size: 9px; color: var(--muted); }
+.subtasks h4 { padding: 0 16px 8px; }
+.subtasks h4 span { display: inline-grid; place-items: center; height: 18px; min-width: 18px; border-radius: 6px; background: var(--selected); font-size: 11px; }
+.subtasks ul { list-style: none; margin: 0; padding: 0; }
+.subtasks li { display: flex; align-items: center; gap: 10px; min-height: 40px; padding: 8px 16px; border-top: 1px solid var(--border); }
+.subtasks li > svg:first-child { color: var(--muted); }
+.subtasks li > .truncate { flex: 1; }
+.subtasks small { flex-shrink: 0; color: var(--muted); font-size: 10px; }
+.addTask { display: flex; align-items: center; gap: 10px; padding: 12px 16px; margin: 0; border-top: 1px solid var(--border); color: var(--muted); }
+
+/* task-timeline header, rail and CommentItem spacing. */
+.activity { border-top: 1px solid var(--border); margin-top: 64px; }
+.activityHeader { display: flex; align-items: center; justify-content: space-between; padding: 8px 16px; }
+.activityHeader h4 { margin: 0; font-size: 14px; font-weight: 500; }
+.activityHeader > svg { color: var(--muted); width: 14px; height: 14px; margin-right: 7px; }
+.commentTrigger { display: flex; align-items: center; gap: 10px; padding: 4px 22px; margin-top: 8px; color: var(--muted); font-size: 14px; }
+.activityStream { padding: 8px 16px; }
+.activityRow { position: relative; display: flex; align-items: flex-start; gap: 8px; padding: 6px 0 6px 32px; font-size: 14px; line-height: 20px; color: var(--muted); }
+.activityRow > svg { position: absolute; left: 7px; top: 9px; width: 14px; height: 14px; }
+.activityRow p { display: flex; flex-wrap: wrap; align-items: baseline; gap: 6px; margin: 0; }
+.activityRow p > span { color: var(--foreground); }
+.activityRow small, .commentAuthor small { font-size: 12px; color: var(--muted); white-space: nowrap; }
+.activityComment { display: flex; align-items: flex-start; gap: 12px; padding: 20px 0; font-size: 14px; line-height: 20px; }
+.activityComment > div:nth-child(2) { flex: 1; min-width: 0; }
+.activityAvatar { display: grid; place-items: center; height: 32px; width: 32px; flex-shrink: 0; background: #008577; border: 1px solid #54b5a9; border-radius: 50%; }
+.commentAuthor { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; font-weight: 500; }
+.activityComment p { margin: 4px 0 0; }
+.activityComment > svg { width: 16px; height: 16px; color: var(--muted); }
+
+.activity > section { margin: 0 16px; }
+
+.projectActions { background:var(--background); padding:0 16px; }
+.close { display:grid; place-items:center; flex-shrink:0; width:28px; height:28px; border:0; border-radius:6px; padding:0; background:transparent; color:var(--muted); }
+.close:hover { background:var(--selected); color:var(--foreground); }
+.assigneeAvatar { display:inline-grid; place-items:center; flex-shrink:0; width:20px; height:20px; border-radius:50%; background:#353535; font-size:10px; }
+
+.metadata .parent { gap:6px; line-height:20px; }
+.parentRef { display:inline-flex; align-items:center; gap:6px; flex-shrink:0; white-space:nowrap; }
+.parentTitle { min-width:0; max-width:200px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }

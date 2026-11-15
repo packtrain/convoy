@@ -1,0 +1,33 @@
+[package]
+name = "convoy-desktop"
+version = "0.1.0"
+description = "Convoy Desktop — tray runner for the Convoy CLI agent"
+edition = "2021"
+
+[lib]
+name = "convoy_desktop_lib"
+crate-type = ["staticlib", "cdylib", "rlib"]
+
+[build-dependencies]
+tauri-build = { version = "2", features = [] }
+
+[dependencies]
+tauri = { version = "2", features = ["macos-private-api", "tray-icon", "image-png"] }
+tauri-plugin-opener = "2"
+tauri-plugin-http = "2"
+tauri-plugin-dialog = "2"
+tauri-plugin-autostart = "2"
+tauri-plugin-notification = "2"
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+toml_edit = "0.22"
+dirs = "6"
+libc = "0.2"
+
+# macOS-only: native NSMenuItem.subtitle for tray menu rows (no muda API).
+# tray-icon must track the version tauri uses (pin tauri minor when bumping).
+[target."cfg(target_os = \"macos\")".dependencies]
+tray-icon = "0.24"
+objc2 = "0.6"
+objc2-foundation = { version = "0.3", features = ["NSString"] }
+objc2-app-kit = { version = "0.3", features = ["NSMenu", "NSMenuItem", "NSStatusItem", "NSStatusBar", "NSResponder", "NSView"] }

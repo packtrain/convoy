@@ -1,0 +1,893 @@
+---
+title: CLI command reference
+sidebarTitle: CLI commands
+description: Every convoy command and flag, derived from the CLI's own command definitions.
+---
+
+The full `convoy` command surface. Narrative setup guides live in
+[`CLI & AI integrations`](/docs/cli); this page is the flat catalog.
+
+## Global options
+
+Available on every command (and repeatable after subcommands):
+
+| Flag | Purpose |
+|---|---|
+| `--profile <key>` | Profile key for profile lookup |
+| `--url <url>` | Convex backend URL (overrides config) |
+| `--api-key <key>` | API key (overrides config) |
+| `--project <id>` | Project ID (overrides config) |
+
+Environment variables:
+
+| Variable | Purpose |
+|---|---|
+| `CONVOY_PROFILE` | Select the profile non-interactively |
+| `CONVOY_CLI_DEBUG=1` | Verbose logging, truncated at 400 chars/line |
+| `CONVOY_CLI_DEBUG=2` | Verbose logging, no truncation |
+| `CONVOY_BACKGROUND_SHELL_WAIT_MS` | How long a Claude Code turn stays open for background shell jobs after its answer, in milliseconds. Default `1800000` (30 minutes). Jobs still running at the limit are stopped |
+| `CONVOY_BACKGROUND_AGENT_WAIT_MS` | How long a Claude Code turn waits for background subagents, counted from when the first one starts, in milliseconds. Default `3600000` (1 hour) |
+
+The CLI reads these at startup, so restart `convoy connect` after changing them. The desktop app starts the CLI through your login shell (`$SHELL -lc`), which is not interactive: for zsh, set them in `~/.zshenv` or `~/.zprofile`, not `~/.zshrc`.
+
+## Setup and configuration
+
+### `convoy setup`
+
+Interactive setup wizard. All flags are optional prefills, enabling
+non-interactive use:
+
+| Flag | Purpose |
+|---|---|
+| `--url <url>` | Prefill Convex URL |
+| `--api-key <key>` | Prefill API key |
+| `--profile <name>` | Prefill profile display name |
+| `--profile-key <key>` | Prefill profile key (used in the config file) |
+| `--project <id>` | Prefill project ID |
+| `--path <path>` | Workspace folder path (defaults to current directory) |
+| `-f, --force` | Overwrite an existing profile key |
+
+When run interactively without `--api-key`, setup asks whether to log in
+with the browser (recommended) or paste a key.
+
+### `convoy login`
+
+Browser-approve login: prints an approve link plus a backup device code,
+waits for approval in the web app, then continues with the same project
+selection and profile save as `convoy setup`. Accepts the same flags as
+`setup` except `--api-key`.
+
+### `convoy config`
+
+| Subcommand | Purpose |
+|---|---|
+| `config list` | List all configured profiles |
+| `config show` | Show the resolved profile for the current directory |
+| `config default <key>` | Set the default profile |
+| `config delete <key> [-f]` | Delete a profile (`-f` skips confirmation) |
+
+### `convoy paths`
+
+| Subcommand | Purpose |
+|---|---|
+| `paths list` | List paths for the resolved profile |
+| `paths add [path]` | Add a path (defaults to current directory) |
+| `paths remove <path>` | Remove a path |
+
+### `convoy keys`
+
+Manage model providers stored locally in `config.toml`. These are Bedrock or
+Mantle credentials for Claude Code — or a credential-free entry pinning a
+Claude.ai subscription — not the Convoy API key used to authenticate the
+CLI with the backend. See
+[Model provider keys](/docs/cli/provider-keys) for the walkthrough.
+
+| Subcommand | Purpose |
+|---|---|
+| `keys add <name>` | Store or update a named provider entry |
+| `keys list` | List stored entries with masked tokens and profile assignments (`ls` alias) |
+| `keys use <name>` | Assign a key to the resolved profile; `--runtime codex` assigns it to Codex |
+| `keys unassign` | Clear the resolved profile's assignment; `--runtime codex` clears Codex's |
+| `keys remove <name>` | Delete an unassigned key (`rm` alias) |
+
+`keys add <name>` options:
+
+| Flag | Purpose |
+|---|---|
+| `--provider <provider>` | `bedrock`, `mantle`, or `anthropic`; prompted when omitted |
+| `--token <token>` | API key or bearer token; prompted with masked input when omitted. Rejected for `anthropic` |
+| `--region <region>` | AWS region, such as `us-east-1`. Required for Codex, optional for Claude Code, rejected for `anthropic` |
+
+`--provider anthropic` stores no credential: profiles using that entry run
+Claude Code on the machine's own Claude sign-in (a Claude.ai subscription),
+overriding Bedrock or Mantle settings the machine enables globally.
+
+On ordinary profiles, `--runtime codex` stores a Bedrock or Mantle key as
+`codex_provider_key`; see [Provider keys](/docs/cli/provider-keys#run-codex-on-aws-bedrock-or-mantle).
+
+`keys use` and `keys unassign` accept `--profile <key>` to select a profile
+explicitly. Without it, normal profile resolution applies. Assignment
+changes take effect on the next `convoy connect`.
+
+For isolated projects, managed OpenAI, Anthropic, Mantle, Bedrock and Cursor credentials (OpenAI and Anthropic also for OpenCode) use
+a separate private store. They are not legacy `config.toml` tokens:
+
+| Command | Options and behavior |
+| --- | --- |
+| `keys add <name> --provider openai --auth api-key` | Masked prompt, or `--from-env <name>` / `--stdin`; requires an unused name |
+| `keys add <name> --provider anthropic --auth api-key` | The same for an Anthropic API key, for Claude Code and OpenCode |
+| `keys add <name> --provider mantle\|bedrock --auth api-key --region <region>` | The same for an AWS key; Codex or Claude Code runs through that provider and Region |
+| `keys add <name> --provider cursor --auth api-key` | The same for a Cursor account key, for Cursor only; billed to that Cursor account |
+| `keys use <name> --runtime codex\|claude-code\|cursor\|opencode --profile <key>` | Assign a managed key to one runtime of a registered project; Codex takes OpenAI and AWS keys, Claude Code takes Anthropic and AWS keys, Cursor takes Cursor keys, OpenCode takes one OpenAI and one Anthropic key |
+| `keys unassign --runtime codex\|claude-code\|cursor\|opencode --profile <key>` | Disable managed use for that runtime (for OpenCode, both keys); add `--native-login` to explicitly restore private native login |
+| `keys status` | Desired/applied revisions and observed request results; `--json` for structured output |
+| `keys rotate <name>` | Replace and enable the key; masked prompt or `--from-env` / `--stdin` |
+| `keys rollback <name> --revision <number>` | Select a retained revision; does not re-enable a disabled key |
+| `keys disable <name>` | Stop future delivery; existing workers need pause/reload |
+| `keys list` / `keys remove <name>` | List metadata or remove an unassigned entry; aliases `ls` / `rm` |
+
+Add `--env <name>` to manage keys in a host-managed environment, or
+`--remote <name>` for a [remote target](/docs/cli/remote-targets#manage-credentials).
+These routes manage only the managed entries above, not the legacy Claude providers.
+Apply changes to running projects with `service reload --profile <key>
+--interrupt`. See [Model provider keys](/docs/cli/provider-keys) for revocation,
+rotation and native-login behavior. `api-key` is an authentication mode name,
+not a placeholder for the secret.
+
+### `convoy status`
+
+Show configuration and connection status.
+
+## Agent bridge
+
+### `convoy connect`
+
+Start the long-running agent connection.
+
+| Flag | Default | Purpose |
+|---|---|---|
+| `--repo <path>` | current directory | Path to the repository the agent runs in |
+| `--name <name>` | folder name | Display name for this session |
+| `-c, --concurrency <n>` | profile value, otherwise `5` (max `50`) | Max simultaneous chat subprocesses |
+| `--buffered` | off (streaming on) | Send whole agent events only, instead of streaming partial (delta) events for live token streaming in the web app |
+| `--codex-exec` | off (app-server on) | Serve Codex threads over non-interactive `codex exec --json` instead of the app-server protocol (loses mid-run approvals, plan mode, steering, deltas, context-window meter) |
+| `--provider-key <name>` | profile assignment | Use a stored provider key for this run without changing the profile |
+| `-s, --stream <path>` | — | Stream from a JSONL fixture instead of a real agent |
+| `-d, --delay <ms>` | `1500` | Delay between streamed lines with `--stream` |
+
+## Managed environments and isolated projects
+
+Run host-managed commands on your Mac or Linux host with Docker running.
+`environment` has the alias `env`; `--environment` has the alias `--env`.
+Project, service, attachment and managed-key commands accept
+`--env <name>` to select a managed container. Without it, they operate in the
+current execution environment. A manually configured VM uses the latter route.
+
+### `convoy run` and `convoy environment`
+
+| Command | Options and behavior |
+| --- | --- |
+| `run` | Create/reuse a container, start its service and attach; `--env <name>` defaults to `default` |
+| `environment status` | Inspect container/service state and versions |
+| `environment stop` | Stop the service and container, retaining data volumes |
+| `environment restart` | Restart the service; `--interrupt` permits stopping active connections/work |
+| `environment update --version <version>` | Stage an exact published inner CLI version; `--interrupt` permits stopping active work |
+| `environment rebuild` | Rebuild the container image, retain volumes; accepts `--interrupt`, `--package <tgz>`, repeatable `--mount <folder>` to replace the mounted host folders and `--no-mounts` to clear them |
+
+Every `environment` subcommand requires `--env <name>` and accepts `--json`.
+`run` accepts `--no-attach` to return after readiness, `--json` for NDJSON
+attachment, `--deployment <name>` and `--domains <comma-separated-domains>` for
+initial network setup, `--mode shared|isolated` (default `shared` for a new
+environment), repeatable `--mount <folder>` for host folders in shared mode, and
+`--package <tgz>` for a local image-build candidate.
+A local archive does not replace an existing installation volume. See
+[Managed local environments](/docs/cli/managed-environments) for setup and recovery.
+
+### `convoy devcontainer [directory]`
+
+Write a devcontainer definition into the selected folder, defaulting to the current
+directory. `--projects` selects the multi-project isolation template; `--force`
+allows overwriting an existing definition. This command writes files, whereas
+`convoy run` builds and starts a host-managed environment. See
+[Use in your project](/docs/cli/dev-container/use-in-your-project).
+
+### `convoy project`
+
+| Command | Options and behavior |
+| --- | --- |
+| `project add <path>` | Register an isolated workspace and remote project; prompts on the control host |
+| `project list` | List registrations and observed service state; accepts `--json` |
+| `project remove <profile>` | Unregister while retaining files; `--yes` confirms and `--interrupt` separately permits stopping active work |
+| `project shell <profile>` | Open the private HOME/workspace for login and diagnostics; pause its connection first. `--login codex\|claude-code\|cursor\|opencode` runs only that runtime's login |
+| `project login <profile> --runtime codex\|claude-code\|cursor\|opencode` | Pause the project, run the runtime's login in its private shell, reload it and wait until online; `--interrupt` permits stopping active runs |
+| `project check <profile>` | Check the sandbox, each runtime (installed root-owned, config folder, logged in), the project lease and the backend key, with a fix for each failure. Read-only; exits 1 on a failed check. `--json` always exits 0 |
+
+`project add` accepts `--profile-key <key>`, `--project <id-or-alias>` to select
+an existing accessible project, or `--create` with `--org <id-or-slug>`,
+`--project-name <name>` and `--project-alias <alias>`. Interactive creation defaults
+the name from the profile key and suggests an alias. `--clone <https-url>` clones
+inside the boundary; `--reuse` accepts an existing privately owned directory.
+`--non-interactive` requires complete inputs. Deployment/authentication flags
+include `--url` and `--api-key`; prefer the masked prompt for interactive secrets.
+See [Isolated projects](/docs/cli/isolated-projects) for worker-key scope and recovery.
+
+### `convoy service` and `convoy attach`
+
+| Command | Options and behavior |
+| --- | --- |
+| `service start` | Run in the configured Linux environment; `-b` / `--background` detaches. With `--env`, starts the managed service in the background |
+| `service status` | Show service and project state; accepts `--json` |
+| `service stop` | Stop service workers; with `--env`, leave the container running |
+| `service pause <profile>` | Release one project for its private shell; `--interrupt` permits stopping its connection/work |
+| `service reload` | Reconcile registrations; use `--profile <key> --interrupt` to apply a live project's pending change |
+| `service logs` | Read saved operational events and exit; accepts `--profile <key>`, `--json` and `--follow` |
+| `attach` | Watch snapshots/events; accepts `--profile <key>` and `--json`; Ctrl+C detaches without stopping agents |
+| `service outcome <requestId> --epoch <epoch>` | Check a mutation whose response was lost; unknown is not proof of failure |
+| `service bridge` | Internal stdio transport; run inside the execution environment, not with `--env` |
+
+Operational logs are distinct from agent transcripts. For service crashes and
+stopped containers, see [Diagnose a stopped service](/docs/cli/managed-environments#diagnose-a-stopped-service).
+`attach` requires a running service; `run` provisions and starts it first.
+
+### `convoy remote`
+
+| Command | Options and behavior |
+| --- | --- |
+| `remote add <name> --host <destination>` | Check the remote CLI over SSH, then save the target; `--container <name>` and `--command <path>` are optional. Without `--command`, a CLI under `/opt/convoy` or `/usr/local/bin` is found and saved |
+| `remote list` | List saved targets; accepts `--json` |
+| `remote remove <name>` | Forget a target; nothing on the remote changes |
+
+`attach`, `service`, `project` and `keys` commands accept `--remote <name>`, which cannot be
+combined with `--env`. See [Remote targets](/docs/cli/remote-targets).
+`--target <name>` on the same commands picks the remote or managed environment
+with that name.
+
+### `convoy service runs`
+
+All commands require `--profile <key>` and accept `--json` and `--env <name>`.
+
+| Command | Additional options |
+| --- | --- |
+| `service runs list` | `--cursor <cursor>`, `--limit <n>` |
+| `service runs get <threadId>` | Inspect one execution thread |
+| `service runs history <threadId>` | `--cursor <cursor>`, `--limit <n>` |
+| `service runs logs <threadId> --message <messageId>` | `--after <order>` resumes stored chunks; `-f` / `--follow` follows this run until it ends |
+| `service runs cancel <threadId> --run <runId>` | Cancel the exact active run; optional `--request-id <id>` for outcome lookup |
+
+List/history default to 20 entries; `--limit` accepts 1 to 50. Use returned
+`continueCursor` until `isDone`. Transcript `--after` defaults to -1. These reads
+require a live service and backend access. See [Persistent project service](/docs/cli/project-service#inspect-execution-and-transcripts).
+
+
+## Integrations
+
+### `convoy init mcp`
+
+Create or update MCP server config for selected CLI targets (`.mcp.json`
+and/or `.codex/config.toml`).
+
+| Flag | Purpose |
+|---|---|
+| `--cli <target...>` | Targets: `claude`, `codex` (repeat or comma-separate; default both) |
+| `-o, --output-dir <path>` | Directory to write config files (default: cwd) |
+| `-f, --force` | Overwrite existing config without prompting |
+
+### `convoy init skill`
+
+Install Convoy skills for Claude Code and/or Codex.
+
+| Flag | Purpose |
+|---|---|
+| `--cli <target...>` | Targets: `claude`, `codex` (repeat or comma-separate) |
+| `-s, --scope <scope>` | Installation scope: `project` or `user` (prompts if omitted) |
+| `--claude-method <method...>` | Claude install method(s) when more than one applies |
+| `-f, --force` | Overwrite existing skill files without prompting |
+
+Bare `convoy init` accepts the union of both subcommands' flags and runs
+both steps.
+
+## Listing commands
+
+| Command | Purpose |
+|---|---|
+| `orgs list` | List accessible organizations |
+| `projects list` | List projects |
+| `task-types list` | List task types available in a project |
+| `project-agents list` | List Project agents |
+| `project-agents create` | Create a Project agent |
+| `project-agents update <projectAgentId>` | Update a Project agent |
+| `lists list` | List project Lists (Backlog and friends) |
+| `lists create` | Create a project List |
+| `lists update <list>` | Rename, re-ref, recolor, or set the default view of a project List |
+| `labels list` | List project labels (in board-column order) |
+| `prompts list` | List project or organization prompts |
+| `prompts create` | Create a prompt |
+| `prompts update <promptId>` | Update a prompt |
+| `skills list` | List project or organization Skills |
+| `skills show <skillId>` | Show a Skill with its SKILL.md and file list |
+| `skills create` | Create a Skill |
+| `skills install <name>` | Install an organization Skill into the project |
+| `skills update <skillId>` | Update a Skill |
+| `skills remove <skillId>` | Delete a Skill |
+| `profiles list` | List your CLI profiles in a project, with online state and available runtimes |
+| `threads list [<containerId>]` | List CLI threads in a project, or one thread group's members |
+| `threads get <threadId>` | Get a thread, or a thread group's metadata |
+| `threads messages <threadId>` | Read a thread's most recent messages |
+| `workflows list` | List a project's Workflows |
+| `workflows get <workflowId>` | Show a Workflow and its draft definition |
+| `workflows create` | Create a Workflow from a definition file or another Workflow's draft |
+| `workflows update <workflowId>` | Edit a Workflow or replace its draft definition |
+| `workflows delete <workflowId>` | Delete a Workflow (cancels its active runs) |
+| `workflows validate <workflowId>` | Dry-run the checks a run start applies |
+| `workflows start <workflowId>` | Start a Workflow run on a profile and path |
+| `workflows runs list <workflowId>` | List your runs of a Workflow |
+| `workflows runs get <runId>` | Show a run's stages, steps, and threads |
+| `workflows runs cancel <runId>` | Cancel a run (asks first; `--yes` skips) |
+| `workflows runs approve\|retry\|skip <runId> <stepId>` | Act on a waiting or failed step |
+| `workflows runs resume <runId> --lane <laneId>` | Resume a held lane |
+
+## Tasks
+
+All task commands support `--output <text|json>`; list-like commands
+support pagination via `--limit <n>` and `--cursor <cursor>`. `--org <org>`
+takes an organization ID or slug and is used together with `--project`
+as an alias.
+
+### `convoy tasks list`
+
+| Flag | Purpose |
+|---|---|
+| `--status <status...>` | Filter statuses (repeat and/or comma-separate) |
+| `--list <list>` | List ID or bare List ref |
+| `--archived` | List archived tasks |
+| `--include-links` | Print each task's external links in text output |
+
+### `convoy tasks search <query>`
+
+| Flag | Purpose |
+|---|---|
+| `--archive-mode <mode>` | `active` or `archived` (default: `active`) |
+| `--status <status>` | Filter by task status |
+| `--assignee-id <userId>` | Filter by owner (human assignee) |
+| `--unassigned` | Filter to tasks with no owner |
+| `--delegated-to-agent <projectAgentId>` | Filter by delegated project agent |
+| `--list <list>` | List ID or bare List ref |
+
+### `convoy tasks get <taskId>`
+
+Get a task with external links, artifacts, files, subtasks, and optional
+comments (`--comments <n>`, 1–50). Text output prints `Assignee:` (the human
+owner) and, when the task is delegated, `Delegated to:` (the executing
+agent).
+
+A `Runs:` section lists the CLI threads that have worked the task — status,
+title, thread ID, runtime, and who ran it — newest first. This includes your
+teammates' runs, not just your own, so it answers "is an agent already on
+this ticket?" before you start. Pass a thread ID to
+[`convoy threads get`](#convoy-threads-get-threadid) for its runtime
+target, or `threads send` to message it.
+
+### `convoy tasks refs <refs...>`
+
+Get tasks by refs (e.g. `convoy tasks refs ABC-1 ABC-2`). Supports
+`--comments <n>`.
+
+### `convoy tasks create`
+
+| Flag | Purpose |
+|---|---|
+| `--name <name>` | Task name (**required**) |
+| `--parent-id <taskId>` | Create as a subtask of this task |
+| `--task-type-key <key>` | Task type key |
+| `--priority <priority>` | `None`, `Low`, `Medium`, `High`, `Critical` |
+| `--status <status>` | Task status |
+| `--due-date <value>` | Unix seconds/ms or ISO-8601 |
+| `--assignee-id <userId>` | Owner (human assignee) |
+| `--delegate-to-agent <projectAgentId>` | Delegate execution to this project agent |
+| `--tags <tag...>` | Tags (repeat and/or comma-separate) |
+| `--list <list>` | List ID or bare List ref |
+| `--label <label>` | Label ID or exact name |
+
+### `convoy tasks update <taskId>`
+
+Same field flags as `create`, plus clearing variants:
+`--clear-description`, `--clear-due-date`, `--unassign`, `--clear-delegation`,
+`--clear-tags`, and `--label <label>` / `--clear-label`.
+`--checklist <checklist>` sets the task's Checklist by ID or exact name, and
+`--no-checks` gives the task no checks.
+`--unassign` clears the owner (any delegation is kept);
+`--clear-delegation` clears the delegated agent (the owner is kept) and is
+mutually exclusive with `--delegate-to-agent`. Delegating a task with no
+owner auto-sets you as owner.
+
+### `convoy tasks move <task>`
+
+Move a task (ID or ref) to a new parent (`--parent <task>`) or to
+top-level (`--top-level`).
+
+### `convoy tasks move-to-list <tasks...>`
+
+Move 1-25 task IDs/refs to a persisted List or Backlog in one mutation.
+
+| Flag | Purpose |
+|---|---|
+| `--list <list>` | List ID, bare List ref, or `BACKLOG` (**required**) |
+
+### `convoy tasks comments add <taskId>`
+
+Create an ordinary markdown task comment. Pass exactly one of
+`--message <text>` or `--message-file <path>`. Raw IDs, bare refs, and scoped
+refs are supported.
+
+### `convoy tasks delete <taskId>`
+
+| Flag | Purpose |
+|---|---|
+| `--cascade <mode>` | `delete_all` (default) or `keep_children` |
+
+## Lists
+
+Managing Lists requires List management permissions (project members and
+admins).
+
+### `convoy lists create`
+
+| Flag | Purpose |
+|---|---|
+| `--name <name>` | List name (**required**, unique per project, max 80 chars) |
+| `--ref <ref>` | List ref (uppercase; derived from the name when omitted) |
+| `--color <hex>` | Color from the List palette |
+| `--default-view <list\|board>` | Default view for this List (inherits the project default when omitted) |
+| `--board-group-by <field>` | Board grouping (`status`, `assignee`, `priority`, `type`, `label`); requires `--default-view board` |
+
+### `convoy lists update <list>`
+
+`<list>` is a raw List ID or bare List ref (e.g. `SPRINT-1`); system Lists
+like `BACKLOG` cannot be updated. Requires at least one flag.
+
+| Flag | Purpose |
+|---|---|
+| `--name <name>` | New List name |
+| `--ref <ref>` | New List ref |
+| `--color <hex>` | New color from the List palette |
+| `--clear-color` | Clear the List color (mutually exclusive with `--color`) |
+| `--default-view <list\|board>` | Default view for this List |
+| `--board-group-by <field>` | Board grouping; requires `--default-view board` |
+| `--clear-default-view` | Inherit the project default view again (mutually exclusive with `--default-view`) |
+
+Archiving, deleting, and changing the default List stay in the web UI.
+
+## Project agents
+
+Project-agent commands use the standard `--project` / `--org` resolution and
+support `--output <text|json>`.
+
+### `convoy project-agents create`
+
+Requires `--name <name>` and `--color <palette-color>`. Optional fields:
+`--description`, `--prompt`, and `--category`.
+
+Assignment automation is a whole-value configuration:
+
+- `--automation enabled|disabled`
+- `--automation-prompt <text>`
+- `--automation-cli-type <type>`
+- `--automation-cli-model <model>`
+- `--automation-cli-effort <effort>`
+- `--automation-mode <mode>`
+- `--automation-workspace local|worktree`
+
+### `convoy project-agents update <projectAgentId>`
+
+Supports the create fields plus `--clear-description`, `--clear-prompt`,
+`--clear-category`, and `--clear-automation`. Automation detail flags require
+`--automation enabled|disabled`; providing automation replaces the complete
+stored configuration.
+
+## Prompts
+
+Prompts (slash commands) live either on a project or on an organization. Every
+prompt command supports `--output <text|json>` and picks its scope with
+`--scope project|organization` (default `project`).
+
+Under `--scope organization`, `--org <orgId|orgSlug>` names the target
+organization on its own — including an organization with no projects you can
+access; leave it out to use the organization of the resolved project. Under
+project scope, `--org` only disambiguates `--project` and cannot be used alone.
+
+### `convoy prompts list`
+
+List active prompts for the resolved project or organization.
+
+### `convoy prompts create`
+
+Requires `--key <key>` (without the leading slash) and `--content <content>`.
+Optional: `--description`, `--category`, `--auto-expand`, `--auto-submit`.
+
+```bash
+convoy prompts create --key review --content "Review this contract." --project WEB
+convoy prompts create --scope organization --org acme --key handoff --content "Write a handoff doc."
+```
+
+### `convoy prompts update <promptId>`
+
+Updates only the flags you pass: `--key`, `--content`, `--description`,
+`--category`, `--auto-expand` / `--no-auto-expand`, `--auto-submit` /
+`--no-auto-submit`, plus `--clear-description` and `--clear-category`. No scope
+flags — the stored prompt carries its own scope.
+
+Deleting a prompt stays in the web UI.
+
+## Skills
+
+A Skill is a `SKILL.md` plus optional additional files. `list` and `create` take
+`--scope project|organization`, defaulting to the profile's project, and
+`--org <orgId|orgSlug>` for organization scope — the same flags the prompt
+commands take.
+`show`, `update`, and `remove` take a Skill ID, which carries its own scope.
+Managing organization Skills requires organization owner or admin; a project Skill
+requires project admin or member.
+
+### `convoy skills list`
+
+Lists the project's or the organization's Skills with their version, name,
+description, and category.
+
+### `convoy skills show <skillId>`
+
+Prints the Skill's columns, its `SKILL.md`, and the paths of its other files.
+`--output json` includes every file's content. A Skill copied out of a Git
+repository also prints whatever provenance was recorded, as
+`repoUrl/subpath@commitSha (ref)` — the commit is the version an upstream check
+compares against, and every part of it is optional.
+
+### `convoy skills create`
+
+Requires `--name` and either `--content <content>` or `--content-file <path>`.
+Optional: `--description`, `--category`, `--scope`, `--org`.
+
+```bash
+convoy skills create --name pdf-tools --content-file ./SKILL.md --project WEB
+convoy skills create --name pdf-tools --content-file ./SKILL.md --scope organization --org acme
+```
+
+### `convoy skills install <name>`
+
+Installs an organization Skill into the project, by name, looked up in the
+project's own organization. The install **copies** it: the project copy is
+independent, so editing it never changes the template.
+
+```bash
+convoy skills install pdf-tools --project WEB
+convoy skills install /pdf-tools --org acme --project WEB
+```
+
+Takes `--org` to disambiguate a project alias two organizations share. Looking the
+name up reads the organization's Skills, so an API key narrowed to specific
+projects cannot resolve it — use an unnarrowed key, or install from project
+settings.
+
+Installing a Skill the project already has under that name fails. Updating an
+installed copy from its template is done in project settings, where it warns before
+discarding local edits.
+
+### `convoy skills update <skillId>`
+
+Updates only the flags you pass: `--name`, `--content` / `--content-file`,
+`--description`, `--category`, plus `--clear-description` and
+`--clear-category`. `SKILL.md` is stored verbatim and never rewrites the name or
+description.
+
+### `convoy skills remove <skillId>`
+
+Deletes the Skill. Files inside it are unreachable afterwards.
+
+Editing a Skill file by file — adding, renaming, or patching one file — is an
+MCP operation: see [MCP tools](/docs/reference/mcp-tools).
+
+## Workflows
+
+Workflows are project-scoped. Both commands support `--output <text|json>`;
+`--org` only disambiguates `--project`.
+
+### `convoy workflows list`
+
+List active Workflows for the resolved project. Text output marks a Workflow
+whose draft changed since its last run with `draft changed`.
+
+### `convoy workflows get <workflowId>`
+
+Show a Workflow's identity fields, then its Lanes and each Stage's Steps.
+JSON output is the stored record; its `draftDefinition` is the shape the
+editor saves, so it can be edited and sent back with `workflows update`.
+
+### `convoy workflows create`
+
+| Option | Description |
+|---|---|
+| `--name <name>` | Workflow name (required) |
+| `--definition-file <path>` | Definition JSON: a bare definition, or a `workflows get` dump (its `draftDefinition` is used) |
+| `--from <workflowId>` | Copy another Workflow's draft definition instead of reading a file |
+| `--description`, `--category`, `--color` | Identity fields; color is an agent palette value |
+
+Exactly one of `--definition-file` and `--from` is required. Lane, Stage, and
+Step ids are plain strings that only need to be unique within the definition,
+so a hand-written file can use readable ids:
+
+```json
+{
+  "lanes": [{ "laneId": "main", "name": "Main", "type": "single", "defaults": { "cliType": "claude-code" } }],
+  "stages": [
+    {
+      "stageId": "build",
+      "name": "Build",
+      "steps": [
+        { "stepId": "test", "laneId": "main", "action": { "type": "bash", "script": "pnpm test", "timeoutMs": 600000, "reportOutput": "on_failure" } }
+      ]
+    }
+  ]
+}
+```
+
+Save checks structure only; the full checks run when a run starts. Pass
+`--validate` to run them right after saving (exits non-zero when the draft
+is not runnable), or use `workflows validate`. With `--output json` the
+verdict rides in the same object: `{ "workflowId": "...", "validation": { "ok": false, "error": "..." } }`.
+
+### `convoy workflows update <workflowId>`
+
+Same identity flags as `create`, plus `--clear-description`, `--clear-category`,
+`--clear-color`, `--definition-file <path>` to replace the draft, and
+`--validate`. At least one field flag is required.
+
+### `convoy workflows validate <workflowId>`
+
+Runs the version-cut checks without starting a run: the stored draft by
+default, or `--definition-file <path>` checked against that Workflow's project
+before you save it. Prints the first failing rule and exits non-zero. JSON
+output is `{ "ok": true }` or `{ "ok": false, "error": "..." }`, and a failed
+verdict exits non-zero in JSON mode too, so it works as a CI gate.
+
+### `convoy workflows start <workflowId>`
+
+Starts a run: cuts a version from the draft when it changed, creates the run's
+container thread, and dispatches the first Step. Runtime, model, and mode come
+from the definition, so there is no `--cli-type`.
+
+| Option | Description |
+|---|---|
+| `--profile-id <profileId>` | CLI profile to run on (required; see `profiles list`) |
+| `--path-id <pathId>` | Working path on that profile (required) |
+| `--worktree-branch <branch>` | Run in a new worktree on this branch, created from the path |
+| `--worktree-base <ref>` | Base ref for the worktree branch (needs `--worktree-branch`) |
+| `--task <taskId>` | Attach a task (ID or ref); it must live in the Workflow's project |
+| `--first-prompt <text>`, `--first-prompt-file <path>` | Override the first Lane's first prompt for this run only. With no prompt Step in that Lane the text becomes a Kickoff step |
+
+Prints the run ID and its container thread ID; `--output json` returns both.
+
+### `convoy workflows runs ...`
+
+Run babysitting from the terminal. Every command here is gated by the backend
+to the user who started the run; anyone else gets "not found".
+
+| Command | Purpose |
+|---|---|
+| `runs list <workflowId>` | Your runs of the Workflow, newest first, with status and timestamps |
+| `runs get <runId>` | Header state, then each Stage's Steps with status, lane, type, run-step ID, lane thread, error, and `held` |
+| `runs cancel <runId>` | Terminal: in-flight Steps flip to canceled and every lane thread is stopped. Asks first; `-y`/`--yes` skips |
+| `runs approve <runId> <stepId>` | A waiting wait Step completes; a bash Step held for approval runs |
+| `runs retry <runId> <stepId>` | Re-dispatch a failed Step, on a fresh thread when the old one is gone |
+| `runs skip <runId> <stepId>` | Mark a failed Step skipped so the Stage barrier clears |
+| `runs resume <runId> --lane <laneId>` | Clear a lane hold your own message in the lane thread caused |
+
+`<stepId>` is the run-step ID that `runs get` prints, not the definition's
+step id. All commands support `--output json`.
+
+### `convoy workflows delete <workflowId>`
+
+Soft-deletes the Workflow. Its active runs are canceled; version and run
+history are kept.
+
+```bash
+convoy workflows list --project WEB
+convoy workflows get k17... --output json > release.json
+convoy workflows update k17... --definition-file release.json --validate
+convoy workflows validate k17... --definition-file draft.json
+convoy workflows create --name "Release train (copy)" --from k17... --project WEB
+convoy workflows start k17... --profile-id j57... --path-id 3f1c... --task WEB-42 --worktree-branch web-42
+convoy workflows runs get k57... --output json
+convoy workflows runs approve k57... kd7...
+```
+
+## Labels
+
+Project labels are single-valued, colored, ordered task classifications
+(managed set, distinct from free-form tags). Managing labels requires project
+admin permissions; assigning one to a task needs only task-update permission.
+Wherever a command takes a `<label>`, you may pass the label's raw ID or its
+exact name (case-insensitive).
+
+### `convoy labels list`
+
+List a project's labels in board-column order. Supports `--output <text|json>`
+and `--org <org>`.
+
+### `convoy labels create`
+
+| Flag | Purpose |
+|---|---|
+| `--name <name>` | Label name (**required**, unique per project, max 50 chars) |
+| `--color <hex>` | Color from the extended palette (default: blue) |
+
+### `convoy labels update <label>`
+
+| Flag | Purpose |
+|---|---|
+| `--name <name>` | New label name |
+| `--color <hex>` | New color from the extended palette |
+
+### `convoy labels delete <label>`
+
+Deletes the label and resolves every task that references it (including
+soft-deleted and archived tasks) in one mutation.
+
+| Flag | Purpose |
+|---|---|
+| `--resolution <mode>` | `clear` (default), `reassign`, or `archive` |
+| `--reassign-to <label>` | Target label (required for `--resolution reassign`) |
+
+Label reordering is not exposed on the CLI — board-column order is managed in
+the web UI.
+
+## Task links
+
+### `convoy tasks links ...`
+
+External links on a task (commits, branches, pull requests, generic URLs).
+Use a deterministic `--id` (e.g. `github-pr-acme-app-12`) so repeated
+upserts update instead of duplicating. The link URL flag is `--link-url`
+(`--url` is the global backend override).
+
+| Subcommand | Purpose |
+|---|---|
+| `links upsert <taskId> --id <id> --kind <kind>` | Create or replace a link. Kinds: `commit` (requires `--sha`), `branch` (requires `--name`), `pull_request` / `url` (require `--link-url`). Optional: `--title`, `--repo`, `--branch`, `--identifier` |
+| `links delete <taskId> --id <id>` | Delete a link (idempotent) |
+
+## Task artifacts
+
+### `convoy tasks artifacts ...`
+
+| Subcommand | Purpose |
+|---|---|
+| `artifacts list <taskId>` | List markdown artifacts for a task (ID or ref) |
+| `artifacts get <artifactId>` | Get an artifact by ID |
+| `artifacts create <taskId> --name <name>` | Create an artifact on a task ID or ref (`--content <md>` or `--content-file <path>`, optional `--run-id <id>`) |
+| `artifacts update <artifactId>` | Update fields (`--name`, `--content`, `--content-file`, `--clear-content`, `--run-id`, `--clear-run-id`) |
+| `artifacts replace <artifactId>` | Replace an exact string (`--old-string` / `--old-string-file`, `--new-string` / `--new-string-file`, `--replace-all`) |
+| `artifacts move <artifactId> --to-task <taskId>` | Move an artifact to another task (ID or ref) in the same project |
+| `artifacts delete <artifactId>` | Delete an artifact |
+
+## CLI profiles
+
+### `convoy profiles list`
+
+List your CLI profiles in a project, with the online state, CLI version, and
+available runtimes each connected machine reports, plus its working paths and
+path IDs. Supports `--output <text|json>` and `--org <org>`.
+
+This is the server's view of your machines — `convoy paths` and
+`convoy status` read local config instead.
+
+## Threads
+
+Read-only views of CLI threads. A **thread group** is a container row with no
+transcript of its own: it lists as a single row with a child count, and its
+members come from `threads list <containerId>`.
+
+### `convoy threads list [<containerId>]`
+
+List the project's threads, newest activity first. Pass a group's container ID to
+list that group's members instead.
+
+| Flag | Purpose |
+|---|---|
+| `--include-done` | Include threads marked done (default: off) |
+| `--limit <n>` | Page size, 1–50 (default: 20). Ignored for a group's members |
+| `--cursor <cursor>` | Pagination cursor. Not used for a group's members |
+
+Listing a group's members needs no project and is never paginated — a group holds
+at most 100 threads and is read in one pass.
+
+### `convoy threads get <threadId>`
+
+Get one thread: its status, runtime, target profile with online state, working
+path, and queue state. Given a group's container ID, prints the group's metadata
+(kind, child count, group status, origin thread) instead of a runtime target.
+
+### `convoy threads messages <threadId>`
+
+Read a thread's most recent messages, oldest first. `--limit <n>` takes 1–20
+(default: 10). Text is composed from the agent's prose only — tool calls, tool
+output, and reasoning are not included, so a turn that only ran tools reads as
+empty. A group has no transcript and is an error.
+
+### `convoy threads attach <threadId> [file...]`
+
+```bash
+convoy threads attach <threadId> shot.png notes.txt --message-id <replyId> --session-id <sessionId>
+```
+
+Attaches files to a running agent's current reply. Images render inline, or as
+a gallery when several are adjacent; other files render as download pills. You
+rarely type this yourself: each run's prompt gives the agent the exact command
+with its reply and session IDs. It fails once that run has finished. Up to 10
+files per reply, 50 MB each. JSON output is
+`{ "threadId": "...", "messageId": "...", "storageIds": [...] }`.
+
+With `--check <key>`, the files also answer one of the task's checks, and the
+file list may be empty. Pass exactly one status: `--passed`, `--warning`,
+`--failed`, or `--not-performed`. All but `--passed` need `--note <why>`. A key
+outside the project's check catalog needs `--label`. On a thread with no task,
+the result belongs to the thread until you attach one. JSON output adds `checkResultId`.
+
+```bash
+convoy threads attach <threadId> out.log --check tests --passed --note "412 passed" --message-id <replyId> --session-id <sessionId>
+convoy threads attach <threadId> --check spec --not-performed --note "User asked to skip" --message-id <replyId> --session-id <sessionId>
+```
+
+### `convoy threads checks <threadId>`
+
+```bash
+convoy threads checks <threadId>
+convoy threads checks <threadId> --json
+```
+
+Lists the checks that apply to the thread's task, or to the thread itself when
+it has no task: key, label, instruction, and current status (`pending` until
+reported). Checks reported outside the checklist show as added.
+
+### `convoy threads done <threadId>`
+
+```bash
+convoy threads done <threadId>
+convoy threads done <threadId> --json
+```
+
+Marks your thread done and read, acknowledging current attention. A group or
+workflow run also marks its children done. Running threads or containers with
+running members are rejected; wait for execution to finish. New activity makes
+the thread not done again. JSON output is `{ "threadId": "..." }`.
+
+### `convoy threads attach-task <threadId> <task>`
+
+```bash
+convoy threads attach-task <threadId> OS-1713
+convoy threads attach-task <threadId> OS-1713 --json
+```
+
+Attaches a task to your thread when the thread was started without one, so the
+thread shows on the task's Runs column, timeline and Threads field. `<task>` is
+an ID or bare ref (`OS-5`, not `acme/OS-5`) in the thread's project. Re-attaching the same task does nothing; a
+thread already attached to another task is rejected. JSON output is
+`{ "threadId": "...", "taskId": "..." }`.
+
+### `convoy threads attach-pr <threadId> <pullRequest>`
+
+```bash
+convoy threads attach-pr <threadId> 'contoso/convoy#482'
+convoy threads attach-pr <threadId> https://github.com/contoso/convoy/pull/482 --json
+```
+
+Attaches a GitHub pull request to your thread when it has none, so the thread
+shows on the PR. `<pullRequest>` is a github.com PR URL or `owner/repo#number`.
+Re-attaching the same PR does nothing; a thread already attached to another PR
+is rejected. JSON output is `{ "threadId": "...", "pullRequest": "..." }`.
+
+## See also
+
+- [`One-shot commands`](/docs/cli/one-shot-commands) — usage patterns and
+  examples
+- [`Config file (config.toml)`](/docs/reference/config-toml) — what
+  `setup` writes and how profiles resolve
+- [`MCP tools reference`](/docs/reference/mcp-tools) — the equivalent
+  catalog for the MCP server

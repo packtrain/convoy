@@ -1,0 +1,190 @@
+---
+title: Authoring docs
+description: Edit and extend the Convoy docs site — where content lives, how the sidebar is configured, and what stays in sync with code.
+---
+
+The public docs site lives under `apps/docs/`. Content is MDX under
+`apps/docs/content/docs/`. This page documents the site's conventions
+so a contributor can make edits with confidence and without breaking
+the sidebar.
+
+## Where content lives
+
+```
+apps/docs/content/docs/
+├── meta.json                  # Root sidebar configuration
+├── index.mdx                  # /docs (landing)
+├── <section>/
+│   ├── meta.json              # Optional per-folder config
+│   ├── index.mdx              # /docs/<section>
+│   └── <page>.mdx             # /docs/<section>/<page>
+```
+
+Each `.mdx` file becomes one page. Folder metadata can supply a title;
+page ordering follows the ownership rules below.
+
+## Local development
+
+From the repo root:
+
+```bash
+pnpm docs:dev             # https://docs.convoy.localhost
+pnpm docs:types:check     # Typegen + MDX + tsc --noEmit
+pnpm docs:build           # Production build
+pnpm docs:lint            # Biome
+```
+
+Run `types:check`, `build`, and `lint` before opening a PR. Biome is
+strict about JSON formatting — small `meta.json` `pages` arrays must
+be on a single line; multi-line arrays for longer lists.
+
+## `meta.json` basics
+
+```json
+{
+  "title": "Section title",
+  "description": "Shown under the title.",
+  "defaultOpen": false,
+  "collapsible": true,
+  "pages": ["index", "first-page", "second-page"]
+}
+```
+
+| Field | Purpose |
+|---|---|
+| `title` | Sidebar label. |
+| `description` | Optional, mostly informational. |
+| `defaultOpen` | Initial-load state for collapsible folders. Set to `false` so readers see a compact sidebar; the folder containing the active page auto-expands anyway. |
+| `collapsible` | Whether the folder collapses at all. |
+| `pages` | Explicit page ordering. Use `"<name>"` for a file, `"<folder>"` for a nested folder, and `"---[icon]Label---"` for a section separator. |
+
+## Short navigation labels
+
+Keep `title` descriptive for the page heading and search. If it would wrap
+in the sidebar, add a concise `sidebarTitle`, such as `API keys` for a page
+titled `API keys for scripts and headless machines`. The page tree uses
+this label for navigation and previous/next links. Check it at desktop and
+mobile widths without truncating the label.
+
+## Navigation ownership
+
+Root `apps/docs/content/docs/meta.json` owns the flat sections in this order:
+Getting started, Using Convoy, CLI, Integrations, Deploy Convoy, Operations,
+Reference, Contributing. It uses separators and explicit page paths:
+
+```json
+"---[terminal]CLI---",
+"cli/index",
+"cli/profiles-paths-status",
+"cli/api-keys"
+```
+
+Edit root metadata to add or reorder a flat page. Do not add competing
+`pages` arrays to section metadata and do not use the `...` rest operator.
+Every canonical page must have exactly one navigation entry.
+
+The two existing collapsible groups, `cli/mcp` and `cli/dev-container`, own
+their child order in their own `meta.json`. Root lists each folder once.
+Separators create no directories; a new collapsible group would need a
+folder and a separate route-preservation decision.
+
+Five old routes remain as compatibility pages but have no sidebar or
+previous/next entry:
+
+- `using/organizations-and-members`
+- `using/tasks`
+- `using/comments-attachments-artifacts`
+- `cli/install`
+- `cli/setup-and-connect`
+
+Their short content links to the matching section in `/docs/using` or
+`/docs/cli`. Keep their existing heading anchors. New internal links should
+point directly to the consolidated guides. Do not restore a second copy of
+the instructions on a compatibility page.
+
+Static generation enumerates MDX files independently of sidebar metadata,
+so those HTML routes and per-page Markdown endpoints remain available.
+Search and LLM output can retain the short compatibility pointers. Check
+these outputs after navigation changes, along with page order, breadcrumbs,
+and previous/next links. The full contract is in the repository's
+`docs/specs/docs-site-navigation.md`.
+
+## Section separators and icons
+
+Root meta uses the `---[icon]Name---` syntax to draw visual separators
+for top-level sections. Available icons are registered in
+`apps/docs/app/lib/source.ts`:
+
+```ts
+const iconMap: Record<string, LucideIcon> = {
+  "book-open": BookOpen,
+  code: Code,
+  compass: Compass,
+  "layout-grid": LayoutGrid,
+  rocket: Rocket,
+  sparkles: Sparkles,
+  terminal: Terminal,
+  wrench: Wrench,
+};
+```
+
+To use a new icon, import it from `lucide-react` and add it to the map
+with a stable kebab-case key. Separators without an icon still render;
+they just don't carry a glyph.
+
+## MDX components available in pages
+
+The default Fumadocs MDX components are registered in
+`apps/docs/app/components/mdx.tsx`. Notable additions:
+
+- `<Cards>` / `<Card title="…" description="…" href="…" />` — used on
+  the landing to surface audience paths.
+- `<Mermaid chart={`…`} />` — for sequence and flowchart diagrams.
+  Preferred over ASCII art when the diagram has more than three nodes.
+- Standard markdown: tables, code fences (including `language-mermaid`
+  blocks, which render the same as the component), `<kbd>` keys.
+
+## What stays in sync with code
+
+A few docs pages mirror specific code modules. Whenever you change the
+code, update the page in the same PR — otherwise readers get a
+misleading reference.
+
+| Page | Source of truth |
+|---|---|
+| `using/keyboard-shortcuts.mdx` | `SHORTCUT_GROUPS` in `apps/web/components/blocks/sidebar/keyboard-shortcuts-dialog.tsx` and the key literals in `apps/web/lib/browser/hotkeys.ts`. |
+| `reference/mcp-tools.mdx` | `getToolDefinitions()` in `apps/web/convex/mcp/tools.ts`. |
+| `reference/config-toml.mdx` | `ConfigFileSchema` in `apps/cli/src/lib/config/types.ts` and the profile resolver in `profile.ts`. |
+| `contributing/cli-architecture-and-lifecycle.mdx` | `cliNormalizedEventValidator` in `apps/web/convex/lib/contracts/validators.ts` and the runtime files under `apps/web/convex/cli/lib/runtimes/`. |
+| `reference/cli-commands.mdx` | The commander definitions under `apps/cli/src/commands/` (and `addGlobalOptions` in `apps/cli/src/cli.ts`). |
+| `reference/roadmap.mdx` | `CLI_RUNTIME_SLUGS` in `apps/web/convex/cli/lib/runtimes/contracts.ts` and the CLI-side runners under `apps/cli/src/agent/runtimes/`. Promote a runtime from "config only" to "supported" when the CLI-side runner lands. |
+| `reference/glossary.mdx` | Domain concepts introduced in the spec. Add an entry when a new term enters the product vocabulary. |
+
+## Section landings
+
+The convention for landing pages (`<section>/index.mdx`) is:
+
+1. Short intro paragraph.
+2. One or two context sections if needed (what this section covers,
+   how it relates to the rest of the docs).
+3. End with a `## Next steps` pointer list — 3–6 links, each with a
+   one-phrase rationale.
+
+The product and CLI landings are complete consolidated guides with a table
+of contents. Do not split their onboarding steps across new pages.
+
+Exceptions: landings whose whole body is already the pointer list (the
+Reference index, the Operations index) skip the separate "Next steps"
+block to avoid duplication.
+
+## Deploying the docs
+
+The docs site is a static build. See
+[`Deploy the Docs Site`](/docs/deployment/deploy-docs) for the
+hosting setup.
+
+## See also
+
+- [Contributing overview](/docs/contributing) — repository map and
+  conventions
+- [Specs-first workflow](/docs/contributing/specs-first-workflow)

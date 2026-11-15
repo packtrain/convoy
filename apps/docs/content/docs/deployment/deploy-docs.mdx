@@ -1,0 +1,40 @@
+---
+title: Deploying the docs site
+sidebarTitle: Publish the docs
+description: Build and deploy the Convoy documentation site.
+---
+
+The docs site (`apps/docs`) is a static site built with [Fumadocs](https://fumadocs.vercel.app/) and [React Router](https://reactrouter.com/). It has no backend dependencies — it can be deployed to any static hosting provider.
+
+## Build
+
+From the repository root:
+
+```bash
+pnpm docs:build
+```
+
+The site is fully pre-rendered. Build output goes to `apps/docs/build/client/`.
+
+## Deploy to Vercel
+
+Import the repository in Vercel and configure:
+
+| Setting | Value |
+| --- | --- |
+| **Root Directory** | `apps/docs` |
+| **Build Command** | `npx react-router build` |
+| **Output Directory** | `build/client` |
+| **Install Command** | Leave as default |
+
+No environment variables are required. Click **Deploy**.
+
+The build command must use `npx react-router build` (not `react-router build`) because the binary is not globally installed.
+
+## Deploy Elsewhere
+
+Since the output is static HTML in `build/client/`, you can deploy it to any static hosting provider (Cloudflare Pages, Netlify, GitHub Pages, etc.). Point the provider at the `build/client/` directory after running the build.
+
+## Content
+
+Documentation content lives in `apps/docs/content/docs/` as `.mdx` files. Root `content/docs/meta.json` owns flat-section ordering. Only the MCP and dev-container groups own child ordering. See [Authoring docs](/docs/contributing/authoring-docs) for navigation and compatibility-page rules.

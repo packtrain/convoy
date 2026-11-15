@@ -1,0 +1,70 @@
+---
+title: API keys for scripts and headless machines
+sidebarTitle: API keys
+description: Set up unattended CLI access and manage user-scoped credentials.
+---
+
+For an interactive machine, use [browser login](/docs/cli#login-and-connect).
+`convoy login` issues and saves a key after you approve in the browser.
+Even a machine without its own browser can use the printed device code.
+
+Create a key manually when a script or unattended bootstrap needs a
+credential without interactive approval. In the web app, open user settings
+and create an API key. The key acts as your user and inherits your existing
+project permissions.
+
+These keys authenticate access to Convoy. [Model provider
+keys](/docs/cli/provider-keys) authenticate the AI runtime with a model
+provider and stay on the CLI machine.
+
+## Non-interactive setup
+
+Supply the deployment URL, API key, project ID, and profile key to skip
+interactive prompts:
+
+```bash
+convoy setup \
+  --url https://your-deployment.convex.cloud \
+  --api-key sk_user_xxx \
+  --project proj_abc123 \
+  --profile-key work \
+  --profile "Work" \
+  --path .
+```
+
+Replace the example credential through your script's secret handling.
+Avoid placing a real key in committed scripts or shell history.
+
+`--path .` saves the current directory as an absolute path. Add `--force`
+to overwrite an existing profile key. This mode saves the profile and exits;
+start the worker separately with `convoy connect --profile work`.
+
+See the [CLI reference](/docs/reference/cli-commands#convoy-setup) for all
+setup flags and [Running the CLI long-term](/docs/operations/running-the-cli-long-term)
+for a persistent worker.
+
+## What API keys are used for
+
+A saved CLI profile uses its key for bridge connections and one-shot
+commands. Generated [MCP configuration](/docs/cli/mcp) can also embed a key.
+MCP clients that support the direct OAuth flow can connect through browser
+authorization instead.
+
+## Important properties
+
+Keys are user-scoped. They inherit the permissions of the user who created
+them and grant no additional access. Use separate keys for separate
+machines or scripts so you can revoke one without interrupting the rest.
+
+## Operational guidance
+
+Rotate credentials if a machine is lost or a secret leaks. Never commit
+keys, including generated MCP files that contain them. The CLI stores its
+key in `~/.config/convoy/config.toml`, created with file mode `0600`.
+See [Config file](/docs/reference/config-toml) for the storage layout.
+
+## Related pages
+
+- [Install and connect](/docs/cli) for interactive setup.
+- [Model provider keys](/docs/cli/provider-keys) for runtime credentials.
+- [Security model](/docs/cli/security) for the execution and access boundaries.

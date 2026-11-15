@@ -1,0 +1,113 @@
+---
+title: Adding a runtime
+description: Steps to land execution support for a new CLI runtime.
+---
+
+Convoy already has a runtime registry, so adding a new runtime slug is a
+data change. Adding real *execution* support is the harder piece. This page
+lists what you need to implement on each side.
+
+Read [`CLI architecture and lifecycle`](/docs/contributing/cli-architecture-and-lifecycle)
+first — it has the system shape, event union, and file pointers this page
+builds on.
+
+## 1. Pick and register the slug
+
+Edit `apps/web/convex/cli/lib/runtimes/contracts.ts`:
+
+- Add your slug to `CLI_RUNTIME_SLUGS` (and `GENERIC_CLI_RUNTIME_SLUGS` if
+  you do not yet have a bespoke runtime folder).
+- A slug becomes a stable public identifier — renaming later forces a data
+  migration of `cliSessions`, `cliProfiles`, and `cliMessageChunks` rows.
+
+## 2. Backend runtime definition
+
+Two options:
+
+- **Generic runtime** — good enough if your runtime does not need a
+  custom chunk normalizer, custom models, or custom continuation handling.
+  Use `createGenericCliRuntime({ type, label })` in `registry.ts`. The
+  generic runtime provides a default `parseAvailableCli` and an
+  identity-style chunk path.
+- **Bespoke runtime** — create
+  `apps/web/convex/cli/lib/runtimes/<slug>/` with at least `runtime.ts`
+  exporting a `CliRuntimeDefinition`, then register it in
+  `registry.ts`. Typical members:
+  - `parseAvailableCli` — validate the CLI-reported `availableClis` row
+  - `normalizeChunk` — map `RawCliChunk → CliNormalizedEvent`. The
+    contract is defined in `apps/web/convex/lib/contracts/validators.ts`.
+    Keep all runtime-specific parsing here.
+  - `getModelOptions` / `resolveRunModel` / `normalizeStoredModel` if the
+    runtime exposes user-visible model choices.
+  - `extractContinuationIdFromChunks` / `buildResumeCommand` if the
+    runtime supports continuations.
+
+See `apps/web/convex/cli/lib/runtimes/claudeCode/` as the worked example.
+
+## 3. Frontend UI metadata
+
+Edit `apps/web/lib/cli-runtime-ui/`:
+
+- Register the slug with a label, icon, and selector metadata (see
+  existing `claude-code.tsx` and `codex.tsx` entries).
+- Any runtime-specific UI (e.g. a context-window meter) should use the
+  normalized event kinds, not raw chunk shapes.
+
+## 4. CLI-side executor
+
+Create `apps/cli/src/agent/runtimes/<slug>/`:
+
+- `runner.ts` exporting a `CliRuntimeRunner` (see the contract in
+  `apps/cli/src/agent/runtimes/contracts.ts`). A runner yields raw chunks:
+
+  ```ts
+  async *execute(...) {
+    for await (const chunk of spawnTheRuntime(...)) {
+      yield { type: chunk.type, data: chunk.data };
+    }
+  }
+  ```
+
+- `detect.ts` exporting whatever `detectAvailableClis` needs to report this
+  runtime in `registerSession`.
+- Optional: `models.ts`, `prompts.ts`, `continuation.ts` mirroring the
+  Claude Code layout when the runtime needs them.
+
+Register the runner in `apps/cli/src/agent/runtimes/registry.ts`. A cliType
+without a registered runner fails fast with a clear "unsupported cliType"
+message instead of silently hanging.
+
+Two transport shapes exist as worked examples:
+
+- **Per-turn subprocess** (`apps/cli/src/agent/runtimes/codex/`) — spawn the
+  CLI once per run in JSON-stream mode and forward stdout lines as chunks.
+  Simplest; no mid-run interactivity.
+- **Interactive server + SDK** (`apps/cli/src/agent/runtimes/opencode/`) —
+  keep a long-lived server process, drive sessions through the runtime's
+  SDK, and route permission/question requests through the interaction
+  bridge. Use this when the runtime supports mid-run approvals or
+  streaming deltas.
+
+## 5. Specs
+
+Per the project's specs-first workflow, update or add a spec in
+`docs/specs/` that documents:
+
+- expected stream shapes from this runtime
+- continuation semantics (if any)
+- tool-call handling
+- any known payload gotchas that should be preserved across refactors
+
+## 6. Tests
+
+- Backend: add `normalizeChunk.test.ts` fixtures covering each event kind
+  your parser emits. Use Convex-test patterns (`pnpm web:test:once`).
+- CLI: add a `runner.test.ts` that exercises the executor against a
+  deterministic fixture stream. Claude Code uses `--stream <jsonl>` for this;
+  replicate that pattern so your runtime has a non-live test path.
+
+## 7. Roadmap
+
+Update [`Roadmap`](/docs/reference/roadmap) when you move a runtime from
+"config surface only" to "executable" so the public docs stay honest about
+which runtimes users can actually run today.

@@ -1,0 +1,48 @@
+---
+title: Choose a deployment path
+sidebarTitle: Choose deployment
+description: Choose managed hosting or Docker, then configure authentication, the backend, and the web app.
+---
+
+Deploy a Convoy instance once for your team. Each developer who wants to
+execute AI threads then [connects their own machine](/docs/cli). People who
+only manage tasks can use the web app without the CLI.
+
+## Managed hosting
+
+Use managed Convex for the backend and a Next.js host for the web app. The
+documented web-host example is Vercel. Follow this order so each credential
+is ready before the next step needs it:
+
+1. [Auth and Clerk](/docs/deployment/auth-and-clerk). Create the Clerk app,
+   configure the `convex` JWT template, and copy the issuer and app keys.
+2. [Deploy the Convex backend](/docs/deployment/deploy-with-convex). Set the
+   issuer, deploy the functions and schema, and record the deployment URL.
+3. [Deploy the web app](/docs/deployment/deploy-to-vercel). Configure the
+   backend connection and Clerk keys on your web host.
+4. [Email and Resend](/docs/deployment/email-and-resend). Configure email if
+   your team needs invitation delivery.
+5. [GitHub integration](/docs/deployment/github-integration). Register a
+   GitHub App if projects should browse pull requests in Convoy.
+6. [Production checklist](/docs/deployment/production-checklist). Verify
+   sign-in, permissions, uploads, and a connected runtime before launch.
+
+## Docker
+
+[Docker deployment](/docs/deployment/self-hosting-convex) runs the backend,
+dashboard, and web app using the bundled Compose setup. It still requires
+Clerk; Resend is optional. Follow that recipe directly instead of the
+managed Convex and Vercel steps above.
+
+You own backups, upgrades, network access, and availability on this path.
+Read its validation status, then use the same
+[production checklist](/docs/deployment/production-checklist).
+
+## After launch
+
+[Operations](/docs/operations) covers upgrades, migrations, monitoring, and
+recovery. The [environment variable reference](/docs/reference/environment-variables)
+shows which settings belong in Convex, the web host, or a local environment.
+
+The public docs site is a separate application. Contributors can follow
+[Deploying the docs site](/docs/deployment/deploy-docs) when publishing it.

@@ -1,0 +1,46 @@
+---
+title: Debugging
+description: Symptom-indexed entry point for production issues. Routes to the subsystem-specific troubleshooting pages.
+---
+
+If you do not yet know which subsystem is broken, start here. This
+page is the "I don't know where to look" front door; each subsystem
+has its own deeper troubleshooting page linked below.
+
+## Areas to check first
+
+- web app availability
+- Convex deployment health
+- Clerk configuration
+- Resend configuration
+- connected CLI session status
+
+## Route by symptom
+
+| Symptom | Start at |
+|---|---|
+| Users cannot sign in, 4xx/5xx after login | [`Auth and Clerk`](/docs/deployment/auth-and-clerk) — verify Clerk keys, allowed domains, JWT issuer. |
+| Tasks load slowly or fail | [`Monitoring and logs`](/docs/operations/monitoring-and-logs) — check Convex function error rate and latency. |
+| Threads stay pending, never execute | [`CLI Troubleshooting`](/docs/cli/troubleshooting) — verify a compatible profile is online and the runtime is installed. |
+| MCP client cannot reach Convoy | [`MCP Troubleshooting`](/docs/cli/mcp/troubleshooting) — config path, client scope, API key validity. |
+| Dev-container issues (firewall, env vars, Bedrock retries) | [`Dev Container Troubleshooting`](/docs/cli/dev-container/troubleshooting). |
+| Email links are wrong | [`Email and Resend`](/docs/deployment/email-and-resend) — check `NEXT_PUBLIC_APP_URL` in the Convex dashboard. If unset, email links default to `https://app.convoy.build`. |
+| Claim lease / retry / chunk normalization issues | [`CLI architecture and lifecycle`](/docs/contributing/cli-architecture-and-lifecycle) — the invariants section explains the expected behavior. |
+
+## Debugging strategy
+
+Start from the user-visible symptom, then narrow the problem by
+subsystem:
+
+- auth
+- backend
+- email
+- CLI connectivity
+- runtime-specific execution
+
+## See also
+
+- [`CLI troubleshooting`](/docs/cli/troubleshooting)
+- [`MCP troubleshooting`](/docs/cli/mcp/troubleshooting)
+- [`Dev container troubleshooting`](/docs/cli/dev-container/troubleshooting)
+- [`Monitoring and logs`](/docs/operations/monitoring-and-logs)

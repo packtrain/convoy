@@ -1,0 +1,99 @@
+import { PassThrough } from "node:stream";
+import { Box, render } from "ink";
+import assert from "node:assert/strict";
+import { Onboarding } from "../onboarding/index.js";
+import { Browser } from "../workflow.js";
+import { plain } from "../formatters.js";
+import { inputBound, settle } from "./test-helpers.js";
+import type { ProjectAddOptions } from "../../project/workflow.js";
+const stdout = Object.assign(new PassThrough(), { columns: 80, rows: 24, isTTY: true });
+const stdin = Object.assign(new PassThrough(), { isTTY: true, setRawMode() {}, ref() {}, unref() {} });
+const stderr = new PassThrough();
+let frame = "", output = "", calls = 0;
+stdout.on("data", chunk => { output += chunk.toString(); if (plain(chunk.toString()).trim()) frame = plain(chunk.toString()); });
+const requests: ProjectAddOptions[] = [];
+const browser = new Browser([{ id: "fixture", name: "Fixture", transport: "unix", endpoint: "/socket", open: async () => { throw new Error(); },
+  addProject: async (_directory, options) => {
+    requests.push(options); calls++;
+    return calls === 1 ? { ok: false, registered: false, applied: false, retrySafe: true, phase: "preparation", projectId: "created-project" }
+      : { ok: true, registered: true, applied: true, retrySafe: true, phase: "complete", projectId: "created-project" };
+  },
+}]);
+if (["access", "remount"].includes(process.argv[2])) {
+  browser.targets[0].credentials = { status: async () => ({ service: true, compatible: true, configurationError: false, entries: [], projects: [] }) };
+  browser.prepareOnboardingAccess = async profile => ({ profile, status: "online", attempts: 1, runtimes: ["codex"] });
+}
+browser.openOnboarding();
+const mount = () => render(<Box width={80} height={23}><Onboarding browser={browser} width={80} height={23} load={async (_url, secret) => {
+  assert.equal(secret, "PRIVATE_API_KEY_qard");
+  return { projects: [{ _id: "existing", name: "Existing", alias: "EX", organizationName: "Org", organizationId: "org" }], organizations: [{ _id: "org", name: "Org", slug: "org" }] };
+}} /></Box>, { stdout: stdout as unknown as NodeJS.WriteStream, stdin: stdin as unknown as NodeJS.ReadStream, stderr: stderr as unknown as NodeJS.WriteStream, debug: true, exitOnCtrlC: false, patchConsole: false });
+let instance = mount();
+async function wait(check: () => boolean) {
+  const deadline = Date.now() + 3000;
+  while (!check()) { if (Date.now() > deadline) throw new Error(frame); await new Promise<void>(resolve => setImmediate(resolve)); }
+  await inputBound();
+}
+async function key(value: string) { const before = frame; stdin.write(value); await wait(() => frame !== before || browser.getSnapshot().onboarding === false); }
+try {
+  await wait(() => frame.includes("Deployment HTTPS"));
+  await key("https://example.convex.cloud"); await key("\t"); await key("PRIVATE_API_KEY_qard");
+  assert(!output.includes("PRIVATE_API_KEY_qard"), frame);
+  browser.select({ connection: 0, details: false }); assert(browser.getSnapshot().scope.details);
+  await key("\t"); await key("\t"); await key("\r"); await wait(() => frame.includes("Link existing"));
+  if (process.argv[2] === "cancel") {
+    await key("\u001b"); await key("\u001b");
+    assert(frame.includes("Discard project draft"), "Leaving a nonempty form requires an explicit discard");
+    await key("\r"); assert(frame.includes("Deployment HTTPS"));
+    await key("\u001b"); stdin.write("\t"); await settle(70); await key("\r");
+    assert.equal(browser.getSnapshot().onboarding, false, "Explicit discard closes the form");
+  } else if (process.argv[2] === "link") {
+    await key("\r"); await key("\r"); await wait(() => frame.includes("Profile name"));
+    await key(" custom"); await key("\t"); await key("-custom"); await key("\t");
+    await key("-workspace"); await key("\t"); await key(" "); await key("\u001b[B"); await key("\r"); await key("\t"); await key("\t"); await key("\r");
+    await wait(() => frame.includes("Back")); await key("\t"); await key("\r");
+    await wait(() => frame.includes("preparation failed"));
+    assert.equal(requests[0].project, "existing"); assert.equal(requests[0].profileName, "Existing custom");
+    assert.equal(requests[0].profileKey, "ex-custom"); assert.equal(requests[0].reuse, true);
+  } else {
+    await key("\u001b[B"); await key("\r"); await key("\r");
+    await wait(() => frame.includes("Project name"));
+    for (let i = 0; i < 7; i++) await key("\t");
+    await key("\r");
+    await wait(() => frame.includes("Back")); assert.equal(calls, 0);
+    if (process.argv[2] === "small") {
+      instance.rerender(<Box width={45} height={10}><Onboarding browser={browser} width={45} height={10} /></Box>);
+      await wait(() => frame.includes("Create") || frame.includes("Resize"));
+      stdin.write("\t"); await new Promise<void>(resolve => setImmediate(resolve));
+      stdin.write("\r"); await new Promise<void>(resolve => setImmediate(resolve));
+      await new Promise<void>(resolve => setImmediate(resolve));
+      assert.equal(calls, 0, "Cannot register while confirmation is clipped");
+      assert(frame.includes("Resize"));
+    } else {
+      await key("\t"); await key("\r"); await wait(() => frame.includes("preparation failed"));
+      assert.equal(requests[0].create, true);
+      await key("\r"); await wait(() => frame.includes("Profile name"));
+      for (let i = 0; i < 5; i++) await key("\t");
+      await key("\r");
+      await key("\t"); await key("\r");
+      if (["access", "remount"].includes(process.argv[2])) {
+        await wait(() => frame.includes("Runtime access") && frame.includes("Skip"));
+        assert(!frame.includes("Service applied"));
+        assert.equal(calls, 2);
+        if (process.argv[2] === "remount") {
+          instance.unmount(); instance.cleanup();
+          frame = "";
+          instance = mount();
+          await wait(() => frame.includes("Runtime access"));
+          assert(!frame.includes("Deployment HTTPS"));
+        }
+        for (let i = 0; i < 30; i++) await new Promise<void>(resolve => setImmediate(resolve));
+        await key("\r");
+      }
+      await wait(() => frame.includes("Service applied"));
+      assert.equal(calls, 2); assert.equal(requests[1].project, "created-project"); assert.equal(requests[1].create, undefined);
+      assert(!output.includes("PRIVATE_API_KEY_qard"), frame);
+    }
+  }
+  console.log("Onboarding renderer checks passed");
+} finally { instance.unmount(); instance.cleanup(); browser.dispose(); }

@@ -1,0 +1,326 @@
+.root {
+  container-type: inline-size;
+  display: flex;
+  flex-direction: column;
+  width: 100%;
+  margin: 0;
+  font-size: 13px;
+}
+
+.node {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  min-width: 0;
+  padding: 12px 14px;
+  border: 1px solid rgb(255 255 255 / 0.1);
+  background: #0e0e15;
+}
+
+.root > .node {
+  align-self: center;
+  width: min(100%, 340px);
+}
+
+.icon {
+  display: inline-flex;
+  flex: none;
+  align-items: center;
+  justify-content: center;
+  width: 32px;
+  height: 32px;
+  border: 1px solid rgb(255 255 255 / 0.1);
+  background: rgb(255 255 255 / 0.03);
+  color: #c6cad3;
+}
+
+.icon svg {
+  width: 16px;
+  height: 16px;
+}
+
+.text {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+
+.title {
+  font-size: 14px;
+  font-weight: 510;
+  color: #f2f3f5;
+}
+
+.detail {
+  font-size: 12.5px;
+  line-height: 1.45;
+  color: #8f94a1;
+}
+
+.flow {
+  display: grid;
+  grid-template-columns: 1fr 1px 1fr;
+  align-items: center;
+  height: 56px;
+}
+
+.line,
+.lineUp {
+  position: relative;
+  grid-column: 2;
+  height: 100%;
+  overflow: hidden;
+  background: rgb(255 255 255 / 0.16);
+}
+
+.line::after,
+.lineUp::after {
+  content: "";
+  position: absolute;
+  left: 0;
+  width: 1px;
+  height: 16px;
+  background: linear-gradient(transparent, #f2f3f5, transparent);
+  animation: flow-down 2.4s linear infinite;
+}
+
+.lineUp::after {
+  animation-name: flow-up;
+}
+
+@keyframes flow-down {
+  from { top: -16px; }
+  to { top: 100%; }
+}
+
+@keyframes flow-up {
+  from { top: 100%; }
+  to { top: -16px; }
+}
+
+.flowLabel {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding-left: 14px;
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 11px;
+  color: #c6cad3;
+}
+
+.flowLabel code {
+  font: inherit;
+}
+
+.flowNote {
+  color: #6f7480;
+}
+
+.boundary {
+  position: relative;
+  padding: 28px 16px 16px;
+  border: 1px dashed rgb(255 255 255 / 0.2);
+  background: radial-gradient(120% 90% at 50% 0%, rgb(255 255 255 / 0.045), transparent 70%);
+}
+
+.boundaryLabel {
+  margin: 0;
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 11px;
+  font-weight: 400;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+}
+
+.boundaryLabel {
+  position: absolute;
+  top: -8px;
+  left: 14px;
+  padding: 0 8px;
+  background: #08080d;
+  line-height: 16px;
+  color: #c6cad3;
+}
+
+.services {
+  display: grid;
+  justify-items: stretch;
+}
+
+.bridge {
+  justify-self: center;
+  width: 1px;
+  height: 16px;
+  background: rgb(255 255 255 / 0.16);
+}
+
+@container (min-width: 480px) {
+  .services {
+    grid-template-columns: 1fr 28px 1fr;
+    align-items: stretch;
+  }
+
+  .bridge {
+    align-self: center;
+    justify-self: stretch;
+    width: auto;
+    height: 1px;
+  }
+}
+
+.machines {
+  display: grid;
+  gap: 8px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.machine {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  min-width: 0;
+  padding: 12px;
+  border: 1px solid rgb(255 255 255 / 0.1);
+  background: #0e0e15;
+}
+
+.machineHead {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+}
+
+.machineIcon {
+  flex: none;
+  width: 15px;
+  height: 15px;
+  color: #c6cad3;
+}
+
+.machineFoot {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+@container (min-width: 480px) {
+  .machines {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+
+  .machine {
+    display: block;
+  }
+
+  .machineFoot {
+    margin-top: 10px;
+  }
+}
+
+.runtimes {
+  display: flex;
+  gap: 6px;
+  color: #c6cad3;
+}
+
+.runtime {
+  display: inline-flex;
+  width: 14px;
+  height: 14px;
+}
+
+.runtime svg {
+  width: 100%;
+  height: 100%;
+}
+
+/* Machines fan out to model providers: drops, a shared line, then stubs. */
+.fanout { display: none; }
+
+.narrowFlow .flow { height: 40px; }
+
+.drops,
+.stubs {
+  display: grid;
+  gap: 8px;
+}
+
+.drops { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+.stubs { grid-template-columns: repeat(4, minmax(0, 1fr)); }
+
+.drops > span,
+.stubs > span {
+  position: relative;
+  display: flex;
+  justify-content: center;
+}
+
+.drops .line { width: 1px; height: 24px; }
+.stubs .line { width: 1px; height: 16px; }
+
+.fanoutLabel {
+  position: absolute;
+  top: 5px;
+  left: calc(50% + 12px);
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 11px;
+  color: #c6cad3;
+  white-space: nowrap;
+}
+
+/* Spans from the first provider's centre to the last one's. */
+.bus {
+  display: block;
+  height: 1px;
+  margin-inline: calc((100% - 24px) / 8);
+  background: rgb(255 255 255 / 0.16);
+}
+
+.providers {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 8px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.provider {
+  display: flex;
+  justify-content: center;
+  min-width: 0;
+  padding: 10px 12px;
+  border: 1px dashed rgb(255 255 255 / 0.16);
+}
+
+.logo {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+  color: #e6e8ec;
+}
+
+/* Wordmarks shrink to fit a narrow card; the mark keeps its size. */
+.logo svg { width: auto; height: auto; max-height: 14px; min-width: 0; max-width: 100%; }
+.logo svg:first-child { flex: none; height: 16px; max-height: none; }
+
+@container (min-width: 480px) {
+  .narrowFlow { display: none; }
+  .fanout { display: block; }
+  .providers { grid-template-columns: repeat(4, minmax(0, 1fr)); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .line::after,
+  .lineUp::after {
+    animation: none;
+    opacity: 0;
+  }
+}

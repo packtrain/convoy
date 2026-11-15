@@ -1,0 +1,75 @@
+---
+title: Install Skills for AI clients
+sidebarTitle: Client Skills
+description: Install Convoy skills so AI clients work with your tasks in a consistent way.
+---
+
+Skills teach supported AI clients (Claude Code, Codex) how to work with
+Convoy: standard task workflows, artifact conventions, and less repeated
+setup across teammates. They complement [MCP](/docs/cli/mcp) — MCP exposes
+the tools, skills teach the client how to use them well.
+
+This page covers local client installation. To manage reusable Skills in
+the web app, see [Skills in Convoy](/docs/using/skills).
+
+## Install with the CLI
+
+```bash
+convoy init skill
+convoy init skill --cli claude,codex --scope project
+convoy init skill --cli claude,codex --scope project --force
+```
+
+Project-scoped installs keep one copy of the skill in
+`.agents/skills/convoy`. Claude Code raw skill installs create
+`.claude/skills/convoy` as a symlink to that shared copy. If an
+existing skill directory or link is found, Convoy prompts before
+replacing it; use `--force` to replace without a prompt. The
+`--claude-method` flag selects the Claude Code install method when more
+than one is available.
+
+## Scope choices
+
+- use **project scope** when the skill should live with the repo —
+  preferred for shared team repos
+- use **user scope** when the setup should stay local to one machine
+
+## skills.sh alternative
+
+If your team already manages agent skills with
+[`skills.sh`](https://skills.sh/docs/cli), install the same task skill
+with:
+
+```bash
+npx skills add https://github.com/packtrain/convoy/tree/main/plugins/convoy/skills --skill convoy
+```
+
+The `/tree/main/plugins/convoy/skills` form is the documented GitHub
+subdirectory URL shape for skills.sh — a repository URL without
+`/tree/main/` points at the repository root, not this skill directory.
+
+Useful options:
+
+- `--agent claude-code` or `--agent codex` targets a specific client
+- `--global` installs to the user-level skill directory
+- `--copy` copies files instead of using skills.sh's default symlink-based
+  install
+- `--yes` skips confirmation prompts
+
+See the [skills CLI reference](https://skills.sh/docs/cli) and
+[vercel-labs/skills](https://github.com/vercel-labs/skills) for the full
+command surface.
+
+## Recommended approach for a shared repo
+
+1. [Connect the client through MCP](/docs/cli/mcp). Direct OAuth or manual
+   configuration does not need a running bridge.
+2. If you use the CLI config generator, save a profile with `convoy setup`.
+3. Install the project-scoped skill (`convoy init skill --scope project`).
+4. Validate the client inside that repo: ask it to list tasks, then create
+   a test task.
+
+## Related pages
+
+- [`Set up MCP`](/docs/cli/mcp)
+- [Supported runtimes](/docs/reference/roadmap)

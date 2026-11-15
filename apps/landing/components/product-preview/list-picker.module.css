@@ -1,0 +1,12 @@
+/* Product dark popover tokens; the List rows scroll in a 17rem viewport (task-lists.md). */
+.picker { position:relative; display:inline-flex; min-width:0; }
+.picker svg { width:14px; height:14px; flex-shrink:0; }
+.menu { position:absolute; top:calc(100% + 4px); right:0; z-index:20; display:flex; flex-direction:column; width:192px; padding:6px; background:#171717; border:1px solid #ffffff1a; border-radius:8px; box-shadow:0 8px 24px #0006; font-size:14px; line-height:20px; color:#e8e8e8; text-align:left; }
+.menu button { display:flex; flex-shrink:0; align-items:center; gap:10px; width:100%; height:32px; padding:0 8px; border:0; border-radius:6px; background:transparent; font:inherit; color:inherit; white-space:nowrap; cursor:pointer; }
+.menu button:hover,.menu button:focus-visible,.menu button[aria-checked=true] { background:#262626; outline:none; }
+.search { display:flex; align-items:center; gap:8px; height:32px; margin-bottom:4px; padding:0 10px; border:1px solid #ffffff1f; border-radius:8px; background:#ffffff08; color:#929292; }
+.search input { min-width:0; flex:1; padding:0; border:0; outline:none; background:none; font:inherit; color:#e8e8e8; }
+.search input::placeholder { color:#929292; }
+.muted { color:#929292; }
+.menu hr { width:calc(100% + 12px); margin:6px -6px; border:0; border-top:1px solid #ffffff1a; }
+.lists { display:flex; flex-direction:column; max-height:17rem; overflow-y:auto; scrollbar-width:none; }

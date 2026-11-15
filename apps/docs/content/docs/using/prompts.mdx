@@ -1,0 +1,84 @@
+---
+title: Prompts / Slash commands
+description: Save reusable messages and choose how they expand or submit in the thread composer.
+---
+
+Prompts store message text under a slash command such as `/review`. Create them
+in organization or project settings, then select them in a thread composer.
+
+## Create a prompt
+
+1. Open **Prompts** in project settings for a project-specific command, or in
+   organization settings to share it across the organization's projects.
+2. Create a prompt and enter its **Command key**, such as `review`, without
+   the leading slash.
+3. Add an optional description and category, then write the **Content**.
+4. Leave **Auto expand** and **Autosubmit** off for your first prompt, then save.
+
+A review prompt could contain:
+
+```text
+Review the changes for correctness and regressions.
+Read the relevant specification and inspect the test coverage.
+Report actionable findings with a file location and a concrete failure case.
+If there are no findings, say so and identify any verification gaps.
+```
+
+Command keys contain lowercase letters, numbers, hyphens, or colons and must be
+2 to 40 characters long. Keys must be unique within their project or organization.
+
+Organization owners and admins manage organization prompts. Project admins and
+members manage project prompts. Other members who can view the owning
+organization or project can read its prompts.
+
+## Insert a prompt
+
+Type `/` in the thread composer, find the command, and select it with a click,
+Enter, or Tab. The menu shows scope badges when both project and organization
+prompts are available. Add task-specific details around the selected command,
+attach the task if needed, then send.
+
+With Auto expand off, the composer keeps a compact command reference. Convoy
+expands that selected reference into the stored prompt content for the agent
+when you send; the visible message retains its short command label. Typing
+literal `/review` text without selecting a command reference does not perform
+that expansion.
+
+Project prompts take precedence when resolving a bare command key. To choose a
+scope explicitly, use `/project:review` or `/org:review` in the menu. A command
+you selected keeps that identity even when another scope has the same key.
+
+## Choose expansion and submission behavior
+
+| Setting | What happens when you select the prompt |
+| --- | --- |
+| Both off | Inserts a compact reference; you send when ready. |
+| Auto expand on | Inserts the full content as editable text. |
+| Autosubmit on | Sends the selected prompt immediately when the rest of the composer is empty. |
+| Both on | Expands the content and submits it under the same empty-composer rule. |
+
+Both settings default to off. Autosubmit activates only when you select a saved
+prompt from the menu. Merely typing an exact command key never submits.
+Existing text, another command reference, or a file mention prevents autosubmit,
+so you can combine a prompt with your own request. An attached task and ready
+attachments can still accompany an automatic submission. Autosubmit also
+respects the normal Send button's disabled state.
+
+Edit a saved prompt from its settings row. A selected compact reference uses the
+prompt content resolved when you send; expanded text is already part of your
+draft and can be edited there. Deleting a prompt requires confirmation.
+
+## Prompts, Skills, and runtime commands
+
+The `/` menu also contains other items with different behavior:
+
+- [Skills](/docs/using/skills) tell the agent to load an instruction bundle
+  through MCP. They do not paste the whole bundle into the message or autosubmit.
+- Runtime commands come from the selected AI runtime. For example, `/compact`
+  manages its conversation context; it is not a saved Convoy prompt. Availability
+  and behavior depend on the runtime. Selecting `/compact` can submit immediately
+  when the composer is otherwise empty.
+
+Use a [Project agent](/docs/using/project-agents) when the instructions should
+apply throughout a new thread. Use a prompt when you want to insert a reusable
+request into a particular message.

@@ -1,0 +1,32 @@
+export const errors = {
+  ORG_NOT_FOUND: "Organization not found",
+  ORG_DELETED: "Organization has been deleted",
+  ORG_SLUG_TAKEN: "Organization slug already taken",
+  ORG_NAME_TOO_SHORT: "Organization name must be at least 2 characters",
+  ORG_SLUG_INVALID: "Slug must contain only lowercase letters, numbers, and hyphens, and cannot start or end with a hyphen",
+  ORG_SLUG_LENGTH: "Slug must be between 2 and 50 characters",
+  ORG_URL_TAKEN: "This URL is already taken",
+  ORG_NO_LONGER_EXISTS: "Organization no longer exists",
+
+  USER_ALREADY_MEMBER: "User is already a member of this organization",
+  CURRENT_USER_NOT_MEMBER: "You are not a member of this organization",
+  TARGET_USER_NOT_MEMBER: "User is not a member of this organization",
+
+  INVITATION_ALREADY_PENDING: "An invitation is already pending for this email",
+  INVITATION_NOT_FOUND: "Invitation not found",
+  INVITATION_RESEND_REQUIRES_PENDING: "Can only resend pending invitations",
+  INVITATION_REVOKE_REQUIRES_PENDING: "Can only revoke pending invitations",
+  INVITATION_ACCOUNT_EMAIL_REQUIRED: "Unable to verify your account email. Please sign in with an account that has an email address.",
+  INVITATION_LINK_INVALID: "Invalid invitation link",
+  INVITATION_UNAUTHORIZED: "This invitation is not available for this account",
+  INVITATION_ALREADY_ACCEPTED: "This invitation has already been accepted",
+  INVITATION_REVOKED: "This invitation has been revoked",
+  INVITATION_EXPIRED: "This invitation has expired",
+
+  ONLY_OWNERS_CAN_CHANGE_OWNER_ROLE: "Only owners can change another owner's role",
+  ONLY_OWNERS_CAN_PROMOTE_OWNER: "Only owners can promote to owner",
+  ONLY_OWNERS_CAN_REMOVE_OWNERS: "Only owners can remove other owners",
+  CANNOT_DEMOTE_ONLY_OWNER: "Cannot demote yourself as the only owner. Transfer ownership first.",
+  CANNOT_REMOVE_SELF: "Cannot remove yourself. Use 'Leave organization' instead.",
+  CANNOT_LEAVE_ONLY_OWNER: "Cannot leave as the only owner. Transfer ownership to another member first, or delete the organization.",
+} as const;

@@ -1,0 +1,58 @@
+/**
+ * User-facing error messages thrown by the workflows domain. Specs and tests
+ * assert on these strings.
+ */
+export const errors = {
+  WORKFLOW_NOT_FOUND: "Workflow not found",
+  WORKFLOW_NAME_REQUIRED: "Workflow name is required",
+  WORKFLOW_NAME_TOO_LONG: "Workflow name must be 120 characters or fewer",
+  WORKFLOW_CATEGORY_TOO_LONG: "Workflow category must be 60 characters or fewer",
+  WORKFLOW_DESCRIPTION_TOO_LONG: "Workflow description must be 2000 characters or fewer",
+  WORKFLOW_COLOR_INVALID: "Workflow color must be one of the supported palette colors",
+  WORKFLOW_DEFINITION_DUPLICATE_LANE_ID: "Workflow definition has duplicate lane IDs",
+  WORKFLOW_DEFINITION_DUPLICATE_STAGE_ID: "Workflow definition has duplicate stage IDs",
+  WORKFLOW_DEFINITION_DUPLICATE_STEP_ID: "Workflow stage has duplicate step IDs",
+  WORKFLOW_DEFINITION_UNKNOWN_LANE: "Workflow step references a lane that is not in the definition",
+  WORKFLOW_DEFINITION_TOO_MANY_LANES: "Workflow definition must have 12 lanes or fewer",
+  WORKFLOW_DEFINITION_TOO_MANY_STAGES: "Workflow definition must have 50 stages or fewer",
+  WORKFLOW_DEFINITION_TOO_MANY_STEPS: "Workflow stage must have 50 steps or fewer",
+  WORKFLOW_DEFINITION_SCRIPT_TOO_LONG: "Workflow Bash script must be 32000 characters or fewer",
+  WORKFLOW_DEFINITION_PROMPT_TOO_LONG: "Workflow prompt must be 32000 characters or fewer",
+  WORKFLOW_DEFINITION_TOO_LARGE: "Workflow definition is too large",
+  WORKFLOW_DEFINITION_NO_LANES: "Workflow needs at least one lane",
+  WORKFLOW_DEFINITION_NO_STAGES: "Workflow needs at least one stage",
+  // Version-cut (run start) validation — docs/specs/workflow-data-schema.md.
+  WORKFLOW_DEFINITION_EMPTY_STAGE: "Every stage needs at least one step to run",
+  WORKFLOW_DEFINITION_LANE_NAME_REQUIRED: "Every lane needs a name to run",
+  WORKFLOW_DEFINITION_STAGE_NAME_REQUIRED: "Every stage needs a name to run",
+  WORKFLOW_DEFINITION_LANE_RUNTIME_REQUIRED: "Every lane needs a runtime to run",
+  WORKFLOW_DEFINITION_STEP_RUNTIME_REQUIRED: "Every prompt in a parallel lane needs a runtime to run",
+  // Runtime settings live on the lane (single) or the step (parallel); one message covers both.
+  WORKFLOW_DEFINITION_LANE_MODEL_UNSUPPORTED: "A model is not supported by its runtime",
+  WORKFLOW_DEFINITION_LANE_EFFORT_UNSUPPORTED: "A reasoning effort is not supported by its runtime",
+  WORKFLOW_DEFINITION_AGENT_NOT_FOUND: "The workflow references an agent that no longer exists",
+  WORKFLOW_DEFINITION_AGENT_DIFFERENT_PROJECT: "The workflow references an agent from another project",
+  WORKFLOW_DEFINITION_WAIT_FIRST: "A lane cannot start with a Wait step",
+  WORKFLOW_DEFINITION_BASH_TIMEOUT_INVALID: "A Bash step's timeout must be between 1 second and 6 hours",
+  WORKFLOW_DEFINITION_PARALLEL_BASH_MUST_STOP: "A Bash step in a parallel lane must stop on failure — its one-shot thread has no agent to report to",
+  // Runs.
+  WORKFLOW_RUN_NOT_FOUND: "Workflow run not found",
+  WORKFLOW_RUN_NOT_STARTER: "Only the user who started the run can do that",
+  WORKFLOW_STEP_NOT_FOUND: "Workflow run step not found",
+  WORKFLOW_STEP_NOT_FAILED: "Only a failed step can be retried or skipped",
+  WORKFLOW_STEP_NOT_WAITING: "Only a waiting step can be approved",
+  WORKFLOW_RUN_ALREADY_FINISHED: "The run has already finished",
+  WORKFLOW_RUN_PROFILE_DIFFERENT_PROJECT: "The selected machine belongs to another project",
+  WORKFLOW_RUN_SOURCE_DIFFERENT_PROJECT: "The thread belongs to another project",
+  WORKFLOW_RUN_SOURCE_ALREADY_BOUND: "This thread group already has a workflow run",
+  WORKFLOW_RUN_SOURCE_MOVED: "The source thread changed groups. Reopen the new-thread composer and try again.",
+  WORKFLOW_RUN_SOURCE_SHARED: "Unshare this thread or group before starting a workflow",
+  // Step failure reasons persisted onto run step rows by the engine.
+  WORKFLOW_STEP_THREAD_DELETED: "The step's thread was deleted",
+  WORKFLOW_STEP_THREAD_FAILED: "The step's thread run failed",
+  WORKFLOW_STEP_DISPATCH_FAILED: "The step could not be dispatched",
+  WORKFLOW_STEP_SCRIPT_FAILED: "The step's script failed",
+  WORKFLOW_STEP_SCRIPT_TIMED_OUT: "The step's script timed out",
+  workflowStepScriptExited: (exitCode: number) => `The step's script exited with code ${exitCode}`,
+  workflowStepRuntimeUnavailable: (cliType: string) => `The connected CLI does not have the "${cliType}" runtime available`,
+} as const;

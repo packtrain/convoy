@@ -1,0 +1,126 @@
+---
+title: "Quickstart: run from source"
+sidebarTitle: Run from source
+description: Clone the repo, start Convex + Next.js, and point the CLI at your local dev deployment.
+---
+
+This guide is for contributors who want the full Convoy stack running from a
+local checkout: Convex backend, Next.js web app, and the CLI bridge executing
+your selected runtime against the same dev deployment.
+
+If you instead have access to an existing deployment and just want the CLI
+wired up, see [`Quickstart: join a deployment`](/docs/quickstart-join).
+
+## Prerequisites
+
+- Node.js 18+
+- pnpm
+- a Convex dev deployment (free tier is fine)
+- Clerk keys for local authentication
+- An installed, authenticated [supported runtime](/docs/reference/roadmap#runtime-execution)
+
+Verify the runtime before starting the bridge. For Claude Code:
+
+```bash
+claude --version
+```
+
+## Install dependencies
+
+From the repository root:
+
+```bash
+pnpm install
+cp apps/web/.env.example apps/web/.env.local
+```
+
+Fill `apps/web/.env.local` with your Convex and Clerk values. At minimum, the
+web app needs `NEXT_PUBLIC_CONVEX_URL`, `NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY`, and
+`CLERK_SECRET_KEY`. See
+[`Environment variables`](/docs/reference/environment-variables) for the full
+matrix.
+
+## Start Convex
+
+In one terminal:
+
+```bash
+pnpm web:convex:dev
+```
+
+Keep this process running. It syncs Convex schema and functions from
+`apps/web/convex`, tails backend logs, and provides the deployment URL used by
+the web app and CLI profile.
+
+## Start the web app
+
+In a second terminal:
+
+```bash
+pnpm web:dev
+```
+
+Open [`https://app.convoy.localhost`](https://app.convoy.localhost). Sign
+in, create or join an organization, and create a project. The project is the
+unit that CLI profiles and AI threads target.
+
+## Configure a local profile
+
+In a third terminal, from the repository or worktree you want the runtime to
+operate on:
+
+```bash
+pnpm cli:dev login
+```
+
+The setup wizard asks for:
+
+- the Convex deployment URL from `NEXT_PUBLIC_CONVEX_URL`
+- browser approval in the local web app, which issues the API key automatically
+- the project to bind this machine to
+- a profile name and local path
+
+The wizard saves a profile in `~/.config/convoy/config.toml` and starts the
+connection. Leave that terminal running. For unattended setup, see
+[API keys for scripts and headless machines](/docs/cli/api-keys). The CLI
+resolves a profile by `--profile`, `CONVOY_PROFILE`, matching the current
+working directory against saved paths, then the default profile. See
+[`Config file (config.toml)`](/docs/reference/config-toml) for the full schema
+and resolution rules.
+
+## Connect the CLI bridge
+
+Browser login starts the bridge. After stopping it, reconnect with:
+
+```bash
+pnpm cli:dev connect
+```
+
+For more logging while developing:
+
+```bash
+CONVOY_CLI_DEBUG=1 pnpm cli:dev connect
+```
+
+When connected, the CLI registers a session with Convex, heartbeats in the
+background, watches for pending threads in the configured project, and runs
+the selected runtime for claimed work.
+
+## Send a test thread
+
+1. Open the project in the web app.
+2. Start a new AI thread.
+3. Select your online profile, working path, and runtime.
+4. Send a small prompt, such as asking it to inspect the repository structure.
+5. Watch the streamed assistant response appear in the web UI.
+
+If nothing runs, check `pnpm cli:dev status`, confirm the CLI process is still
+connected, and verify that your runtime executable is available on the same `PATH` used by the
+terminal running `pnpm cli:dev connect`.
+
+## Next steps
+
+- Read [`How Convoy works`](/docs/how-convoy-works) for the runtime model
+- Read [`Profiles, paths, and status`](/docs/cli/profiles-paths-status)
+- Read [`CLI architecture and lifecycle`](/docs/contributing/cli-architecture-and-lifecycle)
+- Read the [`Contributing overview`](/docs/contributing) for the repository map

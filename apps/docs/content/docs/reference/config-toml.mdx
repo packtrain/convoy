@@ -1,0 +1,165 @@
+---
+title: Config file (config.toml)
+sidebarTitle: Config file
+description: Schema for ~/.config/convoy/config.toml, profile resolution order, and environment-variable overrides.
+---
+
+The Convoy CLI stores profile configuration in a single TOML file at
+`~/.config/convoy/config.toml`. This page is the authoritative schema
+reference; the narrative CLI pages link here for depth.
+
+File location is fixed to `~/.config/convoy/config.toml` (on all
+platforms; the `~/.config/convoy/` directory is created with mode
+`0700` on first write).
+
+## Schema
+
+The file has three top-level sections: `[settings]` (optional),
+`[profiles.<key>]` (any number of profile tables), and `[keys.<name>]`
+(optional provider-key tables).
+
+### `[settings]`
+
+| Field | Type | Required | Purpose |
+|---|---|---|---|
+| `default_profile` | `string` | No | Key of the profile to use when no other resolver matches. |
+
+### `[profiles.<key>]`
+
+`<key>` is a stable identifier you pick (e.g. `convoy-local`,
+`client-project`). It's what you pass to `--profile <key>`.
+
+| Field | Type | Required | Purpose |
+|---|---|---|---|
+| `name` | `string` | Yes | Human-readable label shown in the CLI and the web app profile selector. |
+| `url` | `string` (URL) | Yes | Convex deployment URL, e.g. `https://friendly-wolf-872.convex.cloud`. |
+| `api_key` | `string` | Yes | User API key (starts with `sk_user_`). See [API keys](/docs/cli/api-keys). |
+| `project_id` | `string` | Yes | Convoy project ID this profile binds to. |
+| `paths` | `string[]` (≥1) | Yes | One or more absolute local paths that resolve to this profile when running from them. |
+| `streaming` | `boolean` | No | Default for partial (delta) event streaming on connect. The `--buffered` flag takes precedence. On when omitted. |
+| `isolated` | `boolean` | No | OS-sandbox spawned agents to this profile's `paths` ([details](/docs/cli/isolation-options#the-built-in-isolated-mode)). The `--isolated` flag takes precedence. Off when omitted. |
+| `concurrency` | `integer` (`1-50`) | No | Maximum threads this profile processes in parallel. The `--concurrency` flag takes precedence. Defaults to `5` when omitted. |
+| `provider_key` | `string` | No | Name of a `[keys.<name>]` entry. Agents spawned for this profile run through that provider. When omitted, agents use the machine's own Claude config (typically your claude.ai subscription). |
+| `codex_provider_key` | `string` | No | Name of a `mantle` or `bedrock` `[keys.<name>]` entry with a `region`. Codex runs for this profile go through AWS. When omitted, Codex uses the machine's own Codex config and login. Independent of `provider_key`. |
+
+### `[keys.<name>]`
+
+Named model providers, stored only on this machine and assignable to profiles
+via `provider_key`. Manage them with `convoy keys`; see
+[Model provider keys](/docs/cli/provider-keys) for the walkthrough.
+
+| Field | Type | Required | Purpose |
+|---|---|---|---|
+| `provider` | `"bedrock"` \| `"mantle"` \| `"anthropic"` | Yes | Which provider the entry selects. `anthropic` pins this machine's Claude sign-in (a Claude.ai subscription) and stores no credential. |
+| `token` | `string` | For `bedrock`/`mantle` | Bearer token, injected as `AWS_BEARER_TOKEN_BEDROCK` for spawned agents. Unused by `anthropic`. |
+| `region` | `string` | No | AWS region, injected as `AWS_REGION` when set. Unused by `anthropic`. |
+
+All required fields are enforced per the Zod schema in
+`apps/cli/src/lib/config/types.ts`; the file is rejected at load time
+if any are missing.
+
+## Example
+
+```toml
+[settings]
+default_profile = "convoy-local"
+
+[profiles.convoy-local]
+name = "Convoy Local"
+url = "https://your-dev-deployment.convex.cloud"
+api_key = "sk_user_..."
+project_id = "proj_..."
+paths = [
+  "/Users/you/src/convoy",
+  "/Users/you/src/convoy-worktree"
+]
+concurrency = 8
+
+[profiles.client-project]
+name = "Client Project"
+url = "https://your-prod-deployment.convex.cloud"
+api_key = "sk_user_..."
+project_id = "proj_..."
+paths = ["/Users/you/src/client-project"]
+provider_key = "work-bedrock"
+
+[keys.work-bedrock]
+provider = "bedrock"
+token = "ABSK..."
+region = "us-east-1"
+
+[keys.claude-sub]
+provider = "anthropic"
+```
+
+The profile key is everything after `profiles.`. In the example above,
+`convoy-local` and `client-project` are the two profile keys.
+
+## Profile resolution order
+
+The CLI picks a profile using this priority, top to bottom:
+
+1. **`--profile <key>`** — explicit CLI flag.
+2. **`CONVOY_PROFILE`** env var — profile key from the environment.
+3. **Path match** — the current working directory is checked against
+   every `paths` entry in every profile. Exact matches and ancestor
+   matches both count; the **most specific (longest path)** match
+   wins.
+4. **`settings.default_profile`** — configured default.
+5. **No match** — the CLI reports no profile found.
+
+## Environment-variable overrides
+
+Three env vars override fields from the resolved profile at command
+execution time. They don't change the file on disk; they just take
+priority over what the file says:
+
+| Env var | Overrides |
+|---|---|
+| `CONVOY_PROFILE` | Which profile to resolve (see step 2 above). |
+| `CONVOY_URL` | The profile's `url`. |
+| `CONVOY_API_KEY` | The profile's `api_key`. |
+
+CLI flags like `--url`, `--api-key`, and `--project` are the highest
+priority — they override both env vars and profile values.
+
+## Managing profiles from the CLI
+
+You usually don't edit this file by hand. The CLI has commands for
+every common operation:
+
+```bash
+convoy setup                        # Interactive setup wizard
+convoy setup --path .               # Save current directory explicitly
+convoy config list                  # List profiles
+convoy config show                  # Show the resolved profile for cwd
+convoy config default <profile-key> # Set settings.default_profile
+convoy paths list                   # Paths for resolved profile
+convoy paths add /path/to/repo      # Append a path
+convoy paths remove /path/to/repo   # Remove a path
+convoy keys add work-bedrock --provider bedrock --region us-east-1
+                                      # Store a provider key (token prompted)
+convoy keys list                    # List keys (tokens masked)
+convoy keys use work-bedrock        # Assign to the resolved profile
+convoy keys unassign                # Back to the machine's Claude config
+convoy keys use work-mantle --runtime codex   # Codex on AWS (needs a region)
+convoy keys unassign --runtime codex          # Back to the machine's Codex config
+convoy keys remove work-bedrock     # Delete a key
+convoy status                       # Config + connection status
+```
+
+See [Profiles, paths, and status](/docs/cli/profiles-paths-status) for
+the narrative walkthrough, and
+[API keys](/docs/cli/api-keys#non-interactive-setup) for the non-interactive
+`convoy setup` invocation. See
+[Model provider keys](/docs/cli/provider-keys) for the `convoy keys`
+workflow.
+
+## Security notes
+
+- The config directory is created with mode `0700`. Keep it that way.
+- Don't commit `config.toml` to a repo — it contains API keys.
+- Rotate API keys if a machine is lost or a secret leaks. API keys are
+  user-scoped; a rotated key replaces the old one for that user only.
+- Store keys in this file rather than in shell history or ad-hoc env
+  var exports when possible.

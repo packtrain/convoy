@@ -1,0 +1,434 @@
+---
+title: Persistent project service
+description: Run registered projects in the background and inspect their status and operational logs.
+---
+
+The project service keeps registered projects connected after the terminal
+closes. An environment runs its projects in one of two modes:
+
+- **Shared** (the default): every project runs as your account, with your
+  logins. Works on macOS and Linux with no administrator setup. See
+  [Shared environments](#shared-environments).
+- **Isolated** (opt-in): each project gets its own Linux account, sandbox and
+  private HOME. Needs the administrator setup from
+  [Isolated projects on Linux](/docs/cli/isolated-projects).
+
+A machine with the isolated launcher installed is isolated; any other machine is
+shared. On Linux, the first `project add` or `service start` asks which mode to
+use (Shared is the default; `--mode` answers without a prompt). macOS is always
+shared. Exit any `convoy project shell` sessions and stop foreground `convoy
+connect` processes first. Each project permits one execution owner.
+
+The rest of this page shows an isolated Linux VM, run as the control account used
+during installation (for the test VM, `ubuntu`). You need CLI 0.74.1 and matching
+backend code. To create and control a container from your Mac, use
+[Managed local environments](/docs/cli/managed-environments).
+
+## Shared environments
+
+Shared mode needs CLI 0.133.0 or later. On a laptop, dev box or the
+[dev container template](/docs/cli/dev-container/use-in-your-project), as your
+normal user:
+
+```bash
+convoy project add ~/code/a --profile-key a
+convoy project add ~/code/b --profile-key b
+convoy service start -b
+convoy service status
+```
+
+`project add` prompts for the backend URL, API key and project, then creates the
+folder, reuses an existing one, or clones into it with `--clone <https-url>`.
+Any key that can see the project works; no per-project key is created. A folder
+that an ordinary `convoy setup` profile already covers is refused.
+
+Log in to `gh`, git and each agent runtime once, as yourself. Every project uses
+those logins. `convoy project login a --runtime codex` runs the runtime's own
+login without pausing anything; reload the project afterwards if it was online
+while logged out. `convoy project shell a` opens your `$SHELL` in the project
+folder. `convoy project check a` lists each runtime (installed, logged in), the
+project lease and the backend key.
+
+Pause, reload, remove, logs and the TUI work as described below. The sandbox
+rows, root-owned runtime installs and private shells do not apply.
+
+Shared mode has no boundary between projects: an agent in A can read B's files
+and use the same logins. Use it when the projects are at one trust level. For a
+boundary from your host, run the shared environment inside a container or VM
+(see [Isolation options](/docs/cli/isolation-options)). To change the mode,
+delete the environment and create a new one.
+
+## Start and inspect
+
+With A and B already registered and their runtimes authenticated:
+
+```bash
+convoy project list
+convoy service start -b
+convoy service status
+convoy service logs --follow
+```
+
+`service start` confirms that the service and local control socket are ready. Projects
+may still be connecting. `service status` reports each profile as connecting,
+online, retrying, blocked, failed or stopped. Use `--json` for machine-readable
+status. A project that cannot connect is listed under `Warnings:` with the fix, for
+example `a: failed · Project is in use by a private project shell. Stop it, then run service reload --profile a.`
+Warnings name a held project lease, a sandbox that did not start, a rejected API
+key, an unreachable backend and a missing runtime. They also cover a runtime
+that is not logged in or not root-owned, and those stay while the project is
+online. The TUI shows the same warnings in the environment details and marks the
+project with `!` in the sidebar.
+
+To check every precondition at once, run `convoy project check a`. It lists the
+sandbox boundary, each runtime (installed root-owned, config folder, logged in),
+the project lease and the backend key, with the fix for each failed check. It
+changes nothing and works while the service is stopped. The TUI offers it as
+[e] Check project in the project's Actions.
+
+Trigger a task in project A and another in B through Convoy's web UI. Ask each
+agent to create a file in its own workspace and read it back. Check that both
+profiles are online and that their run events appear:
+
+```bash
+convoy service logs --profile a --follow
+convoy service logs --profile b --json
+```
+
+These are operational logs: connection states, run lifecycle events and worker
+exits. Read the full agent conversation in Convoy's web UI. The service does
+not retain raw model output, backend error text or credentials.
+
+Press Ctrl+C to close the log viewer. Close the VM terminal, reopen it, then run
+`convoy service status` to confirm the service continued. Multiple log viewers
+can run independently. `convoy service start` without `--background` runs in the
+foreground; Ctrl+C there stops the service and its workers.
+
+`--background` is the long form of `-b`.
+
+## Stop and restart
+
+```bash
+convoy service stop
+convoy service logs
+```
+
+Stop waits for project workers to drain. The launcher allows up to 30 seconds
+before forcing its sandbox to exit. Registry-lock waits are bounded and cancellable.
+The service has a 35-second fallback for its own launcher children and reports an
+error if cleanup cannot be confirmed. Workspace files, runtime sign-in and browser
+state remain. Retained logs are readable after stopping. For host commands,
+filtering, recent output and the stopped-container limitation, see
+[Diagnose a stopped service](/docs/cli/managed-environments#diagnose-a-stopped-service).
+
+To restart every project, stop the service, then run `convoy service start -b`
+again. Normal project registration changes do not require this restart.
+
+## Start at login on macOS
+
+```bash
+convoy service enable
+```
+
+Enable writes a LaunchAgent, `~/Library/LaunchAgents/build.convoy.service.plist`,
+that starts the service each time you log in. It records your current `PATH` so
+the service finds the agent runtimes your shell finds. It does not start the
+service now; run `convoy service start -b` for that. `convoy service stop` stops
+the service until the next login, and `convoy service disable` removes the
+LaunchAgent without stopping a running service.
+
+After updating the CLI or switching Node versions, the next `convoy service
+start` updates the LaunchAgent. Running `convoy service enable` again does the
+same without starting the service. On Linux, start the service from your own
+init system.
+
+## Add and remove projects while running
+
+With A and B running, register C in another terminal inside the same environment:
+
+```bash
+convoy project add c --profile-key c
+convoy project list
+convoy service logs --profile c --follow
+```
+
+Add prepares C, saves its registration and asks the running service to connect it.
+“Registered” does not mean “online.” A connection failure retains the registration
+and files; inspect `project list` for status. A and B keep running. With no service,
+add reports an offline registration and shows the start command.
+
+For runtime login, run:
+
+```bash
+convoy project login c --runtime codex
+```
+
+It pauses only C, runs `codex login --device-auth` in C's private shell, then
+reloads C and waits until it is online. Add `--interrupt` if C has active runs;
+use `--runtime claude-code` for Claude Code. The TUI offers [i] Log in to Codex
+and [o] Log in to Claude Code in the project's Actions.
+
+For other work in the private shell, pause C yourself:
+
+```bash
+convoy service pause c --interrupt
+convoy project shell c
+exit
+convoy service reload --profile c --interrupt
+```
+
+A and B continue running. Pausing retains C's registration and private files; it
+lasts until targeted reload or a service restart. Exit the shell before reloading,
+since it holds C's execution lease. Provider account management remains separate.
+
+To remove C while preserving its files and private state:
+
+```bash
+convoy project remove c --yes --interrupt
+```
+
+`--yes` confirms unregistration. `--interrupt` separately permits stopping C's live
+connection and active work. Without it, removal refuses and reports the observed
+active-run count. Even zero observed runs requires interruption permission because
+new work can arrive. A and B continue. An independently opened project shell or
+foreground connection must be stopped in its own terminal.
+
+The service checks configuration every two seconds. Invalid configuration leaves
+existing workers running. Changed or externally removed live connections show
+`pending` until you explicitly apply their changes:
+
+```bash
+convoy service reload
+convoy service reload --profile c --interrupt
+```
+
+The targeted command can also retry a failed or kicked connection after you repair
+its configuration. It stops only the selected service connection. Profile aliases
+share one identity; status uses the first profile key in sorted order. Removing one
+alias preserves the worker if another remains.
+
+Do not edit config from the desktop or an external editor at the same time as
+project commands. If a command loses its service response, inspect `project list`
+and `service status` before retrying; the operation may already have completed.
+
+## Upgrade the service
+
+Stop before updating the installed CLI. On the existing test VM, install the
+new package into the same root-owned prefix used during setup:
+
+```bash
+convoy service stop
+sudo npm install --prefix /opt/convoy ./useconvoy-cli-0.74.1.tgz
+convoy --version
+```
+
+Use the candidate archive when testing an unpublished change. If upgrading from
+a launcher older than 0.67.2, refresh it using your saved installation paths below.
+For an existing 0.73.3 installation, this phase needs no launcher refresh.
+For older installations, use the installer below to keep the launcher current.
+Then start the service:
+
+```bash
+sudo python3 -I - <<'PYTHON'
+import json
+import pwd
+import subprocess
+from pathlib import Path
+config = json.loads(Path("/etc/convoy-projects.json").read_text())
+installer = Path(config["package_root"]) / "dist/templates/project-isolation/install.py"
+subprocess.run([
+    "/usr/bin/python3", "-I", str(installer),
+    "--control-user", pwd.getpwuid(config["control_uid"]).pw_name,
+    "--workspace", config["workspace"],
+    "--package-root", config["package_root"],
+    "--node", config["node"],
+    "--state", config["state"],
+], check=True)
+PYTHON
+convoy service start -b
+```
+
+The installer preserves the existing runtime acceptance settings when these paths
+are unchanged. No browser download is required. Rebuilt project images include
+the updated launcher.
+
+## Failures and recovery
+
+- **Already running:** use `convoy service status`. Duplicate starts are rejected.
+- **Failed profile:** check `convoy project list`, stop the service, then run
+  `convoy connect --profile a` for the connection diagnostic. Check that runtime
+  acceptance is enabled and the project-scoped API key remains valid. An open
+  project shell or direct connection also holds the project's execution lease.
+- **Kicked connection:** the service reports blocked after exit code 3 and does
+  not automatically take the connection back from another owner.
+- **Crash:** exit code 1 retries three times after 1, 2 and 4 seconds, then stays
+  failed. Use `convoy service reload --profile a --interrupt` after correcting the cause.
+- **Service owner died:** its launcher pipes close, which stops the workers.
+  A new start recovers the stale socket using the kernel lock. It never kills
+  an arbitrary PID from a stale file. A worker still draining may temporarily
+  retain its execution lease.
+- **Unsafe state permissions:** `~/.convoy/service` and its parent `.convoy`
+  must belong to the control account with mode 0700. Log and lock files require
+  mode 0600. Symlinks and writable untrusted ancestors are rejected.
+
+Service state lives in `~/.convoy/service`, separate from project repositories.
+Operational logs rotate across two files of at most 1 MiB each; the live API
+retains the latest 1,000 entries and reports a gap if a viewer falls behind.
+The private Unix socket has mode 0600 and is outside each project's filesystem
+view. There is no public control port. The service supports up to 128 project
+identities and profile keys of at most 80 characters.
+
+## Verify the environment
+
+Before relying on a new VM or rebuilt image, test the full workflow above with
+real agents. Confirm A and B can each edit their own files, cannot read each
+other's private state, and stop after `service stop`. Check that a direct
+connection cannot run concurrently with the service for the same project.
+Process-fixture tests verify service mechanics; they do not certify a particular
+VM's runtime or filesystem isolation.
+
+
+For live-registration acceptance, keep real tasks running in A/B while adding C.
+Confirm C appears, becomes online after its runtime setup, and can complete a task.
+Verify removal without --interrupt refuses, then remove C with --interrupt and
+check A/B stayed connected and C's files remain. Repeat an identical add, repair an
+invalid config, test targeted reload and verify offline registration after stopping
+the service. Run these checks on the VM and the rebuilt distributed image.
+
+
+## Attach from multiple terminals
+
+Run as the control account inside the execution environment:
+
+```bash
+# Terminal 1
+convoy attach --profile a
+# Terminal 2
+convoy attach --profile b --json
+```
+
+Attach shows a profile-health snapshot followed by execution changes. It does
+not start the service. Ctrl+C detaches only that viewer. If the service restarts,
+attach reconnects and reports the lost event window before showing a fresh
+snapshot. Slow viewers disconnect rather than blocking agents or other clients.
+For a host-managed Docker container, run the same command on your Mac with
+`--env dev`. See [Managed local environments](/docs/cli/managed-environments).
+
+## Inspect execution and transcripts
+
+Use actual IDs from each command's output in the next command:
+
+```bash
+convoy service runs list --profile a --limit 10 --json
+convoy service runs get THREAD_ID --profile a
+convoy service runs history THREAD_ID --profile a --limit 5 --json
+convoy service runs logs THREAD_ID --profile a --message MESSAGE_ID --follow
+convoy service runs cancel THREAD_ID --profile a --run RUN_ID
+```
+
+List includes your project's execution threads, including group children, ordered
+by recent activity. It shows execution status and whether messages are queued.
+These are separate from a task's To Do/In Progress/Done status. History lists
+assistant runs, newest first. Use `continueCursor` with `--cursor` on list or
+history until `isDone` is true; an empty page does not necessarily mean the end.
+
+Logs emits normalized stored events, including text, tool activity and usage when
+the runtime supplies it. It excludes ephemeral token fragments. Oversized individual
+events carry an explicit truncation marker; open the web conversation for their
+full content. These transcripts are fetched from Convex and are not stored in the
+service's operational logs. `convoy service logs` remains the operational-log view.
+
+For resumable transcript output use `--json`. Each row has an `order`; resume with
+`--after LAST_ORDER`. Follow ends when the selected run finishes. A backend or
+connection failure exits visibly; repeat this read-only command to reconnect.
+Ctrl+C leaves the run active.
+
+Cancellation requires the exact active run ID. If it has ended and another run
+has started, cancellation fails without stopping the new run. A repeated
+cancellation with a new request ID may report that the selected run is no longer
+active. To check a lost command response, use the request ID and epoch reported
+by the client:
+
+```bash
+convoy service outcome REQUEST_ID --epoch SERVICE_EPOCH
+```
+
+Outcomes are retained for at most ten minutes and 1024 mutations in one service
+lifetime. `unknown` does not mean the command failed. Inspect state before issuing
+a new command. Cancel also accepts `--request-id` for callers that track their own
+IDs. No command automatically replays an uncertain mutation after reconnect.
+
+`convoy service bridge` is the internal stdin/stdout transport used by the host
+Docker and SSH clients ([remote targets](/docs/cli/remote-targets)). Stdout
+carries bounded versioned NDJSON only. It requires the same control-account access as other management commands; no TCP control port
+or agent MCP management tool is exposed.
+
+## Two-terminal A/B acceptance
+
+After updating the backend and installing the candidate CLI on your VM:
+
+1. Start the service and confirm A/B are online. Open two control-account terminals
+   and attach one to A and the other to B.
+2. Send a real task to each project from the web app. In another terminal, run
+   `service runs list` for each profile. Inspect a thread and paginate its history.
+3. Follow A's selected message in one terminal and B's in the other. Confirm each
+   prints the correct run's text/tool events. Press Ctrl+C in A's viewer. B and both
+   workers must continue. Resume A with the last JSON `order`.
+4. Cancel one active run using its history `runId`. B must continue. Reusing the
+   old run ID after another run starts must not stop the newer run.
+5. Keep an attach viewer open while pausing/reloading a profile from another
+   terminal. Both viewers should observe the changed health. Stop/restart the
+   service and confirm attach resnapshots; agents stop on service shutdown.
+6. From `convoy project shell a`, try connecting to the control account's socket
+   path with a Unix-socket client. Access must fail. The socket remains mode 0600
+   under the control account's private directory, and has no TCP equivalent.
+
+Run the same exercise in the rebuilt multi-project devcontainer. Automated tests
+use real CLI subprocesses and a test backend. They do not replace this real-agent
+VM/container acceptance.
+
+### Viewer failures and polling
+
+Plain output shows tables, run details and text/tool events. Use `--json` for
+structured output. A truncated log event is marked with its bounded preview.
+When list/history has another page, the CLI prints its `--cursor` argument.
+
+An idle `runs logs --follow` backs off to one request every five seconds and
+resets after new output arrives. A blocked output pipe detaches the client with
+an error after 512 KiB is queued or output takes ten seconds to drain. Agents
+continue running. A silent subscribed service is detected after 15 seconds.
+
+Stop the old service before upgrading. If an incompatible service is still
+running, use the previous CLI's `convoy service stop`, then start the new version
+with `convoy service start -b`. There is no legacy protocol fallback.
+
+The internal bridge drains outstanding replies when stdin ends. Incomplete
+frames fail, and lost replies identify requests with unknown outcomes. Do not
+blindly repeat a mutation after a lost reply; inspect state and its outcome first.
+
+## Run these commands from your host
+
+The [managed environment workflow](/docs/cli/managed-environments) provisions a
+local container with `convoy run --environment dev`. Add `--environment dev` to
+attachment, project and service commands to target it. Existing direct VM commands
+keep their current behavior.
+
+## Interactive service browser
+
+CLI 0.95.1 adds `convoy tui` to browse an existing service. Use
+`convoy tui --environment <name>` to select a saved managed Docker target.
+The sidebar lists connections and projects; `d` opens Details, `r` opens Runs,
+Enter opens a thread's execution history, and `q` detaches without stopping agents.
+
+In CLI 0.107.0, `c` on an environment opens Credentials. It manages the managed API
+keys of that environment: add with a masked field, rotate, roll back, disable, delete
+an unassigned key, and
+assign each key to projects with a checklist you save explicitly. A project's Actions
+also has Assign or unassign credentials, including native login. Changes apply after
+you reload the project. Profile keys on your own machine stay in `convoy keys`.
+
+Both stdin and stdout must be interactive terminals. For scripts or redirected
+output, use `convoy service status --json` or
+`convoy service runs list --profile <key> --json` instead. The TUI exits with code 1
+and a plain diagnostic outside a terminal. It does not start a service or update
+one automatically. Incompatible services show update instructions in Details.

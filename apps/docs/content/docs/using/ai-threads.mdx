@@ -1,0 +1,103 @@
+---
+title: AI threads
+description: Run agents on your connected machines, steer their work, and share read-only conversations with teammates.
+---
+
+Threads are persistent AI conversations in a project, optionally associated
+with a task. The agent runs through your CLI profile in a working directory
+on your connected machine. Its output streams back into the thread.
+
+A thread belongs to its creator. Teammates can read it only when you
+explicitly share it with the project and they have permission to use threads.
+
+## Requirements
+
+To execute work, your project needs one of your compatible CLI profiles
+online. Follow [Install and connect](/docs/cli) to set one up. An offline
+target can hold queued work until you connect it.
+
+Convoy has runners for Claude Code, Codex, Cursor, and OpenCode. Models,
+approvals, steering, and other controls depend on the runtime and connection.
+See [runtime capabilities](/docs/reference/roadmap) for the current matrix.
+
+## Sending a message
+
+1. Start a thread with `N`, or open one you own.
+2. Select your profile and working directory. Where available, choose an
+   existing worktree or request a new one from a branch. The CLI creates a
+   requested worktree on the first run.
+3. Choose a runtime and the model, effort, and mode it offers. The mode
+   controls when the runtime asks for approval. `Shift+Tab` toggles plan
+   mode where supported.
+4. Add task context, files, or images with `Mod+U`, and send your prompt.
+
+The web app queues the message. The CLI claims the work, runs the runtime
+in the chosen directory, and streams the response back. Separate worktrees
+let parallel threads edit separate checkouts.
+
+Choose a [project agent](/docs/using/project-agents) for reusable agent
+instructions. [Skills in Convoy](/docs/using/skills) supply procedures an
+agent can load, while [Prompts / Slash commands](/docs/using/prompts) let you
+reuse prompt text from the composer. For staged work with multiple steps,
+see [Workflows](/docs/using/workflows).
+
+## What you see while it runs
+
+A response moves from pending to streaming and then completed or failed.
+The thread displays assistant text, reasoning and tool output where the
+runtime supplies them, runtime notices, and a context meter where usage is
+available. A buffered connection sends output in batches.
+
+When the runtime and mode support interaction, approval cards let the owner
+answer questions, approve tools, or review a plan. Available controls follow
+the capabilities advertised by the connected CLI.
+
+## Queued messages and steering
+
+Messages sent while an agent works normally queue for the next run. Responses
+within a thread are sequential.
+
+The queued-message strip lets you edit or delete a waiting message. When
+steering is supported, Steer sends it into the active run instead of waiting
+for that run to finish. Runtime and transport support determine whether the
+action appears.
+
+## Sharing with teammates
+
+From a thread's actions menu, choose Share with project team and send the copied
+link to a teammate. Sharing includes the full transcript and live streaming.
+For a thread group, share the group to include its child threads.
+
+The recipient must belong to the project and have thread permission. Project
+admins and members have that permission; viewers do not. Organization admin
+or owner status alone does not grant project access.
+
+Sharing is read-only. Only the owner can send, steer, retry, cancel, answer
+approval requests, or change the thread. A shared thread does not appear in
+the recipient's normal thread list; they open it through its link. The owner
+can find their shares in Shared threads and revoke access with Stop sharing.
+
+Group children share through their group, rather than individually. Workflow
+runs cannot be shared. Sharing is for eligible project teammates, not public
+or anonymous access.
+
+## When something fails
+
+Retry a failed response from the thread to requeue its user messages. If work
+stays pending, check whether the selected profile is online and advertises
+the requested runtime. Run `convoy status` on that machine, or follow
+[CLI troubleshooting](/docs/cli/troubleshooting).
+
+## Threads vs. MCP
+
+Use threads for persistent conversations and streamed agent work in Convoy.
+Use [MCP](/docs/cli/mcp) to read and update Convoy tasks directly from your
+editor or AI client. A direct MCP connection does not require running the
+CLI bridge.
+
+## Related pages
+
+- [How Convoy works](/docs/how-convoy-works) explains the connection between
+  the web app, CLI, and runtime.
+- [Security model](/docs/cli/security) covers what a connected agent can do
+  on your machine.

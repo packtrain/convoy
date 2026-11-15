@@ -1,0 +1,453 @@
+---
+title: Isolated projects on Linux
+description: Register multiple projects in one Linux VM, authenticate Codex separately, and test project isolation.
+---
+
+This is the opt-in mode. By default an environment is
+[shared](/docs/cli/project-service#shared-environments): every project runs as
+your account, with no setup. Choose isolated mode when projects on one machine
+must not see each other's files or logins.
+
+Run multiple Convoy projects in one Linux VM with a separate Linux identity,
+workspace and private HOME for each project. Run all commands on this page
+**inside the VM**, except where a step explicitly says to use your PC or source
+checkout. Provision and start the VM yourself; this workflow does not create it.
+
+This is the experimental OS-1958 workflow. Use a build containing `convoy project`
+and the matching backend `apiKeys.core.currentScope` query. An older published
+CLI or backend may not contain these changes. Registration, private shells and
+Codex login have been exercised on a test VM; complete agent/runtime and
+container acceptance is still pending.
+
+## Start a VM if needed
+
+If you already have a Linux VM, continue with the prerequisites. Otherwise,
+one option is [Multipass](https://canonical.com/multipass/docs/latest/how-to-guides/install-multipass/).
+After installing it on your **PC**, create and enter an Ubuntu VM:
+
+```bash
+multipass launch 24.04 --name convoy-test --cpus 4 --memory 8G --disk 30G
+multipass shell convoy-test
+```
+
+Install system-wide Node.js 22/npm inside it before proceeding.
+
+## Install the VM prerequisites
+
+Use a normal Linux account with sudo access and system-wide Node.js 22/npm.
+Node, Convoy and their parent directories must be root-owned and not writable
+by other users. A Node installation under the control user's home is unsuitable
+for the privileged launcher.
+
+```bash
+sudo apt-get update
+sudo apt-get install -y python3 bubblewrap sudo git util-linux ca-certificates
+```
+
+For an unpublished build, run these commands in your **Convoy source checkout**:
+
+```bash
+pnpm --filter @useconvoy/cli build
+cd apps/cli
+npm pack --ignore-scripts
+```
+
+Transfer the generated package to the VM using SSH or your VM tool. Back
+**inside the VM**, install that package, substituting its actual path:
+
+```bash
+sudo npm install --prefix /opt/convoy /path/to/useconvoy-cli-VERSION.tgz
+export PATH="/opt/convoy/node_modules/.bin:$PATH"
+convoy project --help
+```
+
+Add the PATH export to your normal VM account's shell configuration for future
+terminals. Keep the CLI installation separate from a writable source checkout.
+
+## Install the project launcher
+
+With CLI 0.140.0 or later, Convoy can do this step for you. On a machine with
+no projects yet, the first `convoy project add` or `convoy service start` (or
+`convoy remote add` from your PC for an SSH target) asks for the mode. Choose
+**Isolated**: Convoy checks bubblewrap, user namespaces, Node and the CLI
+location, prints the fix for anything missing, and then runs the commands below
+with sudo. Without a terminal, pass `--mode isolated`. The TUI asks the same
+question in its first Add project.
+
+To install by hand, run as the normal VM account, using sudo only where shown:
+
+```bash
+sudo install -d -m 0755 \
+  -o "$(id -u)" -g "$(id -g)" /srv/convoy-workspaces
+
+sudo python3 -I \
+  /opt/convoy/node_modules/@useconvoy/cli/dist/templates/project-isolation/install.py \
+  --control-user "$(id -un)" \
+  --workspace /srv/convoy-workspaces \
+  --package-root /opt/convoy/node_modules/@useconvoy/cli \
+  --node "$(readlink -f "$(command -v node)")"
+```
+
+This installs the restricted launcher, its sudo rule, and
+`/etc/convoy-projects.json`. It then runs a sandbox check and lists the runtimes
+it detected. A failed check does not stop the installation; it prints the cause
+and the fix. Projects do not start until the check passes. After fixing it,
+reload the projects; no reinstall is needed.
+When updating Convoy, rerun this installer with the same arguments to update
+the installed launcher too. Updating the npm package alone does not replace
+`/usr/local/libexec/convoy-project-launcher`.
+
+## Ubuntu AppArmor prerequisite
+
+If registration fails with `bwrap: setting up uid map: Permission denied`,
+inspect the kernel log:
+
+```bash
+sudo journalctl -k --since "10 minutes ago" --no-pager \
+  | grep -Ei 'apparmor|DENIED|bwrap' | tail -40
+sysctl kernel.apparmor_restrict_unprivileged_userns \
+  kernel.unprivileged_userns_clone user.max_user_namespaces
+```
+
+On our test VM, AppArmor moved bubblewrap into `unprivileged_userns` and denied
+`setpcap` and `uid_map` access. There was no bubblewrap profile. For that case,
+install this application-specific exception:
+
+```bash
+sudo tee /etc/apparmor.d/bwrap >/dev/null <<'PROFILE'
+abi <abi/4.0>,
+include <tunables/global>
+
+profile bwrap /usr/bin/bwrap flags=(unconfined) {
+  userns,
+}
+PROFILE
+sudo apparmor_parser -r /etc/apparmor.d/bwrap
+```
+
+Inspect existing bubblewrap profiles before adding one; do not overwrite an
+administrator's policy. This exception applies to bubblewrap system-wide,
+including uses outside Convoy. The global user-namespace restriction remains
+enabled. Convoy's project UID and filesystem boundary still apply. See
+[Ubuntu's explanation of application-specific namespace policies](https://ubuntu.com/blog/ubuntu-23-10-restricted-unprivileged-user-namespaces).
+
+## Create and register two projects
+
+Project creation requires CLI 0.73.3 or later. Deploy the matching Convoy backend before
+using these commands. Run them as the control user inside your configured VM or
+project-isolation devcontainer, outside any `project shell`.
+
+You need an existing Convoy account and organization. In the web app's API Keys
+popup, create a manual unscoped key or an organization-wide key for that organization.
+Browser-login and MCP credentials cannot issue worker keys.
+Copy the CLI / Convex URL, such as `https://your-deployment.convex.cloud`.
+The MCP endpoint uses `.convex.site/api/mcp` and is a different URL.
+
+```bash
+convoy project add a --profile-key a --create
+convoy project add b --profile-key b --create
+convoy project list
+```
+
+Each command asks for the URL, masks the API-key input, and prompts for an
+organization, project name and alias. Press Enter to use the
+profile key as the project name and accept an alias suggested from that name.
+Type another value to override either suggestion. Aliases contain 2-5 letters/numbers and
+start with a letter. You can also omit `--create` and pick an existing project
+or Create a new project from the selector. No container rebuild is needed.
+Use fresh folder/profile names if your existing A/B tests already use `a`/`b`.
+
+Convoy uses the broad key only in the control process. It issues a separate key
+restricted to the selected project and stores that key in its registration.
+Click a key name in API Keys to see its Project worker details, source name and
+status. Inactive workers show Inactive in the expiry column. Worker keys count
+toward your limit of 100 API keys, shared with every other key you hold, so each
+project can have its own key on several machines or devcontainers. Issuing a key
+removes expired workers and workers whose
+sources were deleted or expired. Scope-narrowed workers still count because
+restoring source access can reactivate them. They expire
+no later than the setup key and within one year, even when the setup key has
+no expiration. They stop authenticating if that source is deleted,
+expires or no longer covers the project. Keep the setup key valid while its
+workers are in use. Every project using the same setup key loses backend access
+when that key expires or is revoked. Worker keys can be deleted but not edited. Existing single-project keys still work
+when registering an existing project.
+
+For automation, provide all inputs. The API key below is an environment variable
+you set locally; interactive masked input avoids putting it in process arguments.
+
+```bash
+convoy project add c --profile-key c --create \
+  --url "$CONVOY_URL" --api-key "$CONVOY_SETUP_KEY" \
+  --org your-org-slug --project-name "Project C" --project-alias IPC \
+  --non-interactive
+```
+
+With a running service, registration applies without restarting A/B. Otherwise,
+start it with `convoy service start -b`, or use `convoy connect --profile a` for a
+foreground connection. Authenticate your chosen runtime in each private HOME
+before running tasks, or assign managed provider credentials. The sections below
+cover runtime login and checking the boundary. Pause a service-managed project
+before opening its shell.
+
+To clone a public repository during registration, add
+`--clone https://github.com/owner/repo.git`. For a private repository, register an
+empty directory, authenticate Git inside its project shell, and clone into `.`.
+Host Git credentials are not inherited.
+
+### Recover after a failed add
+
+The CLI prints the new remote project ID before local preparation. If cloning,
+profile saving or service registration fails, retry using `--project ID`
+instead of `--create`, omitting `--org`, `--project-name` and `--project-alias`.
+Keep the same folder and profile key. Supply the same
+clone source if applicable. Remote project history and local files are retained.
+Inspect `convoy project list` and `convoy service status` first if the service
+response was lost; the operation may already have succeeded.
+
+If creation itself loses its response, inspect the project's alias in Convoy
+before retrying. A second creation request never silently chooses an existing
+project. If a worker key was issued but registration failed, its printed key ID
+lets you revoke the unused key in API Keys. Registration reuses an already saved
+worker key only after the backend validates its source link. If no valid secret
+was saved, a retry can issue a replacement.
+
+### Acceptance on your VM
+
+Create A and B, authenticate a runtime and complete a real agent task in each.
+Confirm distinct project UIDs with `convoy project list`, and repeat the private
+file read/write and worktree checks below. Then add C while A/B remain connected.
+Check `convoy service status` and run a task in C. Finally:
+
+```bash
+convoy project remove c --yes --interrupt
+```
+
+C's remote project, task history, workspace and private state must remain.
+Also try a project-restricted creation key, an expired key, an inaccessible
+organization and a duplicate alias. Each must fail without adding a project.
+A failed HTTPS clone after successful creation must print the ID for recovery.
+These checks require a real Linux environment and runtime credentials; unit
+tests do not certify the runtime isolation matrix.
+
+## Check the project boundary
+
+Enter A and create a marker:
+
+```bash
+convoy project shell a
+id
+pwd
+echo "private to A" > probe.txt
+cat probe.txt
+exit
+```
+
+Then check from B:
+
+```bash
+convoy project shell b
+id
+echo "private to B" > probe.txt
+cat /srv/convoy-workspaces/a/probe.txt
+exit
+```
+
+The UIDs should differ. Each project must be able to write its own files.
+B must not be able to read A's marker. `No such file or directory` is expected
+because A's directory is absent from B's filesystem view. Test the reverse
+direction too. This is a smoke check, not proof of the complete isolation model.
+
+A project shell holds the execution lease. Exit it before connecting that
+project or opening another shell for the same project.
+
+## Install and authenticate Codex
+
+At your **normal VM prompt**, install the shared, root-owned executable:
+
+```bash
+sudo sh -c 'umask 022 && npm install -g --prefix /usr/local @openai/codex'
+/usr/local/bin/codex --version
+```
+
+Projects use every tested runtime (Codex, Claude Code, Cursor, OpenCode) whose binary is root-owned
+and not group- or world-writable. The launcher checks at each start, so a runtime
+installed later needs only a project reload. A binary under a project's own HOME
+is ignored.
+
+Log project A in:
+
+```bash
+convoy project login a --runtime codex
+```
+
+This runs `codex login --device-auth` inside A's boundary. With a running
+service, it pauses A first, then reloads it and waits until it is online. Add
+`--interrupt` if A has active runs. Open the printed link in **your PC's
+browser** and enter the one-time code. Device-code login may need enabling in
+ChatGPT security settings or workspace permissions. See [OpenAI's headless login instructions](https://developers.openai.com/codex/auth#login-on-headless-devices).
+Claude Code uses `--runtime claude-code`, which runs `claude auth login`.
+Cursor uses `--runtime cursor`, which runs `cursor-agent login` and prints a
+browser link. Cursor is not on npm; see [Install Cursor](#install-cursor).
+OpenCode uses `--runtime opencode`, which runs `opencode auth login`; see
+[Install OpenCode](#install-opencode).
+
+### Install Cursor
+
+Install the build Convoy tested, root-owned, on x86-64 or ARM64. The same
+command upgrades an older Cursor; `convoy project check a` also prints it while
+Cursor is missing:
+
+```bash
+sudo sh -c 'umask 022 && mkdir -p /usr/local/lib/cursor-agent && curl -fsSL https://downloads.cursor.com/lab/2026.10.22-27dcf5f/linux/$(uname -m | sed s/x86_64/x64/\;s/aarch64/arm64/)/agent-cli-package.tar.gz | tar --no-same-owner --strip-components=1 -xzf - -C /usr/local/lib/cursor-agent && chmod -R go-w /usr/local/lib/cursor-agent && ln -sf /usr/local/lib/cursor-agent/cursor-agent /usr/local/bin/cursor-agent'
+/usr/local/bin/cursor-agent --version   # 2026.10.22-27dcf5f
+```
+
+Then reload the projects. Managed Cursor keys need 2026.08.11 or newer.
+
+### Install OpenCode
+
+Install the version Convoy tested, root-owned. `convoy project check a` also
+prints this command while OpenCode is missing:
+
+```bash
+sudo sh -c 'umask 022 && npm install -g --prefix /usr/local opencode-ai@1.19.5'
+/usr/local/bin/opencode --version   # 1.19.5
+```
+
+Then reload the projects. Managed OpenCode keys need 1.18.18 or newer.
+
+Repeat with `convoy project login b --runtime codex`. The path `/home/convoy/.codex` looks
+identical in each shell but maps to different private storage. Signing both
+projects into the same account gives them that account's provider access;
+separate files do not narrow the provider credential's permissions.
+
+## Connect and run agents
+
+Close any project shells, then open **two terminals into the VM**.
+
+Terminal A:
+
+```bash
+convoy connect --profile a
+```
+
+Terminal B:
+
+```bash
+convoy connect --profile b
+```
+
+In each project's web UI, start a thread using its online profile and Codex.
+Ask it to create `hello.txt` with the project's name and read it back. Both
+connections should work concurrently, with logs in their respective terminals.
+Then ask B's agent to read A's `probe.txt`; that must fail too.
+
+Ctrl+C stops a direct connection and its workers. A duplicate connection to the
+same project should be rejected. To keep both projects running after closing
+your terminal, use the [persistent project service](/docs/cli/project-service).
+
+Use `--name vm-a` to name a connection. A backend session conflict is reported
+without prompting inside the worker. After checking the existing connection,
+use `convoy connect --profile a --force` to explicitly take it over. Ctrl+C
+requests graceful shutdown; after 30 seconds the launcher forcibly stops a
+worker that has not exited.
+
+## Manage registrations with a running service
+
+With CLI 0.68.0, `project add` connects a new registration through a running service.
+`project list --json` includes live status. To remove one service connection, use
+`convoy project remove b --yes --interrupt`; other projects keep running. To log
+a runtime in, run `convoy project login b --runtime codex`; it pauses B, runs the
+login and reloads B. For other work in the private shell, pause B with
+`convoy service pause b --interrupt`, exit the shell, then run
+`convoy service reload --profile b --interrupt`. See [Persistent project service](/docs/cli/project-service).
+
+## Stop, remove and retain data
+
+After stopping B and exiting its shell:
+
+```bash
+convoy project remove b --yes
+```
+
+This unregisters B locally and retains its workspace, worktrees, private state
+and UID reservation. Preserve `/var/lib/convoy-projects`, the parent workspace
+and the control account's Convoy configuration when migrating or recreating
+the environment. Do not delete the UID registry while keeping project files.
+
+Removing the last profile disables that project's launcher registration.
+Re-adding it restores execution with the same UID. If several profiles point
+to the same project, removing one leaves the others usable. `project list`
+also shows pending preparations without a saved profile, including their UID
+and path for administrator recovery.
+
+## Troubleshooting
+
+Start with `convoy project check a`. It runs the sandbox probes and checks each
+runtime, the project lease and the backend key, then prints the fix for each
+failure:
+
+```text
+Project a
+✓ Sandbox boundary
+✓ Codex installed root-owned
+✓ Codex config folder
+✗ Codex logged in. Run project login a --runtime codex.
+- Claude Code not installed
+✓ Project lease: held by the project service
+✓ Backend accepts the project key
+```
+
+- **`Project preparation failed inside the Linux boundary`:** check AppArmor
+  logs and namespace support first. Keep the retained state and retry the same
+  registration after fixing the environment. Clone failures can require
+  inspecting the retained checkout before retrying.
+- **`CODEX_HOME ... does not exist`:** the launcher predates CLI 0.110.0.
+  Rerun `install.py` with the same arguments; the launcher then creates
+  `~/.codex` and `~/.claude` in each project's private HOME.
+- **Missing `apiKeys.core.currentScope`:** install the matching backend
+  feature; the new CLI alone cannot complete registration against an older
+  backend.
+- **No supported runtime is installed system-wide:** install Codex or Claude
+  Code root-owned, for example with the `npm install -g --prefix /usr/local`
+  command above, then reload the project. `readlink -f "$(command -v codex)"`
+  shows the file the launcher checks; it and its parent folders must be
+  root-owned without group or world write.
+- **`... is under a user home or nvm`:** `install.py` needs a Node the sandbox
+  can see. Install a system Node, for example with `apt install nodejs`, and pass
+  `--node /usr/bin/node`.
+
+Projects share the VM's network. Filesystem isolation does not protect secrets
+served by unauthenticated local TCP services or cloud metadata endpoints.
+
+For the container variant, see [Multiple Convoy projects](/docs/cli/dev-container/use-in-your-project#multiple-convoy-projects).
+
+## Browser testing
+
+Continue with [Browser automation](/docs/cli/browser-automation) to install Chromium in the existing VM and test projects A and B without recreating their registrations.
+
+
+### Renew worker credentials
+
+Before a setup key or its worker keys expire, create another manual key in API Keys. For each
+registered project, run the command below as the control user and select the
+existing remote project. Supply the new setup key at the masked prompt.
+
+```bash
+convoy project add YOUR_FOLDER --profile-key YOUR_PROFILE
+convoy service reload --profile YOUR_PROFILE --interrupt
+```
+
+The reload interrupts that project's current work, so choose an appropriate time.
+Repeat for each project that used the old source, verify connection and real task
+execution, then revoke the old setup key. Files and remote projects are retained.
+There is no bulk renewal command or advance expiry warning yet. Service failures
+may report a generic authentication error; inspect the worker's API Keys popover
+for the source status. Normal browser login does not rotate manual setup keys.
+
+To test revocation, delete a disposable setup key and confirm its worker is
+rejected on the next backend request. Narrowing a source to exclude the project
+also blocks access; restoring coverage restores access while both keys remain
+unexpired. Completed work is not undone, and losing backend authorization does
+not forcibly terminate an already running local agent.

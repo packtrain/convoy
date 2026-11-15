@@ -1,0 +1,88 @@
+.preview, .taskChecks { color: #ededed; font: 14px/1.5 var(--font-preview-sans, Arial), Arial, sans-serif; }
+.preview { display: flex; overflow: hidden; container-type: inline-size; container-name: checks; }
+.preview *, .taskChecks * { box-sizing: border-box; }
+.preview svg, .taskChecks svg { width: 16px; height: 16px; flex-shrink: 0; }
+.panel { flex: 0 1 480px; container-type: inline-size; container-name: evidence; min-width: 0; min-height: 510px; border: 1px solid #ffffff26; border-radius: 0 8px 8px 0; background: #131313; }
+.tabs { display: flex; align-items: stretch; gap: 20px; padding: 0 16px; height: 55px; border-bottom: 1px solid #ffffff26; color: #949494; white-space: nowrap; }
+.tabs > span { display: flex; align-items: center; gap: 7px; }
+.tabs .active { color: #ededed; box-shadow: inset 0 -2px #ededed; }
+.tabs .taskTab { font-size: 12px; }
+.taskTab > svg:first-child { color: #64748b; }
+.tabs .panelActions { margin-left: auto; gap: 16px; color: #ddd; }
+.content { padding: 12px 16px 14px; }
+.heading { display: flex; align-items: center; gap: 10px; margin-bottom: 4px; }
+.heading h4, .otherFiles h4 { display: flex; align-items: center; gap: 8px; margin: 0; font-size: 14px; font-weight: 500; }
+.heading h4 a { display: flex; color: #737373; }
+.heading h4 a svg { width: 13px; height: 13px; }
+.count { margin-left: auto; color: #949494; font-size: 12px; }
+.menu { position: relative; }
+.menu > summary { display: flex; align-items: center; gap: 5px; padding: 3px 8px; border: 1px solid #ffffff26; border-radius: 9px; background: #ffffff05; cursor: pointer; list-style: none; white-space: nowrap; font-size: 12px; }
+.menu > summary svg { width: 13px; height: 13px; }
+.options { position: absolute; z-index: 3; right: 0; top: calc(100% + 6px); width: 224px; padding: 4px; border: 1px solid #ffffff26; border-radius: 10px; background: #1c1c1c; box-shadow: 0 8px 24px #0008; }
+.options button { display: flex; align-items: center; gap: 8px; width: 100%; padding: 4px 6px; min-height: 28px; border: 0; border-radius: 3px; background: transparent; color: inherit; font: inherit; font-size: 14px; text-align: left; cursor: pointer; }
+.options button:hover { background: #ffffff12; }
+.options button > span:first-child { flex: 1; }
+.options button small { color: #949494; font-size: 12px; }
+.options button svg, .checkSpace { width: 14px; height: 14px; flex-shrink: 0; }
+.menuSeparator { margin: 4px -4px; border-top: 1px solid #ffffff26; }
+.menuLabel { margin: 0; padding: 4px 6px; color: #949494; font-size: 12px; }
+.preview select, .taskChecks select { padding: 3px 6px; border: 1px solid #ffffff26; border-radius: 5px; background: #202020; color: #ededed; font: inherit; font-size: 12px; cursor: pointer; }
+.row > summary { display: flex; align-items: center; gap: 8px; min-height: 32px; padding: 5px 0; list-style: none; cursor: pointer; }
+.row > summary > span { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.row small { color: #949494; font-size: 12px; white-space: nowrap; }
+.row .added { padding: 0 8px; border: 1px solid #ffffff26; border-radius: 8px; line-height: 18px; }
+.row .chevron { width: 12px; color: #949494; }
+.row[open] > summary .chevron { transform: rotate(90deg); }
+.row .passed { color: #00d78b; }
+.row .warning { color: #ffc400; }
+.row .failed { color: #ff4c5b; }
+.row .pending { color: #565656; }
+.row .not_performed, .muted { color: #949494; }
+.result { padding: 8px 0 14px 24px; color: #bdbdbd; font-size: 13px; }
+.result p { margin: 0 0 10px; }
+.file { border: 1px solid #ffffff26; border-radius: 6px; overflow: hidden; }
+.file > summary { display: flex; align-items: center; gap: 8px; padding: 9px 10px; list-style: none; cursor: pointer; }
+.file > summary span { flex: 1; }
+.file pre, .attachment pre { margin: 0; padding: 12px; border-top: 1px solid #ffffff1f; font: 12px/1.7 var(--font-preview-mono, monospace), monospace; white-space: pre-wrap; overflow-wrap: anywhere; }
+.result .provenance { margin: 10px 0 0; color: #949494; font-size: 11px; }
+.otherFiles { padding: 12px 16px; border-top: 1px solid #ffffff26; }
+.otherFiles > p { margin: 12px 0 8px; color: #949494; font-size: 12px; }
+.attachment { width: fit-content; max-width: 100%; border-radius: 12px; background: #242424; }
+.attachment > summary { display: flex; align-items: center; gap: 10px; padding: 6px 12px 6px 6px; cursor: pointer; list-style: none; }
+.attachment small { display: block; color: #949494; font-size: 12px; }
+.fileIcon { display: grid; place-items: center; width: 32px; height: 32px; border-radius: 8px; background: #131313; color: #949494; }
+.taskChecks { padding: 16px; border-top: 1px solid #ffffff1f; }
+.taskChecks .heading { justify-content: space-between; margin-bottom: 8px; }
+.taskChecks h4 small { color: #949494; font-size: 11px; }
+.taskChecks .row > summary { font-size: 13px; }
+.preview :is(summary, button, select, a):focus-visible, .taskChecks :is(summary, select):focus-visible { outline: 2px solid #a3a3a3; outline-offset: 3px; }
+.preview summary::-webkit-details-marker, .taskChecks summary::-webkit-details-marker { display: none; }
+.threadCrop { position: relative; flex: 1; min-width: 0; overflow: hidden; mask-image: linear-gradient(to right, transparent, #000 85%); }
+.thread { --border: #ffffff26; position: absolute; right: 0; top: 0; bottom: 0; display: flex; flex-direction: column; width: 470px; background: #131313; border-top: 1px solid var(--border); border-bottom: 1px solid var(--border); }
+.thread > div:last-child { margin-top: auto; }
+.thread > header { height: 55px; }
+.tool { display: flex; align-items: center; gap: 8px; color: #949494; }
+.replyChecks { display: flex; align-items: center; gap: 8px; border: 1px solid #ffffff26; border-radius: 6px; padding: 12px; }
+.replyChecks span { margin-left: auto; color: #949494; }
+@container checks (max-width: 720px) {
+  .tabs { gap: 14px; }
+  .tabs .panelActions { display: none; }
+  .row .time { font-size: 11px; }
+}
+@container checks (max-width: 520px) {
+  .threadCrop { display: none; }
+  .panel { flex: 1; border-radius: 8px; }
+  .tabs { gap: 16px; padding: 0 12px; }
+  .tabs .taskTab { display: none; }
+  .content, .otherFiles { padding: 12px; }
+  .row > summary { align-items: flex-start; padding: 7px 0; }
+  .row > summary > svg { margin-top: 2px; }
+  .row .added { font-size: 10px; padding: 0 5px; }
+  .row .time { display: none; }
+  .row:has(.pending) .time { display: block; }
+}
+
+@container evidence (max-width: 500px) {
+  .tabs { gap: 14px; }
+  .tabs .panelActions { display: none; }
+}

@@ -1,0 +1,16 @@
+.exch-hole{fill:var(--anatomy-shade-0);stroke:none}
+.exch-lamp-on>.iso-top{fill:var(--anatomy-green)}
+.exch-lamp-on>.iso-edge{stroke:var(--anatomy-green)}
+.exch-heart-beat>.iso-top{fill:var(--anatomy-green);animation:exch-beat 2.4s ease-in-out infinite}
+.exch-heart-red>.iso-top{fill:var(--anatomy-red)}
+.exch-heart-red>.iso-edge{stroke:var(--anatomy-red)}
+@keyframes exch-beat{0%,100%{opacity:.25}8%{opacity:1}32%{opacity:.25}}
+@media (prefers-reduced-motion:reduce){.exch-heart-beat>.iso-top{animation:none}}
+.exch-tube .tb-body{fill:var(--anatomy-face)}
+.exch-tube .tb-shade{fill:var(--anatomy-shade-1)}
+.exch-tube .tb-shine{fill:var(--anatomy-top);opacity:.9}
+.iso-svg .exch-capsule{vector-effect:none;stroke-linecap:round;fill:none}
+.exch-capsule[data-tone="mid"]{stroke:var(--anatomy-mid)}
+.exch-hit{fill:transparent;stroke:none}
+[data-part]{cursor:default}
+[data-part^="runtime"],[data-part="coupling"]{cursor:pointer}

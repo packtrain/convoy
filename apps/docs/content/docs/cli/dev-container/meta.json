@@ -1,0 +1,13 @@
+{
+  "title": "Dev container",
+  "description": "Run AI CLIs in an isolated workspace with optional network restrictions.",
+  "defaultOpen": false,
+  "collapsible": true,
+  "pages": [
+    "index",
+    "setup-and-modes",
+    "use-in-your-project",
+    "convoy-and-ai-clis",
+    "troubleshooting"
+  ]
+}

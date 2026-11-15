@@ -1,0 +1,186 @@
+---
+title: Isolation options
+description: Ways to isolate connected agents — from runtime sandboxes to containers, VMs, and OS-level options on macOS, Windows, and Linux.
+---
+
+A connected profile lets anyone with project access drive an AI agent on
+the machine running `convoy connect` (see the
+[security model](/docs/cli/security)). The
+[dev container](/docs/cli/dev-container) is the isolation setup Convoy
+ships, but it is not the only option. This page maps the broader
+landscape so you can pick a boundary that matches your trust model.
+
+## Start with the threat model
+
+Two different questions lead to different setups:
+
+1. **"Agents shouldn't damage or read my host"** — protect your home
+   directory, SSH keys, browser profiles, and other repos from the
+   machine the agent runs on. Any container or VM boundary solves this,
+   including one shared environment with several projects mounted.
+2. **"An agent working on project A shouldn't see project B"** — a
+   shared environment alone does not separate projects. Use one isolated
+   environment per project or trust domain, or configure separate identities
+   and filesystem views within it. Convoy's experimental
+   [isolated projects on Linux](/docs/cli/isolated-projects) workflow provides
+   the latter; full runtime acceptance is still pending.
+
+Convoy's [project service](/docs/cli/project-service) offers both answers per
+environment:
+
+| Mode | Projects run as | Separates projects | Setup |
+|---|---|---|---|
+| Shared (default) | Your account, your logins | No | None; macOS or Linux |
+| Isolated (opt-in) | One Linux account and sandbox each | Yes | Administrator install on Linux |
+
+Shared mode answers question 1 when the environment itself sits behind a
+boundary, such as the [dev container](/docs/cli/dev-container/use-in-your-project)
+or a VM. Isolated mode answers question 2. The mode is fixed per environment.
+
+The practical rule: draw the isolation boundary where your trust
+boundary is, not mechanically per repo. Projects at the same trust
+level can share an environment; different clients, different secrets,
+or one especially sensitive project deserve their own.
+
+## The spectrum
+
+Roughly ordered from lightest to heaviest:
+
+| Layer | Examples | Protects against |
+|---|---|---|
+| Runtime permission settings | Claude Code permission modes, Codex sandbox flags, OpenCode rulesets | Unapproved commands and file writes |
+| Runtime OS sandboxes | `convoy connect --isolated`; Seatbelt (macOS), Landlock/bubblewrap (Linux) | File/network access outside allowed paths, no container needed |
+| Containers | Dev container, plain Docker/Podman | Host filesystem and host credentials |
+| Lightweight VMs | WSL2, OrbStack, Lima, Tart, UTM, Apple `container` | Container escapes; full kernel boundary |
+| Remote/ephemeral machines | A dedicated box, cloud sandboxes | Everything local — blast radius is the remote machine |
+
+Each layer composes with the ones above it: runtime permission
+settings still apply inside a container, and a container still runs
+inside a VM.
+
+## The built-in isolated mode
+
+The lightest boundary ships with the CLI itself:
+
+```bash
+convoy connect --isolated
+```
+
+or per profile in `~/.config/convoy/config.toml`:
+
+```toml
+[profiles.myproject]
+# ...
+isolated = true
+```
+
+When enabled, the CLI generates OS-level sandbox configuration from the
+profile's `paths` and applies it to every agent it spawns: agents can
+write only inside the granted folders (plus the run's working directory,
+so worktrees keep working). The flag wins when both are set; default off.
+The desktop app launches `convoy connect` without flags, so for
+desktop-managed connections enable it with the **Isolate agents** toggle in
+Settings → Profiles (which writes `isolated = true` to the profile).
+
+Per runtime:
+
+- **Claude Code** — the Agent SDK's OS sandbox (Seatbelt on macOS,
+  bubblewrap on Linux) with the profile paths as the write boundary. If
+  the machine cannot sandbox (e.g. bubblewrap missing), runs fail loudly
+  instead of silently running open.
+- **Codex** — never `danger-full-access`, even in agent mode: runs use
+  `workspace-write` with the profile paths as extra writable roots. On
+  Linux, `/tmp` additionally stays writable (Codex's default; it is often
+  the only temp dir there).
+- **Cursor and OpenCode** — no OS sandbox support; runs fail fast with a
+  clear error. Use Claude Code or Codex on isolated profiles, or disable
+  isolation.
+
+Approval prompts and permission modes behave exactly as without the flag —
+isolation is defense-in-depth underneath them, and most useful for
+full-access agent mode. It restricts the *spawned agents*, not the
+Convoy CLI process itself; for a machine boundary, keep reading.
+
+## Runtime built-in sandboxes
+
+The agent runtimes ship their own containment, and it is the first
+layer to configure regardless of anything else:
+
+- **Claude Code** sandboxes bash commands using the OS's native
+  mechanisms — Seatbelt (`sandbox-exec`) on macOS, bubblewrap on
+  Linux — restricting filesystem and network access without a
+  container. Permission modes control what runs without approval.
+- **Codex** exposes OS sandbox flags backed by Seatbelt on macOS and
+  Landlock/seccomp on Linux.
+- **OpenCode** uses session permission rulesets; "Ask to approve"
+  routes each request to the thread for approval.
+
+These are per-command guardrails, not a machine boundary: the agent
+process itself still runs as your user. Treat them as the baseline,
+and add a container or VM when the stakes justify it.
+
+## Containers
+
+- **The Convoy [dev container](/docs/cli/dev-container)** — the
+  supported path. Preinstalled AI CLIs, optional profile mounting, and
+  a `strict` network mode that blocks outbound traffic except an
+  allowlist. A generic version installs into
+  [any project](/docs/cli/dev-container/use-in-your-project).
+- **Plain Docker/Podman** — you don't need the dev container spec for
+  the boundary itself; running the CLI in any container with only the
+  project checkout mounted gives the same host isolation with less
+  ceremony (and without the curated tooling and network modes).
+
+One container can serve multiple projects — mount several checkouts
+and connect several profiles — but remember threat model 2: that
+container is one trust domain.
+
+## macOS
+
+- **Seatbelt profiles** (`sandbox-exec`) — the mechanism the agent
+  runtimes wrap. Technically deprecated but widely used; fine-grained
+  file and network rules with zero VM overhead.
+- **Lightweight Linux VMs** — OrbStack, Lima, Tart, or UTM give you a
+  real kernel boundary per trust domain with low friction and easy
+  snapshots. OrbStack in particular makes a VM-per-client workflow
+  nearly effortless.
+- **Apple's `container` CLI** (macOS 26+) — Apple's native
+  containerization framework; each container is a minimal Linux VM.
+- **A second macOS user account** — crude but free: an agent running
+  as a separate user cannot read your files. Coarse-grained, and no
+  network control.
+
+## Windows
+
+- **WSL2** — the default answer. A real VM boundary with its own
+  kernel, and agent runtimes work better under Linux anyway. Use one
+  distro per trust domain (`wsl --import` clones distros easily).
+- **Windows Sandbox** — built into Pro/Enterprise: a disposable VM
+  that resets on close. Good for one-off unattended runs; the lack of
+  persistence makes it awkward for ongoing development.
+- **Hyper-V VMs** — heavier, persistent, full isolation.
+
+## Remote and ephemeral machines
+
+- **A dedicated box** — a cheap cloud VM or spare machine you SSH
+  into. The blast radius is that machine; this pairs naturally with
+  [running the CLI long-term](/docs/operations/running-the-cli-long-term).
+- **Ephemeral cloud sandboxes** — services that give each agent run a
+  fresh microVM. Strong isolation with zero local setup, at the cost
+  of shipping your code to a third party.
+
+## What does not isolate
+
+Git worktrees and separate checkouts isolate the *diff*, not the
+process. An agent running in a worktree still executes as your user
+and can read `~/.ssh`, other repos, and anything else on the machine.
+Worktrees are for parallelism and clean review, not security — combine
+them with one of the boundaries above when isolation matters.
+
+## Related pages
+
+- [`Security model`](/docs/cli/security) — what a connected session
+  can do and where the trust boundary sits
+- [`Dev container`](/docs/cli/dev-container) — the isolation setup
+  Convoy ships
+- [`Running the CLI long-term`](/docs/operations/running-the-cli-long-term)

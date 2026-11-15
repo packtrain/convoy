@@ -1,0 +1,84 @@
+---
+title: Scripting with one-shot commands
+sidebarTitle: CLI scripting
+description: Use the CLI as a scriptable interface for organizations, projects, agents, tasks, and artifacts.
+---
+
+One-shot commands run once, print results, and exit.
+
+## Main areas
+
+- `convoy orgs list`
+- `convoy projects list`
+- `convoy task-types list`
+- `convoy project-agents list|create|update`
+- `convoy prompts list|create|update`
+- `convoy skills list|show|create|install|update|remove`
+- `convoy tasks list`
+- `convoy tasks search`
+- `convoy tasks get`
+- `convoy tasks refs`
+- `convoy tasks create`
+- `convoy tasks update`
+- `convoy tasks move`
+- `convoy tasks move-to-list`
+- `convoy tasks comments add`
+- `convoy tasks delete`
+- `convoy tasks artifacts ...`
+- `convoy profiles list`
+- `convoy threads list|get|messages|create|send|attach|done`
+- `convoy workflows list|get|create|update|delete|validate|start`
+- `convoy workflows runs list|get|cancel|approve|retry|skip|resume`
+
+## Output modes
+
+Use text output for humans:
+
+```bash
+convoy tasks list
+```
+
+Use JSON output for scripts:
+
+```bash
+convoy tasks search "billing bug" --output json
+```
+
+## Examples
+
+```bash
+convoy projects list
+convoy tasks list --status "In Progress"
+convoy tasks search "search dropdown"
+convoy tasks create --name "Fix login bug" --project WEB --org acme
+convoy tasks move WEB-12 --parent WEB-42 --project WEB --org acme
+convoy task-types list --project WEB
+convoy project-agents list --project WEB
+convoy prompts list --scope organization --org acme
+convoy skills list --project WEB
+convoy skills list --scope organization --org acme
+convoy skills install pdf-tools --project WEB
+convoy workflows list --project WEB
+convoy tasks comments add WEB-12 --message "Ready for review" --project WEB
+convoy tasks move-to-list WEB-12 WEB-42 --list SPRINT-1 --project WEB
+```
+
+## Full command surface
+
+This page shows the shape; every command and flag (including `--limit` /
+`--cursor` pagination) is cataloged in the
+[`CLI command reference`](/docs/reference/cli-commands).
+
+## Best use cases
+
+- shell scripts
+- CI helpers
+- editor tasks
+- quick terminal workflows without opening the web UI
+
+## Threads in workflow containers
+
+Use `convoy threads create --source <containerId> --content "Investigate"` to
+add an independent thread to a populated workflow container. For an empty
+container, also pass `--profile-id`, `--path-id`, and `--cli-type`. Canceling
+the workflow leaves these threads running.

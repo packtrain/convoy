@@ -1,0 +1,59 @@
+---
+title: Setup and connect
+description: CLI setup has moved to Install and connect.
+---
+
+Use [Install and connect](/docs/cli#login-and-connect) for the complete guide.
+
+## Interactive setup
+
+See [Login and connect](/docs/cli#login-and-connect).
+
+## Non-interactive setup
+
+See [API keys for scripts and headless machines](/docs/cli/api-keys#non-interactive-setup).
+
+## Connect
+
+See [Login and connect](/docs/cli#login-and-connect) and the
+[command reference](/docs/reference/cli-commands#convoy-connect).
+
+## Debugging and simulation
+
+See [Connection options](/docs/cli#connection-options).
+
+## Notes
+
+See [Runtime support](/docs/reference/roadmap#runtime-execution).
+
+## See also
+
+See [Profiles, paths, and status](/docs/cli/profiles-paths-status) and
+[Config file](/docs/reference/config-toml).
+
+
+## Create a project during setup
+
+With CLI 0.73.3 and its matching backend, `convoy setup` offers Create a new
+project in the selector. Your account and organization must already exist.
+Use an unscoped or organization-wide Convoy key with project-create permission.
+For non-interactive setup, replace `--project` with:
+
+```bash
+--create --org your-org-slug --project-name "My Project" --project-alias MYPR
+```
+
+Also provide `--url`, `--api-key`, `--profile-key` and an existing `--path`.
+Non-interactive setup saves the profile and exits. Interactive setup connects
+as before. Setup writes an ordinary profile; to create and run an isolated
+project in a configured VM/devcontainer, use `convoy project add --create`.
+See [isolated projects](./isolated-projects) for commands and recovery steps.
+
+Interactive creation suggests the supplied profile display name,
+or profile key, as the project name. It also suggests an alias from the chosen
+name. Press Enter to accept either default, or type a replacement.
+
+Local profile and workspace checks run before remote creation, including when
+Create a new project is selected interactively. The profile is checked again
+before saving. If remote creation succeeds but a later operation fails, use the
+printed project ID with `--project` to attach it instead of creating it again.

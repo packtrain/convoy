@@ -1,0 +1,28 @@
+
+.preview { container-type: inline-size; display: flex; flex-direction: column; min-width: 0; min-height: 540px; background: #131313; border: 1px solid rgb(255 255 255 / 12%); border-radius: 8px; overflow: hidden; font-family: var(--font-preview-sans), Inter, Arial, sans-serif; font-size: 14px; line-height: 20px; color: oklch(.93 0 0); }
+.preview * { box-sizing: border-box; }
+.tabs { display: flex; flex-shrink: 0; align-items: stretch; overflow-x: auto; scrollbar-width: none; padding: 0 4px; border-bottom: 1px solid rgb(255 255 255 / 12%); height: 56px; }
+.tabs button { display: flex; align-items: center; gap: 8px; flex-shrink: 0; max-width: 256px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; border: 0; border-bottom: 2px solid transparent; padding: 1px 12px 0; background: transparent; color: oklch(.65 0 0); font: inherit; cursor: pointer; }
+.tabs button[aria-selected="true"] { border-bottom-color: oklch(.93 0 0); color: oklch(.93 0 0); font-weight: 500; }
+.add { display: flex; flex-shrink: 0; align-items: center; justify-content: center; width: 32px; color: oklch(.65 0 0); }
+.add svg { width: 14px; height: 14px; }
+.preview :is(button,[role="tabpanel"]):focus-visible { outline: 2px solid #888; outline-offset: -3px; }
+.transcript { flex: 1; width: 100%; max-width: 768px; min-height: 300px; margin: 0 auto; padding: 32px 16px; font-size: 14px; line-height: 20px; }
+.userMessage { width: fit-content; max-width: 100%; padding: 12px 16px; border-radius: 12px; background: oklch(.25 0 0); margin-left: auto; }
+.response { margin-top: 28px; }
+.response p { margin: 16px 0; }
+@container (max-width: 500px) {
+  .tabs button { max-width: 160px; }
+  .transcript { min-height: 310px; }
+}
+@container (max-width: 500px) {
+  .preview button[aria-disabled="true"] { padding-inline: 4px; }
+}
+
+.taskRef { display: inline-flex; align-items: center; gap: 6px; flex-shrink: 0; color: oklch(.65 0 0); font-size: 12px; font-weight: 500; line-height: 16px; }
+.taskRef svg { width: 14px; height: 14px; flex-shrink: 0; }
+.taskRef > span { font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace; }
+.tabTitle { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+@container (max-width: 500px) {
+  .tabs button { max-width: 256px; }
+}

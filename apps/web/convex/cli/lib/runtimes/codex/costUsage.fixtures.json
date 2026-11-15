@@ -1,0 +1,213 @@
+{
+  "codexVersion": "0.153.4",
+  "capturedAt": "2026-09-18",
+  "provider": "local canned Responses SSE, no model requests",
+  "appServer": [
+    {
+      "threadId": "captured-thread",
+      "turnId": "turn-1",
+      "tokenUsage": {
+        "total": {
+          "totalTokens": 120,
+          "inputTokens": 100,
+          "cachedInputTokens": 40,
+          "cacheWriteInputTokens": 10,
+          "outputTokens": 20,
+          "reasoningOutputTokens": 5
+        },
+        "last": {
+          "totalTokens": 120,
+          "inputTokens": 100,
+          "cachedInputTokens": 40,
+          "cacheWriteInputTokens": 10,
+          "outputTokens": 20,
+          "reasoningOutputTokens": 5
+        },
+        "modelContextWindow": 258400
+      }
+    },
+    {
+      "threadId": "captured-thread",
+      "turnId": "turn-1",
+      "tokenUsage": {
+        "total": {
+          "totalTokens": 360,
+          "inputTokens": 300,
+          "cachedInputTokens": 120,
+          "cacheWriteInputTokens": 30,
+          "outputTokens": 60,
+          "reasoningOutputTokens": 15
+        },
+        "last": {
+          "totalTokens": 240,
+          "inputTokens": 200,
+          "cachedInputTokens": 80,
+          "cacheWriteInputTokens": 20,
+          "outputTokens": 40,
+          "reasoningOutputTokens": 10
+        },
+        "modelContextWindow": 258400
+      }
+    },
+    {
+      "threadId": "captured-thread",
+      "turnId": "turn-1",
+      "tokenUsage": {
+        "total": {
+          "totalTokens": 360,
+          "inputTokens": 300,
+          "cachedInputTokens": 120,
+          "cacheWriteInputTokens": 30,
+          "outputTokens": 60,
+          "reasoningOutputTokens": 15
+        },
+        "last": {
+          "totalTokens": 240,
+          "inputTokens": 200,
+          "cachedInputTokens": 80,
+          "cacheWriteInputTokens": 20,
+          "outputTokens": 40,
+          "reasoningOutputTokens": 10
+        },
+        "modelContextWindow": 258400
+      }
+    },
+    {
+      "threadId": "captured-thread",
+      "turnId": "turn-2",
+      "tokenUsage": {
+        "total": {
+          "totalTokens": 720,
+          "inputTokens": 600,
+          "cachedInputTokens": 240,
+          "cacheWriteInputTokens": 60,
+          "outputTokens": 120,
+          "reasoningOutputTokens": 30
+        },
+        "last": {
+          "totalTokens": 360,
+          "inputTokens": 300,
+          "cachedInputTokens": 120,
+          "cacheWriteInputTokens": 30,
+          "outputTokens": 60,
+          "reasoningOutputTokens": 15
+        },
+        "modelContextWindow": 258400
+      }
+    },
+    {
+      "threadId": "captured-thread",
+      "turnId": "turn-3",
+      "tokenUsage": {
+        "total": {
+          "totalTokens": 720,
+          "inputTokens": 600,
+          "cachedInputTokens": 240,
+          "cacheWriteInputTokens": 60,
+          "outputTokens": 120,
+          "reasoningOutputTokens": 30
+        },
+        "last": {
+          "totalTokens": 360,
+          "inputTokens": 300,
+          "cachedInputTokens": 120,
+          "cacheWriteInputTokens": 30,
+          "outputTokens": 60,
+          "reasoningOutputTokens": 15
+        },
+        "modelContextWindow": 258400
+      }
+    },
+    {
+      "threadId": "captured-thread",
+      "turnId": "turn-3",
+      "tokenUsage": {
+        "total": {
+          "totalTokens": 1200,
+          "inputTokens": 1000,
+          "cachedInputTokens": 400,
+          "cacheWriteInputTokens": 100,
+          "outputTokens": 200,
+          "reasoningOutputTokens": 50
+        },
+        "last": {
+          "totalTokens": 480,
+          "inputTokens": 400,
+          "cachedInputTokens": 160,
+          "cacheWriteInputTokens": 40,
+          "outputTokens": 80,
+          "reasoningOutputTokens": 20
+        },
+        "modelContextWindow": 258400
+      }
+    },
+    {
+      "threadId": "captured-thread",
+      "turnId": "turn-3",
+      "tokenUsage": {
+        "total": {
+          "totalTokens": 1200,
+          "inputTokens": 1000,
+          "cachedInputTokens": 400,
+          "cacheWriteInputTokens": 100,
+          "outputTokens": 200,
+          "reasoningOutputTokens": 50
+        },
+        "last": {
+          "totalTokens": 5543,
+          "inputTokens": 0,
+          "cachedInputTokens": 0,
+          "cacheWriteInputTokens": 0,
+          "outputTokens": 0,
+          "reasoningOutputTokens": 0
+        },
+        "modelContextWindow": 258400
+      }
+    },
+    {
+      "threadId": "captured-thread",
+      "turnId": "turn-4",
+      "tokenUsage": {
+        "total": {
+          "totalTokens": 1800,
+          "inputTokens": 1500,
+          "cachedInputTokens": 600,
+          "cacheWriteInputTokens": 150,
+          "outputTokens": 300,
+          "reasoningOutputTokens": 75
+        },
+        "last": {
+          "totalTokens": 600,
+          "inputTokens": 500,
+          "cachedInputTokens": 200,
+          "cacheWriteInputTokens": 50,
+          "outputTokens": 100,
+          "reasoningOutputTokens": 25
+        },
+        "modelContextWindow": 258400
+      }
+    }
+  ],
+  "exec": [
+    {
+      "type": "turn.completed",
+      "usage": {
+        "input_tokens": 300,
+        "cached_input_tokens": 120,
+        "cache_write_input_tokens": 30,
+        "output_tokens": 60,
+        "reasoning_output_tokens": 15
+      }
+    },
+    {
+      "type": "turn.completed",
+      "usage": {
+        "input_tokens": 600,
+        "cached_input_tokens": 240,
+        "cache_write_input_tokens": 60,
+        "output_tokens": 120,
+        "reasoning_output_tokens": 30
+      }
+    }
+  ]
+}

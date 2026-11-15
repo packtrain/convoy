@@ -1,0 +1,972 @@
+.mdx-editor-kit--dark .mdxeditor {
+  --accentBase: rgba(45, 212, 191, 0.08);
+  --accentBgSubtle: rgba(45, 212, 191, 0.12);
+  --accentBg: rgba(45, 212, 191, 0.16);
+  --accentBgHover: rgba(45, 212, 191, 0.2);
+  --accentBgActive: rgba(45, 212, 191, 0.24);
+  --accentLine: rgba(45, 212, 191, 0.3);
+  --accentBorder: rgba(45, 212, 191, 0.4);
+  --accentBorderHover: rgba(45, 212, 191, 0.5);
+  --accentSolid: var(--primary);
+  --accentSolidHover: #5eead4;
+  --accentText: #7ae9dd;
+  --accentTextContrast: var(--primary-foreground);
+  --basePageBg: rgba(15, 23, 32, 0.96);
+  --baseBase: rgba(15, 23, 32, 0.92);
+  --baseBgSubtle: rgba(148, 163, 184, 0.08);
+  --baseBg: rgba(148, 163, 184, 0.12);
+  --baseBgHover: rgba(148, 163, 184, 0.16);
+  --baseBgActive: rgba(148, 163, 184, 0.2);
+  --baseLine: rgba(148, 163, 184, 0.12);
+  --baseBorder: rgba(148, 163, 184, 0.18);
+  --baseBorderHover: rgba(148, 163, 184, 0.3);
+  --baseSolid: rgba(148, 163, 184, 0.64);
+  --baseSolidHover: rgba(232, 237, 243, 0.84);
+  --baseText: rgba(202, 213, 225, 0.84);
+  --baseTextContrast: var(--foreground);
+}
+
+.mdx-editor-kit .mdxeditor {
+  min-height: 0;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  flex: 1 1 0%;
+}
+
+.mdx-editor-kit .mdxeditor [class*="editorWrapper"] {
+  display: flex;
+  flex-direction: column;
+  flex: 1 1 0%;
+  min-height: 0;
+}
+
+.mdx-editor-kit .mdxeditor .mdxeditor-diff-source-wrapper {
+  display: flex;
+  flex-direction: column;
+  flex: 1 1 0%;
+  min-height: 0;
+}
+
+.mdx-editor-kit .mdxeditor .mdxeditor-rich-text-editor:not([style*="display: none"]) {
+  display: flex !important;
+  flex-direction: column;
+  flex: 1 1 0%;
+}
+
+.mdx-editor-kit .mdxeditor [class*="rootContentEditableWrapper"] {
+  display: flex;
+  flex-direction: column;
+  flex: 1 1 0%;
+  min-height: 0;
+}
+
+.mdx-editor-kit .mdxeditor [class*="rootContentEditableWrapper"] > div:first-of-type {
+  display: flex;
+  flex-direction: column;
+  flex: 1 1 0%;
+  min-height: 0;
+}
+
+.mdx-editor-kit .mdxeditor .mdx-editor-kit__content {
+  flex: 1 1 0%;
+}
+
+.mdx-editor-kit__toolbar--sticky {
+  position: sticky;
+  top: 0;
+  z-index: 10;
+  background: var(--card);
+}
+
+.mdx-editor-kit--light .mdxeditor {
+  --accentBase: rgba(15, 118, 110, 0.06);
+  --accentBgSubtle: rgba(15, 118, 110, 0.08);
+  --accentBg: rgba(15, 118, 110, 0.12);
+  --accentBgHover: rgba(15, 118, 110, 0.16);
+  --accentBgActive: rgba(15, 118, 110, 0.22);
+  --accentLine: rgba(15, 118, 110, 0.26);
+  --accentBorder: rgba(15, 118, 110, 0.34);
+  --accentBorderHover: rgba(15, 118, 110, 0.44);
+  --accentSolid: var(--primary);
+  --accentSolidHover: #0f8d83;
+  --accentText: #0f766e;
+  --accentTextContrast: var(--primary-foreground);
+  --basePageBg: rgba(255, 255, 255, 0.96);
+  --baseBase: rgba(255, 255, 255, 0.92);
+  --baseBgSubtle: rgba(27, 36, 48, 0.04);
+  --baseBg: rgba(27, 36, 48, 0.06);
+  --baseBgHover: rgba(27, 36, 48, 0.08);
+  --baseBgActive: rgba(27, 36, 48, 0.12);
+  --baseLine: rgba(27, 36, 48, 0.08);
+  --baseBorder: rgba(27, 36, 48, 0.12);
+  --baseBorderHover: rgba(27, 36, 48, 0.22);
+  --baseSolid: rgba(27, 36, 48, 0.44);
+  --baseSolidHover: rgba(27, 36, 48, 0.64);
+  --baseText: rgba(91, 102, 120, 0.92);
+  --baseTextContrast: var(--foreground);
+}
+
+.mdx-editor-kit--dark .mdxeditor .cm-editor,
+.mdx-editor-kit--dark .mdxeditor .cm-scroller,
+.mdx-editor-kit--dark .mdxeditor .cm-content,
+.mdx-editor-kit--dark .mdxeditor .cm-gutters,
+.mdx-editor-kit--dark .mdxeditor .sp-wrapper,
+.mdx-editor-kit--dark .mdxeditor .sp-layout,
+.mdx-editor-kit--dark .mdxeditor .sp-editor {
+  background: transparent;
+  color: var(--code-foreground);
+}
+
+.mdx-editor-kit--dark .mdxeditor .cm-cursor,
+.mdx-editor-kit--dark .mdxeditor .cm-dropCursor {
+  border-left-color: var(--code-foreground);
+}
+
+.mdx-editor-kit--dark .mdxeditor .cm-editor .cm-gutters .cm-activeLineGutter,
+.mdx-editor-kit--dark .mdxeditor .cm-editor .cm-activeLineGutter {
+  background-color: transparent !important;
+  color: color-mix(in srgb, var(--code-foreground) 55%, transparent) !important;
+}
+
+.mdx-editor-kit--light .mdxeditor .cm-editor,
+.mdx-editor-kit--light .mdxeditor .cm-scroller,
+.mdx-editor-kit--light .mdxeditor .cm-content,
+.mdx-editor-kit--light .mdxeditor .cm-gutters,
+.mdx-editor-kit--light .mdxeditor .sp-wrapper,
+.mdx-editor-kit--light .mdxeditor .sp-layout,
+.mdx-editor-kit--light .mdxeditor .sp-editor {
+  background: transparent;
+  color: var(--foreground);
+}
+
+.mdx-editor-kit--light .mdxeditor .cm-editor .cm-gutters {
+  color: var(--muted-foreground);
+}
+
+.mdx-editor-kit--light .mdxeditor .cm-editor .cm-gutters .cm-activeLineGutter,
+.mdx-editor-kit--light .mdxeditor .cm-editor .cm-activeLineGutter {
+  background-color: transparent !important;
+  color: var(--foreground) !important;
+}
+
+.mdx-editor-kit .mdxeditor .cm-editor .cm-lineNumbers .cm-gutterElement {
+  padding: 0 0.375rem 0 0.5rem !important;
+  font-size: 0.75rem;
+  line-height: 1.5rem !important;
+  white-space: nowrap;
+}
+
+.mdx-editor-kit .mdxeditor .cm-editor .cm-line {
+  line-height: 1.5rem;
+}
+
+.mdx-editor-kit .mdxeditor .mdxeditor-diff-source-wrapper .cm-content,
+.mdx-editor-kit .mdxeditor .mdxeditor-diff-source-wrapper .cm-line,
+.mdx-editor-kit .mdxeditor .mdxeditor-diff-source-wrapper .cm-gutters,
+.mdx-editor-kit .mdxeditor .mdxeditor-diff-source-wrapper .cm-gutterElement {
+  font-size: 1rem;
+  line-height: 1.625rem !important;
+}
+
+.mdx-editor-kit .mdxeditor .mdx-editor-kit__content {
+  min-height: 420px;
+  overflow-x: auto;
+  padding: 1.25rem 1.125rem;
+}
+
+.mdx-editor-kit .mdxeditor .mdx-editor-kit__content [class*="tableEditor"] {
+  margin: 1.25rem 0;
+  min-width: 32rem;
+  color: var(--foreground);
+}
+
+.mdx-editor-kit
+  .mdxeditor
+  .mdx-editor-kit__content
+  [class*="tableEditor"]
+  > tbody
+  > tr
+  > th:not([data-tool-cell="true"]) {
+  background: var(--muted);
+  font-weight: 600;
+}
+
+.mdx-editor-kit
+  .mdxeditor
+  .mdx-editor-kit__content
+  [class*="tableEditor"]
+  > tbody
+  > tr
+  > td:not([data-tool-cell="true"]),
+.mdx-editor-kit
+  .mdxeditor
+  .mdx-editor-kit__content
+  [class*="tableEditor"]
+  > tbody
+  > tr
+  > th:not([data-tool-cell="true"]) {
+  border-color: var(--border);
+  padding: 0.5rem 0.75rem;
+  vertical-align: top;
+}
+
+.mdx-editor-kit
+  .mdxeditor
+  .mdx-editor-kit__content
+  [class*="tableEditor"]
+  [class*="addRowButton"],
+.mdx-editor-kit
+  .mdxeditor
+  .mdx-editor-kit__content
+  [class*="tableEditor"]
+  [class*="addColumnButton"],
+.mdx-editor-kit
+  .mdxeditor
+  .mdx-editor-kit__content
+  [class*="tableEditor"]
+  [class*="tableColumnEditorTrigger"],
+.mdx-editor-kit
+  .mdxeditor
+  .mdx-editor-kit__content
+  [class*="tableEditor"]
+  [class*="tableRowEditorTrigger"] {
+  cursor: pointer;
+}
+
+/* Table controls stay out of the way until the table is hovered or focused. */
+.mdx-editor-kit
+  .mdxeditor
+  .mdx-editor-kit__content
+  [class*="tableEditor"]
+  [class*="addRowButton"],
+.mdx-editor-kit
+  .mdxeditor
+  .mdx-editor-kit__content
+  [class*="tableEditor"]
+  [class*="addColumnButton"] {
+  background-color: transparent;
+  color: var(--muted-foreground);
+  opacity: 0;
+  transition: opacity 140ms ease, background-color 140ms ease, color 140ms ease;
+}
+
+.mdx-editor-kit
+  .mdxeditor
+  .mdx-editor-kit__content
+  [class*="tableEditor"]
+  [class*="tableColumnEditorTrigger"],
+.mdx-editor-kit
+  .mdxeditor
+  .mdx-editor-kit__content
+  [class*="tableEditor"]
+  [class*="tableRowEditorTrigger"] {
+  color: var(--muted-foreground);
+  opacity: 0;
+  transition: opacity 140ms ease;
+}
+
+.mdx-editor-kit
+  .mdxeditor
+  .mdx-editor-kit__content
+  [class*="tableEditor"]:is(:hover, :focus-within)
+  [class*="addRowButton"],
+.mdx-editor-kit
+  .mdxeditor
+  .mdx-editor-kit__content
+  [class*="tableEditor"]:is(:hover, :focus-within)
+  [class*="addColumnButton"] {
+  opacity: 1;
+}
+
+/* Row and column menus appear only for the hovered row or column. MDXEditor
+   renders both with the column-trigger class; header-row hovers never set
+   data-active, so rows use tr:hover. */
+.mdx-editor-kit
+  .mdxeditor
+  .mdx-editor-kit__content
+  [class*="tableEditor"]
+  > tbody
+  > tr:hover
+  > [data-tool-cell="true"]
+  [class*="tableColumnEditorTrigger"],
+.mdx-editor-kit
+  .mdxeditor
+  .mdx-editor-kit__content
+  [class*="tableEditor"]
+  > thead
+  [class*="tableColumnEditorTrigger"][data-active="true"],
+.mdx-editor-kit
+  .mdxeditor
+  .mdx-editor-kit__content
+  [class*="tableEditor"]
+  [class*="tableColumnEditorTrigger"]:is(:focus-visible, [data-state="open"]) {
+  opacity: 1;
+}
+
+.mdx-editor-kit
+  .mdxeditor
+  .mdx-editor-kit__content
+  [class*="tableEditor"]
+  [class*="addRowButton"]:is(:hover, :focus-visible),
+.mdx-editor-kit
+  .mdxeditor
+  .mdx-editor-kit__content
+  [class*="tableEditor"]
+  [class*="addColumnButton"]:is(:hover, :focus-visible) {
+  background-color: var(--muted);
+  color: var(--foreground);
+}
+
+.mdx-editor-kit--light
+  .mdxeditor
+  .mdx-editor-kit__content
+  [class*="tableEditor"]
+  [class*="addRowButton"],
+.mdx-editor-kit--light
+  .mdxeditor
+  .mdx-editor-kit__content
+  [class*="tableEditor"]
+  [class*="addColumnButton"] {
+  color: color-mix(in srgb, var(--muted-foreground) 70%, transparent);
+}
+
+.mdx-editor-kit[data-density="compact"] .mdxeditor .mdx-editor-kit__content {
+  min-height: 220px;
+  padding: 1rem 0.875rem;
+}
+
+.mdx-editor-kit[data-content-padding="spacious"] .mdxeditor .mdx-editor-kit__content {
+  padding: 2.5rem;
+}
+
+/* Narrow content width: cap the rich-text content at a readable measure and
+   center it; wide tables still scroll inside the capped box (overflow-x on
+   __content). Raw markdown source mode stays full width. */
+.mdx-editor-kit[data-content-width="narrow"] .mdxeditor .mdx-editor-kit__content {
+  width: 100%;
+  max-width: 60rem;
+  margin-inline: auto;
+}
+
+@media (max-width: 767px) {
+  .mdx-editor-kit[data-mobile-toc="true"][data-content-padding="spacious"]
+    .mdxeditor
+    .mdx-editor-kit__content {
+    padding-left: 1rem;
+  }
+}
+
+@media (min-width: 768px) {
+  .mdx-editor-kit .mdxeditor .mdx-editor-kit__content {
+    min-height: 560px;
+    padding: 1.75rem 1.625rem;
+  }
+
+  .mdx-editor-kit[data-inline-toc="true"][data-inline-toc-position="right"]
+    .mdxeditor
+    .mdx-editor-kit__content {
+    padding-right: 4.75rem;
+  }
+
+  .mdx-editor-kit[data-inline-toc="true"][data-inline-toc-position="left"]
+    .mdxeditor
+    .mdx-editor-kit__content {
+    padding-left: 4.75rem;
+  }
+
+  .mdx-editor-kit[data-density="compact"] .mdxeditor .mdx-editor-kit__content {
+    min-height: 280px;
+    padding: 1rem;
+  }
+
+  .mdx-editor-kit[data-density="compact"][data-inline-toc="true"][data-inline-toc-position="right"]
+    .mdxeditor
+    .mdx-editor-kit__content {
+    padding-right: 4rem;
+  }
+
+  .mdx-editor-kit[data-density="compact"][data-inline-toc="true"][data-inline-toc-position="left"]
+    .mdxeditor
+    .mdx-editor-kit__content {
+    padding-left: 4rem;
+  }
+
+  .mdx-editor-kit[data-content-padding="spacious"] .mdxeditor .mdx-editor-kit__content {
+    padding: 2.5rem;
+  }
+
+  .mdx-editor-kit[data-content-padding="spacious"][data-inline-toc="true"][data-inline-toc-position="right"]
+    .mdxeditor
+    .mdx-editor-kit__content {
+    padding-right: 4.75rem;
+  }
+
+  .mdx-editor-kit[data-content-padding="spacious"][data-inline-toc="true"][data-inline-toc-position="left"]
+    .mdxeditor
+    .mdx-editor-kit__content {
+    padding-left: 4.75rem;
+  }
+}
+
+.mdx-editor-kit .mdxeditor [class*="admonitionNote"],
+.mdx-editor-kit .mdxeditor [class*="admonitionTip"],
+.mdx-editor-kit .mdxeditor [class*="admonitionInfo"],
+.mdx-editor-kit .mdxeditor [class*="admonitionCaution"],
+.mdx-editor-kit .mdxeditor [class*="admonitionDanger"] {
+  position: relative;
+  display: flex;
+  gap: 0.75rem;
+  margin: 1rem 0;
+  padding: 1rem;
+  border-radius: 0;
+}
+
+.mdx-editor-kit .mdxeditor [class*="admonitionNote"]::before,
+.mdx-editor-kit .mdxeditor [class*="admonitionTip"]::before,
+.mdx-editor-kit .mdxeditor [class*="admonitionInfo"]::before,
+.mdx-editor-kit .mdxeditor [class*="admonitionCaution"]::before,
+.mdx-editor-kit .mdxeditor [class*="admonitionDanger"]::before {
+  display: flex;
+  flex: none;
+  align-items: flex-start;
+  justify-content: center;
+  width: 1.25rem;
+  padding-top: 0.05rem;
+  font-size: 1rem;
+  line-height: 1.25rem;
+  font-weight: 700;
+}
+
+.mdx-editor-kit .mdxeditor [class*="admonitionNote"] > div,
+.mdx-editor-kit .mdxeditor [class*="admonitionTip"] > div,
+.mdx-editor-kit .mdxeditor [class*="admonitionInfo"] > div,
+.mdx-editor-kit .mdxeditor [class*="admonitionCaution"] > div,
+.mdx-editor-kit .mdxeditor [class*="admonitionDanger"] > div {
+  min-width: 0;
+  flex: 1 1 auto;
+}
+
+.mdx-editor-kit .mdxeditor [class*="admonitionNote"] > div::before,
+.mdx-editor-kit .mdxeditor [class*="admonitionTip"] > div::before,
+.mdx-editor-kit .mdxeditor [class*="admonitionInfo"] > div::before,
+.mdx-editor-kit .mdxeditor [class*="admonitionCaution"] > div::before,
+.mdx-editor-kit .mdxeditor [class*="admonitionDanger"] > div::before {
+  content: none !important;
+}
+
+.mdx-editor-kit .mdxeditor [class*="admonitionNote"] > div > div,
+.mdx-editor-kit .mdxeditor [class*="admonitionTip"] > div > div,
+.mdx-editor-kit .mdxeditor [class*="admonitionInfo"] > div > div,
+.mdx-editor-kit .mdxeditor [class*="admonitionCaution"] > div > div,
+.mdx-editor-kit .mdxeditor [class*="admonitionDanger"] > div > div {
+  background: transparent !important;
+}
+
+.mdx-editor-kit .mdxeditor [class*="admonitionNote"] .mdxeditor,
+.mdx-editor-kit .mdxeditor [class*="admonitionTip"] .mdxeditor,
+.mdx-editor-kit .mdxeditor [class*="admonitionInfo"] .mdxeditor,
+.mdx-editor-kit .mdxeditor [class*="admonitionCaution"] .mdxeditor,
+.mdx-editor-kit .mdxeditor [class*="admonitionDanger"] .mdxeditor,
+.mdx-editor-kit .mdxeditor [class*="admonitionNote"] [class*="nestedEditor"],
+.mdx-editor-kit .mdxeditor [class*="admonitionTip"] [class*="nestedEditor"],
+.mdx-editor-kit .mdxeditor [class*="admonitionInfo"] [class*="nestedEditor"],
+.mdx-editor-kit .mdxeditor [class*="admonitionCaution"] [class*="nestedEditor"],
+.mdx-editor-kit .mdxeditor [class*="admonitionDanger"] [class*="nestedEditor"],
+.mdx-editor-kit .mdxeditor [class*="admonitionNote"] .mdxeditor-rich-text-editor,
+.mdx-editor-kit .mdxeditor [class*="admonitionTip"] .mdxeditor-rich-text-editor,
+.mdx-editor-kit .mdxeditor [class*="admonitionInfo"] .mdxeditor-rich-text-editor,
+.mdx-editor-kit .mdxeditor [class*="admonitionCaution"] .mdxeditor-rich-text-editor,
+.mdx-editor-kit .mdxeditor [class*="admonitionDanger"] .mdxeditor-rich-text-editor,
+.mdx-editor-kit .mdxeditor [class*="admonitionNote"] .mdxeditor-root-contenteditable,
+.mdx-editor-kit .mdxeditor [class*="admonitionTip"] .mdxeditor-root-contenteditable,
+.mdx-editor-kit .mdxeditor [class*="admonitionInfo"] .mdxeditor-root-contenteditable,
+.mdx-editor-kit .mdxeditor [class*="admonitionCaution"] .mdxeditor-root-contenteditable,
+.mdx-editor-kit .mdxeditor [class*="admonitionDanger"] .mdxeditor-root-contenteditable {
+  background: transparent !important;
+}
+
+.mdx-editor-kit .mdxeditor [class*="admonitionNote"] [class*="nestedEditor"],
+.mdx-editor-kit .mdxeditor [class*="admonitionTip"] [class*="nestedEditor"],
+.mdx-editor-kit .mdxeditor [class*="admonitionInfo"] [class*="nestedEditor"],
+.mdx-editor-kit .mdxeditor [class*="admonitionCaution"] [class*="nestedEditor"],
+.mdx-editor-kit .mdxeditor [class*="admonitionDanger"] [class*="nestedEditor"] {
+  padding: 0 !important;
+  border-radius: 0 !important;
+  box-shadow: none !important;
+}
+
+.mdx-editor-kit .mdxeditor [class*="admonitionNote"] .mdxeditor-root-contenteditable,
+.mdx-editor-kit .mdxeditor [class*="admonitionTip"] .mdxeditor-root-contenteditable,
+.mdx-editor-kit .mdxeditor [class*="admonitionInfo"] .mdxeditor-root-contenteditable,
+.mdx-editor-kit .mdxeditor [class*="admonitionCaution"] .mdxeditor-root-contenteditable,
+.mdx-editor-kit .mdxeditor [class*="admonitionDanger"] .mdxeditor-root-contenteditable {
+  min-height: 0;
+  padding: 0 !important;
+}
+
+.mdx-editor-kit--light .mdxeditor [class*="admonitionNote"] {
+  background: #eff6ff;
+}
+
+.mdx-editor-kit--light .mdxeditor [class*="admonitionNote"]::before {
+  content: "i";
+  color: #60a5fa;
+}
+
+.mdx-editor-kit--light .mdxeditor [class*="admonitionNote"] {
+  color: #1d4ed8;
+}
+
+.mdx-editor-kit--light .mdxeditor [class*="admonitionTip"] {
+  background: #ecfdf5;
+}
+
+.mdx-editor-kit--light .mdxeditor [class*="admonitionTip"]::before {
+  content: "✦";
+  color: #34d399;
+}
+
+.mdx-editor-kit--light .mdxeditor [class*="admonitionTip"] {
+  color: #047857;
+}
+
+.mdx-editor-kit--light .mdxeditor [class*="admonitionInfo"] {
+  background: #f5f3ff;
+}
+
+.mdx-editor-kit--light .mdxeditor [class*="admonitionInfo"]::before {
+  content: "i";
+  color: #a78bfa;
+}
+
+.mdx-editor-kit--light .mdxeditor [class*="admonitionInfo"] {
+  color: #6d28d9;
+}
+
+.mdx-editor-kit--light .mdxeditor [class*="admonitionCaution"] {
+  background: #fffbeb;
+}
+
+.mdx-editor-kit--light .mdxeditor [class*="admonitionCaution"]::before {
+  content: "!";
+  color: #fbbf24;
+}
+
+.mdx-editor-kit--light .mdxeditor [class*="admonitionCaution"] {
+  color: #b45309;
+}
+
+.mdx-editor-kit--light .mdxeditor [class*="admonitionDanger"] {
+  background: #fef2f2;
+}
+
+.mdx-editor-kit--light .mdxeditor [class*="admonitionDanger"]::before {
+  content: "×";
+  color: #f87171;
+}
+
+.mdx-editor-kit--light .mdxeditor [class*="admonitionDanger"] {
+  color: #b91c1c;
+}
+
+.mdx-editor-kit--dark .mdxeditor [class*="admonitionNote"] {
+  background: rgba(30, 58, 138, 0.18);
+}
+
+.mdx-editor-kit--dark .mdxeditor [class*="admonitionNote"]::before {
+  content: "i";
+  color: #93c5fd;
+}
+
+.mdx-editor-kit--dark .mdxeditor [class*="admonitionNote"] {
+  color: #bfdbfe;
+}
+
+.mdx-editor-kit--dark .mdxeditor [class*="admonitionTip"] {
+  background: rgba(6, 95, 70, 0.22);
+}
+
+.mdx-editor-kit--dark .mdxeditor [class*="admonitionTip"]::before {
+  content: "✦";
+  color: #6ee7b7;
+}
+
+.mdx-editor-kit--dark .mdxeditor [class*="admonitionTip"] {
+  color: #a7f3d0;
+}
+
+.mdx-editor-kit--dark .mdxeditor [class*="admonitionInfo"] {
+  background: rgba(76, 29, 149, 0.22);
+}
+
+.mdx-editor-kit--dark .mdxeditor [class*="admonitionInfo"]::before {
+  content: "i";
+  color: #c4b5fd;
+}
+
+.mdx-editor-kit--dark .mdxeditor [class*="admonitionInfo"] {
+  color: #ddd6fe;
+}
+
+.mdx-editor-kit--dark .mdxeditor [class*="admonitionCaution"] {
+  background: rgba(146, 64, 14, 0.22);
+}
+
+.mdx-editor-kit--dark .mdxeditor [class*="admonitionCaution"]::before {
+  content: "!";
+  color: #fcd34d;
+}
+
+.mdx-editor-kit--dark .mdxeditor [class*="admonitionCaution"] {
+  color: #fde68a;
+}
+
+.mdx-editor-kit--dark .mdxeditor [class*="admonitionDanger"] {
+  background: rgba(127, 29, 29, 0.24);
+}
+
+.mdx-editor-kit--dark .mdxeditor [class*="admonitionDanger"]::before {
+  content: "×";
+  color: #fca5a5;
+}
+
+.mdx-editor-kit--dark .mdxeditor [class*="admonitionDanger"] {
+  color: #fecaca;
+}
+
+.mdx-editor-kit .mdxeditor a {
+  color: var(--primary) !important;
+  font-weight: inherit !important;
+  text-decoration: underline;
+  text-decoration-color: color-mix(in srgb, var(--primary) 70%, transparent);
+  text-underline-offset: 0.18em;
+}
+
+.mdx-editor-kit .mdxeditor a:hover {
+  color: color-mix(in srgb, var(--primary) 82%, var(--foreground)) !important;
+}
+
+.mdx-editor-kit .mdxeditor a[data-lexical-link="true"] {
+  cursor: pointer;
+}
+
+.mdx-editor-kit--dark .mdxeditor .cm-selectionLayer .cm-selectionBackground,
+.mdx-editor-kit--dark .mdxeditor .cm-editor.cm-focused > .cm-scroller > .cm-selectionLayer .cm-selectionBackground,
+.mdx-editor-kit--dark .mdxeditor .cm-content ::selection,
+.mdx-editor-kit--dark .mdxeditor .cm-line::selection,
+.mdx-editor-kit--dark .mdxeditor .cm-line > span::selection {
+  background: rgba(45, 212, 191, 0.22) !important;
+}
+
+.mdx-editor-kit__code-block-shell {
+  position: relative;
+  overflow: visible;
+}
+
+.mdx-editor-kit__code-block-toolbar {
+  position: absolute;
+  top: 0;
+  left: 50%;
+  z-index: 2;
+  display: flex;
+  gap: 0.375rem;
+  padding: 0.375rem;
+  border: 1px solid var(--border);
+  border-radius: 0.875rem;
+  background: color-mix(in srgb, var(--card) 92%, transparent);
+  box-shadow: var(--shadow-soft);
+  backdrop-filter: blur(12px);
+  opacity: 0;
+  pointer-events: none;
+  transform: translate(-50%, calc(-100% - 0.375rem));
+  transition: opacity 140ms ease, transform 140ms ease;
+}
+
+.mdx-editor-kit__code-block-toolbar.is-active {
+  opacity: 1;
+  pointer-events: auto;
+  transform: translate(-50%, calc(-100% - 0.5rem));
+}
+
+.mdx-editor-kit__code-block-body > div {
+  margin-bottom: 1.25rem;
+}
+
+.mdx-editor-kit__code-block-body > div > :first-child {
+  display: none;
+}
+
+
+.mdx-editor-kit .mdxeditor [class*="listItemChecked"]::before,
+.mdx-editor-kit .mdxeditor [class*="listItemUnchecked"]::before {
+  top: 0.35em;
+}
+
+.mdx-editor-kit .mdxeditor [class*="listItemChecked"]::after {
+  top: calc(0.35em + 0.0625rem);
+  left: 0.375rem;
+  width: 0.3125rem;
+  height: 0.625rem;
+  border-color: var(--accentTextContrast);
+  border-width: 0 0.125rem 0.125rem 0;
+}
+
+.mdxeditor-popup-container [data-radix-popper-content-wrapper]:has([class*="linkDialogPopoverContent"]) {
+  left: 50% !important;
+  top: 3rem !important;
+  transform: translateX(-50%) !important;
+}
+
+.mdx-editor-kit .mdxeditor-popup-container [class*="linkDialogPopoverContent"] {
+  display: grid;
+  gap: 0.5rem;
+  min-width: min(22rem, calc(100vw - 2rem));
+  padding: 0.1875rem;
+  border: 1px solid var(--border) !important;
+  border-radius: 0.875rem;
+  background: var(--card) !important;
+  color: var(--foreground) !important;
+  box-shadow: var(--shadow-soft) !important;
+  backdrop-filter: none !important;
+}
+
+.mdx-editor-kit .mdxeditor-popup-container [class*="linkDialogPopoverContent"]:has(
+    [class*="linkDialogPreviewAnchor"]
+  ) {
+  display: flex;
+  align-items: center;
+  gap: 0.25rem;
+}
+
+.mdx-editor-kit .mdxeditor-popup-container [class*="popoverArrow"] {
+  display: none !important;
+}
+
+.mdx-editor-kit .mdxeditor-popup-container [class*="linkDialogPreviewAnchor"] {
+  display: flex;
+  align-items: center;
+  gap: 0.375rem;
+  min-height: 2rem;
+  min-width: 0;
+  padding: 0 0.625rem;
+  border-radius: 0.625rem;
+  color: var(--primary) !important;
+  font-size: 0.8125rem;
+  font-weight: 500;
+  line-height: 1.2;
+  text-decoration: none;
+  transition: background-color 140ms ease, color 140ms ease;
+}
+
+.mdx-editor-kit .mdxeditor-popup-container [class*="linkDialogPopoverContent"]:has(
+    [class*="linkDialogPreviewAnchor"]
+  )
+  [class*="linkDialogPreviewAnchor"] {
+  flex: 1 1 auto;
+}
+
+.mdx-editor-kit .mdxeditor-popup-container [class*="linkDialogPreviewAnchor"] span {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.mdx-editor-kit .mdxeditor-popup-container [class*="linkDialogPreviewAnchor"]:hover {
+  background: var(--muted);
+}
+
+.mdx-editor-kit .mdxeditor-popup-container [class*="linkDialogEditForm"] {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 0.5rem;
+  align-items: end;
+}
+
+.mdx-editor-kit .mdxeditor-popup-container [class*="formField"] {
+  display: grid;
+  gap: 0.25rem;
+  min-width: 0;
+}
+
+.mdx-editor-kit .mdxeditor-popup-container [class*="formField"] > label {
+  font-size: 0.68rem;
+  font-weight: 600;
+  letter-spacing: 0.01em;
+  color: var(--muted-foreground);
+}
+
+.mdx-editor-kit .mdxeditor-popup-container [class*="linkDialogEditForm"] > [class*="formField"]:first-child {
+  display: contents;
+}
+
+.mdx-editor-kit
+  .mdxeditor-popup-container
+  [class*="linkDialogEditForm"]
+  > [class*="formField"]:first-child
+  > label {
+  display: none;
+}
+
+.mdx-editor-kit .mdxeditor-popup-container [class*="linkDialogEditForm"] > [class*="formField"] + [class*="formField"] {
+  grid-column: 1 / -1;
+}
+
+.mdx-editor-kit .mdxeditor-popup-container [class*="linkDialogEditForm"]:has(> [class*="formField"] + [class*="formField"]) {
+  grid-template-columns: 1fr;
+}
+
+.mdx-editor-kit .mdxeditor-popup-container [class*="linkDialogEditForm"]:has(> [class*="formField"] + [class*="formField"]) > [class*="formField"]:first-child {
+  display: grid;
+}
+
+.mdx-editor-kit .mdxeditor-popup-container [class*="linkDialogEditForm"]:has(> [class*="formField"] + [class*="formField"]) > [class*="formField"]:first-child > label {
+  display: block;
+}
+
+.mdx-editor-kit .mdxeditor-popup-container [class*="linkDialogEditForm"]:has(> [class*="formField"] + [class*="formField"]) > div[style] {
+  grid-column: 1;
+  justify-content: flex-start !important;
+}
+
+.mdx-editor-kit .mdxeditor-popup-container [class*="textInput"],
+.mdx-editor-kit .mdxeditor-popup-container [class*="linkDialogInput"] {
+  box-sizing: border-box;
+  width: 100%;
+  max-width: 100%;
+  min-height: 2.125rem;
+  padding: 0 0.75rem;
+  border: 1px solid var(--border);
+  border-radius: 0.625rem;
+  background: var(--background);
+  color: var(--foreground);
+  outline: none;
+  box-shadow: none;
+  font-size: 0.875rem;
+}
+
+.mdx-editor-kit .mdxeditor-popup-container [class*="textInput"]::placeholder,
+.mdx-editor-kit .mdxeditor-popup-container [class*="linkDialogInput"]::placeholder {
+  color: var(--muted-foreground);
+}
+
+.mdx-editor-kit .mdxeditor-popup-container [class*="textInput"]:focus,
+.mdx-editor-kit .mdxeditor-popup-container [class*="linkDialogInput"]:focus,
+.mdx-editor-kit .mdxeditor-popup-container [class*="linkDialogInputWrapper"][data-visible-dropdown="false"] {
+  border-color: color-mix(in srgb, var(--ring) 60%, transparent);
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--ring) 18%, transparent);
+}
+
+.mdx-editor-kit .mdxeditor-popup-container [class*="linkDialogInputWrapper"] {
+  min-width: 0;
+  max-width: 100%;
+  border: 0;
+  border-radius: 0.75rem;
+  background: transparent;
+  box-shadow: none;
+}
+
+.mdx-editor-kit .mdxeditor-popup-container [class*="linkDialogInputContainer"] {
+  display: grid;
+  gap: 0.375rem;
+  min-width: 0;
+  max-width: 100%;
+  grid-column: 1;
+}
+
+.mdx-editor-kit .mdxeditor-popup-container [class*="actionButton"],
+.mdx-editor-kit .mdxeditor-popup-container [class*="primaryButton"],
+.mdx-editor-kit .mdxeditor-popup-container [class*="secondaryButton"] {
+  display: inline-flex;
+  min-height: 2rem;
+  cursor: pointer;
+  align-items: center;
+  justify-content: center;
+  gap: 0.375rem;
+  padding: 0 0.75rem;
+  border: 1px solid var(--border);
+  border-radius: 0.625rem;
+  background: var(--background);
+  color: var(--foreground);
+  font-size: 0.8125rem;
+  font-weight: 500;
+  transition: background-color 140ms ease, border-color 140ms ease, color 140ms ease;
+}
+
+.mdx-editor-kit .mdxeditor-popup-container [class*="linkDialogEditForm"] > div[style] {
+  grid-column: 2;
+  align-self: center;
+  display: inline-flex !important;
+  align-items: center;
+  justify-content: flex-end !important;
+  gap: 0.25rem !important;
+}
+
+.mdx-editor-kit .mdxeditor-popup-container [class*="actionButton"] {
+  flex: 0 0 auto;
+  width: 2rem;
+  min-width: 2rem;
+  padding: 0;
+}
+
+.mdx-editor-kit .mdxeditor-popup-container [class*="primaryButton"],
+.mdx-editor-kit .mdxeditor-popup-container [class*="secondaryButton"] {
+  position: relative;
+  box-sizing: border-box !important;
+  width: 2rem !important;
+  height: 2rem !important;
+  min-width: 2rem !important;
+  max-width: 2rem !important;
+  min-height: 2rem !important;
+  max-height: 2rem !important;
+  padding: 0 !important;
+  font-size: 0;
+  overflow: hidden;
+}
+
+.mdx-editor-kit .mdxeditor-popup-container [class*="primaryButton"]::before,
+.mdx-editor-kit .mdxeditor-popup-container [class*="secondaryButton"]::before {
+  position: absolute;
+  inset: 0;
+  display: grid;
+  place-items: center;
+  font-size: 0.95rem;
+  line-height: 1;
+}
+
+.mdx-editor-kit .mdxeditor-popup-container [class*="primaryButton"]::before {
+  content: "✓";
+  color: var(--primary-foreground);
+}
+
+.mdx-editor-kit .mdxeditor-popup-container [class*="secondaryButton"]::before {
+  content: "✕";
+  color: var(--foreground);
+}
+
+.mdx-editor-kit .mdxeditor-popup-container [class*="actionButton"]:hover,
+.mdx-editor-kit .mdxeditor-popup-container [class*="secondaryButton"]:hover {
+  background: var(--muted);
+}
+
+.mdx-editor-kit .mdxeditor-popup-container [class*="primaryButton"] {
+  border-color: var(--border) !important;
+  background: var(--primary);
+  color: var(--primary-foreground);
+}
+
+.mdx-editor-kit .mdxeditor-popup-container [class*="primaryButton"]:hover {
+  background: color-mix(in srgb, var(--primary) 92%, black);
+}
+
+/* Streamdown code blocks carry both Shiki themes. Its own `dark:` classes live in
+   node_modules, which Tailwind does not scan, so the dark swap is done here. */
+.dark [data-streamdown="code-block-body"] {
+  background-color: transparent !important;
+  color: var(--foreground) !important;
+}
+
+.dark [data-streamdown="code-block-body"] > code > span > span {
+  color: var(--shiki-dark, var(--foreground)) !important;
+  background-color: var(--shiki-dark-bg, transparent) !important;
+}

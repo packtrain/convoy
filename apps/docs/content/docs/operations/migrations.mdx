@@ -1,0 +1,168 @@
+---
+title: Migrations
+description: How to run Convex data migrations safely in production.
+---
+
+Convoy uses Convex for durable application data. Any migration that
+changes existing documents should follow a staged deployment flow:
+widen the schema, migrate and verify the data, then narrow the schema
+in a later deploy.
+
+## Default: run all pending migrations
+
+The normal production path is to deploy the migration-capable version,
+dry-run all pending migrations, run all pending migrations, then verify
+the migration-specific invariants.
+
+From `apps/web`:
+
+```bash
+npx convex run --prod migrations:runAll '{"dryRun": true}'
+npx convex run --prod migrations:runAll
+npx convex run --prod --component migrations lib:getStatus
+```
+
+If `runAll` dry-run reports `Dry run attempted to update state` while
+encountering already-completed migrations, check component status and
+dry-run the specific pending migration directly:
+
+```bash
+npx convex run --prod --component migrations lib:getStatus
+npx convex run --prod migrations:<migrationName> '{"dryRun": true}'
+```
+
+That fallback is only for dry-run. The normal write path should still
+use `migrations:runAll` unless you intentionally need to run one
+migration in isolation.
+
+## Production flow
+
+### 1. Deploy the widened version
+
+The first deploy must be able to read both old and new data. It should:
+
+- keep the old schema shape valid
+- write the new shape for newly created or updated rows
+- include the migration function and verification queries
+- avoid removing legacy fields or union values until after verification
+
+From `apps/web`:
+
+```bash
+npx convex deploy
+```
+
+If production is deployed by CI, push the widened commit and wait for
+the pipeline to deploy Convex functions and schema.
+
+### 2. Dry-run pending migrations
+
+Run all pending migrations against production with `dryRun: true`
+before writing data:
+
+```bash
+npx convex run --prod migrations:runAll '{"dryRun": true}'
+```
+
+Review the output for the number of rows processed and any sampled
+changes. If Convex says it cannot find the function, production has not
+deployed the widened function bundle yet.
+
+If `runAll` dry-run encounters already-completed migrations and fails
+while trying to update dry-run state, use the fallback from the default
+flow above and dry-run the specific pending migration directly.
+
+### 3. Run pending migrations
+
+After the dry-run output looks correct, run all pending migrations:
+
+```bash
+npx convex run --prod migrations:runAll
+```
+
+For migrations registered with the migrations component, check status
+with:
+
+```bash
+npx convex run --prod --component migrations lib:getStatus
+```
+
+You can run a single migration directly when you are deliberately
+isolating one change:
+
+```bash
+npx convex run --prod migrations:<migrationName>
+```
+
+### 4. Verify the data
+
+Every production migration should have at least one verification query.
+Run it after the migration finishes:
+
+```bash
+npx convex run --prod migrations:<verifyQueryName>
+```
+
+The verification should prove that no active rows still require the
+legacy schema shape. If it reports leftovers, fix the migration or the
+data and verify again before narrowing.
+
+### 5. Deploy the narrowed version
+
+Only after verification passes, ship a separate cleanup deploy that
+removes the old schema shape and transitional code. This is the point
+where you can remove legacy validators, deprecated fields, and
+read-time compatibility shims.
+
+## Migration log
+
+Append production data migrations here after they are run and verified.
+Keep entries concise: ticket, date, migration function names, and the
+verification command names used after the run.
+
+| Date | Ticket | Migration | Verification |
+| --- | --- | --- | --- |
+| _YYYY-MM-DD_ | _Ticket_ | _Migration function names_ | _Verification function names_ |
+
+## Example checklist
+
+For a future migration:
+
+1. Deploy the widened code and schema.
+2. Dry-run production:
+
+   ```bash
+   npx convex run --prod migrations:<migrationName> '{"dryRun": true}'
+   ```
+
+3. Run production:
+
+   ```bash
+   npx convex run --prod migrations:<migrationName>
+   ```
+
+4. Verify production:
+
+   ```bash
+   npx convex run --prod migrations:<verifyQueryName>
+   ```
+
+5. Deploy the narrowed code and schema only after verification passes.
+
+## Rollback notes
+
+The widened deploy is usually rollback-friendly because it still
+accepts the old data. The narrowed deploy is different: once a schema
+removes a legacy field or union value, rolling back code may not be
+enough because the data has already changed.
+
+Treat narrowing deploys as fix-forward by default. If rollback might be
+needed, take a Convex backup or export before narrowing and read
+[`Backups and rollback`](/docs/operations/backups-and-rollback)
+before deploying.
+
+## Related
+
+- [`Deploy the Convex Backend`](/docs/deployment/deploy-with-convex)
+- [`Backups and rollback`](/docs/operations/backups-and-rollback)
+- [`Monitoring and logs`](/docs/operations/monitoring-and-logs)

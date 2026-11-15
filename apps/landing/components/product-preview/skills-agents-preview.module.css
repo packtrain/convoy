@@ -1,0 +1,62 @@
+.scene {
+  --skill-background: #131313;
+  --skill-foreground: oklch(.93 0 0);
+  --skill-muted: oklch(.65 0 0);
+  --skill-border: oklch(1 0 0 / 12%);
+  container-type: inline-size;
+  font-family: var(--font-preview-sans), Inter, sans-serif;
+  font-size: 14px;
+  line-height: 20px;
+  color: var(--skill-foreground);
+  color-scheme: dark;
+}
+.scene *, .scene *::before, .scene *::after { box-sizing: border-box; }
+.panel { min-width: 0; padding: 24px; border: 1px solid var(--skill-border); border-radius: 12px; background: var(--skill-background); }
+.skill { position: relative; z-index: 1; box-shadow: 0 16px 48px #0005; }
+.skillHeader { display: flex; flex-direction: column; gap: 12px; }
+.skillHeader h2 { margin: 0; font-size: 24px; font-weight: 600; line-height: 32px; letter-spacing: -.025em; overflow-wrap: anywhere; }
+.skillHeader > span, .skillHeader p { color: var(--skill-muted); }
+.skillHeader p { margin: 0; font-size: 14px; line-height: 24px; }
+.document { margin-top: 24px; padding: 20px; border: 1px solid var(--skill-border); border-radius: 8px; }
+.markdown { font-size: 16px; font-weight: 400; line-height: 1.7; }
+.markdown p { margin: 0; }
+.markdown p + * { margin-top: 16px; }
+.markdown ol { list-style: decimal; margin: 16px 0; padding-left: 24px; }
+.markdown li { margin: 4px 0; }
+.readonly { padding: 20px 18px; opacity: .8; }
+.files { margin-top: 24px; }
+.files h3 { margin: 0 0 8px; font-size: 14px; font-weight: 500; line-height: 20px; }
+.file { display: flex; align-items: center; gap: 12px; padding: 10px 16px; border: 1px solid var(--skill-border); border-radius: 8px; }
+.file svg { width: 16px; height: 16px; flex-shrink: 0; color: var(--skill-muted); }
+.file span { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.agent { margin-top: 64px; display: flex; flex-direction: column; gap: 16px; }
+.field { min-width: 0; }
+.field label { display: flex; flex-direction: column; gap: 8px; font-weight: 500; line-height: 14px; }
+.nameRow { display: flex; gap: 8px; }
+.color { display: flex; align-items: center; justify-content: center; width: 32px; height: 32px; border: 1px solid var(--skill-border); border-radius: 8px; background: transparent; flex-shrink: 0; }
+.field input, .field textarea { width: 100%; min-width: 0; height: 32px; padding: 4px 10px; border: 1px solid oklch(1 0 0 / 15%); border-radius: 8px; background: oklch(1 0 0 / 4.5%); color: inherit; font: inherit; font-weight: 400; line-height: 20px; outline: none; }
+.field textarea { min-height: 80px; padding: 8px 12px; resize: none; }
+.field input:focus-visible, .field textarea:focus-visible { border-color: oklch(.556 0 0); box-shadow: 0 0 0 3px oklch(.556 0 0 / 50%); }
+.contentLabel { display: flex; align-items: center; justify-content: space-between; height: 28px; margin-bottom: 8px; font-weight: 500; }
+.contentLabel svg { width: 14px; height: 14px; margin-right: 7px; color: var(--skill-muted); }
+.editor { overflow: hidden; border: 1px solid var(--skill-border); border-radius: 8px; }
+.toolbar { display: flex; align-items: center; gap: 8px; height: 41px; padding: 4px 8px; overflow: hidden; border-bottom: 1px solid var(--skill-border); background: oklch(.21 0 0); color: var(--skill-muted); }
+.toolbar > div { display: flex; align-items: center; gap: 4px; }
+.toolbar span { display: inline-flex; align-items: center; justify-content: center; width: 32px; height: 32px; flex-shrink: 0; }
+.toolbar .paragraph { width: 36px; }
+.toolbar svg { width: 16px; height: 16px; flex-shrink: 0; }
+.prompt { padding: 16px 14px; }
+@media (min-width: 768px) { .readonly { padding: 28px 26px; } .prompt { padding: 16px; } }
+@media (max-width: 760px) {
+  .scene { padding: 24px 12px; }
+  .agent { margin-top: 0; }
+  .panel { padding: 20px; }
+}
+
+.color > span { width: 16px; height: 16px; border-radius: 50%; background: #a78bfa; }
+
+.frames { display: grid; grid-template-columns: minmax(0, 1.2fr) minmax(0, 1fr); align-items: start; gap: 24px; }
+@container (max-width: 700px) {
+  .frames { grid-template-columns: minmax(0, 1fr); gap: 20px; }
+  .agent { margin-top: 0; }
+}

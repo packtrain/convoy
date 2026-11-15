@@ -1,0 +1,33 @@
+---
+title: Dev container
+description: Use the project dev container to run AI CLIs inside an isolated development environment.
+---
+
+The Convoy dev container gives you an isolated workspace for running AI CLIs such as Claude Code without using your host machine directly.
+
+The copy in `.devcontainer/` is coupled to the Convoy repository, so its main audiences are contributors working on Convoy itself and operators who want an isolated, tested environment for [running the CLI long-term](/docs/operations/running-the-cli-long-term). A generic version of the same setup can be installed into **any** project — see [Use in your project](/docs/cli/dev-container/use-in-your-project).
+
+Use it when you want:
+
+- a repeatable setup for local AI tooling
+- a safer place to run agent workflows
+- optional outbound network restrictions
+- a container-local dependency environment that does not overwrite host packages
+
+## What it includes
+
+- a preconfigured dev container for this repo
+- Claude Code, Codex, OpenCode, and Cursor CLIs installed in the container
+- optional Convoy CLI profile mounting
+- `strict` and `open` network modes
+
+## Good fit
+
+This setup is especially useful when you want AI CLIs to work against the repo in a more isolated environment while still keeping access to Convoy profiles, MCP setup, and project-local configuration.
+
+## Next steps
+
+- [`Setup and modes`](/docs/cli/dev-container/setup-and-modes)
+- [`Use in your project`](/docs/cli/dev-container/use-in-your-project)
+- [`Convoy and AI CLIs`](/docs/cli/dev-container/convoy-and-ai-clis)
+- [`Troubleshooting`](/docs/cli/dev-container/troubleshooting)

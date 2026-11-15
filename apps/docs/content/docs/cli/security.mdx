@@ -1,0 +1,109 @@
+---
+title: Security model
+description: What API keys grant, what a connected agent can do on your machine, and how to limit blast radius.
+---
+
+Connecting a machine lets Convoy start AI runtime work as your local user.
+This page explains the credentials, ownership checks, and isolation options
+that control that access.
+
+## API keys
+
+- Keys are **user-scoped**: they act on behalf of the user who created them
+  and inherit exactly that user's organization and project permissions.
+  There is no separate key permission model and no way for a key to grant
+  more than its owner has.
+- Permission checks are enforced by the backend on every query and
+  mutation, not by the client.
+- Rotate keys when a machine is lost or a secret leaks; create separate
+  keys per machine so revocation is targeted.
+
+Keys live in `~/.config/convoy/config.toml`, written with file mode `0600`,
+and inside generated MCP config files. **Generated MCP config
+embeds your API key** — before committing project-scoped config such as
+`.mcp.json` or `.codex/config.toml`, verify the file is ignored by version
+control.
+
+## Model provider keys
+
+Bedrock and Mantle credentials managed by `convoy keys` are a separate
+credential type. They are stored only in the local `config.toml`, assigned
+to profiles, and injected into Claude Code processes. They are never
+registered with or synchronized to the Convoy backend.
+
+See [Model provider keys](/docs/cli/provider-keys) for setup, assignment,
+and removal.
+
+## What a connected CLI session can do
+
+`convoy connect` registers one session for one profile. That session:
+
+- claims eligible threads for its owner in the profile's project
+- runs the selected installed runtime in the profile's local working directory
+- streams the agent's output back to Convex
+
+The agent subprocess runs as your local user. By default it has the same
+filesystem and network access as running `claude` in that directory
+yourself — the runtime's own permission settings are the enforcement layer
+for what it may touch locally (Claude Code's permission modes; Codex's OS
+sandbox flags; OpenCode's session permission rulesets, where Agent mode
+auto-allows all tools and "Ask to approve" routes each request to the
+thread for approval). Opting into
+[`--isolated`](/docs/cli/isolation-options#the-built-in-isolated-mode)
+adds an OS-level sandbox generated from the profile's paths, so agents
+cannot write outside the granted folders (Claude Code and Codex).
+
+## Thread ownership and project access
+
+A profile belongs to a user. Thread creation and control require that user's
+project permissions, and selecting a profile requires owning it. Other project
+members cannot drive your machine through your thread or profile merely
+because they belong to the same project.
+
+Only a thread's owner can send, steer, retry, cancel, or answer approvals.
+Explicit project sharing gives eligible teammates read-only access to the
+transcript. See [AI threads](/docs/using/ai-threads#sharing-with-teammates).
+
+Practical consequences:
+
+- protect credentials that act as your user and review instructions before
+  sending project content to a runtime
+- prefer a dedicated checkout or worktree as the profile path, rather than
+  a directory with unrelated secrets
+- enable [`--isolated`](/docs/cli/isolation-options#the-built-in-isolated-mode)
+  (or `isolated = true` on the profile) so agents are OS-sandboxed to the
+  profile's folders
+- for stronger isolation, run the bridge inside the
+  [dev container](/docs/cli/dev-container) — container-local dependencies,
+  and a `strict` network mode that blocks outbound traffic except an
+  allowlist — or pick another boundary from
+  [isolation options](/docs/cli/isolation-options)
+
+## What leaves your machine
+
+While a thread runs, the CLI streams the agent's events — assistant text,
+reasoning, tool calls, and tool output — to the Convex backend, where they
+are stored durably and shown to the owner. An explicitly shared thread also
+shows its full transcript and live output to eligible project teammates. If
+the agent prints a sensitive file, that content becomes part of the thread.
+
+Thread file attachments are cached locally under
+`~/.cache/convoy/thread-attachments` (cleaned up after 7 days).
+
+## MCP exposure
+
+The MCP server exposes task and project data under the authenticated user's
+permissions. Its thread tools can create threads and send messages to that
+user's threads. Those requests can trigger runtime work on the user's connected
+machine. Treat an MCP client with that credential as able to act for you,
+including through the bridge, and protect generated config files.
+
+## Related pages
+
+- [`API keys`](/docs/cli/api-keys)
+- [`Model provider keys`](/docs/cli/provider-keys)
+- [`Isolation options`](/docs/cli/isolation-options) — the full landscape
+  of sandboxes, containers, and VMs
+- [`Dev container`](/docs/cli/dev-container) — isolation and network modes
+- [`Organizations, projects, and members`](/docs/using#organizations-projects-and-members)
+  — the permission model behind all of this

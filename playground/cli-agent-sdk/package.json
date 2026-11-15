@@ -1,0 +1,35 @@
+{
+  "name": "@convoy/cli-agent-sdk",
+  "version": "0.1.0",
+  "description": "CLI for exploring agent SDKs (Claude, Codex)",
+  "type": "module",
+  "bin": {
+    "cli-agent-sdk": "./dist/bin/cli-agent-sdk.js"
+  },
+  "scripts": {
+    "dev": "tsx bin/cli-agent-sdk.ts",
+    "dev:watch": "tsx watch bin/cli-agent-sdk.ts",
+    "build": "tsc",
+    "start": "node dist/bin/cli-agent-sdk.js",
+    "test": "node scripts/run-vitest.mjs run --dir src",
+    "test:watch": "node scripts/run-vitest.mjs --dir src",
+    "test:ui": "node scripts/run-vitest.mjs --ui",
+    "smoke:mock-json": "pnpm build && node dist/bin/cli-agent-sdk.js --agent mock-cli-json -p \"hello\"",
+    "smoke:mock-line": "pnpm build && node dist/bin/cli-agent-sdk.js --agent mock-cli-line -p \"hello\"",
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "@anthropic-ai/claude-agent-sdk": "^0.2.112",
+    "@inquirer/prompts": "^8.2.0",
+    "chalk": "^5.6.2",
+    "commander": "^14.0.2"
+  },
+  "devDependencies": {
+    "@types/node": "^25.0.10",
+    "tsx": "^4.21.0",
+    "typescript": "^5.9.3"
+  },
+  "engines": {
+    "node": ">=18"
+  }
+}

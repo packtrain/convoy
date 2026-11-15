@@ -1,0 +1,136 @@
+---
+title: Environment Variables
+description: Reference for all environment variables, where each one belongs, and what it does.
+---
+
+Convoy uses environment variables across three different contexts. Each variable belongs in a specific place — setting it in the wrong place has no effect.
+
+## Where Each Variable Goes
+
+| Variable | Convex Dashboard | Web Hosting (Vercel, etc.) | Local `.env.local` |
+| --- | :---: | :---: | :---: |
+| `CLERK_JWT_ISSUER_DOMAIN` | Yes | — | — |
+| `RESEND_API_KEY` | Yes | — | — |
+| `EMAIL_FROM` | Yes | — | — |
+| `NEXT_PUBLIC_APP_URL` | Yes | — | — |
+| `CONVOY_BACKEND_BUILD_ID` | Yes | — | — |
+| `CONVOY_BACKEND_BUILD_TIME` | Yes | — | — |
+| `CONVOY_BACKEND_GIT_REF` | Yes | — | — |
+| `CONVOY_BACKEND_VERCEL_ENV` | Yes | — | — |
+| `GITHUB_APP_ID` | Yes | — | — |
+| `GITHUB_APP_SLUG` | Yes | — | — |
+| `GITHUB_APP_PRIVATE_KEY` | Yes | — | — |
+| `GITHUB_APP_CLIENT_ID` | Yes | — | — |
+| `GITHUB_APP_CLIENT_SECRET` | Yes | — | — |
+| `GITHUB_APP_WEBHOOK_SECRET` | Yes | — | — |
+| `CONVEX_DEPLOY_KEY` | — | Yes (if integrated build) | — |
+| `NEXT_PUBLIC_CONVEX_URL` | — | Yes (if separate deploy) | Yes |
+| `NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY` | — | Yes | Yes |
+| `CLERK_SECRET_KEY` | — | Yes | Yes |
+| `NEXT_PUBLIC_CLERK_SIGN_IN_URL` | — | Yes | Yes |
+| `NEXT_PUBLIC_CLERK_SIGN_UP_URL` | — | Yes | Yes |
+| `NEXT_PUBLIC_CLERK_SIGN_IN_FALLBACK_REDIRECT_URL` | — | Yes | Yes |
+| `NEXT_PUBLIC_CLERK_SIGN_UP_FALLBACK_REDIRECT_URL` | — | Yes | Yes |
+| `NEXT_PUBLIC_APP_ENV` | — | Yes | Yes |
+| `NEXT_PUBLIC_APP_BUILD_ID` | — | Yes | Yes |
+| `NEXT_PUBLIC_APP_BUILD_TIME` | — | Yes | Yes |
+| `NEXT_PUBLIC_APP_GIT_REF` | — | Yes | Yes |
+| `NEXT_PUBLIC_APP_VERCEL_ENV` | — | Yes | Yes |
+| `NEXT_PUBLIC_APP_VERSION_POLL_INTERVAL_MS` | — | Yes | Yes |
+| `NEXT_PUBLIC_VERCEL_ANALYTICS_ENABLED` | — | Yes | Yes |
+| `CONVEX_DEPLOYMENT` | — | — | Yes |
+
+## Convex Dashboard Variables
+
+Set these in the Convex dashboard under **Settings → Environment Variables** for your deployment. They run inside Convex functions at runtime.
+
+| Variable | Required | Purpose |
+| --- | --- | --- |
+| `CLERK_JWT_ISSUER_DOMAIN` | Yes | Clerk JWT issuer domain for token verification |
+| `RESEND_API_KEY` | No | Resend API key for transactional email |
+| `EMAIL_FROM` | No | Verified sender identity (e.g. `Convoy <noreply@example.com>`) |
+| `NEXT_PUBLIC_APP_URL` | No | Base URL for email links. Defaults to `https://app.convoy.build` when unset |
+| `CONVOY_BACKEND_BUILD_ID` | No | Backend build or commit id shown in Settings → Developer. Vercel integrated builds should set this from `VERCEL_GIT_COMMIT_SHA` before `convex deploy` |
+| `CONVOY_BACKEND_BUILD_TIME` | No | Backend deploy timestamp shown in Settings → Developer |
+| `CONVOY_BACKEND_GIT_REF` | No | Backend branch/ref shown in Settings → Developer |
+| `CONVOY_BACKEND_VERCEL_ENV` | No | Vercel environment label shown for the backend in Settings → Developer |
+| `GITHUB_APP_ID` | No | GitHub App ID. All six `GITHUB_APP_*` variables together enable the [GitHub integration](/docs/deployment/github-integration) |
+| `GITHUB_APP_SLUG` | No | The App's URL slug, for its install link |
+| `GITHUB_APP_PRIVATE_KEY` | No | The App's private key in PKCS#8 PEM form (`BEGIN PRIVATE KEY`) |
+| `GITHUB_APP_CLIENT_ID` | No | The App's OAuth client ID, used to verify the connecting admin |
+| `GITHUB_APP_CLIENT_SECRET` | No | The App's OAuth client secret |
+| `GITHUB_APP_WEBHOOK_SECRET` | No | Secret GitHub signs webhook deliveries with |
+
+## Web Hosting Variables
+
+Set these in your web hosting provider (Vercel, Cloudflare, etc.). They are used by the Next.js app at build time and runtime.
+
+| Variable | Required | Purpose |
+| --- | --- | --- |
+| `CONVEX_DEPLOY_KEY` | If integrated build | Deploy key for CI/CD Convex deploys (Settings → General → Deploy Keys) |
+| `NEXT_PUBLIC_CONVEX_URL` | If separate deploy | Convex deployment URL (e.g. `https://friendly-wolf-872.convex.cloud`) |
+| `NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY` | Yes | Clerk publishable key for browser auth |
+| `CLERK_SECRET_KEY` | Yes | Clerk server-side secret |
+| `NEXT_PUBLIC_CLERK_SIGN_IN_URL` | Yes | Sign-in route (typically `/auth/sign-in`) |
+| `NEXT_PUBLIC_CLERK_SIGN_UP_URL` | Yes | Sign-up route (typically `/auth/sign-up`) |
+| `NEXT_PUBLIC_CLERK_SIGN_IN_FALLBACK_REDIRECT_URL` | Yes | Post-sign-in redirect (typically `/auth/callback`) |
+| `NEXT_PUBLIC_CLERK_SIGN_UP_FALLBACK_REDIRECT_URL` | Yes | Post-sign-up redirect (typically `/auth/callback`) |
+| `NEXT_PUBLIC_APP_ENV` | No | Environment label (`dev`, `staging`, or `production`). Non-production values show a colored indicator card in the sidebar. Defaults to `production` |
+| `NEXT_PUBLIC_APP_BUILD_ID` | No | Frontend build or commit id shown in Settings → Developer. Vercel builds derive this from `VERCEL_GIT_COMMIT_SHA` when unset |
+| `NEXT_PUBLIC_APP_BUILD_TIME` | No | Frontend build timestamp shown in Settings → Developer. The Next.js build fills this automatically when unset |
+| `NEXT_PUBLIC_APP_GIT_REF` | No | Frontend branch/ref shown in Settings → Developer. Vercel builds derive this from `VERCEL_GIT_COMMIT_REF` when unset |
+| `NEXT_PUBLIC_APP_VERCEL_ENV` | No | Frontend Vercel environment label shown in Settings → Developer. Vercel builds derive this from `VERCEL_ENV` when unset |
+| `NEXT_PUBLIC_APP_VERSION_POLL_INTERVAL_MS` | No | Frontend update-check interval in milliseconds. Defaults to `120000` (2 minutes) |
+| `NEXT_PUBLIC_VERCEL_ANALYTICS_ENABLED` | No | Enables Vercel Web Analytics only when set to `true`. Defaults to off so self-hosted installs do not send analytics events to Vercel unless explicitly opted in |
+
+When using the integrated Convex build command, the `NEXT_PUBLIC_CONVEX_URL` is injected automatically and does not need to be set separately. See [Deploy to Vercel](/docs/deployment/deploy-to-vercel) for the full command, including backend version metadata setup.
+
+## Convex Deploy Variables
+
+These are used on the command line or in CI when deploying Convex functions. They are **not** set in the Convex dashboard or in your web hosting provider.
+
+| Variable | Purpose |
+| --- | --- |
+| `CONVEX_DEPLOYMENT` | Target deployment with prefix: `prod:` for production, `dev:` for development (e.g. `prod:friendly-wolf-872`) |
+| `CONVEX_DEPLOY_KEY` | Deploy key from the Convex dashboard (Settings → General → Deploy Keys). Includes auth — useful for CI/CD |
+
+Use one or the other. See [Deploy the Convex Backend](/docs/deployment/deploy-with-convex) for usage examples.
+
+## Local Development
+
+For local development, `apps/web/.env.local` only needs:
+
+```
+NEXT_PUBLIC_APP_ENV=dev
+NEXT_PUBLIC_APP_VERSION_POLL_INTERVAL_MS=120000
+NEXT_PUBLIC_VERCEL_ANALYTICS_ENABLED=false
+
+CONVEX_DEPLOYMENT=dev:your-dev-deployment-123
+NEXT_PUBLIC_CONVEX_URL=https://your-dev-deployment-123.convex.cloud
+
+NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY=pk_test_...
+CLERK_SECRET_KEY=sk_test_...
+
+NEXT_PUBLIC_CLERK_SIGN_IN_URL=/auth/sign-in
+NEXT_PUBLIC_CLERK_SIGN_UP_URL=/auth/sign-up
+NEXT_PUBLIC_CLERK_SIGN_IN_FALLBACK_REDIRECT_URL=/auth/callback
+NEXT_PUBLIC_CLERK_SIGN_UP_FALLBACK_REDIRECT_URL=/auth/callback
+```
+
+The `dev:` prefix indicates a development deployment. Production deployments use `prod:` instead.
+
+Convex server-side variables (`CLERK_JWT_ISSUER_DOMAIN`, `RESEND_API_KEY`, `EMAIL_FROM`, `NEXT_PUBLIC_APP_URL`) go in the Convex dashboard for your dev deployment — they are not needed in `.env.local`.
+
+## Guidance
+
+- Keep secrets out of the repo
+- Make Convex `NEXT_PUBLIC_APP_URL` match the real user-facing URL when you need email links to target a non-default host
+- Verify that the Convex deployment URL matches the environment users are actually signing into
+- Convex dashboard env vars and Next.js env vars serve different runtimes — configure both
+
+## Related Pages
+
+- [Deploy the Convex Backend](/docs/deployment/deploy-with-convex)
+- [Deploy to Vercel](/docs/deployment/deploy-to-vercel)
+- [Auth and Clerk](/docs/deployment/auth-and-clerk)
+- [Email and Resend](/docs/deployment/email-and-resend)

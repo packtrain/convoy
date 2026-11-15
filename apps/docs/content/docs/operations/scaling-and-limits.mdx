@@ -1,0 +1,114 @@
+---
+title: Scaling and limits
+description: Levers for scaling Convoy CLI throughput, and the backpressure signals to watch.
+---
+
+Convoy hasn't been run at large team scale in production yet, so this
+page documents **levers and signals** rather than tested settings. Start
+conservative, watch the signals, and raise limits only when you see
+backpressure, not preemptively.
+
+## The knobs that actually exist
+
+### Per-profile concurrency
+
+`convoy connect --concurrency <n>` caps how many claimed chats the
+process handles in parallel. Without the flag, Convoy uses the resolved
+profile's optional `concurrency` value, then `5`. The Desktop app exposes the
+same profile setting under Settings → Profiles.
+
+- Default: profile `concurrency`, otherwise `5`
+- Hard cap: `50` (enforced in the CLI)
+- Each concurrent chat is a separate claimed thread running its own
+  runtime subprocess, plus its own round-trip to Convex for chunk
+  appends.
+
+Raising `--concurrency` increases throughput for a project with many
+users, at the cost of host CPU, memory, and runtime-provider rate
+limits hitting earlier.
+
+### Number of CLI sessions per profile
+
+One active session per profile is enforced server-side by
+`cliSessions`. Attempting to register a second session for the same
+profile returns a conflict that you can resolve with `--force`, which
+disconnects the existing one.
+
+That means **horizontal scaling by running multiple workers for one
+profile is not possible today**. The horizontal path is multiple
+profiles, each on its own worker.
+
+### Number of CLI sessions per project
+
+A project can have many profiles. Each profile is a separate claim
+holder. Two workers on two profiles for the same project can process
+two different threads in parallel — they'll never compete for the same
+thread because claims are thread-level and mutually exclusive.
+
+### Thread-level sequencing
+
+Within a single thread, assistant responses run sequentially under the
+same claim. New user messages that arrive mid-stream become the next
+run after the active one finishes. This is a correctness property,
+not a tuning knob — there is no way to parallelize a single thread.
+
+## Runtime-provider limits
+
+The harder cap is usually your model provider, not Convoy's code.
+
+- **Anthropic API** — rate limits and concurrent-request caps depend on
+  your account tier. See Anthropic's rate limits documentation. Hitting
+  them surfaces in Convoy as `runtime-notice` events with code
+  `claude-api-retry` in the thread stream.
+- **AWS Bedrock** — quotas per-model and per-region. See the AWS
+  Bedrock service quotas docs. Exceeding them typically surfaces as
+  throttling errors from the runtime.
+
+Convoy does not rate-limit the runtime on its own; it relies on the
+provider's own backpressure and the runtime's retry behavior.
+
+## Backpressure signals to watch
+
+When something is wrong, these are the first places it shows up.
+
+| Signal | Where | What it means |
+|---|---|---|
+| Threads sit as "pending" for seconds-to-minutes | Web UI | No worker is claiming — check the CLI session is actually online. |
+| Repeated `claude-api-retry` notices on streamed threads | Thread view | Runtime provider is rate-limiting. Lower concurrency or slow down user load. |
+| Frequent `failed` runs in `cliMessages` | Convex dashboard → Data → `cliMessages` | Runtime is actually erroring. See the linked raw chunks on each failed message. |
+| Stale claims (claim lease expires, thread stays claimed) | `cliThreads` rows | Worker crashed mid-claim. Server-side recovery releases it. |
+| Convex function timeouts on `appendRunContent` | Convex dashboard → Functions → Logs | A single chunk-append is taking too long. Usually a very large tool output. |
+
+## A starting recipe
+
+For an initial deployment, assume nothing and start here:
+
+1. Run **one worker per profile** at the default concurrency of `5`.
+2. For one project, provision **one profile per physical worker host**.
+3. Watch the signals above for a week of real use.
+4. Raise `--concurrency` only on hosts that are idle under backpressure
+   (plenty of CPU, threads queueing up).
+5. Add more profiles / hosts when a single worker at healthy
+   concurrency can't keep up.
+
+Don't skip step 3. "Pre-scale to a guess" is how deployments end up
+wasting provider quota and host CPU on a workload that never shows up.
+
+## What is not in scope for scaling here
+
+- **Convex function limits and transaction size.** These are Convex's
+  own operational envelope. See Convex docs.
+- **Web app scaling.** Next.js on Vercel scales horizontally; the
+  interesting scaling question for Convoy is always on the CLI side.
+- **Model / runtime selection.** Choosing a different Claude model
+  changes cost and latency but doesn't change how Convoy schedules
+  work.
+
+## Related
+
+- [`Running the CLI long-term`](/docs/operations/running-the-cli-long-term)
+  for how to actually deploy workers.
+- [`Monitoring and logs`](/docs/operations/monitoring-and-logs) for
+  where the signals above actually show up.
+- [`CLI architecture and lifecycle`](/docs/contributing/cli-architecture-and-lifecycle)
+  for the claim/run model the knobs above operate on.

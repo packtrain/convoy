@@ -1,0 +1,5 @@
+{
+  "name": "convoy",
+  "version": "0.1.0",
+  "description": "Convoy task management via MCP or the convoy CLI — setup, configure, and manage projects and tasks directly from Claude Code."
+}

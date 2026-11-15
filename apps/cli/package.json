@@ -1,0 +1,83 @@
+{
+  "name": "@useconvoy/cli",
+  "version": "0.142.0",
+  "description": "CLI agent for Convoy",
+  "license": "Elastic-2.0",
+  "homepage": "https://docs.convoy.build/docs/cli/install",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/packtrain/convoy.git",
+    "directory": "apps/cli"
+  },
+  "bugs": {
+    "url": "https://github.com/packtrain/convoy/issues"
+  },
+  "keywords": [
+    "convoy",
+    "cli",
+    "agent",
+    "project-management",
+    "convex"
+  ],
+  "type": "module",
+  "files": [
+    "dist",
+    "README.md",
+    "LICENSE"
+  ],
+  "bin": {
+    "convoy": "./dist/bin/convoy.js"
+  },
+  "publishConfig": {
+    "access": "public"
+  },
+  "scripts": {
+    "dev": "tsx bin/convoy.ts",
+    "dev:watch": "tsx watch bin/convoy.ts",
+    "deploy": "tsx scripts/deploy.ts",
+    "build": "node -e \"const fs=require('fs');fs.rmSync('dist',{recursive:true,force:true})\" && tsc -p tsconfig.build.json && node -e \"const fs=require('fs');fs.cpSync('../../plugins','dist/marketplace',{recursive:true});fs.cpSync('../../templates','dist/templates',{recursive:true});fs.cpSync('../web/convex/_generated','dist/src/convex/_generated',{recursive:true})\"",
+    "prepack": "npm run build",
+    "start": "node dist/bin/convoy.js",
+    "lint": "eslint .",
+    "typecheck": "tsc --noEmit",
+    "test": "vitest",
+    "test:once": "vitest run",
+    "test:coverage": "vitest run --coverage",
+    "release": "npm logout; npm login && npm publish"
+  },
+  "dependencies": {
+    "@anthropic-ai/claude-agent-sdk": "0.3.295",
+    "@anthropic-ai/sdk": "^0.93.0",
+    "@inquirer/prompts": "^8.2.0",
+    "@opencode-ai/sdk": "^1.17.13",
+    "chalk": "^5.6.2",
+    "commander": "^14.0.2",
+    "conf": "^15.0.2",
+    "convex": "^1.49.0",
+    "ini": "^6.0.0",
+    "ink": "^6.6.0",
+    "ink-spinner": "^5.0.0",
+    "open": "^11.0.0",
+    "ora": "^9.1.0",
+    "react": "^19.2.4",
+    "smol-toml": "^1.6.0",
+    "string-width": "8.1.0",
+    "zod": "^4.3.6"
+  },
+  "devDependencies": {
+    "@eslint/js": "9.39.2",
+    "@types/ini": "^4.1.1",
+    "@types/node": "^25.0.10",
+    "@types/react": "19.2.14",
+    "@vitest/coverage-v8": "4.0.16",
+    "eslint": "9.39.2",
+    "globals": "16.4.0",
+    "tsx": "^4.21.0",
+    "typescript": "^5.9.3",
+    "typescript-eslint": "8.50.0",
+    "vitest": "^4.0.18"
+  },
+  "engines": {
+    "node": ">=22"
+  }
+}

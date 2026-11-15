@@ -1,0 +1,14 @@
+{
+  "name": "convoy",
+  "description": "Convoy plugins for Claude Code",
+  "owner": {
+    "name": "Convoy"
+  },
+  "plugins": [
+    {
+      "name": "convoy",
+      "source": "./convoy",
+      "description": "Convoy task management via MCP — manage projects and tasks directly from Claude Code."
+    }
+  ]
+}

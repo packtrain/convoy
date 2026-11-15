@@ -1,0 +1,84 @@
+---
+title: CLI troubleshooting
+description: Diagnose common setup, auth, runtime, and profile issues in the Convoy CLI.
+---
+
+## Common problems
+
+### No profile found
+
+Run:
+
+```bash
+convoy config show
+convoy config list
+```
+
+Then either pass `--profile` explicitly or add the current directory to the right profile with `convoy paths add`.
+
+### Authentication failed
+
+Check that the API key is valid for the target deployment and that the user still has access to the project.
+
+### `connect` starts but threads do not run
+
+Check:
+
+- the selected profile points at the correct project
+- a supported runtime is installed locally
+- the thread is targeting a compatible CLI type
+
+### Claude CLI not found
+
+Install Claude Code locally before using live thread execution with the Claude runtime.
+
+### Config files look wrong
+
+Re-run:
+
+```bash
+convoy init mcp --force
+```
+
+or inspect the generated config file before overwriting it.
+
+### A managed container or service stopped
+
+Start with `convoy env status --env dev` on your host. Read saved operational
+logs with `convoy service logs --env dev`, without `--follow`. This works when
+the service stopped but the container remains running. See
+[Diagnose a stopped service](/docs/cli/managed-environments#diagnose-a-stopped-service)
+for recent-log commands, retention and the stopped-container limitation.
+
+### Isolated mode prerequisites
+
+When you choose Isolated, Convoy checks the machine before it changes
+anything. A ✗ line means one prerequisite is missing. Nothing was installed and
+the machine is still shared. Fix each ✗ item, then run the same command again
+(in the TUI, choose Check again).
+
+- **bubblewrap installed**: run `sudo apt-get install bubblewrap`. bubblewrap
+  is the sandbox that keeps each project's files apart.
+- **Unprivileged user namespaces allowed**: the sandbox runs each project in its
+  own user namespace, and the kernel refused to create one.
+  - If the message names AppArmor, which is the default on Ubuntu 23.10 and
+    later, add the bwrap AppArmor profile from
+    [Ubuntu AppArmor prerequisite](/docs/cli/isolated-projects#ubuntu-apparmor-prerequisite).
+  - Otherwise, allow unprivileged user namespaces, for example with
+    `sudo sysctl -w kernel.unprivileged_userns_clone=1`, and check that
+    `user.max_user_namespaces` is above 0.
+- **Root-owned Node outside home folders**: projects run as other accounts and
+  cannot see a Node under `/home`, `/root` or nvm. Install Node 22
+  system-wide (for example under `/usr/local/bin`) and put it first on `PATH`.
+- **Convoy CLI under /opt/convoy**: the launcher runs as root, so it only runs
+  a root-owned CLI. Run `sudo npm install --prefix /opt/convoy @useconvoy/cli`,
+  put `/opt/convoy/node_modules/.bin` first on `PATH`, and run that `convoy`.
+
+For the full manual setup, see
+[Isolated projects on Linux](/docs/cli/isolated-projects).
+
+## See also
+
+- [`Debugging`](/docs/operations/debugging) — system-wide front door when you don't know which subsystem is broken.
+- [`MCP troubleshooting`](/docs/cli/mcp/troubleshooting)
+- [`Dev container troubleshooting`](/docs/cli/dev-container/troubleshooting)

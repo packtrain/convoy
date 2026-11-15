@@ -1,0 +1,74 @@
+---
+title: GitHub Integration
+description: Register a GitHub App so projects can connect a repository and browse its pull requests.
+---
+
+Projects connect one GitHub.com repository under **Project settings → Integrations**. Every project member, viewers included, can then read its open pull requests and their diffs on the project's **Pull Requests** page. Convoy reads with the App's installation credentials, so members need no GitHub token of their own.
+
+Without the variables below, the GitHub integration page says GitHub isn't set up and the rest of Convoy works as usual. Local-demo deployments always show GitHub as unavailable: they have no signed-in user to bind a connection to.
+
+## Register the GitHub App
+
+Create the App under your GitHub organization: **Settings → Developer settings → GitHub Apps → New GitHub App**.
+
+| Setting | Value |
+| --- | --- |
+| Callback URL | `https://<your-app-host>/integrations/github/callback` (your `NEXT_PUBLIC_APP_URL` plus that path) |
+| Request user authorization (OAuth) during installation | Off |
+| Setup URL | The Callback URL again: `https://<your-app-host>/integrations/github/callback` |
+| Redirect on update | On |
+| Webhook URL | `https://<your-convex-site-host>/api/integrations/github/webhook` (the Convex **HTTP Actions** URL, ending in `.convex.site` on Convex Cloud) |
+| Webhook secret | A long random string; it becomes `GITHUB_APP_WEBHOOK_SECRET` |
+
+Grant these repository permissions from the start. Changing an App's permissions later makes every connected organization's owner approve again, and an organization that never approves stops syncing.
+
+| Permission | Access |
+| --- | --- |
+| Pull requests | Read and write |
+| Issues | Read and write |
+| Contents | Read and write |
+| Checks | Read and write |
+| Commit statuses | Read-only |
+| Metadata | Read-only |
+
+Subscribe to the **Pull request**, **Installation**, and **Installation repositories** events. Convoy uses only read access today; the write permissions are for later features, where every write acts as the member's own GitHub account.
+
+After creating the App, open its **Credentials** page. Generate a client secret under **Client secrets** and a private key under **Key pairs**; GitHub shows the secret only once and downloads the key as a `.pem` file. Note the App ID, the client ID, and the App's URL slug (`https://github.com/apps/<slug>`) from the **General** page.
+
+## Convert the private key
+
+GitHub downloads the key as PKCS#1 (`BEGIN RSA PRIVATE KEY`). Convoy signs with Web Crypto, which needs PKCS#8 (`BEGIN PRIVATE KEY`):
+
+```bash
+openssl pkcs8 -topk8 -nocrypt -in convoy.private-key.pem -out convoy.pkcs8.pem
+```
+
+If you set the unconverted key, Convoy treats GitHub as not set up and logs a warning that names the variable.
+
+## Set the variables
+
+Set these on the Convex deployment, never as `NEXT_PUBLIC_*` variables:
+
+```bash
+npx convex env set GITHUB_APP_ID 123456
+npx convex env set GITHUB_APP_SLUG convoy-acme
+npx convex env set GITHUB_APP_CLIENT_ID Iv23li...
+npx convex env set GITHUB_APP_CLIENT_SECRET ...
+npx convex env set GITHUB_APP_WEBHOOK_SECRET ...
+npx convex env set GITHUB_APP_PRIVATE_KEY -- "$(cat convoy.pkcs8.pem)"
+```
+
+`NEXT_PUBLIC_APP_URL` on the Convex deployment must match the Callback URL's host, since Convoy sends it as the OAuth `redirect_uri`.
+
+## Connect a repository
+
+1. As a project admin with admin access to the repository on GitHub, open **Project settings → Integrations → GitHub** and click **Connect GitHub**.
+2. Authorize on GitHub. You return to the GitHub page with a repository picker.
+3. If the repository isn't listed, click **Add repository**. GitHub's install page opens in a new tab: install the App, or add the repository to an existing installation. GitHub then returns to Convoy's Setup URL, which closes the tab when the browser allows it. Switch back to Convoy and the list reloads.
+4. Pick the repository and confirm that every project member can read it.
+
+Convoy imports the open pull requests in the background, and webhooks keep them current. Disconnecting hides them right away; Convoy keeps their metadata for 30 days so a reconnect brings them back, then deletes it.
+
+## Test setup
+
+Use a separate App per deployment (dev, preview, production), each with its own callback and webhook URLs. For a dev deployment, a test organization with one throwaway repository where you are an admin is enough. GitHub must reach the webhook URL; Convex Cloud's `.convex.site` URL works without tunneling.

@@ -1,0 +1,24 @@
+---
+title: Specs-first workflow
+description: Use the internal specs as the implementation source of truth before changing behavior.
+---
+
+Convoy uses a specs-first workflow for behavior changes.
+
+## Expected Process
+
+1. find the relevant spec in `docs/specs`
+2. implement against that spec
+3. update the spec if behavior changes
+4. update public docs when the change is user-visible
+
+## Why It Exists
+
+This keeps product behavior, implementation details, and contributor
+expectations aligned.
+
+## Practical Rule
+
+Do not treat public docs as the sole implementation contract. Public docs
+explain behavior. Specs define the detailed internal rules contributors should
+preserve.

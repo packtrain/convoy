@@ -1,0 +1,96 @@
+---
+title: Checks
+description: Named claims an agent proves about its work, with a status, a note, and evidence on the task.
+---
+
+When an agent says it is done, a Check shows what that means. A Check is a
+named claim about the work, such as "All tests pass" or "UI verified". The
+agent answers each one with a status, a note, and evidence such as a log or a
+screenshot. Results live on the task, so everyone who can see the task sees
+them, not only the person who ran the thread.
+
+For example, a bug fix task can ask for "Regression test fails before the fix,
+passes after", "All tests pass", and "Lint and type check are clean". The agent
+reports the test output as evidence for the second Check and explains a
+failure in the note for the third.
+
+## Checks and Checklists
+
+Project admins manage both in project settings, under **Checks**.
+
+- A **Check** has a key (`tests`), a label ("All tests pass"), and an
+  instruction that tells the agent how to prove it ("Run the test suite and
+  attach the output"). The key is how agents name the Check and cannot change.
+- A **Checklist** is an ordered set of Checks, such as "Feature" or "Bug fix".
+  A Checklist can be the default for task types, so a new bug starts with the
+  "Bug fix" Checklist.
+
+Anyone who can edit a task can switch its Checklist, or pick **No checks**,
+from the **Checks** section of the task sidebar, or from **Run checks** →
+**Switch checklist** in the thread's Checks tab. Switching never loses work:
+a Check that already has a result stays on the task.
+
+## Statuses
+
+| Status | Meaning | Note |
+| --- | --- | --- |
+| Passed | The claim holds. | Optional |
+| Warning | The claim holds, but a person should look, for example "adds an index on `tasks`". Counts as passed. | Required |
+| Failed | The claim does not hold. | Required |
+| Not performed | The agent could not or was told not to check, for example "no browser in this environment". | Required |
+| Pending | No result yet. | — |
+
+Checks never block anything. You can still mark the task or thread done, or
+open a pull request, with failed or pending Checks. They stay visible on the
+task instead.
+
+## Ask an agent to run the checks
+
+In the thread's Checks tab, open **Run checks** and pick **Pending and
+failed** or **All checks**. Convoy sends the thread a message that lists those
+Checks with their instructions and how to report them. If the agent is busy,
+the message waits for its turn.
+
+You can also type it in the thread, for example "run the checks". Agents
+running in a Convoy thread are told how to list and report Checks:
+
+```bash
+convoy threads checks <thread>        # the Checks that apply, with instructions
+convoy threads attach <thread> out.log --check tests --passed --note "412 passed" \
+  --message-id <id> --session-id <id>
+```
+
+Each `--check` reports one result, with
+any files as its evidence. Reporting the same Check again later adds a newer
+result. The newest is current, and older ones stay in the row's history. An
+agent can also report a Check outside the Checklist when you ask for it; the
+row shows an **Added** badge. See
+[`convoy threads attach`](/docs/reference/cli-commands#convoy-threads-attach-threadid-file) for every flag.
+
+MCP clients can read the same list with
+[`get_checks`](/docs/reference/mcp-tools#get_checks). Results are reported through the
+CLI only.
+
+## Where results show
+
+- **The agent's reply** shows a checks card with the pass count and one row per
+  Check. Checks that run didn't answer read "Not reported".
+- **The thread's Checks tab** lists the task's Checks with their latest
+  result, then any files the agent attached without a Check. Every thread has
+  the tab. If the project has no Checklist yet, project admins get an **Add
+  checks** button there that opens Settings → Checks.
+- **The task sidebar** shows the same Checks next to the Checklist selector.
+
+Expand a row to see its note, its evidence, and where it was reported. Rows
+with images or video start expanded. Threads are private, so teammates see who
+reported a result and in which thread, but only the thread's owner gets a link
+to it.
+
+## Threads without a task
+
+A thread with no task keeps its own results. Pick its Checklist from **Run
+checks** → **Switch checklist** in the Checks tab. Only you, and whoever you
+share the thread with, see these results. When you attach a task, the results
+move onto it. If the task and the thread both answered the same Check, the
+newer result is current and the other goes to its history. Deleting a thread
+that still has no task deletes its results.

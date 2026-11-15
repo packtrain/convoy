@@ -1,0 +1,67 @@
+---
+title: Contributing overview
+sidebarTitle: Overview
+description: Repository map, conventions, and where contributor-facing documentation lives.
+---
+
+This section is for developers working on the Convoy codebase: the
+repository map and conventions below, plus dedicated pages for testing, the
+specs-first workflow, CLI internals, and authoring these docs.
+
+## Repository structure
+
+Main applications:
+
+- `apps/web` — Next.js app plus the Convex backend
+- `apps/cli` — CLI bridge and one-shot commands
+- `apps/docs` — this documentation site
+- `apps/desktop` — desktop companion
+- `apps/landing` — marketing site
+
+Supporting areas:
+
+- `docs/specs` — internal behavior specifications
+- `docs/features` — implementation plans and historical notes
+- `playground/*` — experiments and prototypes
+- `.devcontainer` — containerized development environment
+
+The architectural split: the web app owns product UI and backend behavior,
+the CLI owns local runtime execution and terminal workflows, and the docs
+app owns public documentation. This separation decides where new code and
+new documentation should live.
+
+## Conventions
+
+General:
+
+- prefer early returns
+- use named exports
+- avoid `any`
+- avoid unsafe casts from untrusted input
+
+Repo-specific:
+
+- use kebab-case file names outside `convex/`; camelCase inside `convex/`
+  (Convex module paths cannot contain hyphens)
+- keep hooks near their owning domain
+- update tests for backend changes
+- run lint and type checks before finishing
+
+Documentation: if a change is user-visible, update the relevant spec under
+`docs/specs/` and the public docs page in the same change. See
+[`Specs-first workflow`](/docs/contributing/specs-first-workflow).
+
+## In this section
+
+- [Run from source](/docs/quickstart-source) sets up the local applications.
+- [Specs-first workflow](/docs/contributing/specs-first-workflow) explains
+  the behavior contract for a change.
+- [Testing](/docs/contributing/testing) covers required checks and writing
+  the failing test before a bug fix.
+- [CLI architecture and lifecycle](/docs/contributing/cli-architecture-and-lifecycle)
+  explains claims, retries, and streamed output.
+- [Adding a runtime](/docs/contributing/adding-a-runtime) covers the backend,
+  frontend, and CLI work for another runtime.
+- [Authoring docs](/docs/contributing/authoring-docs) explains content and
+  navigation ownership.
+- [Deploying the docs site](/docs/deployment/deploy-docs) covers static hosting.

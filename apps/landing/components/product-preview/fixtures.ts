@@ -1,0 +1,45 @@
+export const threads = [
+  {
+    id: "NS-142",
+    type: "bug",
+    title: "Add retry handling for failed deliveries",
+    age: "2m",
+    prompt: "Add retries for failed webhook deliveries. Use exponential backoff and keep the delivery history on the task.",
+    intro: "I'll check how deliveries are queued, then add retry handling and tests for failed requests.",
+    tools: [
+      { label: "Read delivery worker", detail: "src/workers/deliver-webhook.ts" },
+      { label: "Read queue configuration", detail: "src/queues/webhooks.ts" },
+      { label: "Update retry policy", detail: "src/workers/deliver-webhook.ts  +38 −6" },
+    ],
+    result: "Failed deliveries now retry up to five times with exponential backoff. Each attempt records its response and timestamp in the delivery history.",
+    checks: ["Retries stop after a successful delivery", "Failed attempts remain in delivery history", "All 18 delivery tests pass"],
+  },
+  {
+    id: "NS-139",
+    type: "epic",
+    title: "Review the webhook delivery plan",
+    age: "18m",
+    prompt: "Review the delivery plan before we start implementing. Pay attention to duplicate events and retry limits.",
+    intro: "I'll compare the plan with the existing worker and flag anything that needs a decision.",
+    tools: [
+      { label: "Read implementation plan", detail: "Task artifact: Delivery plan" },
+      { label: "Inspect idempotency checks", detail: "src/webhooks/idempotency.ts" },
+    ],
+    result: "The plan covers retry limits. I added a comment about using the same idempotency key across every attempt so retries cannot create duplicate events.",
+    checks: ["Reviewed delivery lifecycle", "Added feedback to the plan", "Ready for your review"],
+  },
+  {
+    id: "NS-136",
+    type: "feature",
+    title: "Keep delivery filters in the URL",
+    age: "1h",
+    prompt: "Keep the selected status and date range when someone shares a link to the delivery list.",
+    intro: "I'll check the list filters and update the route so a shared link opens the same view.",
+    tools: [
+      { label: "Read delivery filters", detail: "src/components/delivery-filters.tsx" },
+      { label: "Update URL parameters", detail: "src/routes/deliveries.tsx  +24 −8" },
+    ],
+    result: "The delivery list now reads its filters from the URL. Changing a filter updates the link, and the browser back button restores the previous selection.",
+    checks: ["Shared links preserve both filters", "Back navigation restores the previous view", "All 12 filter tests pass"],
+  },
+] as const;

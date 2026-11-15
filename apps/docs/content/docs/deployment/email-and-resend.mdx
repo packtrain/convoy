@@ -1,0 +1,27 @@
+---
+title: Email and Resend
+description: Configure transactional email delivery for invitations and onboarding flows.
+---
+
+Convoy can send live transactional emails through Resend.
+
+## Current Email Use Cases
+
+- organization invitations
+- onboarding or welcome flows tied to invitations
+- project-add invitation notifications
+
+## Required Configuration
+
+Set:
+
+- `RESEND_API_KEY`
+- `EMAIL_FROM`
+- `NEXT_PUBLIC_APP_URL` in the Convex dashboard if email links should target a non-default app host
+
+## Best Practices
+
+- use a verified sending domain
+- verify that links resolve to the correct production URL. If `NEXT_PUBLIC_APP_URL` is unset, email links default to `https://app.convoy.build`
+- test invitation flows end to end before launch
+

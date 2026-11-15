@@ -1,0 +1,129 @@
+---
+title: Remote targets over SSH
+description: Attach to and manage a Convoy service running on another machine.
+---
+
+Use a remote target when the service runs on a Linux VM or server you already
+reach with SSH, such as an EC2 instance. Install and configure Convoy there first,
+following [Isolated projects on Linux](/docs/cli/isolated-projects). Repositories,
+credentials and logs stay on that machine. Convoy does not copy files, install
+anything remotely or open a network port.
+
+## Prepare SSH
+
+Convoy runs your normal `ssh` client with your keys, agent, `~/.ssh/config` and
+`known_hosts`. It never prompts and never forwards your agent, X11 or ports.
+Before adding a target, check that this works without a password or host-key
+question:
+
+```bash
+ssh dev-vm convoy --version
+```
+
+If `convoy` is not on the non-interactive `PATH` there, `remote add` also tries
+`/opt/convoy/node_modules/.bin/convoy` and `/usr/local/bin/convoy` and saves the
+one that answers. For any other location, such as nvm, note its absolute path for
+`--command`.
+
+## Add a target
+
+```bash
+convoy remote add vm --host dev-vm
+convoy remote add vm2 --host ubuntu@10.0.0.5 --command /home/ubuntu/.local/bin/convoy
+convoy remote add box --host dev-vm --container convoy-dev
+convoy remote list
+```
+
+`add` checks the remote CLI version and saves nothing if SSH fails. On a fresh
+Linux target it then asks Shared or Isolated over `ssh -t`; Isolated runs the
+[launcher install](/docs/cli/isolated-projects#install-the-project-launcher)
+there with sudo. Pass `--mode shared|isolated` to answer without a prompt.
+`--container` runs Convoy inside an existing container on that host with
+`docker exec`. `convoy remote remove vm` forgets a target and leaves the remote
+unchanged.
+
+## Use it
+
+Add `--remote <name>` to `attach`, `service`, `project` and `keys` commands:
+
+```bash
+convoy service start -b --remote vm
+convoy project add "/srv/my project" --remote vm
+convoy attach --remote vm
+convoy service runs list --remote vm --profile a
+convoy service stop --remote vm
+```
+
+`attach`, `service status/pause/reload/stop/outcome` and `service runs` run on
+your machine over SSH and refuse an incompatible service before changing anything.
+The other commands run on the remote CLI with your terminal attached, so
+prompts work as if you had logged in. Always start with `-b`. Without it the
+service stays in the foreground and stops when your SSH session ends. Prefer the prompt over `--api-key`, because a
+flag value is visible in the remote process list.
+
+`--target <name>` works too. It finds the name among your remotes and
+[managed environments](/docs/cli/managed-environments), so the same flag works for either:
+
+```bash
+convoy attach --target vm
+convoy keys status --target dev
+```
+
+Remote and environment names must differ. `remote add` refuses a name an
+environment already has, and `convoy run` refuses a remote's name.
+
+`service stop` stops only the service. Convoy never shuts down the remote machine
+or a container. To restart, run `service stop` and then `service start -b`. To
+update the remote CLI, stop its service, update it the way you installed it, and
+start it again.
+
+`convoy tui` lists saved remotes next to local and managed targets. Actions can
+start the service, show saved logs and open a project shell. Add project opens
+the guided form; your API key reaches the remote on stdin, never on its command
+line. The Credentials tab (c) shows and changes the remote's managed credentials.
+Both need CLI 0.113.0 or newer on the remote with its service running. On an older
+remote, update it and restart its service, or use
+`convoy project add <path> --remote <name>` from a terminal.
+
+## Manage credentials
+
+`convoy keys --remote <name>` manages the remote's managed credentials from your
+terminal. They stay in the store on the remote:
+
+```bash
+convoy keys add work-openai --provider openai --auth api-key --remote vm
+convoy keys use work-openai --runtime codex --profile a --remote vm
+convoy keys status --remote vm
+convoy service reload --profile a --interrupt --remote vm
+```
+
+The prompt, `--stdin` and `--from-env` read the key on your machine
+(`--from-env` reads your local variable). The key reaches the remote service over
+SSH and never appears on either command line. Changes need the remote service
+running. If a reply is lost, run `keys status --remote <name>` before retrying;
+Convoy never retries for you. `add` takes managed providers only, with
+`--auth api-key`, and `use` or `unassign` need `--runtime` and `--profile`. For an
+AWS key, allow the printed Region endpoint on the remote if its outbound
+traffic is restricted.
+
+## Disconnects
+
+Ctrl+C, closing the terminal or losing the network detaches only. Agents and other
+attached terminals keep running. If the first connection fails, for example
+because of a host key or a missing CLI, `attach` exits with the error. After
+that, `attach` reconnects and resumes from its last
+position, or loads a fresh snapshot if events expired. A command whose reply was
+lost is never retried automatically; check `service outcome` or the state first.
+
+## Troubleshooting
+
+| Message | Fix |
+| --- | --- |
+| `SSH to ... failed: Host key verification failed.` | Run `ssh <host>` once and verify the key. Convoy never disables host-key checks. |
+| `SSH to ... failed: Permission denied` | Load a key into your agent or set `IdentityFile` in `~/.ssh/config`. |
+| `Convoy CLI not found on ...` | Install the CLI on the target or re-add it with `--command /absolute/path`. |
+| `Service unavailable` | Run `convoy service start -b --remote <name>`. |
+| `shell startup output exceeded 64 KiB` | Stop non-interactive shell startup files from printing. |
+
+Remote access is only a transport. Project isolation on the target depends on how
+Convoy is installed there.

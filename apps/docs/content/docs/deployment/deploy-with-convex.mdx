@@ -1,0 +1,77 @@
+---
+title: Deploy the Convex backend
+sidebarTitle: Convex backend
+description: Create a Convex deployment, configure environment variables, and push functions and schema.
+---
+
+The Convex backend hosts your schema, queries, mutations, actions, and scheduled jobs. This page covers deploying it — the web app is deployed separately to a hosting provider of your choice (see [Deploy to Vercel](/docs/deployment/deploy-to-vercel) for one option).
+
+Before you start, complete [Auth and Clerk](/docs/deployment/auth-and-clerk).
+You need the `convex` JWT template's issuer for `CLERK_JWT_ISSUER_DOMAIN`.
+
+## 1. Create a deployment
+
+Go to the [Convex dashboard](https://dashboard.convex.dev) and create a new deployment (or select an existing one). Note the deployment identifier — it looks like `friendly-wolf-872`.
+
+Convex distinguishes deployments by prefix:
+
+- `prod:` — production deployments (e.g. `prod:friendly-wolf-872`)
+- `dev:` — development deployments (e.g. `dev:curious-otter-119`)
+
+You will use this prefix when deploying from the command line or CI.
+
+## 2. Set environment variables
+
+In the Convex dashboard, select your deployment and go to **Settings → Environment Variables**. Add the following:
+
+| Variable | Required | Description |
+| --- | --- | --- |
+| `CLERK_JWT_ISSUER_DOMAIN` | Yes | Clerk JWT issuer domain for token verification |
+| `EMAIL_FROM` | No | Verified sender address (e.g. `Convoy <noreply@convoy.build>`) |
+| `RESEND_API_KEY` | No | Resend API key for transactional email |
+| `NEXT_PUBLIC_APP_URL` | No | Base URL for email links. Defaults to `https://app.convoy.build` |
+
+These run inside Convex functions at runtime. They are **not** the same as the Next.js environment variables you configure in your web hosting provider — see [Environment Variables](/docs/reference/environment-variables) for the full breakdown.
+
+## 3. Deploy functions and schema
+
+From the `apps/web` directory, run `npx convex deploy` with the target deployment. There are two ways to specify the target:
+
+### Option A: Using `CONVEX_DEPLOYMENT`
+
+Pass the deployment identifier with the `prod:` or `dev:` prefix:
+
+```bash
+# Production
+CONVEX_DEPLOYMENT="prod:friendly-wolf-872" npx convex deploy
+
+# Development
+CONVEX_DEPLOYMENT="dev:curious-otter-119" npx convex deploy
+```
+
+### Option B: Using a Deploy Key
+
+Create a **Deploy Key** in the Convex dashboard under **Settings → General → Deploy Keys**. The key is a single string that includes both the deployment target and an authentication secret — useful for CI/CD pipelines.
+
+```bash
+CONVEX_DEPLOY_KEY="prod:friendly-wolf-872|sk_deploy_..." npx convex deploy
+```
+
+Copy the full key from the dashboard.
+
+---
+
+Both options push the schema, functions, and components (e.g. the Resend integration) to the target deployment. The command also runs TypeScript type checking by default.
+
+## 4. Verify the deployment
+
+After a successful deploy, check the Convex dashboard:
+
+- **Functions** tab shows your deployed queries, mutations, and actions
+- **Components** tab shows mounted components (e.g. `resend`) — they should **not** say "unmounted"
+- **Data** tab shows your tables once the schema is pushed
+
+## Next steps
+
+- [Deploy the web app to Vercel](/docs/deployment/deploy-to-vercel)
+- [Environment variables reference](/docs/reference/environment-variables)

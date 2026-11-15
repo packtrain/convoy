@@ -1,0 +1,7 @@
+.hero > section { height: 960px; }
+/* Ends just past the table and fades into the page. */
+.project { position: relative; height: 520px; overflow: hidden; border: 1px solid #ffffff1f; border-bottom: 0; border-radius: 8px 8px 0 0; }
+.project::after { content: ""; position: absolute; z-index: 5; left: 0; right: 0; bottom: 0; height: 120px; background: linear-gradient(transparent, #08080d); pointer-events: none; }
+@media (max-width: 760px) {
+  .hero > section { height: 780px; }
+}

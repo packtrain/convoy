@@ -1,0 +1,6 @@
+.factory-led{fill:var(--anatomy-lo)}
+.factory-led[data-on]{fill:var(--anatomy-green);animation:factory-blink .5s steps(1,end) infinite}
+@keyframes factory-blink{50%{opacity:.25}}
+@media (prefers-reduced-motion:reduce){.factory-led[data-on]{animation:none}}
+.factory-lamp-on>.iso-top{fill:var(--anatomy-green)}
+.factory-lamp-on>.iso-edge{stroke:var(--anatomy-green)}

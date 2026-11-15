@@ -1,0 +1,26 @@
+.wt .iso-svg{overflow:hidden}
+.wt{--wt-amber:#f2b63d;--wt-crt:#0a0a0a;--wt-crt-line:#262626;--wt-glow:var(--anatomy-lit)}
+.iso[data-theme="light"] .wt{--wt-amber:#c98a12;--wt-crt:#2a2a2e;--wt-crt-line:#4d4d53;--wt-glow:#fff}
+.wt-crt>.iso-fill,.wt-crt>.iso-top{fill:var(--wt-crt)}
+.wt-crt>.iso-shade{fill:var(--wt-crt)}
+.wt-ring{stroke:var(--wt-crt-line)}
+.wt-sweep{stroke:var(--wt-glow);stroke-width:.9}
+.wt-trail{stroke:var(--wt-glow)}
+.wt-blip{fill:var(--wt-glow)}
+.wt-strip[data-ready]{cursor:pointer}
+.wt-strip[data-pick] .iso-edge,.wt-strip[data-sel] .iso-edge{stroke:var(--anatomy-lit)}
+.wt-strip[data-sel] .wt-tab>.iso-fill,.wt-strip[data-sel] .wt-tab>.iso-top,.wt-strip[data-sel] .wt-tab>.iso-shade{fill:var(--anatomy-lit)}
+.wt-p0 .wt-tab>.iso-top{fill:var(--anatomy-hi)}
+.wt-p1 .wt-tab>.iso-top{fill:var(--anatomy-mid)}
+.wt-p2 .wt-tab>.iso-top{fill:var(--anatomy-lo)}
+.wt-p3 .wt-tab>.iso-top{fill:var(--anatomy-faint)}
+.wt-lamp.wt-on.wt-lamp-running>.iso-top{fill:var(--anatomy-green)}
+.wt-lamp.wt-on.wt-lamp-running>.iso-edge{stroke:var(--anatomy-green)}
+.wt-lamp.wt-on.wt-lamp-waiting>.iso-top{fill:var(--wt-amber);animation:wt-blink 1.8s ease-in-out infinite}
+.wt-lamp.wt-on.wt-lamp-waiting>.iso-edge{stroke:var(--wt-amber)}
+.wt-lamp.wt-on.wt-lamp-failed>.iso-top{fill:var(--anatomy-red)}
+.wt-lamp.wt-on.wt-lamp-failed>.iso-edge{stroke:var(--anatomy-red)}
+.wt-lamp.wt-on.wt-lamp-ready>.iso-top{fill:var(--anatomy-lit)}
+.wt-key[data-on]{cursor:pointer}
+@keyframes wt-blink{50%{opacity:.25}}
+@media (prefers-reduced-motion:reduce){.wt-lamp>.iso-top{animation:none}}

@@ -1,0 +1,7 @@
+{
+  "title": "MCP",
+  "description": "Connect MCP-aware AI clients to Convoy tasks.",
+  "defaultOpen": false,
+  "collapsible": true,
+  "pages": ["index", "workflows-and-scoping", "troubleshooting"]
+}

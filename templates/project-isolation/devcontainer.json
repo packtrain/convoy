@@ -1,0 +1,20 @@
+{
+  "name": "Convoy projects",
+  "build": { "dockerfile": "Dockerfile", "args": { "CONVOY_VERSION": "0.141.0" } },
+  "remoteUser": "node",
+  "updateRemoteUserUID": false,
+  "workspaceMount": "source=${localWorkspaceFolder},target=/workspace,type=bind",
+  "workspaceFolder": "/workspace",
+  "mounts": [
+    "source=convoy-project-state-${devcontainerId},target=/var/lib/convoy-projects,type=volume",
+    "source=convoy-control-${devcontainerId},target=/home/node/.config/convoy,type=volume"
+  ],
+  "runArgs": ["--cap-add=NET_ADMIN", "--cap-add=NET_RAW"],
+  "containerEnv": {
+    "DEVCONTAINER_NETWORK_MODE": "${localEnv:DEVCONTAINER_NETWORK_MODE:strict}",
+    "CONVEX_DEPLOYMENT": "${localEnv:CONVEX_DEPLOYMENT}",
+    "DEVCONTAINER_EXTRA_ALLOWED_DOMAINS": "${localEnv:DEVCONTAINER_EXTRA_ALLOWED_DOMAINS}"
+  },
+  "postStartCommand": "sudo /usr/local/libexec/convoy-project-start",
+  "waitFor": "postStartCommand"
+}

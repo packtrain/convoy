@@ -1,0 +1,50 @@
+---
+title: MCP troubleshooting
+description: Diagnose common MCP setup, discovery, and project scoping problems.
+---
+
+## MCP server does not appear
+
+Check that:
+
+- the config file was written to the expected location
+- the client supports MCP in the way you configured it
+- the client was restarted after config changes
+
+## Connected to the wrong project
+
+This usually means the generated config and your Convoy profile do not match.
+
+Verify:
+
+- current repo path
+- selected profile
+- deployment URL
+- project identity
+
+## Auth or permission errors
+
+Confirm that:
+
+- your API key is still valid
+- the key belongs to the intended user
+- the user can access the target organization and project
+
+## CLI config exists but MCP still fails
+
+Remember that CLI setup and MCP setup are related but different:
+
+- `setup` saves profile information
+- `init mcp` writes client-facing MCP config
+
+You need both pieces aligned.
+
+## Last resort
+
+If the client still cannot use MCP tools reliably, regenerate the config from a clean working directory and test basic task read operations first.
+
+## See also
+
+- [`Debugging`](/docs/operations/debugging) — system-wide front door when you don't know which subsystem is broken.
+- [`CLI Troubleshooting`](/docs/cli/troubleshooting)
+- [`Dev Container Troubleshooting`](/docs/cli/dev-container/troubleshooting)

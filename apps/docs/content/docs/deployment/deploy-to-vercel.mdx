@@ -1,0 +1,106 @@
+---
+title: Deploy the web app
+sidebarTitle: Web app
+description: Deploy the Convoy Next.js web app to Vercel with integrated Convex deployment.
+---
+
+This page covers deploying the Next.js web app (`apps/web`) to Vercel. The Convex backend must be set up first — see [Deploy the Convex Backend](/docs/deployment/deploy-with-convex).
+
+You can deploy Convoy's web app to any hosting provider that supports Next.js. Vercel is documented here as a reference.
+
+## 1. Import the Repository
+
+In the [Vercel dashboard](https://vercel.com/new), import your GitHub repository and configure:
+
+| Setting | Value |
+| --- | --- |
+| **Framework Preset** | Next.js |
+| **Root Directory** | `apps/web` |
+| **Install Command** | Leave as default (Vercel auto-detects pnpm) |
+| **Output Directory** | Leave as default (Next.js default) |
+
+## 2. Set the Build Command
+
+Override the **Build Command** to deploy Convex functions as part of every Vercel build:
+
+```
+pnpm vercel-build
+```
+
+This runs the `vercel-build` script from `apps/web/package.json`. The script stores the current Vercel commit metadata on the Convex deployment, runs `convex deploy`, then builds the Next.js app. The `--cmd-url-env-var-name` flag injects the correct `NEXT_PUBLIC_CONVEX_URL` automatically during the build, so you don't need to set it as a separate environment variable.
+
+`--allow-deleting-large-indexes` is required because Vercel builds are non-interactive: without it, `convex deploy` aborts whenever a schema change drops an index on a table with more than 100,000 documents. Dropped indexes leave their documents untouched, but restoring one means backfilling it again.
+
+The Next.js build derives its frontend version from Vercel's `VERCEL_GIT_COMMIT_SHA` automatically. The `convex env set` commands inside that script make the backend version shown in **Settings → Developer** match the deployed Convex functions.
+
+If you prefer to deploy Convex separately (e.g. from your local machine or a different CI step), leave the build command as the default `next build` and add `NEXT_PUBLIC_CONVEX_URL` to the environment variables below.
+
+## 3. Set Environment Variables
+
+Add the following environment variables in Vercel (Settings → Environment Variables):
+
+| Variable | Required | Description |
+| --- | --- | --- |
+| `CONVEX_DEPLOY_KEY` | Yes | Deploy key from Convex dashboard (Settings → General → Deploy Keys). Only needed if using the integrated build command above |
+| `NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY` | Yes | Production Clerk publishable key |
+| `CLERK_SECRET_KEY` | Yes | Production Clerk secret key |
+| `NEXT_PUBLIC_CLERK_SIGN_IN_URL` | Yes | `/auth/sign-in` |
+| `NEXT_PUBLIC_CLERK_SIGN_UP_URL` | Yes | `/auth/sign-up` |
+| `NEXT_PUBLIC_CLERK_SIGN_IN_FALLBACK_REDIRECT_URL` | Yes | `/auth/callback` |
+| `NEXT_PUBLIC_CLERK_SIGN_UP_FALLBACK_REDIRECT_URL` | Yes | `/auth/callback` |
+| `NEXT_PUBLIC_VERCEL_ANALYTICS_ENABLED` | No | Set to `true` only if you enabled Vercel Web Analytics for this Vercel project |
+
+### Variables you do NOT need in Vercel
+
+These are Convex server-side variables — set them in the **Convex dashboard** (Settings → Environment Variables), not in Vercel:
+
+- `CLERK_JWT_ISSUER_DOMAIN`
+- `RESEND_API_KEY`
+- `EMAIL_FROM`
+
+If you're using the integrated build command with `--cmd-url-env-var-name`, you also don't need `NEXT_PUBLIC_CONVEX_URL` — it's injected automatically.
+
+## 4. Deploy
+
+Click **Deploy**. Vercel will:
+
+1. Install dependencies (`pnpm install`)
+2. Run `npx convex deploy` (pushes functions and schema to your Convex production deployment)
+3. Run `next build` (builds the Next.js app)
+4. Deploy the built app to Vercel's edge network
+
+Subsequent pushes to your production branch will trigger the same flow automatically.
+
+## Deploying Convex Separately
+
+If you don't want Convex to deploy as part of the Vercel build (e.g. you want more control over when backend changes go live):
+
+1. Use the default build command (`next build`)
+2. Remove `CONVEX_DEPLOY_KEY` from Vercel
+3. Add `NEXT_PUBLIC_CONVEX_URL` to Vercel (e.g. `https://friendly-wolf-872.convex.cloud`)
+4. Deploy Convex manually or from a separate CI step:
+
+```bash
+CONVEX_DEPLOYMENT="prod:friendly-wolf-872" npx convex deploy
+```
+
+## Speed Insights
+
+Convoy includes [Vercel Speed Insights](https://vercel.com/docs/speed-insights/quickstart?framework=nextjs) out of the box. The `<SpeedInsights />` component is already added to the root layout (`apps/web/app/layout.tsx`), so Core Web Vitals (LCP, CLS, FID, TTFB, INP) are automatically reported when deployed to Vercel.
+
+No additional configuration is required — view your metrics in the Vercel dashboard under Speed Insights.
+
+## Web Analytics
+
+Vercel Web Analytics is opt-in. To use it, enable Web Analytics for the project in Vercel and set:
+
+```bash
+NEXT_PUBLIC_VERCEL_ANALYTICS_ENABLED=true
+```
+
+Leave this unset or set it to `false` for self-hosted deployments that should not send web analytics events to Vercel.
+
+## Next Steps
+
+- [Environment Variables reference](/docs/reference/environment-variables)
+- [Production Checklist](/docs/deployment/production-checklist)

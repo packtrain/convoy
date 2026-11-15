@@ -1,0 +1,81 @@
+---
+title: Use in your project
+description: Install the AI agent sandbox dev container template into any project with the Convoy CLI.
+---
+
+The Convoy dev container is also available as a standalone template you can install into **any** project — it does not require Convoy. You get Claude Code, Codex CLI, OpenCode CLI, and Cursor CLI preinstalled in an isolated container, with an optional outbound-network firewall (`strict` / `open` modes).
+
+## Install with the CLI
+
+From your project root:
+
+```bash
+npx @useconvoy/cli devcontainer
+```
+
+Or, if you already have the CLI installed:
+
+```bash
+convoy devcontainer
+```
+
+This writes four files into `./.devcontainer/`:
+
+- `devcontainer.json`
+- `Dockerfile`
+- `init-firewall.sh`
+- `README.md`
+
+The command fetches the latest template from GitHub when reachable, and otherwise falls back to the copy bundled with the CLI package. Pass a directory argument to target another project (`convoy devcontainer ../other-project`) and `--force` to overwrite an existing `.devcontainer/`.
+
+If a Convoy CLI profile resolves for the project, the command also prints the exact firewall value to export for strict network mode — `CONVEX_DEPLOYMENT=<slug>` for Convex cloud backends, or `DEVCONTAINER_EXTRA_ALLOWED_DOMAINS=<host>` for self-hosted ones — so you don't have to derive it from your backend URL.
+
+## Multiple Convoy projects
+
+For a manually managed Linux VM, follow
+[Isolated projects on Linux](/docs/cli/isolated-projects), including Ubuntu
+AppArmor setup, project registration, private Codex login and concurrent runs.
+
+The experimental `convoy devcontainer <parent-folder> --projects` template uses
+a shared parent workspace with separate project identities and private runtime
+state. Inside the configured Linux environment, use `convoy project add`,
+`convoy project list`, `convoy project remove` and `convoy connect --profile`.
+`convoy project shell <profile>` opens the private shell for runtime login.
+
+Each registration needs an API key restricted to that one project. Host runtime
+authentication is not mounted into these projects. Runtime execution starts
+disabled until the environment passes its isolation checks. Real runtime,
+Docker mount and Linux VM acceptance are pending. Follow the generated
+`.devcontainer/README.md` for setup, storage requirements and the acceptance
+procedure. The default single-repository template is unchanged.
+
+## Install manually
+
+Copy the files from [`templates/devcontainer/`](https://github.com/packtrain/convoy/tree/main/templates/devcontainer) in the Convoy repository into a `.devcontainer/` folder at your project root.
+
+## What's Convoy-specific
+
+Nothing is required. For Convoy users:
+
+- the container is its own [shared Convoy environment](/docs/cli/project-service#shared-environments): profiles, keys and the project service live in container volumes, not in the host's `~/.config/convoy`. The project service starts with the container, so `convoy project add /workspace` (or `convoy setup`) inside it once is enough
+- the Convoy CLI is installed in the container
+- optional `CONVOY_PROFILE` selects a profile explicitly, with no required profile name
+- startup configures Convoy MCP in a private Codex config without changing the host config
+- the selected profile supplies backend hosts for the strict-mode firewall. A new container has no profile yet, so export `CONVEX_DEPLOYMENT` on the host before the first setup in strict mode
+
+Everything else — agent installs, shared Codex/OpenCode auth mounts, network modes, `DEVCONTAINER_EXTRA_ALLOWED_DOMAINS` for your own API endpoints — is generic. The generated `.devcontainer/README.md` documents all environment variables and modes.
+
+## Next steps
+
+- [`Setup and modes`](/docs/cli/dev-container/setup-and-modes)
+- [`Troubleshooting`](/docs/cli/dev-container/troubleshooting)
+
+## Browser testing
+
+The updated image includes Chromium and its system libraries. See [Browser automation](/docs/cli/browser-automation) for installation in an existing container, agent scripts and screenshots.
+
+
+After changing profiles, restart the container and start a new agent session. If
+no profile matches, run `convoy setup`, then `convoy devcontainer --configure`.
+Containers without a Convoy account still start normally. Existing containers
+need the updated template and an image rebuild to receive these changes.

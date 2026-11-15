@@ -1,0 +1,83 @@
+---
+title: Glossary
+description: Definitions of the terms used in Convoy's product and runtime documentation.
+---
+
+**Alias** is a project's short uppercase code of 2–5 characters, used to
+create task refs such as `WEB-42`. See
+[projects](/docs/using#organizations-projects-and-members).
+
+**Artifact** is a Markdown or HTML document attached to a task, such as a
+plan, review, or report. Markdown is editable in the app; HTML renders in a
+sandboxed frame. See [artifacts](/docs/using#artifacts).
+
+**Attachment** is a raw file attached to a task, such as a screenshot or log.
+See [attachments](/docs/using#attachments).
+
+**Board** is a view that groups root tasks into columns, for example by
+status or assignee. See [Lists and views](/docs/using#lists-and-views).
+
+**Chunk** is a streamed event from a runtime. Convoy stores its raw payload
+and a normalized event for display.
+
+**Claim** is a CLI session's exclusive right to process a thread. Its lease
+expires unless the session renews it.
+
+**Lease** is the expiring part of a claim, renewed by heartbeats and released
+when the queue drains or the session exits.
+
+**List** is a project container for tasks and their order. Inbox is the
+initial default List; Backlog holds deferred work. Lists are independent of
+statuses and views. See [Lists and views](/docs/using#lists-and-views).
+
+**Normalized event** is a provider-independent event derived from a raw
+chunk, such as text, reasoning, or tool input. See
+[CLI architecture](/docs/contributing/cli-architecture-and-lifecycle).
+
+**Profile** maps your Convoy identity and project to paths on a machine.
+Its local configuration lives in `~/.config/convoy/config.toml`. See
+[Profiles, paths, and status](/docs/cli/profiles-paths-status).
+
+**Project** contains tasks, threads, members, and CLI profile connections.
+Project roles determine access to its content.
+
+**Project agent** is a reusable agent configuration for a project. See
+[Project agents](/docs/using/project-agents).
+
+**Prompt** is reusable text available through the composer's slash-command
+menu. It is distinct from a runtime's own commands. See
+[Prompts / Slash commands](/docs/using/prompts).
+
+**Ref** is a task identifier formed from a project alias and task number,
+such as `WEB-42`.
+
+**Run** is one assistant response, including the user messages the CLI
+snapshots for it. A workflow run has a separate meaning: one execution of a
+workflow's stages. See [Workflows](/docs/using/workflows).
+
+**Runtime** is the agent executable behind a thread. Convoy has runners for
+Claude Code, Codex, Cursor, and OpenCode. See
+[runtime capabilities](/docs/reference/roadmap).
+
+**Session** is a registered `convoy connect` process maintained by
+heartbeats. A profile has one active session.
+
+**Skill** is a reusable procedure that an agent can load. See
+[Skills in Convoy](/docs/using/skills) for in-app storage, and
+[local Skill installation](/docs/cli/skills) for AI clients.
+
+**Status** describes task progress, such as `In Progress` or `Done`.
+Backlog is a List, not a status. See [tasks](/docs/using#tasks).
+
+**Subtask** is a task nested under another task in the same project and List.
+
+**Table** is the row-based task view, with inline editing and subtask
+hierarchy. See [Lists and views](/docs/using#lists-and-views).
+
+**Thread** is a persistent AI conversation in a project, optionally tied to
+a task. It belongs to its creator and executes through their profile. See
+[AI threads](/docs/using/ai-threads).
+
+**Workflow** is a saved sequence of stages, lanes, and steps. Starting it
+creates a workflow run on a chosen connection and path. See
+[Workflows](/docs/using/workflows).

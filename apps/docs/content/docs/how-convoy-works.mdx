@@ -1,0 +1,85 @@
+---
+title: How Convoy works
+description: The product model, the runtime model, and how a thread travels from the web app to your machine.
+---
+
+Convoy has two overlapping models: the **product model** users see in the
+web app, and the **runtime model** that lets a local machine execute AI
+thread work. Knowing which model a question belongs to is half of every
+debugging session.
+
+## The product model
+
+- **Organizations** are the top-level membership and administration boundary.
+- **Projects** contain tasks, threads, members, permissions, and CLI
+  profiles. Each project has a short uppercase alias such as `WEB`.
+- **Tasks** are project work items with refs such as `WEB-42`. Comments,
+  attachments, and Markdown or HTML artifacts hang off them. Lists group
+  tasks within a project; Table and Board are views of that work.
+- **Threads** are persistent AI conversations attached to a project, and
+  optionally to a task.
+
+[`Using Convoy`](/docs/using) covers this side in product terms.
+
+## The runtime model
+
+The web app never runs an AI agent itself. It only writes durable thread
+state to Convex. The worker is the Convoy CLI: a long-running process
+(`convoy connect`) on a developer's machine that claims queued threads,
+runs the agent locally, and streams output back.
+
+<Mermaid
+  chart={`sequenceDiagram
+  participant Browser as Browser / Next.js
+  participant Convex as Convex backend
+  participant CLI as convoy connect
+  participant Runtime as Selected AI runtime
+  participant Repo as Local worktree
+
+  Browser->>Convex: create user thread message
+  Convex-->>Browser: realtime pending state
+  CLI->>Convex: subscribe to pending project threads
+  CLI->>Convex: claim thread with lease
+  CLI->>Runtime: run selected prompt in local cwd
+  Runtime-->>CLI: stream JSON events
+  CLI->>Convex: append normalized chunks
+  Convex-->>Browser: realtime assistant stream
+  CLI->>Convex: complete or fail run`}
+/>
+
+The pieces:
+
+- **Convex backend** — the realtime system of record for product data, CLI
+  sessions, thread queue state, and streamed output. The browser and the
+  CLI both subscribe to it live.
+- **CLI session** — one `convoy connect` process, registered with the
+  backend and kept alive by heartbeats. One active session per profile.
+- **Profile** — a saved mapping of deployment URL + API key + project + local
+  paths, stored in `~/.config/convoy/config.toml`. The profile decides
+  which project the CLI watches and which local folder the agent runs in.
+  See [`Config file (config.toml)`](/docs/reference/config-toml).
+- **Claim** — a lease one session holds on a thread while processing it, so
+  two machines never run the same thread.
+- **Runtime** is the agent executable behind a thread. See
+  [supported runtimes](/docs/reference/roadmap) for execution, approval,
+  steering, image, and isolation capabilities.
+
+## What this means in practice
+
+- A thread only executes while a compatible CLI profile is **online** for
+  its project.
+- A user message does not start a process directly — it marks the thread
+  pending. The CLI snapshots all unprocessed user messages into one
+  Thread run, which is what makes retries reliable.
+- If the CLI process dies mid-thread, the claim lease expires and the
+  thread becomes retryable. Nothing is lost, because all state lives in
+  Convex — the frontend and CLI are both replaceable clients.
+
+## Going deeper
+
+- [`CLI architecture and lifecycle`](/docs/contributing/cli-architecture-and-lifecycle)
+  — claims, leases, retries, and the chunk-normalization pipeline, with
+  file pointers
+- [`Config file (config.toml)`](/docs/reference/config-toml) — profile
+  schema and the resolution priority order
+- [Supported runtimes](/docs/reference/roadmap)

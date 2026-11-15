@@ -1,0 +1,84 @@
+---
+title: Dev container troubleshooting
+sidebarTitle: Troubleshooting
+description: Diagnose common dev container issues affecting Convoy profiles, MCP connectivity, and AI CLIs.
+---
+
+## Container fails to start
+
+If the container fails on startup with a mount error, make sure this exists on your host:
+
+```bash
+mkdir -p ~/.config/convoy
+```
+
+## Environment variables missing in the container
+
+Host environment variables must be exported before the container starts.
+
+If they are missing:
+
+1. update your shell profile
+2. open a new terminal or reload the shell
+3. rebuild or reopen the container
+
+## MCP cannot reach Convoy
+
+In `strict` mode, the firewall may be blocking the required domain.
+
+Check that the Convoy deployment host is included in the firewall allowlist and rebuild or re-run the firewall script if needed.
+
+## Claude Code cannot reach Bedrock
+
+Verify:
+
+- `AWS_BEARER_TOKEN_BEDROCK` is set
+- `AWS_REGION` is correct
+- the selected network mode matches your expectation
+- the container was rebuilt after any firewall or environment change
+
+## Claude Code asks for login despite provider env being set
+
+Claude Code installs from `latest` at container **create** time
+(`postCreateCommand`), so a fresh container matches npm. A long-lived container
+can still lag behind your host, and older versions ignore newer provider flags
+(for example `CLAUDE_CODE_USE_MANTLE`) or reject newer ones (a `claude` predating
+auto mode fails with `option '--permission-mode <mode>' argument 'auto' is
+invalid`).
+
+Compare `claude --version` on host and in the container. To update:
+
+```bash
+npm install -g @anthropic-ai/claude-code@latest
+```
+
+Rebuilding also picks up the current `latest`, because the install is not a
+cached image layer.
+
+## Intermittent retry failures
+
+If AI requests start failing with retries and no clear HTTP status, the most likely cause is stale firewall allowlist data in `strict` mode.
+
+Usually the fix is:
+
+```bash
+sudo /usr/local/bin/init-firewall.sh
+```
+
+or a full container restart.
+
+## When to switch to open mode
+
+If you want to confirm whether the firewall is the problem, temporarily switch to:
+
+```bash
+export DEVCONTAINER_NETWORK_MODE=open
+```
+
+If the issue disappears in `open` mode, the firewall configuration is the likely cause.
+
+## See also
+
+- [`Debugging`](/docs/operations/debugging) — system-wide front door when you don't know which subsystem is broken.
+- [`CLI Troubleshooting`](/docs/cli/troubleshooting)
+- [`MCP Troubleshooting`](/docs/cli/mcp/troubleshooting)

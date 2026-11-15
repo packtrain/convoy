@@ -1,0 +1,281 @@
+"use client";
+
+import { useCallback, useMemo, useRef, useState } from "react";
+import { useAction } from "convex/react";
+import { File as FileView, PatchDiff } from "@pierre/diffs/react";
+import { ArrowUpRight, FileText, PanelRight, X } from "lucide-react";
+import { api } from "@/convex/_generated/api";
+import type { Id } from "@/convex/_generated/dataModel";
+import { ThreadWorkspaceSplitPane } from "@/components/blocks/thread/thread-workspace-split-pane";
+import { ChangesViewToggles } from "@/components/custom/diff/changes-view-toggles";
+import { FileTabStrip } from "@/components/custom/diff/file-tab-strip";
+import { PatchFileSection, usePatchDiffOptions } from "@/components/custom/diff/patch-file-sections";
+import { WorktreeFileTree } from "@/components/custom/diff/worktree-file-tree";
+import { Button } from "@/components/ui/button";
+import { Checkbox } from "@/components/ui/checkbox";
+import { Skeleton } from "@/components/ui/skeleton";
+import { useIsMobile } from "@/hooks/browser/use-mobile";
+import { getErrorMessage } from "@/lib/errors";
+import { toSectionFile, toUnifiedPatch, type PullRequestDiff, type PullRequestDiffFile } from "./github-patch";
+import type { useReviewedMarks } from "./use-reviewed-marks";
+
+type FileState =
+  | { kind: "loading" }
+  | { kind: "text"; contents: string }
+  | { kind: "binary" }
+  | { kind: "tooLarge" }
+  | { kind: "error"; message: string };
+
+/** Why a file has no diff here; GitHub doesn't say which, so name every cause. */
+function NoTextDiff({ file, htmlUrl }: { file: PullRequestDiffFile; htmlUrl: string }) {
+  const renamedOnly = file.status === "renamed" && file.additions + file.deletions === 0;
+  return (
+    <p className="px-4 py-2 text-xs text-muted-foreground">
+      {renamedOnly ? (
+        <>
+          Renamed from <code>{file.previousPath}</code>. File contents are unchanged.
+        </>
+      ) : (
+        <>
+          GitHub sent no text diff for this file: it may be binary, too large, or over this view&apos;s limit.{" "}
+          <a href={`${htmlUrl}/files`} target="_blank" rel="noreferrer" className="underline">
+            Open on GitHub
+          </a>
+        </>
+      )}
+    </p>
+  );
+}
+
+/** The Diff tab: files as collapsible sections with Reviewed marks, a closable file tree, and whole files in tabs. */
+export function PullRequestChanges({
+  diff,
+  projectId,
+  repositoryId,
+  number,
+  marks,
+}: {
+  diff: PullRequestDiff;
+  projectId: Id<"projects">;
+  repositoryId: string;
+  number: number;
+  marks: ReturnType<typeof useReviewedMarks>;
+}) {
+  const readFile = useAction(api.integrations.github.pullRequests.readFile);
+  const [diffStyle, setDiffStyle] = useState<"unified" | "split">("unified");
+  const [wordWrap, setWordWrap] = useState(true);
+  const [allCollapsed, setAllCollapsed] = useState(false);
+  const [toggled, setToggled] = useState<ReadonlySet<string>>(new Set());
+  const [selectedPath, setSelectedPath] = useState<string>();
+  const [treeOpen, setTreeOpen] = useState(true);
+  const [activeTab, setActiveTab] = useState<string | null>(null);
+  const [openPaths, setOpenPaths] = useState<string[]>([]);
+  const [contents, setContents] = useState<ReadonlyMap<string, FileState>>(new Map());
+  const isMobile = useIsMobile();
+  const options = usePatchDiffOptions(diffStyle, wordWrap);
+  const sections = useRef(new Map<string, HTMLElement>());
+  const registerSection = useCallback((path: string, element: HTMLElement | null) => {
+    if (element) sections.current.set(path, element);
+    else sections.current.delete(path);
+  }, []);
+  const summaries = useMemo(() => diff.files.map(toSectionFile), [diff.files]);
+  const totals = diff.files.reduce((sum, file) => ({ additions: sum.additions + file.additions, deletions: sum.deletions + file.deletions }), {
+    additions: 0,
+    deletions: 0,
+  });
+  const reviewedCount = diff.files.filter(marks.isReviewed).length;
+
+  const isCollapsed = (path: string) => allCollapsed !== toggled.has(path);
+  const toggle = (path: string) =>
+    setToggled((current) => {
+      const next = new Set(current);
+      if (!next.delete(path)) next.add(path);
+      return next;
+    });
+  // Reviewing folds the file and un-reviewing unfolds it, as on GitHub.
+  const setReviewed = (file: PullRequestDiffFile, reviewed: boolean) => {
+    marks.setReviewed(file, reviewed);
+    if (isCollapsed(file.path) !== reviewed) toggle(file.path);
+  };
+
+  const openFile = (file: PullRequestDiffFile) => {
+    setOpenPaths((current) => (current.includes(file.path) ? current : [...current, file.path]));
+    setActiveTab(file.path);
+    if (contents.has(file.path)) return;
+    const set = (state: FileState) => setContents((current) => new Map(current).set(file.path, state));
+    set({ kind: "loading" });
+    // A deleted file only exists before the change.
+    const ref = file.status === "removed" ? diff.baseSha : diff.headSha;
+    readFile({ projectId, repositoryId, number, path: file.path, ref })
+      .then(set)
+      .catch((error: unknown) => set({ kind: "error", message: getErrorMessage(error, "Could not load the file") }));
+  };
+  const activeFile = diff.files.find((file) => file.path === activeTab);
+
+  return (
+    <ThreadWorkspaceSplitPane
+      isSidebarOpen={treeOpen && !isMobile}
+      onCloseSidebar={() => setTreeOpen(false)}
+      sidebarTitle="Files"
+      sidebarHeader={
+        <div className="flex h-[41px] items-center justify-between border-b px-3 text-xs font-medium">
+          Files
+          <Button variant="ghost" size="icon-sm" aria-label="Close files" onClick={() => setTreeOpen(false)}>
+            <X />
+          </Button>
+        </div>
+      }
+      sidebarContent={
+        <WorktreeFileTree
+          files={summaries}
+          selectedPath={selectedPath}
+          onSelectFile={(path) => {
+            setSelectedPath(path);
+            setActiveTab(null);
+            if (isCollapsed(path)) toggle(path);
+            requestAnimationFrame(() => sections.current.get(path)?.scrollIntoView({ block: "start" }));
+          }}
+          onOpenFile={(path) => {
+            const file = diff.files.find((candidate) => candidate.path === path);
+            if (file) openFile(file);
+          }}
+        />
+      }
+    >
+      <div className="flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden">
+        <div className="flex h-[41px] shrink-0 items-center gap-3 border-b bg-card px-4 text-xs text-muted-foreground tabular-nums">
+          <span>
+            {diff.changedFiles} {diff.changedFiles === 1 ? "file" : "files"}
+          </span>
+          <span className="text-success">+{totals.additions}</span>
+          <span className="text-destructive">-{totals.deletions}</span>
+          <span>
+            · {reviewedCount} / {diff.files.length} reviewed
+          </span>
+          <div className="ml-auto flex items-center gap-1">
+            <ChangesViewToggles
+              allCollapsed={allCollapsed}
+              onToggleCollapseAll={() => {
+                setAllCollapsed(!allCollapsed);
+                setToggled(new Set());
+              }}
+              diffStyle={diffStyle}
+              onToggleDiffStyle={() => setDiffStyle(diffStyle === "unified" ? "split" : "unified")}
+              wordWrap={wordWrap}
+              onToggleWordWrap={() => setWordWrap(!wordWrap)}
+            />
+            {!treeOpen && !isMobile ? (
+              <Button variant="ghost" size="icon-sm" aria-label="Show files" onClick={() => setTreeOpen(true)}>
+                <PanelRight />
+              </Button>
+            ) : null}
+          </div>
+        </div>
+        <FileTabStrip
+          activeTab={activeTab}
+          openPaths={openPaths}
+          onSelect={setActiveTab}
+          onClose={(path) => {
+            setOpenPaths((current) => current.filter((item) => item !== path));
+            if (activeTab === path) setActiveTab(null);
+          }}
+        />
+        <div className="min-h-0 flex-1 overflow-auto">
+          {diff.partial ? (
+            <p className="border-b px-4 py-2 text-xs text-muted-foreground">
+              Some changes aren&apos;t shown here.{" "}
+              <a href={`${diff.htmlUrl}/files`} target="_blank" rel="noreferrer" className="underline">
+                See every file on GitHub
+              </a>
+            </p>
+          ) : null}
+          {activeFile ? (
+            <WholeFile file={activeFile} state={contents.get(activeFile.path)} options={options} htmlUrl={diff.htmlUrl} />
+          ) : (
+            diff.files.map((file) => {
+              const patch = toUnifiedPatch(file);
+              return (
+                <PatchFileSection
+                  key={file.path}
+                  file={toSectionFile(file)}
+                  patch={patch ?? undefined}
+                  collapsed={isCollapsed(file.path)}
+                  onToggle={toggle}
+                  registerSection={registerSection}
+                  actions={
+                    <>
+                      <label className="ml-2 flex cursor-pointer items-center gap-1.5 text-xs text-muted-foreground">
+                        <Checkbox
+                          aria-label={`Reviewed ${file.path}`}
+                          checked={marks.isReviewed(file)}
+                          onCheckedChange={(checked) => setReviewed(file, checked === true)}
+                        />
+                        Reviewed
+                      </label>
+                      <Button
+                        variant="ghost"
+                        size="icon-sm"
+                        className="size-6"
+                        aria-label={`Open ${file.path}`}
+                        title={file.status === "removed" ? "File before deletion" : "Open file"}
+                        onClick={() => openFile(file)}
+                      >
+                        <FileText className="size-3.5" />
+                      </Button>
+                    </>
+                  }
+                >
+                  {file.previousPath && patch ? (
+                    <p className="px-4 py-1.5 text-xs text-muted-foreground">
+                      Renamed from <code>{file.previousPath}</code>
+                    </p>
+                  ) : null}
+                  {patch ? <PatchDiff patch={patch} options={options} /> : <NoTextDiff file={file} htmlUrl={diff.htmlUrl} />}
+                </PatchFileSection>
+              );
+            })
+          )}
+        </div>
+      </div>
+    </ThreadWorkspaceSplitPane>
+  );
+}
+
+function WholeFile({
+  file,
+  state,
+  options,
+  htmlUrl,
+}: {
+  file: PullRequestDiffFile;
+  state: FileState | undefined;
+  options: ReturnType<typeof usePatchDiffOptions>;
+  htmlUrl: string;
+}) {
+  if (!state || state.kind === "loading") {
+    return (
+      <div className="space-y-3 p-5" aria-label="Loading file">
+        <Skeleton className="h-4 w-2/3" />
+        <Skeleton className="h-4 w-3/4" />
+        <Skeleton className="h-4 w-1/2" />
+      </div>
+    );
+  }
+  if (state.kind === "text") {
+    return <FileView file={{ name: file.path, contents: state.contents }} options={options} />;
+  }
+  const message = { binary: "This is a binary file.", tooLarge: "This file is too large to display.", error: state.kind === "error" ? state.message : "" }[
+    state.kind
+  ];
+  return (
+    <div className="flex flex-col items-center gap-3 py-10 text-sm text-muted-foreground">
+      <p>{message}</p>
+      <Button variant="outline" size="sm" asChild>
+        <a href={`${htmlUrl}/files`} target="_blank" rel="noreferrer">
+          View on GitHub
+          <ArrowUpRight />
+        </a>
+      </Button>
+    </div>
+  );
+}

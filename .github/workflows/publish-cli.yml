@@ -1,0 +1,55 @@
+name: Publish CLI
+
+# Runs on every push to main but publishes only when the version in
+# apps/cli/package.json is not already on npm. See docs/agents/publishing-the-cli.md.
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      id-token: write # npm trusted publishing (OIDC)
+    steps:
+      - uses: actions/checkout@v6
+
+      - uses: pnpm/action-setup@v4
+
+      - uses: actions/setup-node@v6
+        with:
+          node-version: "24"
+          registry-url: "https://registry.npmjs.org"
+
+      # Trusted publishing needs npm >= 11.5.1.
+      - run: npm install -g npm@latest
+
+      - name: Check whether this version is already published
+        id: check
+        run: |
+          NAME=$(node -p "require('./apps/cli/package.json').name")
+          VERSION=$(node -p "require('./apps/cli/package.json').version")
+          echo "version=$VERSION" >> "$GITHUB_OUTPUT"
+          if npm view "$NAME@$VERSION" version >/dev/null 2>&1; then
+            echo "publish=false" >> "$GITHUB_OUTPUT"
+            echo "$NAME@$VERSION is already on npm — nothing to do."
+          else
+            echo "publish=true" >> "$GITHUB_OUTPUT"
+            echo "$NAME@$VERSION is new — will publish."
+          fi
+
+      - if: steps.check.outputs.publish == 'true'
+        run: pnpm install --frozen-lockfile
+
+      - if: steps.check.outputs.publish == 'true'
+        run: pnpm cli:lint
+
+      - if: steps.check.outputs.publish == 'true'
+        run: pnpm cli:test:once
+
+      # prepack runs the build; provenance is automatic under OIDC.
+      - if: steps.check.outputs.publish == 'true'
+        run: npm publish
+        working-directory: apps/cli

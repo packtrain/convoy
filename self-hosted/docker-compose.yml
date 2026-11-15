@@ -1,0 +1,76 @@
+name: convoy
+
+services:
+  backend:
+    image: ghcr.io/get-convex/convex-backend:latest
+    stop_grace_period: 10s
+    stop_signal: SIGINT
+    ports:
+      # Loopback-only by default: in local-demo auth mode anyone who can
+      # reach these ports has full access. Set BIND_HOST=0.0.0.0 in .env
+      # only for Clerk-authenticated installs that must be reachable on a network.
+      - "${BIND_HOST:-127.0.0.1}:${CONVEX_PORT:-3210}:3210" # client API (queries/mutations, deploys)
+      - "${BIND_HOST:-127.0.0.1}:${CONVEX_SITE_PORT:-3211}:3211" # HTTP actions (/api/mcp, /api/agent/*)
+    volumes:
+      - convex_data:/convex/data
+    environment:
+      # Public URLs as seen by browsers and CLI agents. Must match
+      # NEXT_PUBLIC_CONVEX_URL used for the web build.
+      - CONVEX_CLOUD_ORIGIN=${CONVEX_CLOUD_ORIGIN:-http://127.0.0.1:3210}
+      - CONVEX_SITE_ORIGIN=${CONVEX_SITE_ORIGIN:-http://127.0.0.1:3211}
+      # Keep these stable across restarts so the admin key stays valid.
+      # The backend rejects empty values, so only concrete values are passed.
+      - INSTANCE_NAME=${INSTANCE_NAME:-convoy}
+      - INSTANCE_SECRET=${INSTANCE_SECRET:?generate with `openssl rand -hex 32` and set in .env}
+      - DISABLE_BEACON=${DISABLE_BEACON:-false}
+      # Optional overrides — uncomment the line AND set the value in .env.
+      # Don't pass them empty: the backend rejects empty values at boot.
+      # External Postgres/MySQL instead of the built-in SQLite:
+      # - DATABASE_URL=${DATABASE_URL}
+      # Required when the external database connection has no TLS:
+      # - DO_NOT_REQUIRE_SSL=${DO_NOT_REQUIRE_SSL}
+      # Hide server error details/log lines from connected clients:
+      # - REDACT_LOGS_TO_CLIENT=${REDACT_LOGS_TO_CLIENT}
+    healthcheck:
+      test: curl -f http://localhost:3210/version
+      interval: 5s
+      start_period: 10s
+
+  dashboard:
+    image: ghcr.io/get-convex/convex-dashboard:latest
+    ports:
+      - "${BIND_HOST:-127.0.0.1}:${DASHBOARD_PORT:-6791}:6791"
+    environment:
+      - NEXT_PUBLIC_DEPLOYMENT_URL=${CONVEX_CLOUD_ORIGIN:-http://127.0.0.1:3210}
+    depends_on:
+      backend:
+        condition: service_healthy
+
+  web:
+    build:
+      context: ..
+      dockerfile: self-hosted/web.Dockerfile
+      args:
+        # NEXT_PUBLIC_* values are baked into the bundle at build time —
+        # rebuild the image after changing any of them.
+        NEXT_PUBLIC_CONVEX_URL: ${CONVEX_CLOUD_ORIGIN:-http://127.0.0.1:3210}
+        NEXT_PUBLIC_APP_URL: ${APP_URL:-http://127.0.0.1:3000}
+        NEXT_PUBLIC_APP_ENV: ${APP_ENV:-production}
+        # clerk | local-demo — must match the AUTH_MODE set on the Convex
+        # deployment (start.sh keeps them in sync).
+        NEXT_PUBLIC_AUTH_MODE: ${AUTH_MODE:-clerk}
+        NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY: ${NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY}
+        NEXT_PUBLIC_CLERK_SIGN_IN_URL: /auth/sign-in
+        NEXT_PUBLIC_CLERK_SIGN_UP_URL: /auth/sign-up
+        NEXT_PUBLIC_CLERK_SIGN_IN_FALLBACK_REDIRECT_URL: /auth/callback
+        NEXT_PUBLIC_CLERK_SIGN_UP_FALLBACK_REDIRECT_URL: /auth/callback
+    ports:
+      - "${BIND_HOST:-127.0.0.1}:${WEB_PORT:-3000}:3000"
+    environment:
+      - CLERK_SECRET_KEY=${CLERK_SECRET_KEY}
+    depends_on:
+      backend:
+        condition: service_healthy
+
+volumes:
+  convex_data:

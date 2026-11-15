@@ -1,0 +1,93 @@
+---
+title: Skills in Convoy
+description: Author instruction bundles, install organization templates, and use project Skills in threads.
+---
+
+A Skill is a reusable instruction bundle with a `SKILL.md` entry point and
+optional supporting text files. Use one for a procedure that an agent should
+load when needed, such as reviewing a migration or preparing release notes.
+
+Convoy stores these Skills in your organization or project and delivers project
+Skills through MCP. Installing a Skill into Convoy does not write files into
+your local AI client's configuration. For that separate setup, see
+[Install Skills for AI clients](/docs/cli/skills).
+
+## Create a project Skill
+
+1. Open project settings, then **Skills**.
+2. Choose **Create skill** or **New skill**.
+3. Enter a name, such as `release-review`, and a description explaining when an
+   agent should use it. Category is optional.
+4. Write the procedure in the **SKILL.md** editor. Add supporting files if the
+   procedure needs checklists, examples, or reference material.
+5. Save. The Skill is now available to this project's agents and thread
+   composer.
+
+Names use lowercase letters, digits, and hyphens, with an optional namespace
+such as `team:release-review`. Enter the name without a leading slash. The name
+and description fields are the catalog metadata; adding YAML frontmatter to
+the body does not update them.
+
+A small `SKILL.md` can start with:
+
+```md
+# Release review
+
+Use this skill when preparing a release summary.
+
+1. Read the task and linked artifacts.
+2. Compare the intended behavior with the changes and test results.
+3. Read checklist.md before writing the summary.
+4. List shipped behavior, known limitations, and checks that were not run.
+```
+
+Add `checklist.md` as a supporting file and give it the checks specific to your
+project. File paths are relative, such as `examples/summary.md`. A Skill can
+contain up to 50 files including `SKILL.md`, with a 256 KB limit per file and
+a 1 MB total limit. Save writes the entry point and supporting files together.
+
+## Install an organization Skill
+
+Organization Skills are templates. They become available in a project only
+after installation.
+
+Open the project's **Skills** settings and choose **Install org skill**, either
+in the empty state or in the menu beside **New skill**. Select a template and
+install it. Convoy creates an independent project copy; editing that copy does
+not edit the organization template.
+
+When the template changes, the project copy offers **Update**. A locally edited
+copy can also offer **Reset** to restore the current template. Both replace the
+copy's content and files after confirmation. They do not merge local edits.
+Deleting the organization template leaves installed project copies intact.
+
+Organization owners and admins manage organization Skills. Project admins and
+members manage project Skills, including installing and refreshing templates.
+Viewers have read-only access.
+
+## Use a Skill in a thread
+
+Type `/` in a project thread composer and select the Skill from the menu. Use
+`/skill:` to narrow the suggestions to Skills. For example, select
+`release-review`, then add the task you want reviewed and send the message.
+
+The selected Skill stays as a compact reference in the message. Convoy asks the
+agent to load it with `load_skill` before acting. That tool returns `SKILL.md`
+and the supporting file paths; `read_skill_file` reads an additional file when
+needed. Agents can also discover project Skills through the MCP tool catalog
+without an explicit mention.
+
+Only installed or directly authored project Skills appear here. If an
+organization template is missing from the menu, install it in the project
+first. If an agent cannot load a Skill, check that its
+[MCP connection](/docs/cli/mcp) targets the same project.
+
+## Record a Skill's source
+
+When copying a Skill from a repository, the editor's source fields can record
+its repository, commit, branch or tag, and subdirectory. These fields identify
+the copied version; pasting a repository URL into them does not fetch files.
+
+Use [Prompts / Slash commands](/docs/using/prompts) for reusable message text.
+Use [Project agents](/docs/using/project-agents) for a working prompt attached
+to every new thread created with that agent.

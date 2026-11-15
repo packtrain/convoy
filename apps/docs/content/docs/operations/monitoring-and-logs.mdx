@@ -1,0 +1,123 @@
+---
+title: Monitoring and logs
+description: Where backend and CLI logs live, what to watch, and what to alert on.
+---
+
+Convoy's system-of-record is Convex, and the CLI is a relatively
+thin worker. That means most interesting log output lives in two
+places: the Convex dashboard, and the CLI process's own stdout/stderr.
+
+## Convex dashboard
+
+For the deployment you are operating, go to **dashboard.convex.dev →
+your deployment**. The tabs that matter:
+
+- **Functions** — shows every query / mutation / action with invocation
+  counts, error rates, and p50/p99 latency. Sort by error count to find
+  misbehaving functions quickly.
+- **Logs** — live stream of function invocations, including arguments
+  (when not suppressed) and error traces. Filter by function name when
+  debugging a specific code path.
+- **Data** — table browser. `cliThreads`, `cliMessages`,
+  `cliMessageChunks`, `cliSessions`, `cliProfiles` are the tables to
+  inspect when diagnosing the CLI pipeline.
+- **Components** — confirms mounted components (e.g. `resend`) are
+  healthy. An "unmounted" row here is a deployment problem.
+- **Settings → Environment Variables** — where server-side config lives
+  (`CLERK_JWT_ISSUER_DOMAIN`, `RESEND_API_KEY`, etc.).
+
+The Convex dashboard is the canonical debugging surface for backend
+behavior. Nothing Convoy-specific replaces it.
+
+## CLI process logs
+
+`convoy connect` writes to stdout/stderr. How you collect those
+depends on how you're running it:
+
+| Host pattern | Where logs land |
+|---|---|
+| Interactive terminal | Your terminal |
+| Dev container | The terminal attached to the container |
+| systemd | `journalctl -u convoy-connect -f` |
+| launchd | `StandardOutPath` / `StandardErrorPath` from the plist |
+| PM2 | `pm2 logs <name>` |
+| Docker | `docker logs -f <container>` |
+
+Debug levels:
+
+- `CONVOY_CLI_DEBUG=1` — verbose logs, truncated at 400 characters
+  per line.
+- `CONVOY_CLI_DEBUG=2` — verbose logs, no truncation. Use when
+  inspecting specific runtime stream payloads.
+
+Leave debug **off** in normal operation. The default output already
+logs registration, claim activity, run transitions, and errors; the
+extra noise only helps when you're actively diagnosing.
+
+## Data tables worth inspecting
+
+When a thread misbehaves, these rows usually show the story.
+
+- **`cliSessions`** — one row per currently-connected CLI process.
+  `lastHeartbeatAt` in the past by more than 60s means the server
+  considers it offline. A session that is "there" but not heartbeating
+  usually means the CLI crashed without a clean disconnect.
+- **`cliThreads`** — `claimedBySessionId`, `claimedAt`, and
+  `claimLeaseExpiresAt` tell you who is processing a thread and for
+  how much longer. `hasPendingUserMessages` + no `claimedBySessionId`
+  means nobody is claiming it.
+- **`cliMessages`** — the assistant envelope with a `status` of
+  `failed` is the first place to look after a complaint that "the AI
+  didn't respond".
+- **`cliMessageChunks`** — raw streamed events plus the computed
+  `normalizedEvent`. `kind: "runtime-notice"` with
+  `code: "claude-api-retry"` is the most common "something external is
+  going wrong" signal. `kind: "unknown"` with a populated `rawData`
+  means the normalizer couldn't classify the chunk.
+
+See
+[`CLI architecture and lifecycle`](/docs/contributing/cli-architecture-and-lifecycle)
+for the table-level data model.
+
+## What to alert on
+
+Priority-ordered, for teams running Convoy for real users:
+
+1. **Session heartbeat loss for a profile that has pending work.** If
+   the only profile that can process a project's threads goes offline,
+   user-visible thread output stops. Detect via a scheduled check that
+   compares `cliProfiles` rows (expected worker profiles) to
+   `cliSessions` rows with a recent heartbeat.
+2. **Repeated `failed` assistant messages in a short window.** One
+   failure is normal. A burst is a runtime-provider incident or an
+   environmental break (expired API key, firewall change, runtime
+   binary missing from `PATH`).
+3. **Convex function error rate > baseline.** Visible in the
+   dashboard's Functions tab. Investigate top offenders.
+4. **Claims held past their lease.** Indicates a worker that crashed
+   mid-claim. Server-side recovery releases them on subsequent
+   operations; a sustained rise means workers are dying.
+5. **Email delivery failures** (if email is enabled). Watch Resend's
+   dashboard; Convoy currently does not retry email on its own.
+
+Convoy does not yet ship an opinionated alerting integration. Pick
+whichever of Grafana / Datadog / Cloudwatch / PagerDuty you already
+run, and query the above signals from the Convex dashboard or via
+Convex HTTP actions.
+
+## Retention
+
+Convoy does not currently run a scheduled job to delete old stream
+chunks or completed threads. Rows live in Convex until something
+explicitly removes them. If retention becomes a concern for a long-lived
+deployment, that is a spec-and-implement item, not a configuration
+toggle today.
+
+## Related
+
+- [`Running the CLI long-term`](/docs/operations/running-the-cli-long-term)
+  — service logging setup per host pattern.
+- [`Operations and debugging`](/docs/operations/debugging)
+  — symptom-indexed debugging guide.
+- [`Scaling and limits`](/docs/operations/scaling-and-limits) — how the
+  signals above map to scaling decisions.

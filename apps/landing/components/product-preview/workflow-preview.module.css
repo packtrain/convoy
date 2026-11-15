@@ -1,0 +1,58 @@
+.scene {
+  --workflow-background: #131313;
+  --workflow-foreground: oklch(.93 0 0);
+  --workflow-muted: oklch(.65 0 0);
+  --workflow-border: oklch(1 0 0 / 12%);
+  container-type: inline-size;
+  position: relative;
+  overflow: hidden;
+  min-width: 0;
+  font-family: var(--font-preview-sans), Inter, sans-serif;
+  color: var(--workflow-foreground);
+  color-scheme: dark;
+}
+.scene *, .scene *::before, .scene *::after { box-sizing: border-box; }
+.scroll { overflow-x: auto; border: 1px solid var(--workflow-border); border-bottom: 0; border-radius: 10px 10px 0 0; background: var(--workflow-background); scrollbar-width: thin; scrollbar-color: #555 transparent; }
+.scroll:focus-visible { outline: 2px solid oklch(.556 0 0); outline-offset: 2px; }
+.grid { width: 100%; min-width: 800px; font-size: 14px; line-height: 20px; }
+.row, .spacer { display: grid; grid-template-columns: minmax(160px, 1fr) 320px 320px; }
+.header { display: flex; align-items: center; gap: 8px; height: 37px; border-right: 1px solid var(--workflow-border); border-bottom: 1px solid var(--workflow-border); padding: 4px 4px 4px 12px; font-weight: 500; background: var(--workflow-background); }
+.stage { border-right: 1px solid var(--workflow-border); }
+.header.stage { padding: 8px 12px; }
+.laneName { min-width: 0; flex: 1; padding: 2px 4px; }
+.selector { display: inline-flex; align-items: center; gap: 8px; height: 28px; padding: 0 10px; font-size: 12.8px; line-height: 16px; font-weight: 500; color: var(--workflow-muted); white-space: nowrap; }
+.selector svg { width: 16px; height: 16px; flex-shrink: 0; }
+.selector svg:last-child { width: 12px; height: 12px; opacity: .5; }
+.stageName { padding: 14px 16px; font-weight: 500; }
+.cell { display: flex; flex-direction: column; gap: 12px; padding: 12px; border-right: 1px solid var(--workflow-border); }
+.alternate { background: oklch(.25 0 0 / 60%); }
+.card { width: 100%; overflow: hidden; border: 1px solid transparent; border-radius: 8px; background: oklch(.21 0 0); text-align: left; }
+.card svg { filter: saturate(.7); }
+.alternate .card { background: var(--workflow-background); }
+.cardBody { display: flex; flex-direction: column; min-height: 96px; padding: 10px 12px; }
+.card h4 { display: -webkit-box; -webkit-line-clamp: 3; -webkit-box-orient: vertical; overflow: hidden; margin: 0; font-size: 14px; font-weight: 500; line-height: 19.25px; }
+.pills { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; margin-top: auto; padding-top: 8px; }
+.pill, .bashPill { flex-shrink: 0; padding: 2px 6px; border-radius: 4px; background: oklch(.25 0 0); color: var(--workflow-muted); font-size: 12px; font-weight: 500; line-height: 16px; }
+.runtime { display: flex; align-items: center; gap: 6px; min-width: 0; font-size: 12px; font-weight: 500; line-height: 16px; }
+.runtime svg { width: 14px; height: 14px; flex-shrink: 0; }
+.card.wait { display: flex; align-items: center; gap: 8px; padding: 10px 12px; background: oklch(.769 .188 70.08 / 10%); color: oklch(.924 .12 95.746); font-weight: 500; line-height: 19.25px; }
+.wait svg { width: 16px; height: 16px; flex-shrink: 0; color: oklch(.879 .169 91.605); }
+.card.bash { background: oklch(.623 .214 259.815 / 10%); color: oklch(.882 .059 254.128); }
+.script { display: flex; align-items: flex-start; gap: 8px; }
+.script svg { margin-top: 2px; width: 16px; height: 16px; flex-shrink: 0; color: oklch(.809 .105 251.813); }
+.script code { font-family: var(--font-preview-mono), monospace; font-size: 12px; line-height: 19.5px; }
+.bashPill { background: oklch(.623 .214 259.815 / 20%); color: oklch(.932 .032 255.585); }
+.spacer { height: 64px; }
+.spacer span { border-right: 1px solid var(--workflow-border); }
+/* The frame draws the right edge. */
+.row > :last-child, .spacer > :last-child { border-right: 0; }
+.scene::after { content: ""; position: absolute; height: 56px; bottom: 0; left: 0; right: 0; pointer-events: none; background: linear-gradient(transparent, #08080d); }
+.reference::after { display: none; }
+.reference .scroll { border-bottom: 1px solid var(--workflow-border); border-radius: 8px; }
+
+@container (max-width: 600px) {
+  .scene:not(.reference) .grid { width: 640px; min-width: 640px; }
+  .scene:not(.reference) .row, .scene:not(.reference) .spacer { grid-template-columns: 320px 320px; }
+  .scene:not(.reference) .stage { position: absolute; width: 1px; height: 1px; padding: 0; overflow: hidden; clip-path: inset(50%); }
+  .scene:not(.reference) .spacer span:first-child { display: none; }
+}

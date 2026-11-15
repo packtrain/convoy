@@ -1,0 +1,127 @@
+---
+title: Backups and rollback
+description: How to back up Convoy data, roll back a bad deploy, and avoid the migration traps.
+---
+
+Most of what Convoy would lose in a disaster is in Convex. Everything
+else (the web app, the CLI, the docs site) is rebuildable from the
+repo. This page points at the Convex- and Vercel-native tools for
+backup and rollback, and flags the Convoy-specific hazards.
+
+> **Tested status.** Rollback has not been exercised end-to-end against
+> a production Convoy deployment. The guidance below is the right
+> shape; do a dry run in a dev deployment before you need it in prod.
+
+## Backups
+
+All durable state (users, orgs, projects, tasks, threads, CLI session
+metadata) lives in Convex tables. Use Convex's built-in backup and
+export features rather than rolling something Convoy-specific:
+
+- Convex dashboard → **Backups** for scheduled and ad-hoc backups.
+- `npx convex export` for on-demand exports if you need a file
+  artifact.
+
+See the official [Convex backup docs](https://docs.convex.dev/) for
+retention settings, export formats, and import flow.
+
+What you do **not** need to back up:
+
+- `apps/web` and `apps/cli` source — in the repo.
+- Static assets and the docs site — rebuildable from the repo.
+- CLI profile config (`~/.config/convoy/config.toml`) — trivially
+  recreatable via `convoy setup`. Back up the API keys separately if
+  your secret management doesn't already capture them.
+
+## Rollback: the web app
+
+Hosted on Vercel (or whichever provider you use), roll back the same
+way you would for any Next.js app.
+
+- **Vercel**: dashboard → Deployments → pick a previous deployment →
+  **Promote to Production**. This takes effect almost immediately.
+
+This is purely a frontend rollback. The backend stays on whatever
+schema and functions are currently live in Convex. As long as the old
+web app doesn't depend on schema changes that no longer exist in
+Convex, the rollback is safe on its own.
+
+## Rollback: the Convex backend
+
+Roll back Convex by redeploying the functions and schema from a prior
+commit. From `apps/web/`:
+
+```bash
+# Check out the commit you want to redeploy to.
+git checkout <prior-commit>
+CONVEX_DEPLOYMENT="prod:friendly-wolf-872" npx convex deploy
+# When done, return to your current branch.
+```
+
+This redeploys:
+
+- Convex functions (queries, mutations, actions, HTTP endpoints)
+- Convex schema (indexes, validators)
+- Mounted Convex components
+
+## The schema migration trap
+
+Schema-changing Convex deploys are not cleanly reversible if the change
+dropped or narrowed a field. A few patterns to be aware of:
+
+- **Widen → backfill → narrow.** If a deploy narrowed a field (e.g.
+  removed a union variant), rolling the functions back without also
+  restoring the data won't help — the old code expects values that no
+  longer exist.
+- **Added an index.** Safe to roll back: the old code simply stops
+  using the index.
+- **Dropped a field.** Old code reading that field will fail. Rolling
+  back requires either a schema redeploy that re-adds the field (with
+  the right validator), or importing the field's values back from a
+  backup.
+- **Table rename or split.** Same as above, but worse. Plan to not roll
+  this back; plan to fix-forward.
+
+The practical rule: **treat schema-narrowing deploys as one-way doors.**
+If a production schema change may need to be reverted, use a
+widen-first strategy and keep the old shape valid for at least one
+release cycle. The `@convex-dev/migrations` component is built for
+this.
+
+## Rollback: the CLI
+
+The CLI on each host is whatever version is installed. To roll back:
+
+- Monorepo checkout flow: `git checkout <prior-commit>` in the repo
+  and restart `pnpm cli:dev connect`.
+- npm install flow: `npm install -g @useconvoy/cli@<version>` and restart
+  the service.
+
+There is no local CLI data worth backing up. Profile config is
+re-generatable.
+
+## Rollback checklist
+
+When a bad deploy ships:
+
+1. **Assess the blast radius.** Is it a frontend bug only, a Convex
+   function bug only, or both? Rollback scope depends on the answer.
+2. **Web-only bug:** Promote a previous Vercel deployment. Done.
+3. **Backend-only bug, no schema change:** Redeploy Convex from the
+   prior commit. Frontend stays put.
+4. **Backend bug with schema changes:** Stop here and read "The schema
+   migration trap" above. Decide whether fix-forward or restore from
+   backup is the safer path.
+5. **Both:** Roll back the web app first (fast, reversible), then
+   decide on backend rollback.
+6. **After rollback:** verify sign-in works, verify at least one thread
+   runs end-to-end through a connected CLI.
+
+## Related
+
+- [`Deploy the Convex Backend`](/docs/deployment/deploy-with-convex)
+  for `npx convex deploy` usage.
+- [`Deploy to Vercel`](/docs/deployment/deploy-to-vercel) for Vercel's
+  integrated build model.
+- [`Production Checklist`](/docs/deployment/production-checklist) for
+  the pre-launch list that helps you avoid needing this page.

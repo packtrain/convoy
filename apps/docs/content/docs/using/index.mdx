@@ -1,0 +1,170 @@
+---
+title: Working with projects and tasks
+sidebarTitle: Projects and tasks
+description: Organize your team, track work in Lists and views, and keep comments, files, and artifacts with each task.
+---
+
+Use Convoy's web app to organize work and discuss it with your team. You only
+need a connected CLI profile when you want to run an [AI thread](/docs/using/ai-threads).
+
+For example, create a task called "Fix checkout validation", put it in your
+release List, and attach the failing screenshot. Track its progress with a
+status, discuss the fix in comments, and keep the implementation plan in an
+artifact on that same task.
+
+## Organizations, projects, and members
+
+An organization contains your people, projects, and administration. Invite
+people to the organization, then add them to the projects they need.
+A project contains tasks, threads, members, and CLI profile connections.
+
+Projects have a URL slug and a short uppercase alias of 2–5 characters, such
+as `WEB`. The alias forms task references such as `WEB-42`. Keep it stable
+because people use these refs in links, commands, and commit messages.
+
+### Roles and permissions
+
+Organization roles control organization administration. Project membership
+and your project role determine access to project content. Organization
+owners and admins can manage projects and their members from organization
+settings, but their organization role alone does not grant access to the
+project's tasks or threads.
+
+| Project role | What it allows |
+| --- | --- |
+| Project admin | Manage project settings and members, work with tasks, and run threads. |
+| Member | Work with tasks, comments, Lists, and project AI settings, and run threads. |
+| Viewer | Read the project and its tasks. This role cannot run or read shared AI threads. |
+
+The backend checks permissions for web, CLI, and MCP requests. API keys
+remain subject to your access and the key's scope. See
+[API keys](/docs/cli/api-keys).
+
+Invite members by email. When [email delivery is configured](/docs/deployment/email-and-resend),
+Convoy sends invitation and project-add notifications with links to your deployment.
+
+Thread access has an additional ownership rule. Your teammates can read a
+thread only after you share it, and only if their project role permits
+threads. Sharing never grants control of the run. See
+[sharing threads](/docs/using/ai-threads#sharing-with-teammates).
+
+## Tasks
+
+Each task belongs to a project and has a stable ref such as `WEB-42`. Its
+fields include a title, description, status, priority, assignee, due date,
+type, and tags. Open task details to edit these fields and see its resources
+and related threads.
+
+Create a task with `C`, or press `Enter` to add one below a selected row in
+the Table. Give "Fix checkout validation" a description that explains the
+failure and the expected result, then assign the work and choose a status.
+
+### Statuses and subtasks
+
+Statuses describe progress, such as `To Do`, `In Progress`, `In Review`,
+`Done`, and `Canceled`. Projects can disable optional statuses. Backlog is a
+List for deferred work, not a status.
+
+Break larger work into subtasks. Each subtask has its own ref and fields,
+while staying in its parent's project and List. In the Table, use `Tab` to
+make a task a subtask and `Shift+Tab` to move it back out. The CLI offers
+`convoy tasks move` for the same hierarchy changes.
+
+### Ordering, archiving, and search
+
+Drag Table rows or use `Mod+↑` and `Mod+↓` to change task order. `Mod` means
+Command on macOS and Control on Windows or Linux.
+
+Archive completed work to remove it from active planning. `Mod+Shift+A`
+archives completed tasks, and the archive toast offers Undo. Archived tasks
+remain available through Archived and archive-aware search. Search covers
+active tasks by default; include archived work when looking for older records.
+Archiving retains task context, and archived artifacts open read-only in the app.
+
+See [keyboard shortcuts](/docs/using/keyboard-shortcuts) for duplicating,
+deleting, opening details, and copying task links.
+
+## Lists and views
+
+A **List** groups tasks within a project. A **view** controls how those tasks
+appear. Changing a view does not move tasks between Lists.
+
+Every new project starts with an Inbox List as its default. Tasks created
+without an explicit List go to the project default. Manage Lists in project
+settings under Lists, and choose the List you want to work in from the
+project's List selector. You can make another active List the default.
+
+For a release, create a List such as "September release" and move
+"Fix checkout validation" into it. Use the task's move-to-List action, or
+`convoy tasks move-to-list WEB-42 --list SEPTEMBER-RELEASE` after checking
+that List's ref with `convoy lists list`.
+
+Moving a parent moves its subtasks too. Moving a subtask to another List
+makes it a top-level task there and brings its own descendants with it.
+Moving into or out of Backlog changes the List without changing the status.
+
+| View | Use it for |
+| --- | --- |
+| Table | Edit rows, work with subtasks, and rank tasks with drag and drop or the keyboard. |
+| Board | See root tasks in columns grouped by status, assignee, priority, type, or label. |
+
+Switch layout in the project header settings menu. A List can override the
+project's default view. Board is available for active Lists, including
+Backlog; Archived uses the Table. Open task details from either view to
+work with the task's full context.
+
+## Comments, attachments, and artifacts
+
+Keep the evidence and decisions with the task they explain. For the checkout
+fix, use a comment to discuss the approach, an attachment for the failing
+screenshot, and an artifact for the plan reviewers will revisit.
+
+### Comments
+
+Comments record questions, updates, and short decisions in time order with
+an author. Use them for discussion as work progresses.
+
+### Attachments
+
+Attachments preserve raw files such as screenshots, logs, and design exports.
+Images can be previewed in the app. Uploading an HTML file creates an HTML
+artifact so Convoy can render it as a page.
+
+### Artifacts
+
+Artifacts are documents attached to a task, such as plans, reviews, and
+handoff notes. Update a document in place as the work changes.
+
+- Markdown artifacts are editable in the task sidebar and full-page view.
+- HTML artifacts render in a sandboxed frame. You can open them as a full
+  page; edit their source through CLI or MCP.
+
+Teammates can review an artifact with comments. An agent can read those
+comments, revise the document, and resolve the addressed comments. Reading
+artifacts requires task-view permission; creating or editing them requires
+task-update permission.
+
+The same documents are accessible through [MCP](/docs/cli/mcp) and
+[`convoy tasks artifacts`](/docs/cli/one-shot-commands). The
+[MCP reference](/docs/reference/mcp-tools) lists artifact and review-comment tools.
+
+### Moving a resource to another task
+
+On desktop, drag an attachment or artifact pill from Resources onto a task
+row in the project Table or a task's subtasks. The destination must be in the
+same project. The resource moves rather than being copied, and an artifact's
+comments follow it.
+
+You can also move resources from the CLI:
+
+```bash
+convoy tasks artifacts move <artifactId> --to-task <taskId>
+convoy tasks attachments move <taskId> <attachmentId> --to-task <taskId>
+```
+
+## Next steps
+
+Start an [AI thread](/docs/using/ai-threads) when you want an agent to work on
+the task. Configure reusable [project agents](/docs/using/project-agents),
+[Skills](/docs/using/skills), and [prompts](/docs/using/prompts), or use
+[workflows](/docs/using/workflows) for a sequence of steps.

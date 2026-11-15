@@ -1,0 +1,399 @@
+---
+title: Managed local environments
+description: Start a shared or isolated project environment and manage its service from your host terminal.
+---
+
+Run these commands on your Mac or Linux host with Docker Desktop or a Linux
+Docker Engine running. Install Convoy on the host. You do not need to enter a
+container or install the CLI there yourself.
+
+This workflow creates a new managed environment. It does not adopt your existing
+Multipass VM or an existing VS Code devcontainer. Those keep their current direct
+CLI workflow. To reach a service on another machine, see
+[remote targets](/docs/cli/remote-targets).
+
+Use `convoy env` as a shortcut for `convoy environment`, and `--env` anywhere
+you would use `--environment`. For example, `convoy env status --env dev`.
+On `attach`, `service`, `project` and `keys`, `--target dev` also works, the same
+flag you use for [remote targets](/docs/cli/remote-targets).
+
+## Start an environment
+
+```bash
+convoy run --environment dev --no-attach
+```
+
+The first run builds the image with Convoy, Codex, Claude Code, standalone Playwright CLI and Chromium
+and Linux dependencies. Build and provisioning progress appears in your terminal.
+Later runs reuse the same container and service. To start and stay attached:
+
+```bash
+convoy run --environment dev
+```
+
+Ctrl+C detaches the viewer. Work continues. A second terminal can attach independently:
+
+```bash
+convoy attach --environment dev
+convoy attach --environment dev --profile b --json
+```
+
+## Shared or isolated
+
+Since CLI 0.139.0, a new environment is **shared** unless you pass
+`--mode isolated`. Scripts that create environments and expect isolation need
+that flag. Existing environments keep their mode.
+
+- **Shared**: one account and home folder for every project. Log in to GitHub,
+  git and each runtime once. Projects can read each other's files. A shared
+  environment can mount host folders.
+- **Isolated**: a separate Linux account, sandbox and home per project. Log in
+  per project. Use it when projects must not see each other.
+
+```bash
+convoy run --env dev --mount ~/code --no-attach      # shared, with ~/code mounted
+convoy run --env locked --mode isolated --no-attach  # isolated
+```
+
+The mode is fixed when the environment is created. To change it, delete the
+environment and create a new one. In `convoy tui`, Add environment shows the
+same choice as Project separation, with a Mount folders field below it.
+
+### Mount host folders
+
+`--mount <folder>` is repeatable and works in shared mode only. Each folder
+appears at the same path inside the container, so agents edit the files you see
+on the host. Mount parent folders such as `~/code`, not one folder per project:
+Docker fixes mounts when it creates the container. Convoy refuses your home
+folder, credential folders such as `~/.ssh` or `~/.config`, the Docker socket,
+symlinks and system folders. On macOS, Docker Desktop must share the folder;
+bind mounts there are slower than the container's own volumes.
+
+On a Linux host, the image gives the container user your uid and gid, so files
+agents write in a mount belong to you.
+
+To change the mounts later, rebuild:
+
+```bash
+convoy environment rebuild --env dev --mount ~/code --mount ~/work --interrupt
+convoy environment rebuild --env dev --no-mounts --interrupt
+```
+
+The rebuild refuses to drop a mount that holds a registered project. Logins in
+the container's home survive it.
+
+### GitHub in a shared environment
+
+Your host's SSH keys and credentials never enter the container. Run
+`gh auth login` once in a project shell. The container's git config sends
+`git@github.com:` remotes over HTTPS, so mounted repositories with SSH remotes
+push with that login. Other git hosts need their own HTTPS login.
+
+`convoy run` uses the name `default` when no environment is specified. Other
+environment lifecycle commands require an explicit name. The name selects private
+host controller state. Without `--environment`, existing
+host profiles and direct CLI commands retain their normal meaning.
+
+## Register projects
+
+Projects use the Codex and Claude Code installed in the image. Each start of the
+environment reruns the sandbox check, and each project start detects the runtimes
+again. CLI 0.110.0 removed `environment verify`.
+
+```bash
+convoy project add a --environment dev --profile-key a
+convoy project add b --environment dev --profile-key b
+convoy project list --environment dev
+```
+
+The prompts appear on the host. Select existing projects or choose project
+creation. Registration adds the deployment's HTTPS hostname to this environment's
+shared firewall allowlist. Convex deployments also allow their MCP `.convex.site`
+hostname. Only the selected project's worker key reaches that project's boundary.
+Ordinary host profiles and runtime credentials are not copied.
+
+In an isolated environment, folders are created in the container's Linux
+workspace volume. `--clone` clones there. `--reuse` accepts an existing directory
+only when its ownership already matches the registered identity. An isolated
+environment does not mount or change ownership of your host checkout.
+
+In a shared environment, the project folder must sit under `/workspace` or under
+a mounted folder, for example `~/code/app` with `~/code` mounted. A relative path
+lands in `/workspace`. Convoy refuses a mount root itself, because the project's
+worktrees go beside it in `<repo>-worktrees` and must stay inside the mount.
+
+For explicit creation, use the same flags as the direct project command:
+
+```bash
+convoy project add c --environment dev --profile-key c --create
+```
+
+## Authenticate a runtime
+
+For OpenAI API usage billing, keep the entire setup on the host:
+
+```bash
+convoy keys add work-openai --environment dev --provider openai --auth api-key
+convoy keys use work-openai --environment dev --runtime codex --profile a
+convoy keys use work-openai --environment dev --runtime codex --profile b
+convoy service reload --environment dev --profile a --interrupt
+convoy service reload --environment dev --profile b --interrupt
+convoy keys status --environment dev --json
+```
+
+The add command prompts for the key with masked input. Automation can use
+`--from-env OPENAI_API_KEY` or `--stdin`. Only the supplied key is sent to the
+selected service. It is not stored in your host profiles or environment record.
+Managed key status, rotation, rollback, disable and removal also accept
+`--environment`. Credential changes never fall back to host writes after a lost
+reply. Each project needs an explicit assignment.
+
+For native subscription login instead:
+
+```bash
+convoy project login a --environment dev --runtime codex
+```
+
+In an isolated environment, it pauses A, runs `codex login --device-auth` in A's
+private shell, then reloads A and waits until it is online. Add `--interrupt` if A has active runs. The TUI
+offers the same as [i] Log in to Codex in the project's Actions.
+
+Repeat for B. Native runtime authentication stays in each project's private HOME.
+In a shared environment, one login covers every project and nothing pauses.
+
+### Codex startup errors
+
+If Codex reports that it is not authenticated, run `project login` above for the
+affected project, or assign a managed OpenAI API key.
+`convoy project check a --environment dev` lists every failed precondition with its fix. Logging
+in on the host does not authenticate the isolated project. If a managed key is
+rejected, check or replace that assignment and reload the project before retrying.
+
+Other startup failures show the exit code or signal and a bounded, redacted
+stderr diagnostic. For example, a missing `CODEX_HOME` is a filesystem problem;
+create that directory inside the project's shell. A generic exit with no
+diagnostic does not establish that authentication is missing.
+
+## Inspect work and browser output
+
+Start a task in each project from the Convoy web app. On the host:
+
+```bash
+convoy service status --environment dev
+convoy service logs --environment dev --follow
+convoy service runs list --environment dev --profile a
+convoy service runs history THREAD_ID --environment dev --profile a
+convoy service runs logs THREAD_ID --environment dev --profile a --message MESSAGE_ID --follow
+```
+
+Replace `THREAD_ID` and `MESSAGE_ID` with IDs printed by the preceding commands.
+Operational logs and agent transcripts are separate. Without `--follow`,
+operational logs can also be read after stopping the service while its container
+is still running. Transcript `--follow` follows
+one assistant message until its run finishes. `attach` stays connected across runs.
+
+To use the preinstalled standalone browser inside A's private shell:
+
+```bash
+convoy service pause a --environment dev --interrupt
+convoy project shell a --environment dev
+# Inside the shell:
+playwright-cli -s=ui open --config=/usr/local/share/playwright-cli/config.json
+playwright-cli -s=ui goto https://example.com
+playwright-cli -s=ui screenshot --filename=/tmp/page.png
+playwright-cli -s=ui close
+exit
+# Back on the host:
+convoy service reload --environment dev --profile a --interrupt
+```
+
+The image configuration explicitly disables Chromium's inner sandbox inside the
+project boundary. Browser packages and binaries are image-owned; rebuilding the
+image updates them. CLI updates never install or launch a browser. See
+[Browser automation](/docs/cli/browser-automation).
+
+## Diagnose a stopped service
+
+Run these commands on your host, such as your Mac. Replace `dev` with your
+managed environment name. None of these commands starts or restarts the service.
+
+```bash
+convoy env status --env dev
+convoy service logs --env dev
+convoy service logs --env dev --profile a
+convoy service logs --env dev | tail -50
+convoy service logs --env dev --json
+```
+
+Without `--follow`, the log command prints retained events and exits. `tail -50`
+is a shell command that selects the last 50 output lines, not a Convoy flag.
+Add `--follow` only when you want a live viewer.
+
+| State | What you can inspect |
+| --- | --- |
+| Container and service running | Environment status, service status, retained operational logs and run transcripts |
+| Container running, service stopped | Environment status and retained operational logs without `--follow`; no live service connection is required |
+| Container stopped | Environment status; Convoy cannot read retained logs from a stopped container yet |
+
+Operational logs record connection states, worker exits, retries and run lifecycle
+events. They are not a complete crash dump and do not retain raw worker stderr or
+agent output. A sudden termination may leave no final explanation. Retention is
+bounded; the reader exposes at most the latest 1,000 events, so older events may
+be unavailable. Filtered output can contain fewer entries.
+
+For agent output, use `convoy service runs history` and `convoy service runs logs`
+from the [service guide](/docs/cli/project-service#inspect-execution-and-transcripts).
+Those commands need a running service and fetch stored transcripts from Convex.
+They are different from the locally retained operational log.
+
+If the whole container stopped, inspect its stopped state before choosing to run
+`convoy run --env dev --no-attach`. That command starts the container and service,
+which can reconnect projects and accept queued work; it is not a read-only log
+viewer. The retained log volume survives normal stop/start and rebuild operations.
+
+## Stop, restart, update and rebuild
+
+```bash
+# Stop only the service. Retain the running container.
+convoy service stop --environment dev
+convoy service start --environment dev -b
+
+# Restart the service without rebuilding the container.
+convoy environment restart --environment dev --interrupt
+
+# Stop the service and its managed container. Keep every data volume.
+convoy environment stop --environment dev
+convoy run --environment dev
+
+# Update only the inner CLI to an exact published version.
+convoy environment update --environment dev --version 0.76.1 --interrupt
+
+# Rebuild the image while retaining projects, identities, auth and selected CLI.
+convoy environment rebuild --environment dev --interrupt
+```
+
+`--interrupt` explicitly permits stopping current connections and runs. An update
+stages its package before stopping work, preserves the previous installation,
+refreshes the launcher and browser, and checks service readiness. Failure restores
+the previous installation. A later `run` also recovers an interrupted update.
+Browser OS dependency changes require a rebuild. Host `convoy update` remains a
+separate operation.
+
+Docker starts the environment again when Docker itself starts, as after a
+reboot, and the service comes up with it. An environment you stopped with
+`convoy environment stop` stays stopped. On a Mac, set Docker Desktop to start when
+you sign in (Settings > General). Environments created before CLI
+0.141.0 need one rebuild to get this.
+
+Inspect both versions and runtime enablement with:
+
+```bash
+convoy environment status --environment dev --json
+```
+
+### Install or update agent runtimes
+
+In `convoy tui`, open the environment's Actions and choose Agent runtimes (`r`). It lists Claude Code, Codex,
+OpenCode and Cursor with the installed version, the version on offer and whether
+an update is available. Claude Code and Codex are offered at their npm `latest`.
+OpenCode and Cursor stay on the builds Convoy tested. Check the runtimes to install
+or update, then choose Install / update. A popup confirms the batch, then shows each
+runtime's progress and any failure. A failed runtime stays checked so you can retry
+it. Reload a project or restart the service before it uses a newly installed
+runtime. Runs already using a runtime may fail while its files are replaced.
+
+## Storage, networking and recovery
+
+Docker volumes hold workspace files, private project identities, control config,
+service logs, installed CLI packages and browser binaries. A shared environment keeps one volume for
+the whole container home instead of the control config and service volumes, so
+runtime, `gh` and git logins survive a rebuild. Rebuilds retain all of them. Do not remove these volumes independently; identity reservations and private
+files belong together. No host Docker socket or management port is exposed inside
+the container.
+
+The controller uses a custom seccomp policy for bubblewrap's nested namespaces and
+mounts, and disables Docker's outer AppArmor profile for that container. It also sets `systempaths=unconfined` to let bubblewrap mount a fresh `/proc`.
+This removes Docker's outer masked/read-only system-path restrictions, including
+paths under `/proc` and `/sys`. It retains
+per-project UID separation, private mounts, cleared capabilities and no-new-privileges.
+It never uses a privileged container or adds SYS_ADMIN. Namespace probes fail
+closed on unsupported hosts.
+
+The firewall is shared by all projects. You can set the initial deployment and
+additional domains when first creating an environment:
+
+```bash
+convoy run --environment other --deployment example-deployment --domains example.com --no-attach
+```
+
+Project registration adds backend domains later. Network access is not isolated
+per project. A different Docker daemon or an ownership mismatch stops the command
+without modifying the other environment.
+
+A host lifecycle command holds a private lock under
+`~/.convoy/environments/NAME/lock`. Concurrent commands wait. After a crashed host
+command, inspect the PID in that directory and confirm the writer has exited
+before removing the lock directory. Retrying an uncertain registration must start
+with `project list` and checking Convoy for any newly created remote project.
+Never blindly repeat `--create` after losing its result.
+
+## Manual acceptance
+
+Use disposable projects A and B and keep your existing VM unchanged.
+
+1. Start `dev`, register A/B and assign a managed key or authenticate each natively. Run real agent
+   tasks that write different marker files. Confirm both complete.
+2. Attach in two host terminals, one filtered to A and one to B. Detach A and
+   confirm B and both workers continue. Reattach and inspect run history/logs.
+3. Ask A to read B's workspace, private HOME and control socket. Reads must fail.
+   Confirm A can still edit its own files and perform browser automation.
+4. Add C while A/B are connected. Confirm it appears without a rebuild.
+5. Pause A, use playwright-cli in A's project shell, close the browser and shell, then reload A. B must continue.
+6. Stop/start the service, then stop/start the container. Confirm stable project
+   UIDs, marker files, native credentials and operational logs.
+7. Update to an exact available version, then rebuild. Confirm the same identity
+   and data. Try a nonexistent version; package staging must fail while the old
+   service keeps running. Automated tests cover failure after switching packages
+   and crash recovery; record a real failed-health recovery before certification.
+8. Run two `run --no-attach` commands concurrently. Confirm one container and
+   one service. Stop Docker and check the prerequisite diagnostic.
+
+This workspace has no Docker daemon. Automated controller, bridge and recovery
+checks are separate from this real-host acceptance.
+
+For an unpublished build, pack the CLI and pass its absolute archive path:
+
+```bash
+convoy run --environment acceptance --package /path/to/useconvoy-cli-0.76.1.tgz --no-attach
+```
+
+The archive is only used when building a new image. It does not replace an existing
+installation volume. Use a fresh environment name for an unpublished candidate.
+
+## Recover from a nested proc mount failure
+
+If the sandbox check reports `bwrap: Can't mount proc on /newroot/proc: Operation not
+permitted`, a container created before CLI 0.76.1 may still have Docker's default
+system-path restrictions. Update the host CLI/source checkout and rebuild the
+managed container. A service restart does not change these Docker settings.
+
+For an unpublished source checkout, run from `apps/cli` on your host, using the
+source-backed `convoy` function:
+
+```bash
+pnpm pack
+convoy env rebuild --env test --interrupt --package "$PWD/useconvoy-cli-0.76.1.tgz"
+```
+
+The rebuild retains project and authentication volumes and the installed inner
+CLI version. This fix is in the host's container-creation options, so the inner
+CLI does not need an update. A published installation can omit `--package`.
+If the sandbox check still fails, projects stay stopped; report the output.
+
+## Command reference
+
+The [environment and project command reference](/docs/reference/cli-commands#managed-environments-and-isolated-projects)
+lists lifecycle, registration, attachment, service, run-history and browser commands.
+For managed credential rotation, rollback, disabling and removal, see
+[model provider keys](/docs/cli/provider-keys#openai-keys-for-isolated-codex-projects).
+Add `--env dev` to target this environment rather than the host's configuration.

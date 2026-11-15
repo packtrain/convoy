@@ -1,0 +1,83 @@
+---
+title: Upgrading
+description: Move a live Convoy deployment to a newer version of the code.
+---
+
+Convoy deploys from the repository, so upgrading a live instance means
+deploying a newer commit — backend, web app, and the CLI workers your team
+runs. The order matters when the new version includes schema or data
+changes.
+
+## Before you upgrade
+
+- Read the commit range you are about to deploy, and check the
+  [migration log](/docs/operations/migrations#migration-log) for data
+  migrations introduced since your current version.
+- Take a backup if the range includes schema changes — see
+  [`Backups and rollback`](/docs/operations/backups-and-rollback).
+- Remember the one-way-door rule: schema-**narrowing** deploys are not
+  cleanly reversible. Widen-first changes can sit across two releases.
+
+## Standard flow
+
+### 1. Deploy backend and web app
+
+With the [integrated Vercel build](/docs/deployment/deploy-to-vercel),
+pushing the new commit to the production branch deploys both: the build
+runs `convex deploy` (functions + schema) and then builds the Next.js app.
+
+If you deploy Convex separately, deploy the backend **first**, then the web
+app:
+
+```bash
+# from apps/web
+CONVEX_DEPLOYMENT="prod:friendly-wolf-872" npx convex deploy
+```
+
+### 2. Run pending data migrations
+
+If the release includes data migrations, follow the
+[`Migrations`](/docs/operations/migrations) flow: dry-run all pending
+migrations, run them, verify the invariants. Skipping this leaves the new
+code reading data it does not expect.
+
+### 3. Update CLI workers
+
+Each machine running `convoy connect` should update its checkout and
+restart the bridge:
+
+```bash
+git pull
+pnpm install
+# restart the connect process (supervisor restart, or Ctrl+C and re-run)
+```
+
+The CLI talks to the backend through versioned Convex functions; an
+outdated worker usually keeps functioning, but keep workers within a
+release of the backend to avoid drift. A clean restart re-registers the
+session — in-flight threads fail over via the claim lease and are
+retryable.
+
+### 4. Verify
+
+- **Settings → Developer** in the web app shows both frontend and backend
+  build metadata — confirm both match the deployed commit.
+- The web app polls for new frontend versions
+  (`NEXT_PUBLIC_APP_VERSION_POLL_INTERVAL_MS`, default 2 minutes), so open
+  browser tabs pick up the new build without manual refreshes.
+- Run a quick smoke pass from the
+  [`Production checklist`](/docs/deployment/production-checklist): sign-in,
+  task CRUD, one streamed thread.
+
+## Rebuild the docs site
+
+If you deploy the docs site and the release touched
+`apps/docs/content/`, redeploy it as well — see
+[`Deploy the docs site`](/docs/deployment/deploy-docs).
+
+## If the upgrade goes wrong
+
+[`Backups and rollback`](/docs/operations/backups-and-rollback) covers
+promoting a previous web deployment and redeploying Convex from a prior
+commit — and the schema-migration trap that decides whether rolling back
+is safe at all.

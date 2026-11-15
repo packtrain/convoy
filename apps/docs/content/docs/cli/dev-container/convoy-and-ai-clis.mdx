@@ -1,0 +1,60 @@
+---
+title: Convoy and AI CLIs
+description: Use the dev container with Convoy profiles, Claude Code, MCP config, and project-local AI setup.
+---
+
+The dev container is most useful when you want Convoy and local AI CLIs to work together inside the same isolated environment.
+
+## Convoy profiles
+
+The container mounts your host `~/.config/convoy/` directory into the container.
+
+That means you can:
+
+- reuse existing Convoy profiles
+- run `convoy setup` inside the container
+- keep API keys and profile config outside the repo
+
+If the directory does not exist on the host, create it first:
+
+```bash
+mkdir -p ~/.config/convoy
+```
+
+## Running Claude Code
+
+Claude Code is preinstalled in the container.
+
+Typical usage:
+
+```bash
+claude
+
+cd /workspace/apps/web && claude
+```
+
+## Combining with Convoy
+
+A practical isolated workflow looks like this:
+
+1. Open the repo in the dev container.
+2. Verify your Convoy profile is available.
+3. Run `convoy init mcp` or `convoy init skill` if needed.
+4. Start the AI CLI inside the container.
+5. Use the client against the repo from the containerized environment.
+
+## Why this matters
+
+This keeps:
+
+- repo files
+- MCP config
+- Convoy profile resolution
+- AI CLI execution
+
+in one controlled environment instead of splitting them across host and container setups.
+
+## Related sections
+
+- [`CLI & AI integrations overview`](/docs/cli)
+- [`Set up MCP`](/docs/cli/mcp)

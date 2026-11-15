@@ -1,0 +1,88 @@
+---
+title: Setup and modes
+description: Build the dev container, provide host environment variables, and choose between strict or open networking.
+---
+
+## Prerequisites
+
+Before using the dev container, make sure you have:
+
+- Docker Desktop or a compatible container runtime
+- VS Code with the Dev Containers extension
+
+## Quick start
+
+1. Export the required host environment variables.
+2. Create `~/.config/convoy` on your host if it does not already exist.
+3. Open the repo in VS Code.
+4. Run `Dev Containers: Reopen in Container`.
+5. Open a terminal inside the container and start the AI CLI you want to use.
+
+## Required host environment
+
+For the Bedrock/Mantle-backed Claude Code flow:
+
+```bash
+export AWS_BEARER_TOKEN_BEDROCK=<your-bearer-token>
+export CONVEX_DEPLOYMENT=<your-convex-deployment-slug>  # strict-mode firewall allowlist
+```
+
+Optional variables passed through from the host include:
+
+- `AWS_REGION`
+- `CLAUDE_CODE_USE_BEDROCK`
+- `CLAUDE_CODE_USE_MANTLE`
+- `CLAUDE_CODE_ENABLE_AUTO_MODE`
+- `ENABLE_PROMPT_CACHING_1H`
+- `CLAUDE_CODE_MAX_OUTPUT_TOKENS`
+- `MAX_THINKING_TOKENS`
+- `DEVCONTAINER_NETWORK_MODE`
+
+These are read when the container starts (or on each `devcontainer exec`), so
+export them in your shell profile before opening the container.
+
+To run Claude Code on a Claude.ai subscription instead — sign in inside the
+container, then assign the profile a credential-free provider entry
+(`convoy keys add claude-sub --provider anthropic`). It overrides the
+Bedrock/Mantle flags the container inherits or sets in its own
+`~/.claude/settings.json`. See
+[Model provider keys](/docs/cli/provider-keys).
+
+## Running from the terminal (no VS Code)
+
+The [devcontainer CLI](https://github.com/devcontainers/cli) drives the same
+configuration without an editor. From the repository root:
+
+```bash
+devcontainer up --workspace-folder .
+devcontainer exec --workspace-folder . zsh
+```
+
+`up` is idempotent; add `--remove-existing-container` to force a rebuild after
+config changes. Environment passthrough (`${localEnv:...}`) reads the shell you
+run these commands from.
+
+## Network modes
+
+The dev container supports two modes:
+
+- `strict`: enables the repo firewall and blocks outbound traffic by default
+- `open`: skips the firewall and allows normal outbound traffic
+
+Set the mode on your host before opening or rebuilding the container:
+
+```bash
+export DEVCONTAINER_NETWORK_MODE=strict
+# or
+export DEVCONTAINER_NETWORK_MODE=open
+```
+
+## Why the container helps
+
+The container isolates:
+
+- Linux-native dependencies in `/workspace/node_modules`
+- AI CLI configuration and session state
+- optional network access rules
+
+That makes it a better fit for controlled AI execution than mixing everything into the host machine.

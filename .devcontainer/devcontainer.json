@@ -1,0 +1,104 @@
+{
+  "name": "Claude Code Sandbox",
+  "build": {
+    "dockerfile": "Dockerfile",
+    "args": {
+      "TZ": "${localEnv:TZ:America/Los_Angeles}",
+      "GIT_DELTA_VERSION": "0.18.2",
+      "ZSH_IN_DOCKER_VERSION": "1.2.0"
+    }
+  },
+  "runArgs": [
+    "--cap-add=NET_ADMIN",
+    "--cap-add=NET_RAW"
+  ],
+  "customizations": {
+    "vscode": {
+      "extensions": [
+        "anthropic.claude-code",
+        "dbaeumer.vscode-eslint",
+        "esbenp.prettier-vscode",
+        "eamodio.gitlens"
+      ],
+      "settings": {
+        "editor.formatOnSave": true,
+        "editor.defaultFormatter": "esbenp.prettier-vscode",
+        "editor.codeActionsOnSave": {
+          "source.fixAll.eslint": "explicit"
+        },
+        "terminal.integrated.defaultProfile.linux": "zsh",
+        "terminal.integrated.profiles.linux": {
+          "bash": {
+            "path": "bash",
+            "icon": "terminal-bash"
+          },
+          "zsh": {
+            "path": "zsh"
+          }
+        }
+      }
+    }
+  },
+  "remoteUser": "node",
+  "mounts": [
+    "source=convoy-bashhistory,target=/commandhistory,type=volume",
+    "source=convoy-claude-config,target=/home/node/.claude,type=volume",
+    "source=${localEnv:HOME}/.config/convoy,target=/home/node/.config/convoy,type=bind,consistency=cached",
+    "source=${localEnv:HOME}/.codex,target=/home/node/.codex,type=bind,consistency=cached",
+    "source=${localEnv:HOME}/.cursor,target=/home/node/.cursor,type=bind,consistency=cached",
+    "source=${localEnv:HOME}/.local/share/opencode,target=/home/node/.local/share/opencode,type=bind,consistency=cached",
+    "source=${localEnv:HOME}/.config/opencode,target=/home/node/.config/opencode,type=bind,consistency=cached",
+    "source=convoy-node-modules-${devcontainerId},target=/workspace/node_modules,type=volume",
+    // The CLI creates thread worktrees in a sibling of the repo dir, i.e.
+    // /workspace-worktrees — which the node user cannot mkdir at /.
+    "source=${localWorkspaceFolder}-worktrees,target=/workspace-worktrees,type=bind,consistency=delegated"
+  ],
+  "containerEnv": {
+    "DEVCONTAINER_NETWORK_MODE": "${localEnv:DEVCONTAINER_NETWORK_MODE:strict}",
+    "CONVOY_PROFILE": "${localEnv:CONVOY_PROFILE}",
+    "CONVOY_HOST_WORKSPACE": "${localWorkspaceFolder}",
+    "CONVOY_CONTAINER_WORKSPACE": "/workspace",
+    "NODE_OPTIONS": "--max-old-space-size=4096",
+    "CLAUDE_CONFIG_DIR": "/home/node/.claude",
+    "POWERLEVEL9K_DISABLE_GITSTATUS": "true",
+    // Codex indexes each thread's rollout file by ABSOLUTE path in
+    // ~/.codex/state_5.sqlite. The host's ~/.codex is bind-mounted below, so a
+    // shared state db would be written by both sides with mutually invalid
+    // prefixes (host: /Users/you/.codex/..., container: /home/node/.codex/...).
+    // Whichever side wrote last wins, and `thread/resume` then hard-fails with
+    // "failed to resolve rollout path ...: file does not exist" (OS-1555) — the
+    // first message of a thread works (thread/start) and every followup breaks.
+    // A container-private CODEX_HOME keeps the state db local; postCreateCommand
+    // symlinks auth/config/sessions back to the mount so credentials, config,
+    // and thread history stay shared. Startup replaces the config link with a private copy.
+    "CODEX_HOME": "/home/node/.codex-local"
+  },
+  "remoteEnv": {
+    "AWS_BEARER_TOKEN_BEDROCK": "${localEnv:AWS_BEARER_TOKEN_BEDROCK}",
+    "AWS_REGION": "${localEnv:AWS_REGION:us-east-1}",
+    "CLAUDE_CODE_USE_BEDROCK": "${localEnv:CLAUDE_CODE_USE_BEDROCK}",
+    "CLAUDE_CODE_USE_MANTLE": "${localEnv:CLAUDE_CODE_USE_MANTLE}",
+    "CLAUDE_CODE_ENABLE_AUTO_MODE": "${localEnv:CLAUDE_CODE_ENABLE_AUTO_MODE}",
+    "ENABLE_PROMPT_CACHING_1H": "${localEnv:ENABLE_PROMPT_CACHING_1H}",
+    "CLAUDE_CODE_MAX_OUTPUT_TOKENS": "${localEnv:CLAUDE_CODE_MAX_OUTPUT_TOKENS:32768}",
+    "MAX_THINKING_TOKENS": "${localEnv:MAX_THINKING_TOKENS:1024}",
+    "CONVEX_DEPLOYMENT": "${localEnv:CONVEX_DEPLOYMENT}"
+  },
+  "workspaceMount": "source=${localWorkspaceFolder},target=/workspace,type=bind,consistency=delegated",
+  "workspaceFolder": "/workspace",
+  "initializeCommand": "mkdir -p \"${localEnv:HOME}/.config/convoy\" \"${localEnv:HOME}/.codex\" \"${localEnv:HOME}/.cursor\" \"${localEnv:HOME}/.local/share/opencode\" \"${localEnv:HOME}/.config/opencode\" \"${localWorkspaceFolder}-worktrees\"",
+  // Agent CLIs install here, not in the Dockerfile: Docker caches a
+  // `RUN npm install -g ...@latest` layer forever, so rebuilds silently keep the
+  // first build's versions. postCreateCommand runs once per container create,
+  // uncached and before the firewall, so it always resolves the real `latest`.
+  // The $CODEX_HOME symlinks are (re)created here because /home/node/.codex-local
+  // lives on the container filesystem and does not survive a rebuild. Only
+  // state_5.sqlite stays container-private; startup also copies config locally. Codex
+  // falls back to scanning it by thread id when the db has no row, so threads
+  // started on either side remain resumable. `rm -rf` on the sessions path is
+  // load-bearing: `ln -sfn` onto an existing real directory nests the link
+  // inside it (sessions/sessions) instead of replacing it.
+  "postCreateCommand": "npm install -g @useconvoy/cli@latest @anthropic-ai/claude-code@latest @openai/codex@latest && curl -fsSL https://opencode.ai/install | bash && curl -fsSL https://cursor.com/install | bash && mkdir -p \"$CODEX_HOME\" && rm -rf \"$CODEX_HOME/sessions\" && ln -sfn /home/node/.codex/sessions \"$CODEX_HOME/sessions\" && ln -sfn /home/node/.codex/auth.json \"$CODEX_HOME/auth.json\" && ln -sfn /home/node/.codex/config.toml \"$CODEX_HOME/config.toml\"",
+  "postStartCommand": "convoy devcontainer --configure; { cmp -s /usr/local/share/convoy-devcontainer/Dockerfile .devcontainer/Dockerfile && cmp -s /usr/local/bin/init-firewall.sh .devcontainer/init-firewall.sh; } || echo \"WARN: this container's image is older than .devcontainer/. Rebuild the container.\" >&2; sudo /usr/local/bin/init-workspace.sh && if [ \"$DEVCONTAINER_NETWORK_MODE\" = \"strict\" ]; then sudo /usr/local/bin/init-firewall.sh; else echo \"Skipping firewall setup (DEVCONTAINER_NETWORK_MODE=$DEVCONTAINER_NETWORK_MODE)\"; fi",
+  "waitFor": "postStartCommand"
+}

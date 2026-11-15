@@ -1,0 +1,213 @@
+---
+title: Running the CLI long-term
+sidebarTitle: Persistent connections
+description: Patterns for running convoy connect as a durable worker — dev container first, process supervisors as a fallback.
+---
+
+`convoy connect` is a long-running process. It registers a CLI
+session, heartbeats, and claims thread work from Convex for as long as
+it stays up. To keep threads executing for a team, it needs to be
+running somewhere durable — not someone's laptop terminal.
+
+> **Current status.** Convoy has a working dev-container setup and a
+> verified SIGINT/SIGTERM shutdown path, but there is **no canonical
+> production orchestration pattern yet**. The guidance below leads with
+> the dev container (which is the tested path) and documents
+> process-supervisor options as secondary, not endorsed. Treat service
+> examples as starting points to adapt, not recipes.
+
+## What the process actually needs
+
+Any host running `convoy connect` needs:
+
+- Node.js 18+.
+- The runtime binary on `PATH` — today that is Claude Code's `claude`.
+- A readable Convoy profile at `~/.config/convoy/config.toml` (or
+  `CONVOY_PROFILE` set), with a valid API key.
+- Outbound HTTPS to the Convex deployment and to the runtime provider
+  (Anthropic or Bedrock).
+- Optional: write access to `~/.cache/convoy/thread-attachments`
+  (thread attachment cache; 7-day GC).
+
+Relevant flags (see `convoy connect --help`):
+
+| Flag | Default | Purpose |
+|---|---|---|
+| `--profile <key>` | resolved from cwd / env / default | Which saved profile to use |
+| `--name <name>` | current folder name | Display name for this session |
+| `-c, --concurrency <n>` | profile value, otherwise `5` (max `50`) | How many claimed chats this session processes in parallel |
+| `-s, --stream <path>` | — | Replay a JSONL fixture instead of running a real runtime (useful for UI dev) |
+
+Useful env vars:
+
+- `CONVOY_PROFILE=<key>` — select the profile non-interactively
+- `CONVOY_CLI_DEBUG=1` — verbose logging, truncated
+- `CONVOY_CLI_DEBUG=2` — verbose logging, no truncation
+
+## Recommended: dev container
+
+The repo ships with a pre-configured dev container under
+`.devcontainer/` that already:
+
+- has `claude` preinstalled and pinned to Bedrock
+- mounts `~/.config/convoy/` from the host so profile config survives
+  container rebuilds
+- has an outbound firewall allowlist in `strict` mode that already
+  covers Convex, Anthropic, and Bedrock
+
+See [`Dev Container setup`](/docs/cli/dev-container/setup-and-modes)
+for the full walkthrough. Inside the container, run:
+
+```bash
+CONVOY_CLI_DEBUG=1 pnpm cli:dev connect
+```
+
+If you want this to stay running across VS Code window closures, keep
+the container attached or run the command inside a `tmux` / `screen`
+session inside the container.
+
+The dev container is the currently-tested path. Anything beyond this is
+extrapolation.
+
+## Fallback: process supervisors
+
+If you need the CLI running on a bare-metal machine, any standard
+process supervisor will work. These examples assume the CLI has been
+installed as `convoy` (see [CLI install](/docs/cli#install) for the
+distribution-status caveat until `@useconvoy/cli` ships).
+
+### systemd (Linux)
+
+`/etc/systemd/system/convoy-connect.service`:
+
+```ini
+[Unit]
+Description=Convoy CLI connect (<profile-key>)
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=convoy
+WorkingDirectory=/home/convoy/workspace
+ExecStart=/usr/bin/env convoy connect --profile <profile-key>
+Restart=on-failure
+RestartSec=5
+
+# Make sure the runtime binary is discoverable.
+Environment=PATH=/usr/local/bin:/usr/bin:/bin
+# Optional:
+# Environment=CONVOY_CLI_DEBUG=1
+# EnvironmentFile=/etc/convoy/env          # for secrets not in the profile
+
+StandardOutput=journal
+StandardError=journal
+SyslogIdentifier=convoy-connect
+
+# Clean shutdown: SIGTERM triggers convoy's disconnect path.
+KillSignal=SIGTERM
+TimeoutStopSec=25
+
+[Install]
+WantedBy=multi-user.target
+```
+
+```bash
+sudo systemctl daemon-reload
+sudo systemctl enable --now convoy-connect
+sudo journalctl -u convoy-connect -f
+```
+
+### launchd (macOS)
+
+`~/Library/LaunchAgents/dev.convoy.connect.plist`:
+
+```xml
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN"
+  "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+  <key>Label</key><string>dev.convoy.connect</string>
+  <key>ProgramArguments</key>
+  <array>
+    <string>/usr/local/bin/convoy</string>
+    <string>connect</string>
+    <string>--profile</string>
+    <string>&lt;profile-key&gt;</string>
+  </array>
+  <key>WorkingDirectory</key><string>/Users/you/workspace</string>
+  <key>KeepAlive</key><true/>
+  <key>RunAtLoad</key><true/>
+  <key>StandardOutPath</key><string>/tmp/convoy-connect.log</string>
+  <key>StandardErrorPath</key><string>/tmp/convoy-connect.err.log</string>
+  <key>EnvironmentVariables</key>
+  <dict>
+    <key>PATH</key><string>/usr/local/bin:/usr/bin:/bin</string>
+  </dict>
+</dict>
+</plist>
+```
+
+```bash
+launchctl load ~/Library/LaunchAgents/dev.convoy.connect.plist
+launchctl list | grep convoy
+```
+
+### PM2 (quick-start on any host)
+
+```bash
+pm2 start convoy --name convoy-connect -- connect --profile <profile-key>
+pm2 save
+pm2 startup        # follow printed instructions for boot persistence
+pm2 logs convoy-connect
+```
+
+### Docker
+
+A minimal container that runs `convoy connect`:
+
+```dockerfile
+FROM node:20-bookworm-slim
+# Claude Code must be installed inside the image — see Anthropic's docs
+# for the current recommended install.
+RUN npm install -g @anthropic-ai/claude-code
+RUN npm install -g @useconvoy/cli
+WORKDIR /workspace
+CMD ["convoy", "connect"]
+```
+
+Run it with the host profile directory mounted and outbound network
+available:
+
+```bash
+docker run -d --name convoy-connect \
+  -v $HOME/.config/convoy:/root/.config/convoy \
+  -v /path/to/workspace:/workspace \
+  convoy-connect
+```
+
+## What to verify after the service starts
+
+- The session shows up as online in the web app's profile selector.
+- `convoy status` on the same host resolves to the expected profile.
+- Sending a test thread from the web UI triggers streamed output.
+- Stopping the service cleanly (`systemctl stop` / `launchctl unload` /
+  `docker stop`) results in the session disappearing from the profile
+  selector within a few heartbeat intervals rather than lingering as
+  "online but not processing".
+
+## Known open questions
+
+- **Which orchestration pattern will become canonical.** Dev container
+  is the most tested path; nothing above it has been through production
+  use at scale.
+- **Multiple workers per profile.** A profile has one active session at
+  a time (enforced server-side). Today the horizontal-scaling path is
+  multiple profiles, each on its own host. See
+  [`Scaling and limits`](/docs/operations/scaling-and-limits).
+- **Credential rotation without downtime.** Rotating the API key in the
+  profile TOML currently requires restarting the service.
+
+If you deploy one of the fallback patterns above, notes on what worked
+and what didn't are valuable — open an issue or start a thread.

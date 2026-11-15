@@ -1,0 +1,1255 @@
+---
+title: MCP tools
+description: Full catalog of the tools the Convoy MCP server exposes, with inputs and notable return fields.
+---
+
+Convoy's MCP server speaks JSON-RPC over a single HTTP endpoint at
+`POST /api/mcp` (on your Convex deployment's HTTP host). Requests carry
+a Bearer API key; responses follow the Model Context Protocol. Clients
+wired up via `convoy init mcp --cli <client>` already point at this
+endpoint.
+
+Tools below are grouped by domain. Input fields and types are derived
+from the server's own tool-definitions module
+(`apps/web/convex/mcp/tools.ts`). Return shapes are structured JSON;
+where the shape is worth calling out, it's noted per tool.
+
+> **Keep honest.** If you change or add a tool in
+> `apps/web/convex/mcp/tools.ts`, update this page in the same PR.
+> Tool drift here is actively misleading to integrators.
+
+## Project-aware URL context
+
+Every tool that takes `projectId` accepts it as optional when the MCP
+connection was opened with a `?project=<id>` URL parameter. Convoy's
+`convoy init mcp` writes that URL parameter into generated configs,
+so clients connected via the CLI don't need to pass `projectId` on
+every call.
+
+When not pre-configured, `projectId` becomes required for project-scoped
+tools.
+
+Built-in task type keys (`taskTypeKey`) come from
+`getBuiltInTaskTypeKeys()`: `task`, `bug`, `feature`, `epic`,
+`investigation`, `chore`, and `idea`. The default is `"task"`.
+Additional org-scoped custom types may be present via the web UI; the
+MCP schema only validates built-in keys.
+
+---
+
+## Projects
+
+### `list_projects`
+
+List all projects the authenticated user has access to.
+
+| Argument | Type | Required | Notes |
+|---|---|---|---|
+| — | — | — | No arguments. |
+
+---
+
+## Tasks — read
+
+### `list_task_lists`
+
+List project Lists for discovery.
+Unfiltered persisted Lists are returned in project List rank order. Search
+queries may use full-text relevance order.
+
+| Argument | Type | Required | Notes |
+|---|---|---|---|
+| `projectId` | `string` | When not URL-configured | Project to list from. |
+| `archived` | `boolean` | No | Return archived Lists instead of active Lists. Default `false`. |
+| `query` | `string` | No | Optional List name/ref search query. |
+| `limit` | `integer` 1-50 | No | Default `20`. |
+| `cursor` | `string` \| `null` | No | Pagination cursor. Default `null`. |
+
+### `create_task_list`
+
+Create a project List. Requires List management permissions; max 20 active
+Lists per project. Returns `{ listId }`.
+
+| Argument | Type | Required | Notes |
+|---|---|---|---|
+| `projectId` | `string` | When not URL-configured | |
+| `name` | `string` | Yes | Unique per project, max 80 chars. |
+| `ref` | `string` | No | Uppercase List ref (e.g. `SPRINT-1`). Derived from the name when omitted. `BACKLOG` and `ARCHIVED` are reserved. |
+| `color` | enum | No | Color from the List palette. |
+| `defaultViewMode` | `"list"` \| `"board"` | No | Default view for this List. Omit to inherit the project default view. |
+| `defaultBoardGroupBy` | enum | No | Board grouping when `defaultViewMode` is `board` (defaults to `status`). Ignored otherwise. |
+
+### `update_task_list`
+
+Rename, re-ref, recolor, or set the default view of a project List. Requires
+List management permissions and at least one of
+`name`/`ref`/`color`/`defaultViewMode`. System Lists like `BACKLOG` cannot be
+updated; archive/unarchive, delete, and default-List changes are not available
+via MCP. Returns `{ listId }`.
+
+| Argument | Type | Required | Notes |
+|---|---|---|---|
+| `projectId` | `string` | When not URL-configured | Used to resolve List refs. |
+| `listId` | `string` | Yes | Raw List ID or bare project-scoped List ref. |
+| `name` | `string` | No | |
+| `ref` | `string` | No | |
+| `color` | enum \| `null` | No | `null` clears the color. |
+| `defaultViewMode` | `"list"` \| `"board"` \| `null` | No | `null` clears the override so the List inherits the project default view. |
+| `defaultBoardGroupBy` | enum | No | Board grouping when `defaultViewMode` is `board` (defaults to `status`). Ignored otherwise. |
+
+### `list_task_labels`
+
+List project labels in board-column order. Returns
+`{ labels: [{ _id, name, color }] }`. Other tools accept a label as either
+its raw ID or its exact name (case-insensitive).
+
+| Argument | Type | Required | Notes |
+|---|---|---|---|
+| `projectId` | `string` | When not URL-configured | |
+
+### `list_tasks`
+
+List tasks in a project.
+
+| Argument | Type | Required | Notes |
+|---|---|---|---|
+| `projectId` | `string` | When not URL-configured | Project to list from. |
+| `includeArchived` | `boolean` | No | Default `false`. |
+| `statuses` | `string[]` | No | Subset of task statuses. Omit for no status filter; pass `[]` to return no tasks. |
+| `listId` | `string` | No | Raw List ID or bare project-scoped List ref, e.g. `SPRINT-1`. |
+| `includeLinks` | `boolean` | No | Default `false`. Include each task's `externalLinks` array in the summaries. |
+
+### `search_tasks`
+
+Search tasks in a project with pagination and optional filters.
+
+| Argument | Type | Required | Notes |
+|---|---|---|---|
+| `projectId` | `string` | When not URL-configured | |
+| `query` | `string` | Yes | Search query text. |
+| `archiveMode` | `"active"` \| `"archived"` | No | Default `"active"`. |
+| `filters.status` | `string` | No | Status filter. |
+| `filters.assigneeId` | `string` \| `null` | No | Filter by human owner user ID. Use `null` for tasks with no owner. |
+| `filters.delegatedToAgentId` | `string` \| `null` | No | Filter by delegated project agent ID. Use `null` for non-delegated tasks. |
+| `limit` | `integer` 1–50 | No | Default `20`. |
+| `cursor` | `string` \| `null` | No | Pagination cursor. Default `null`. |
+| `listId` | `string` | No | Raw List ID or bare project-scoped List ref, e.g. `SPRINT-1`. |
+
+Returns paginated results plus a continuation cursor. Pass the returned
+cursor back via `cursor` to fetch the next page. The legacy
+`filters.assignee` object is no longer accepted (see `create_task`).
+
+### `get_task`
+
+Get a single task by document ID or ref.
+
+| Argument | Type | Required | Notes |
+|---|---|---|---|
+| `taskId` | `string` | Yes | Task document ID or ref. |
+| `projectId` | `string` | When resolving bare refs without URL-configured project | |
+
+Returns the task plus its `externalLinks` (commits, branches, PRs, URLs —
+see `update_task_link`), artifact summaries, attached file metadata (with
+download URLs), the latest up to 50 comments, and direct subtask
+summaries (each with `subtaskCount`). Task and subtask payloads include
+both `assignee` (the human owner) and `delegatedToAgent` (the executing
+agent) projections. When the project has Checklists, the task also has
+`checklist` (`{ _id, name }`, or `null` for no checks) and `checks`
+(`[{ key, label, status, note?, reportedAt?, added? }]`). `status` is the
+current result: `passed`, `warning`, `failed`, `not_performed`, or `pending`
+before any. `added` marks a Check reported outside the Checklist.
+
+### `get_tasks`
+
+Look up one or more tasks by task IDs or refs (e.g. `ABC-5`).
+
+| Argument | Type | Required | Notes |
+|---|---|---|---|
+| `identifiers` | `string[]` | Yes | Up to 25 task IDs or refs. |
+| `projectId` | `string` | When resolving bare refs without URL-configured project | |
+
+Returns results in the same order as the input identifiers. Checks active
+tasks first, then archived. Per-task payload matches `get_task`.
+
+### `list_project_agents`
+
+List active Project agents available for task delegation.
+
+| Argument | Type | Required | Notes |
+|---|---|---|---|
+| `projectId` | `string` | When not URL-configured | |
+
+---
+
+## Project agents — write
+
+### `create_project_agent`
+
+Create a project-local Project agent for task delegation.
+
+| Argument | Type | Required | Notes |
+|---|---|---|---|
+| `projectId` | `string` | When not URL-configured | |
+| `name` | `string` | Yes | |
+| `description` | `string` | No | Short description. |
+| `prompt` | `string` | No | Working prompt. |
+| `category` | `string` | No | Category label. |
+| `appearance` | object | Yes | `{ color }`, using a supported Agent palette color. |
+| `automation` | object | No | `{ enabled, prompt?, cliType?, cliModel?, cliEffort?, mode?, workspace? }` assignment-automation config. |
+
+Returns `{ "projectAgentId": "..." }`.
+
+### `update_project_agent`
+
+Edit an existing Project agent. Only specified fields are changed.
+
+| Argument | Type | Required | Notes |
+|---|---|---|---|
+| `projectAgentId` | `string` | Yes | Project agent ID. |
+| `name` | `string` | No | |
+| `description` | `string` \| `null` | No | Pass `null` to clear. |
+| `prompt` | `string` \| `null` | No | Pass `null` to clear. |
+| `category` | `string` \| `null` | No | Pass `null` to clear. |
+| `appearance` | object | No | `{ color }`, using a supported Agent palette color. |
+| `automation` | object \| `null` | No | `{ enabled, prompt?, cliType?, cliModel?, cliEffort?, mode?, workspace? }` — replaces the whole config; pass `null` to clear. |
+
+Returns `null`.
+
+Automation config: `enabled` (boolean, required) makes delegating a task to
+this agent in the web UI offer to start a prefilled thread; `prompt` (string)
+is the plain-text composer prefill; `cliType`, `cliModel`, `cliEffort`, and
+`mode` preselect the CLI runtime, model, reasoning effort, and mode;
+`workspace` (`"local"` or `"worktree"`) chooses between the selected checkout
+and a new worktree. Note that automation only triggers for delegations made
+in the Convoy web UI — delegating a task to an agent via MCP or the CLI
+never starts a thread.
+
+---
+
+## Prompts
+
+Prompts (slash commands) exist in two scopes: project prompts belong to a
+project, organization prompts belong to an organization. All three tools take
+the same scope arguments:
+
+| Argument | Type | Required | Notes |
+|---|---|---|---|
+| `scope` | enum | No | `project` (default) \| `organization`. |
+| `projectId` | `string` | When not URL-configured | Project scope only. |
+| `organization` | `string` | No | Organization scope only: slug or organization ID. Defaults to the organization owning the resolved project. |
+
+### `list_prompts`
+
+List active prompts for a project or an organization.
+
+Returns `promptId`, `scope`, `key`, `description`, `category`, `content`,
+`autoExpand`, and `autoSubmit` per prompt.
+
+### `create_prompt`
+
+Create a prompt in a project or an organization.
+
+| Argument | Type | Required | Notes |
+|---|---|---|---|
+| `key` | `string` | Yes | Key without the leading slash; 2–40 characters of lowercase letters, numbers, hyphens, and colons. Unique per scope owner. |
+| `content` | `string` | Yes | Content inserted into the composer. |
+| `description` | `string` | No | Short description. |
+| `category` | `string` | No | Category label. |
+| `autoExpand` | `boolean` | No | Default `false`. |
+| `autoSubmit` | `boolean` | No | Default `false`. |
+
+Returns `{ "promptId": "..." }`.
+
+### `update_prompt`
+
+Edit a prompt. Only specified fields are changed, and no scope argument is
+needed — the stored prompt carries its own scope.
+
+| Argument | Type | Required | Notes |
+|---|---|---|---|
+| `promptId` | `string` | Yes | Prompt ID. |
+| `key` | `string` | No | |
+| `content` | `string` | No | |
+| `description` | `string` \| `null` | No | Pass `null` to clear. |
+| `category` | `string` \| `null` | No | Pass `null` to clear. |
+| `autoExpand` | `boolean` | No | |
+| `autoSubmit` | `boolean` | No | |
+
+Returns `null`.
+
+Deleting a prompt is web-UI only.
+
+---
+
+## Skills
+
+A Skill is a `SKILL.md` plus optional additional files, addressed by relative
+path. `list_skills` and `create_skill` take a `scope` of `project` or
+`organization`, defaulting to **project** because an MCP connection is configured
+per project. `get_skill`, `update_skill`, and `delete_skill` take a `skillId`,
+which carries its own scope. An API key narrowed to specific projects cannot
+reach organization Skills — except through `install_skill`, which is authorized by
+the project it writes to.
+
+Agents read Skills through `load_skill` and `read_skill_file`, which see the
+project's Skills only. An organization Skill is a template: it reaches a project
+through `install_skill`, which copies it, and only then can an agent load it.
+
+Every write is one save of the Skill, however many files it touches: at most one
+`version` bump, and it cannot half-apply. A call that writes the content already
+stored succeeds without bumping — `version` is what tells a project its installed
+copy is behind, so a no-op must not move it. The caps — 50 files, 256 KB per
+file, 1 MB per Skill — are checked against the whole file set, so a write that
+breaks one changes nothing and reaches you as a plain tool error rather than an
+`ok: false` result.
+
+`list_skills` and `create_skill` take the same scope arguments:
+
+| Argument | Type | Required | Notes |
+|---|---|---|---|
+| `scope` | `string` | No | `project` (default) or `organization`. |
+| `projectId` | `string` | No | Project scope: the target project, when the connection is not URL-configured. Organization scope: only used to derive the organization default. |
+| `organization` | `string` | No | Organization scope only. Slug or organization ID; defaults to the organization owning the resolved project. Passing it in project scope is an error rather than a silent no-op, so an organization call needs `scope: "organization"` too. |
+
+Every other Skill tool takes a `skillId` or a Skill `name` instead.
+
+### `list_skills`
+
+List the project's or the organization's Skills. Returns `skillId`, `scope`,
+`name`, `description`, `category`, `version`, and `source` per Skill — no file
+content.
+
+### `get_skill`
+
+Get one Skill's whole bundle: the list fields plus `skillMd` and
+`files` (`[{ path, content }]`). Takes `skillId`.
+
+### `create_skill`
+
+Create a Skill. Takes the scope arguments above, plus:
+
+| Argument | Type | Required | Notes |
+|---|---|---|---|
+| `name` | `string` | Yes | 2–64 characters of lowercase letters, numbers, and hyphens. Unique within the project or the organization it is created in. |
+| `content` | `string` | Yes | `SKILL.md`, stored verbatim. Frontmatter in the body is never parsed and never feeds `name` or `description`. |
+| `description` | `string` | No | Shown when the Skill is offered to an agent. |
+| `category` | `string` | No | Category label. |
+| `source` | `object` | No | Where the Skill was copied from. See [Git provenance](#git-provenance). |
+
+Returns `{ "skillId": "..." }`. Add the Skill's other files with `update_skill`.
+
+### `update_skill`
+
+Edit a Skill: its columns, its whole `SKILL.md`, and/or its files. Only provided
+fields change.
+
+| Argument | Type | Required | Notes |
+|---|---|---|---|
+| `skillId` | `string` | Yes | Skill ID. |
+| `name` | `string` | No | |
+| `content` | `string` | No | New `SKILL.md`, stored verbatim. Use an `edits` entry to change part of it instead of resending the body. |
+| `description` | `string` \| `null` | No | Pass `null` to clear. |
+| `category` | `string` \| `null` | No | Pass `null` to clear. |
+| `source` | `object` \| `null` | No | New Git provenance — pass the new commit after copying an upstream update. `null` clears it. |
+| `edits` | `array` | No | File edits, applied in order. See below. |
+
+Returns `{ "ok": true, "version": 4 }` — the Skill's `version` after the save.
+
+There are no per-file tools: `edits` is how you touch a Skill's files. Each entry
+is an object whose `op` selects the rest of its fields, and every entry takes
+`path`, a relative POSIX path — no leading slash, no `..` segments.
+
+| `op` | Also takes | Effect |
+|---|---|---|
+| `write` | `content` | Create `path`, or overwrite it if it exists. `content` may be `""` for a placeholder or a truncation. |
+| `replace` | `oldString`, `newString`, `replaceAll` | Swap an exact string inside `path`. `newString: ""` deletes the match; `replaceAll` defaults to `false`, which requires exactly one match. `oldString` must match whitespace, newlines, and casing exactly. |
+| `move` | `newPath` | Rename `path`. Refuses to land on a path already in use. |
+| `delete` | — | Remove `path`. |
+
+Edits apply in order to the Skill's file set, and each sees the previous ones'
+results — rename a file, then edit it by its new path in the same call.
+`content` lands before them, so rewriting `SKILL.md` and patching the result
+compose. The whole call is one save, so a rejected edit writes nothing at all,
+your column changes included.
+
+`SKILL.md` is writable through `write` and `replace` but cannot be renamed or
+deleted — it is the Skill's entry point — and unlike an additional file it must
+never be blank.
+
+A `replace` that cannot be placed is reported instead of failing the call, so you
+can retry with a better `oldString`:
+
+```json
+{
+  "ok": false,
+  "index": 1,
+  "code": "multiple_matches",
+  "message": "oldString matches 2 locations in SKILL.md; pass replaceAll to replace every occurrence",
+  "occurrences": 2
+}
+```
+
+`index` is the position in `edits` of the edit that stopped the save. `code` is
+`old_string_not_found` (with `occurrences: 0`) or `multiple_matches`. Anything
+else — a missing file, a bad path, a cap breach — fails the call instead.
+
+### Git provenance
+
+A Skill copied out of a Git repository can record where it came from, so a later
+check can tell whether its author has released a new version. `create_skill` and
+`update_skill` take it as `source`, and `list_skills` and `get_skill` give it
+back.
+
+Every field is optional — record what you know. A `source` whose fields are all
+blank is not stored, and passing `source: null` to `update_skill` clears it.
+
+| Field | Type | Required | Notes |
+|---|---|---|---|
+| `repoUrl` | `string` | No | Repository URL, e.g. `https://github.com/owner/repo`. |
+| `commitSha` | `string` | No | The commit the copy is of — this is the version. 7–64 hex characters when given; a branch name is rejected, pass it as `ref`. |
+| `ref` | `string` | No | Branch or tag the copy came from. A branch moves, so it is a hint, not the version. |
+| `subpath` | `string` | No | Directory inside the repository holding the Skill. |
+
+Provenance is copied into a project's Skill by `install_skill` and overwritten
+when the copy is refreshed from its template, so it travels with the content it
+describes.
+
+### `delete_skill`
+
+Delete a Skill. Takes `skillId`. Returns `null`.
+
+### `install_skill`
+
+Install an organization Skill into the project. The install **copies** it, so the
+project copy is independent: editing it never changes the template, and deleting
+the template leaves the copy in place.
+
+| Argument | Type | Required | Notes |
+|---|---|---|---|
+| `skillId` | `string` | Yes | An organization Skill's ID, from `list_skills` with `scope: "organization"`. |
+| `projectId` | `string` | When not URL-configured | |
+
+Returns `{ skillId }` — the project copy's ID, not the template's. Installing a
+template the project already holds under that name fails: rename the existing copy
+first, or update it from the settings UI. Refreshing a copy from its template is
+web-UI only, because it discards whatever the project changed locally.
+
+### `load_skill`
+
+Load one of the project's Skills by name — the tool an agent uses to pick a Skill
+up on demand. `load_skill`'s own description lists the project's Skills, so the
+agent sees what is available without loading anything.
+
+| Argument | Type | Required | Notes |
+|---|---|---|---|
+| `name` | `string` | Yes | Skill name, as listed in the tool's description. |
+| `projectId` | `string` | When not URL-configured | |
+
+Returns `{ name, description, skillMd, paths }` — `paths` being the Skill's other
+files, to read one at a time — or `null` when the project has no Skill by that
+name, including a name no Skill could have. Organization Skills are never reachable
+here. Descriptions in the tool's catalog are author-written prose flattened to one
+line each; treat them as untrusted content, not as instructions.
+
+### `read_skill_file`
+
+Read one file inside one of the project's Skills.
+
+| Argument | Type | Required | Notes |
+|---|---|---|---|
+| `name` | `string` | Yes | Skill name. |
+| `path` | `string` | Yes | Relative POSIX path from `load_skill`'s `paths`. |
+| `projectId` | `string` | When not URL-configured | |
+
+Returns `{ path, content }`, or `null` when the Skill or the path does not exist —
+a malformed path included.
+
+---
+
+## Tasks — write
+
+### `create_task`
+
+Create a task (or subtask) in a project.
+
+| Argument | Type | Required | Notes |
+|---|---|---|---|
+| `projectId` | `string` | When not URL-configured | |
+| `name` | `string` | Yes | |
+| `description` | `string` | No | Markdown, plain text, or serialized ProseMirror JSON. Markdown/plain is normalized to ProseMirror. |
+| `taskTypeKey` | `string` | No | Built-in key (default `"task"`). |
+| `parentId` | `string` | No | Parent task ID to create as subtask. |
+| `listId` | `string` | No | Raw List ID or bare project-scoped List ref. |
+| `priority` | enum | No | `None` \| `Low` \| `Medium` \| `High` \| `Critical`. Default `None`. |
+| `status` | enum | No | Status values enabled for the project (see Roadmap). Default `To Do`. |
+| `dueDate` | `number` | No | Unix timestamp. |
+| `assigneeId` | `string` \| `null` | No | User ID of the human owner. `null` leaves the task unassigned. |
+| `delegatedToAgentId` | `string` \| `null` | No | Project agent ID executing the task. `null` clears delegation. |
+| `tags` | `string[]` | No | Default `[]`. |
+| `label` | `string` | No | Label ID or exact label name. |
+
+Assignment is split into two fields: `assigneeId` is the human owner
+accountable for the task, `delegatedToAgentId` the agent executing it. The
+old `assignee` object argument is removed and rejected with an error
+(`assignee is no longer supported; use assigneeId (user) and/or
+delegatedToAgentId (agent)`). Delegating a task that would have no owner
+auto-sets the caller as owner — pass `assigneeId: null` explicitly to keep
+it ownerless.
+
+**Return shape** (structured):
+
+```json
+{
+  "taskId": "kx9...",
+  "refId": "ABC-42",
+  "taskPath": "/o/acme/ABC?task=ABC-42",
+  "taskUrl": "https://app.example.com/o/acme/ABC?task=ABC-42"
+}
+```
+
+`refId`, `taskPath`, and `taskUrl` are `null` if the task was created
+but the ref or URL couldn't be resolved (e.g. missing app URL config).
+
+### `update_task`
+
+Patch an existing task. Pass `null` to clear optional fields.
+
+| Argument | Type | Required | Notes |
+|---|---|---|---|
+| `taskId` | `string` | Yes | |
+| `name` | `string` | No | |
+| `description` | `string` \| `null` | No | Markdown / plain / ProseMirror. `null` clears. |
+| `taskTypeKey` | `string` \| `null` | No | `null` resets to `"task"`. |
+| `priority` | enum | No | Same enum as `create_task`. |
+| `status` | enum | No | |
+| `dueDate` | `number` \| `null` | No | `null` clears. |
+| `assigneeId` | `string` \| `null` | No | User ID of the human owner. `null` unassigns. |
+| `delegatedToAgentId` | `string` \| `null` | No | Project agent ID executing the task. `null` clears delegation. |
+| `tags` | `string[]` | No | Replaces the tag list. |
+| `label` | `string` \| `null` | No | Label ID or exact label name. `null` clears. |
+| `checklist` | `string` \| `null` | No | Checklist ID or exact name. `null` means no checks. |
+
+Assignment follows the same split model as `create_task`: the old `assignee`
+object argument is rejected, clearing delegation keeps the owner, changing
+the owner keeps the delegation, and delegating a task with no owner
+auto-sets the caller as owner unless `assigneeId` is passed explicitly
+(`assigneeId: null` keeps it ownerless).
+
+### `create_task_label`
+
+Create a project label. Requires project admin permissions; max 20 labels
+per project. Returns `{ labelId }`.
+
+| Argument | Type | Required | Notes |
+|---|---|---|---|
+| `projectId` | `string` | When not URL-configured | |
+| `name` | `string` | Yes | Unique per project, max 50 chars. |
+| `color` | enum | No | Color from the extended palette. Default blue. |
+
+### `update_task_label`
+
+Rename or recolor a label. Tasks keep the label (they reference it by ID).
+Requires project admin permissions.
+
+| Argument | Type | Required | Notes |
+|---|---|---|---|
+| `projectId` | `string` | When not URL-configured | Used to resolve label names. |
+| `labelId` | `string` | Yes | Label ID or exact label name. |
+| `name` | `string` | No | |
+| `color` | enum | No | Color from the extended palette. |
+
+### `delete_task_label`
+
+Delete a label and resolve every task that references it. Requires project
+admin permissions. Returns `{ affectedTaskIds }`.
+
+| Argument | Type | Required | Notes |
+|---|---|---|---|
+| `projectId` | `string` | When not URL-configured | Used to resolve label names. |
+| `labelId` | `string` | Yes | Label ID or exact label name. |
+| `resolution` | enum | No | `clear` (default) removes the label from tasks; `reassign` moves them to `reassignTo`; `archiveTasks` clears the label and archives active tasks. |
+| `reassignTo` | `string` | For `reassign` | Target label ID or exact name. |
+
+## Checks and Checklists
+
+A Check is a claim an agent proves with evidence ("All tests pass"). A
+Checklist is an ordered set of Checks and can be the default for task types.
+Listing needs view access; the other tools need project admin permissions.
+Every tool takes `projectId` when the project is not URL-configured.
+
+### `list_checks`
+
+Returns `{ checks: [{ _id, key, label, instruction }] }`.
+
+### `get_checks`
+
+The Checks that apply to a task, or to a thread: its task's, or its own when it
+has no task (`taskId` is then `null`). Returns
+`{ taskId, checklist, checks }`, where each Check has `key`, `label`,
+`instruction`, `status` (`pending` until reported), and the latest `note`
+and `reportedAt`. A Check reported outside the Checklist has `added: true`.
+Agents report results with `convoy threads attach --check <key>`.
+
+| Argument | Type | Required | Notes |
+|---|---|---|---|
+| `taskId` | `string` | One of | Task ID or ref, e.g. `ABC-5`. |
+| `threadId` | `string` | One of | CLI thread ID. The thread must have a task. |
+
+### `create_check`
+
+Max 50 Checks per project. Returns `{ checkId }`.
+
+| Argument | Type | Required | Notes |
+|---|---|---|---|
+| `key` | `string` | Yes | Unique and immutable. Lowercase `a-z`, `0-9`, `-`, `_`; max 40 chars. |
+| `label` | `string` | Yes | Max 100 chars. |
+| `instruction` | `string` | No | Prompt telling the agent how to prove it. Max 2000 chars. |
+
+### `update_check`
+
+Change a Check's label or instruction. The key cannot change; passing `key`
+is an error.
+
+| Argument | Type | Required | Notes |
+|---|---|---|---|
+| `checkId` | `string` | Yes | Check ID or key. |
+| `label` | `string` | No | |
+| `instruction` | `string` | No | An empty string clears it. |
+
+### `delete_check`
+
+Delete a Check and remove it from every Checklist. Takes `checkId` (ID or key).
+
+### `list_checklists`
+
+Returns `{ checklists: [{ _id, name, checkKeys, taskTypeKeys }] }`.
+
+### `create_checklist`
+
+Max 20 Checklists per project. Returns `{ checklistId }`.
+
+| Argument | Type | Required | Notes |
+|---|---|---|---|
+| `name` | `string` | Yes | Unique per project, max 50 chars. |
+| `checkKeys` | `string[]` | No | Ordered check keys. |
+| `taskTypeKeys` | `string[]` | No | Task types that default to this Checklist. A type moves off any other Checklist that had it. |
+
+### `update_checklist`
+
+| Argument | Type | Required | Notes |
+|---|---|---|---|
+| `checklistId` | `string` | Yes | Checklist ID or exact name. |
+| `name` | `string` | No | |
+| `checkKeys` | `string[]` | No | Replaces the list. |
+| `taskTypeKeys` | `string[]` | No | Replaces the list. |
+
+### `delete_checklist`
+
+Delete a Checklist. Tasks that picked it fall back to their task type's
+default. Takes `checklistId` (ID or exact name).
+
+### `update_task_link`
+
+Upsert or delete a single external link on a task (commit, branch, pull
+request, or generic URL). Returns `{ taskId, externalLinks }` with the full
+updated list.
+
+| Argument | Type | Required | Notes |
+|---|---|---|---|
+| `taskId` | `string` | Yes | Task document ID or ref. |
+| `projectId` | `string` | When resolving bare refs without URL-configured project | |
+| `op` | enum | Yes | `"upsert"` or `"delete"` (idempotent). |
+| `id` | `string` | Yes | Stable caller-generated link ID (1–160 chars of `a-zA-Z0-9._:-`). Use deterministic IDs like `github-pr-owner-repo-123` so repeated upserts update instead of duplicating. |
+| `link` | object | For upsert | Kind-discriminated payload, see below. |
+
+Link payload kinds — required, then optional fields:
+
+| `kind` | Required | Optional |
+|---|---|---|
+| `commit` | `sha` (7–64 hex) | `title`, `repo`, `branch`, `url` |
+| `branch` | `name` | `repo`, `url` |
+| `pull_request` | `url` | `title`, `identifier`, `repo`, `branch` |
+| `url` | `url` | `title` |
+
+Upsert replaces the whole link in place (original `createdAt` is preserved).
+URLs must be http(s). Tasks hold at most 20 links.
+
+### `move_task`
+
+Move a task under a new parent, or back to top-level.
+
+| Argument | Type | Required | Notes |
+|---|---|---|---|
+| `taskId` | `string` | Yes | Task document ID, bare ref, or scoped ref like `org-slug/ABC-5`. |
+| `parentId` | `string` \| `null` | Yes | New parent ref or ID; `null` moves the task to top-level. |
+| `projectId` | `string` | When using bare refs without URL-configured project | |
+
+LexoRank generation stays server-side — callers don't pass a rank.
+
+### `move_tasks_to_list`
+
+Move one or more existing tasks into an active project List. Moved tasks land
+in the destination List's "No section".
+
+| Argument | Type | Required | Notes |
+|---|---|---|---|
+| `taskIds` | `string[]` | Yes | Up to 25 task IDs or refs. Parent/child overlap is rejected. |
+| `listId` | `string` | Yes | Raw List ID or bare project-scoped List ref. |
+| `projectId` | `string` | When resolving bare refs without URL-configured project | |
+
+### `delete_task`
+
+Soft-delete a task. Deleted tasks are permanently removed after 30 days.
+
+| Argument | Type | Required | Notes |
+|---|---|---|---|
+| `taskId` | `string` | Yes | |
+| `cascadeMode` | `"delete_all"` \| `"keep_children"` | No | Default `delete_all`. `keep_children` reparents subtasks up one level. |
+
+---
+
+## Task types
+
+### `list_task_types`
+
+List the built-in and org-scoped task types available to this API key.
+
+| Argument | Type | Required | Notes |
+|---|---|---|---|
+| — | — | — | No arguments. |
+
+---
+
+## Comments
+
+### `create_task_comment`
+
+Create a markdown comment on a task.
+
+| Argument | Type | Required | Notes |
+|---|---|---|---|
+| `taskId` | `string` | Yes | |
+| `content` | `string` | Yes | Markdown. Must be non-empty after trimming. |
+
+---
+
+## Artifacts
+
+Artifacts are durable document deliverables (markdown or html) attached to a task
+(plans, reviews, handoff docs). Distinct from comments and attachments
+— see [Using Convoy](/docs/using) for the product-level distinction.
+
+### `list_task_artifacts`
+
+List artifacts for a task.
+
+| Argument | Type | Required |
+|---|---|---|
+| `taskId` | `string` | Yes |
+
+### `get_task_artifact`
+
+Get a single artifact by ID, optionally with its comment threads.
+
+| Argument | Type | Required | Notes |
+|---|---|---|---|
+| `artifactId` | `string` | Yes | |
+| `includeComments` | `boolean` | No | Adds a `comments` array of threads (same shape as `list_artifact_comments`). Default `false`. |
+| `commentsStatus` | `string` | No | With `includeComments`, only threads whose root is `open` or `resolved`. Default: all. |
+
+### `create_task_artifact`
+
+Create a document artifact on a task.
+
+| Argument | Type | Required | Notes |
+|---|---|---|---|
+| `taskId` | `string` | Yes | |
+| `name` | `string` | Yes | Artifact title. |
+| `content` | `string` | No | Artifact body. Default empty string. |
+| `contentType` | `string` | No | `markdown` (default) or `html`. Immutable after creation. `html` artifacts render read-only in the UI. |
+| `runId` | `string` | No | Optional provenance identifier. |
+
+### `update_task_artifact`
+
+Patch an existing artifact. Only provided fields are changed.
+
+| Argument | Type | Required | Notes |
+|---|---|---|---|
+| `artifactId` | `string` | Yes | |
+| `name` | `string` | No | |
+| `content` | `string` | No | |
+| `runId` | `string` \| `null` | No | `null` clears an existing `runId`. |
+
+### `replace_in_task_artifact`
+
+Replace an exact string in artifact content.
+
+| Argument | Type | Required | Notes |
+|---|---|---|---|
+| `artifactId` | `string` | Yes | |
+| `oldString` | `string` | Yes | Exact existing string. Must be non-empty. |
+| `newString` | `string` | Yes | Replacement string. May be empty. |
+| `replaceAll` | `boolean` | No | Defaults to `false`; when false, exactly one match is required. |
+
+Zero-match and multiple-match failures return an MCP tool error (`isError: true`)
+inside a successful JSON-RPC response.
+
+### `move_task_artifact`
+
+Move an artifact to another task in the same project. The artifact leaves the
+source task, taking its comments with it.
+
+| Argument | Type | Required | Notes |
+|---|---|---|---|
+| `artifactId` | `string` | Yes | |
+| `taskId` | `string` | Yes | Target task ID or ref (e.g. `ABC-5`). Must be in the same project. |
+| `projectId` | `string` | No | Required to resolve a ref on a connection with no `?project=` default. |
+
+### `delete_task_artifact`
+
+Delete an artifact.
+
+| Argument | Type | Required |
+|---|---|---|
+| `artifactId` | `string` | Yes |
+
+---
+
+## Artifact comments
+
+Comments anchored to text snippets in markdown artifacts. Each thread is a
+root comment (with an anchor and an `open`/`resolved` status) plus flat
+replies.
+
+### `list_artifact_comments`
+
+List an artifact's comment threads.
+
+| Argument | Type | Required | Notes |
+|---|---|---|---|
+| `artifactId` | `string` | Yes | |
+| `status` | `string` | No | Only threads whose root is `open` or `resolved`. Default: all. |
+
+Returns `{ threads: [...] }`; each thread carries `commentId`, `status`,
+`anchorText` (the quoted snippet), `authorName`, `content`, `createdAt`,
+`isEdited`, and `replies`.
+
+### `create_artifact_comment`
+
+Comment on a text snippet in a markdown artifact.
+
+| Argument | Type | Required | Notes |
+|---|---|---|---|
+| `artifactId` | `string` | Yes | |
+| `content` | `string` | Yes | Comment body (markdown). |
+| `anchorText` | `string` | Yes | Exact snippet from the artifact content. Whitespace, newlines, and casing must match. |
+| `occurrence` | `number` | No | Which match of `anchorText` to use when it appears multiple times (1-based, default 1). |
+
+The server derives the full anchor (context + offsets) from `anchorText`;
+fails if the text is not found in the artifact content.
+
+### `reply_to_artifact_comment`
+
+Reply to a root artifact comment. Replies are flat — replying to a reply fails.
+
+| Argument | Type | Required |
+|---|---|---|
+| `commentId` | `string` | Yes |
+| `content` | `string` | Yes |
+
+### `set_artifact_comment_status`
+
+Resolve or un-resolve root artifact comments in one atomic batch.
+
+| Argument | Type | Required | Notes |
+|---|---|---|---|
+| `commentIds` | `string[]` | Yes | Root comment IDs (1–100). |
+| `status` | `string` | Yes | `open` or `resolved`. |
+
+---
+
+## CLI profiles
+
+### `list_cli_profiles`
+
+List your CLI profiles (connected machines) in a project, with online
+state, the CLI runtimes each one advertises, and the checkouts it
+exposes. This is how an agent picks a target before spawning a CLI
+thread.
+
+| Argument | Type | Required | Notes |
+|---|---|---|---|
+| `projectId` | `string` | When not URL-configured | |
+
+Per profile, returns `profileId`, `name`, `hostname`, `isOnline`,
+`lastConnectedAt`, `appVersion` (the `@useconvoy/cli` version the online
+session reported), `availableClis` (`{ type, version, provider?, cliModels? }` —
+`type` is a `cliType`, and `cliModels` is `{ model, efforts? }[]`: the `cliModel`
+values that runtime accepts on that machine, each with its valid `cliEffort`
+values; omit either to use the runtime's own defaults), and `paths` (`{ pathId, path, label, gitRemoteUrl?, kind?,
+parentPathId?, branch? }`, where `kind: "worktree"` marks a worktree
+rather than a repo checkout).
+
+API keys are personal, so this returns only profiles you own. An offline
+profile is still a usable target — work queued against it starts once
+that CLI connects.
+
+---
+
+## Threads
+
+### `get_thread`
+
+Get one CLI thread: its title, status, queue state, and the target it
+runs on. An agent running inside a thread is told its own ID at session
+start, so this is how it discovers its own machine and checkout before
+spawning another thread there.
+
+| Argument | Type | Required | Notes |
+|---|---|---|---|
+| `threadId` | `string` | Yes | A thread ID, or a thread group / workflow run container ID. |
+
+No `projectId` — a thread ID is globally unique and the project comes
+from the thread.
+
+For an ordinary thread, returns `threadId`, `title`, `status`, `isDone`,
+`createdAt`, `lastActivityAt`, `associatedTaskId`, `parentThreadId`
+(the thread group it belongs to, if any), `spawnedByThreadId` (the
+thread whose agent created it), the target — `profileId`, `pathId`,
+`path`, `cliType`, `profileName` — and its queue state:
+`processingState`, `hasPendingUserMessages`, `hasPendingInteraction`,
+`queueHeldAt`. `targetOnline` and `lastHeartbeatAt` describe the target
+machine; an offline target just means work stays queued until that CLI
+connects.
+
+For a **thread group or workflow run** container, returns `kind`,
+`childCount`, `aggregateStatus` (`idle`, `running`, `needs_attention`,
+or `failed`), and `originThreadId` — and no target, because a container
+has nothing to execute and cannot receive messages. It also returns no
+`status`: `aggregateStatus` is a container's only status, and reflects
+its children. Pass the container's ID to `list_threads` for the members.
+
+A thread that does not exist, one belonging to someone else, and an ID
+that is not a thread ID at all all come back as a "Thread not found"
+error. Threads shared with you by a project teammate are readable,
+including the individual threads inside a shared group.
+
+### `list_threads`
+
+List the CLI threads in a project, most recent activity first — or the
+members of one thread group.
+
+| Argument | Type | Required | Notes |
+|---|---|---|---|
+| `projectId` | `string` | When not URL-configured | Project ID. Not needed when `threadId` is set. |
+| `threadId` | `string` | No | A thread group / workflow run container ID: list that group's members instead of the project's threads. |
+| `includeDone` | `boolean` | No | Include threads marked done. Default `false`. |
+| `limit` | `integer` | No | Page size, 1–50. Default `20`. Ignored when `threadId` is set. |
+| `cursor` | `string \| null` | No | Pagination cursor. Default `null`. Not used when `threadId` is set. |
+
+Every row carries the same fields as [`get_thread`](#get_thread), so you
+can act on a listed thread — send it a message, spawn a Group child on its
+machine — without a second call.
+
+A **thread group or workflow run** appears as a single row (`kind`,
+`childCount`, `aggregateStatus`) rather than as its members, so a page of
+20 rows is 20 separate pieces of work. A row with `kind` set is one you
+can drill into: pass its `threadId` back in to list the members, which
+come back as ordinary threads with full targets.
+
+A group is capped at 100 members and the drill-down returns **all** of
+them in one page — `limit` and `cursor` apply to the project list only. So
+a group can come back larger than the `limit` you asked for. Drilling into
+a group needs no `projectId` either: the container ID is enough to find it.
+
+Threads you have marked done are left out unless you set `includeDone`.
+
+Only your own threads appear in the project list, even in a project you
+share with teammates. The exception is drilling into a group a teammate
+shared with you: its members are readable, the same as opening the group
+in the web app.
+
+An ID you cannot read — a deleted group, someone else's, a typo'd one, or
+an ordinary thread rather than a group — returns an empty list rather than
+an error. Use `get_thread` when you need to know whether a specific ID is
+valid.
+
+### `list_thread_messages`
+
+Read the most recent messages in a CLI thread, oldest first — what the
+agent said, and what was said to it.
+
+| Argument | Type | Required | Notes |
+|---|---|---|---|
+| `threadId` | `string` | Yes | A thread ID. Not a thread group / workflow run container ID. |
+| `limit` | `integer` | No | How many of the most recent messages to return, 1–20. Default `10`. |
+
+No `projectId` — as with [`get_thread`](#get_thread), the thread ID is
+enough.
+
+Per message, returns `messageId`, `role` (`user` or `assistant`),
+`status`, `createdAt`, `text`, `truncated` (only when something was cut),
+`sentBy` (present when another thread's agent queued the message rather
+than a person), and `errorMessage` (the CLI's reason, on the message the
+failing run was working on). A `status` of `streaming` means the `text`
+is whatever had arrived when you read it.
+
+**`text` is the agent's text output only.** Tool calls, tool output,
+reasoning, and attachments are not included, so a message that only ran
+tools comes back with empty text — an empty entry, not an error, and not a
+sign the thread is quiet. Each message is capped at about 4000
+characters. `truncated: true` marks a message you did not receive in
+full; it fires on rows that went unread, which on a tool-heavy run
+includes rows that held no prose.
+
+**There is no cursor** — `limit` is the whole window, so the older turns
+of a long thread are not reachable through this tool.
+
+A **thread group or workflow run** returns an error rather than an empty
+list: it has no transcript and never will. Pass its ID to
+[`list_threads`](#list_threads) for the members and read one of those. A
+thread you cannot read — missing, someone else's, or a typo — returns an
+empty list, the same as `list_threads`. Threads shared with you by a
+teammate are readable, including the threads inside a shared group.
+
+### `create_thread`
+
+Start a new CLI thread with an initial message. An agent running inside a
+thread is told its own ID at session start, so passing that as
+`sourceThreadId` is how it hands work to a second agent on the same
+machine and checkout.
+
+| Argument | Type | Required | Notes |
+|---|---|---|---|
+| `content` | `string` | Yes | The initial user message — the new thread's prompt. |
+| `sourceThreadId` | `string` | No | Spawn beside this thread, inheriting its target. Accepts a thread group container ID. |
+| `profileId` | `string` | Without a source | Target machine, from [`list_cli_profiles`](#list_cli_profiles). |
+| `pathId` | `string` | Without a source | Checkout on that profile. Also required when `profileId` names a different machine than the source's. |
+| `cliType` | `string` | Without a source | CLI runtime, from that profile's `availableClis`. |
+| `title` | `string` | No | Defaults to a title derived from `content`. |
+| `taskId` | `string` | No | Task ID or ref (e.g. `ABC-5`) to attach the thread to. |
+| `projectId` | `string` | No | Only to resolve a bare `taskId` ref when the connection has no default project. Must match the target profile's project. |
+| `cliModel` | `string` | No | Model for the runtime to use. |
+| `cliEffort` | `string` | No | Reasoning-effort level, for runtimes that support one. |
+| `cliMode` | `string` | No | CLI mode to start in, e.g. `plan`. |
+| `runtimeCommand` | `boolean` | No | Open the thread by running `content` as the target agent's own slash command instead of sending it as a prompt. |
+| `projectAgentId` | `string` | No | Project agent to run the thread as, from [`list_project_agents`](#list_project_agents). |
+| `worktree` | `object` | No | Run in a fresh git worktree: `{ parentPathId, branch, baseRef?, startFromOrigin? }`. |
+
+With `sourceThreadId`, the target — `profileId`, `pathId`, `cliType` — is
+inherited from that thread. Without a source, all three are required.
+
+`cliType` can be sent on its own to change just the runtime. `pathId`,
+though, only identifies a checkout **on its own profile** — path IDs are
+not shared between machines — so spawning onto a different `profileId`
+means sending its `pathId` too, or the call is rejected.
+
+**Spawning groups the two threads together.** The source thread's row in
+the sidebar becomes a thread group with tabs, and a pin or a share on it
+moves to the group. That is the same thing that happens when a person adds
+a thread from the group's "+" button — only the initiator differs.
+`sourceThreadId` also accepts a **thread group** container ID, meaning
+"add a thread to this group"; a member is chosen for you. Workflow containers
+work the same way. Added threads run independently of workflow steps and
+keep running when the workflow is canceled. If the container has no live
+threads, provide `profileId`, `pathId`, and `cliType` explicitly.
+
+A group cannot span projects, so the target profile has to be in the
+source thread's project.
+
+A group holds at most 100 threads, and that count includes deleted ones —
+so a group can be full with far fewer than 100 threads visible, and
+retrying will not help.
+
+**`worktree` starts the thread in its own branch.** Without it the thread runs
+in the checkout itself, sharing the working tree with anything else running
+there. With it, the CLI creates a worktree when it claims the thread and runs
+there instead. The parent is the checkout the thread would otherwise have used,
+so `parentPathId` must equal the effective `pathId` — the one you sent, or the
+one inherited from `sourceThreadId`. A worktree cannot be a parent, so spawning
+beside a thread that is *already* in a worktree means sending the parent repo's
+`pathId` yourself; [`list_cli_profiles`](#list_cli_profiles) reports each path's
+`kind` and `parentPathId`. `branch` and `baseRef` are validated as git refnames
+and never sanitized for you. `baseRef` defaults to the repo's current HEAD;
+`startFromOrigin` starts from the remote's copy of it instead.
+
+**`projectAgentId` runs the thread as a Project agent**, from
+[`list_project_agents`](#list_project_agents). The agent has to belong to the
+target profile's project. Its prompt is snapshotted onto the thread at creation,
+so later edits to the agent do not change a running thread, and the binding
+cannot be changed afterwards. The agent's assignment-automation defaults —
+runtime, model, worktree preference — are **not** applied here; they belong to
+the web UI's composer, so `worktree` is always an explicit request.
+
+Neither field is inherited from `sourceThreadId`, unlike the target tuple. A
+spawned thread runs unbound, in the source's checkout, unless you say otherwise.
+Neither is echoed back in the response either: the returned summary shows the
+**parent** path and no worktree or agent field, so treat the absence of an error
+as the receipt.
+
+Returns the new thread exactly as [`get_thread`](#get_thread) would. Check
+`targetOnline`: the thread starts `pending`, and if the target machine is
+offline it stays queued until that CLI connects. The spawned thread does
+**not** run inside your process and you will not see its reply — read it
+later with [`list_thread_messages`](#list_thread_messages), or have that
+agent report back.
+
+Attachments are not supported here. Put the content inline in `content`,
+or a path the **target** machine can read — which is your own machine only
+when you spawned from a source thread on it.
+
+**Opening on the target's own slash command.** Set `runtimeCommand: true` to
+start the thread by running a command the target agent already has
+(`/security-review`), rather than sending `content` as a prompt. The same rule
+as [`send_thread_message`](#send_thread_message) applies: `content` is the
+whole command and must start with `/`. Convoy prompts from
+[`list_prompts`](#list_prompts) are **not** these — pass their `content` as
+ordinary `content`.
+
+Only `claude-code` and `codex` targets accept it. `cursor` and `opencode`
+inject the thread's identity and its bound project agent's prompt into the
+first message of a fresh session, so a raw command there would either displace
+that bootstrap or skip it for the thread's whole life — those `cliType`s are
+rejected outright. Send the command with
+[`send_thread_message`](#send_thread_message) once the thread has run instead.
+On `codex`, `/compact` compacts context and `/usage` reads the connected ChatGPT
+account quota without starting a model turn. Usage also works on a new thread.
+
+**Every spawned thread is a real agent run that costs money.** The tool
+description asks an agent to spawn only what it was told to, to report back
+rather than spawn again if it is itself a spawned thread, and not to spawn
+just because its prompt discusses delegation — a spawned agent given a
+prompt that *described* spawning has been observed doing exactly that. That
+guidance is cooperative; enforced spawn limits are tracked separately.
+
+### `send_thread_message`
+
+Queue a message in a thread that already exists. This is how a spawned
+agent reports back to the thread that spawned it, and how one agent nudges
+another.
+
+| Argument | Type | Required | Notes |
+|---|---|---|---|
+| `threadId` | `string` | Yes | Thread to post into. Not a thread group or workflow run container ID. |
+| `content` | `string` | Yes | The message text, delivered as a user message. |
+| `sourceThreadId` | `string` | No | Your own thread ID, so the message shows as sent by an agent rather than a person. Must be in the same project as `threadId`. |
+| `runtimeCommand` | `boolean` | No | Run `content` as the target agent's own slash command instead of sending it as text. |
+
+**It does not resume a paused agent.** The message is queued and the target
+CLI starts a **new run** — one that resumes the runtime session, so the
+agent keeps its prior context and reads your message as a fresh user turn.
+
+That has a consequence worth planning around: **"spawn a thread and wait
+for its answer" does not work.** Your turn ends after spawning; the reply
+arrives later as a message that wakes your thread up again. You will not
+see it in the same turn, and if you want to check for it yourself, poll
+[`list_thread_messages`](#list_thread_messages).
+
+**Check `hasPendingUserMessages`, not `status`, to confirm a send landed.**
+An idle target becomes `pending`; a target that is mid-run keeps its
+current status and picks the message up on its next turn. Both queued the
+message. An offline target queues it until that CLI connects. None of these
+is an error.
+
+Only your own threads count, as source and as target, and both have to be
+in the same project. Thread groups and workflow runs can neither send nor
+receive — pass a group ID to [`list_threads`](#list_threads) and use one of
+its members.
+
+To make a spawned agent report back, say so in the prompt you give it and
+include your own thread ID. Every runtime is told its thread ID at the
+start of a session — usually in the `CONVOY_THREAD_ID` environment
+variable, though OpenCode receives it in the prompt instead. Nothing
+enforces the report-back; the agent has to cooperate.
+
+**Running the target's own slash commands.** Set `runtimeCommand: true` and
+the CLI hands `content` to the agent as a command instead of as text, so
+`/compact` compacts that thread's context. `content` must be the whole
+message and start with `/`; anything else is rejected. This is the same
+mechanism the web composer's `/` menu uses, so it works where that does —
+`/compact` on `claude-code`, `codex` and `opencode` threads.
+
+There is no way to list a thread's commands over MCP, and an unrecognized
+command behaves differently per runtime: `claude-code` and `cursor` also run
+their own custom commands and skills, `opencode` fails the run on a name it
+does not know, and **`codex` executes `/compact` and `/usage`**. Any other command
+reaches it as ordinary text, which it may answer as if it had run.
+
+---
+
+### `mark_thread_done`
+
+Mark an owned thread done and read, acknowledging its current attention state.
+Requires `threadId`, a string. Pass `done: false` to mark it not done instead;
+`done` defaults to `true`. Returns `{ threadId }` after the mutation succeeds.
+Groups and workflow runs cascade to their live children. Ownership and
+`CLI_THREAD` permission apply to the thread's project, including API-key scope;
+no default project is required. Missing, deleted, or inaccessible threads fail.
+
+Works on a running thread, so an agent can mark its own thread done before it
+finishes. This does not stop execution. The mark stays until someone marks the
+thread not done, marks it unread, or sends it a new message.
+
+---
+
+### `attach_task_to_thread`
+
+Attach a task to an owned thread that was started without one — the
+agent that created a task mid-run binds its own thread to it. Requires
+`threadId` and `taskId` (raw ID or ref; a ref resolves in the thread's own
+project, not the connection's). Returns the thread as `get_thread` would.
+
+The thread then appears on the task like one created with `taskId`: Runs
+column, task timeline and sidebar Threads field. The first attach also logs
+"attached thread" in the task's activity. Attach-once: the same task
+again is a no-op; a thread attached to another task, a group or workflow run
+container, or a task outside the thread's project is rejected. Ownership and
+`CLI_THREAD` permission apply, including API-key scope.
+
+---
+
+### `attach_pull_request_to_thread`
+
+Attach a GitHub pull request to an owned thread that has none, such as the
+PR the thread opened or is reviewing. Requires `threadId` and `pullRequest`:
+a github.com PR URL or `owner/repo#number`. Returns the thread as
+`get_thread` would.
+
+Attach-once: the same PR again is a no-op; a thread attached to another PR,
+or a group or workflow run container, is rejected. Ownership and
+`CLI_THREAD` permission apply, including API-key scope.
+
+## Authentication and errors
+
+- **Auth.** Every request must carry `Authorization: Bearer <api-key>`.
+  API keys are user-scoped and inherit that user's Convoy permissions
+  (see [API keys](/docs/cli/api-keys)).
+- **Error envelope.** Errors follow the JSON-RPC 2.0 shape. Common
+  codes: `-32700` (parse error), `-32001` (unauthorized), `-32603`
+  (internal error).
+- **Permission errors.** These surface as structured errors with
+  human-readable messages; the MCP layer does not invent new
+  permissions — authorization still runs through Convoy's
+  organization / project permission helpers.
+
+## See also
+
+- [Set up MCP](/docs/cli/mcp) — generate or hand-write the client
+  config that points at this endpoint.
+- [MCP workflows and scoping](/docs/cli/mcp/workflows-and-scoping) —
+  keep project, repo path, and client config aligned.
+- [MCP troubleshooting](/docs/cli/mcp/troubleshooting) — when the
+  client connects but tools misbehave.
+
+### Task List grouping defaults
+
+`create_task_list` and `update_task_list` accept `defaultListGroupBy` when
+`defaultViewMode` is `list`: `none`, `status`, `assignee`, `owner`, `priority`,
+`type`, `label`, or `section`. `defaultBoardGroupBy` also accepts `owner`. Owner grouping
+uses the human owner, while Assignee uses the delegated agent when present.
+Section grouping uses the List's own sections; sections are managed in the app.
+
+Default-view grouping arguments on `create_task_list` and `update_task_list` require
+the matching `defaultViewMode` in the same call: `list` for `defaultListGroupBy`,
+`board` for `defaultBoardGroupBy`. Missing or incompatible modes are rejected;
+grouping values are never silently ignored.

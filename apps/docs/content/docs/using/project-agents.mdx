@@ -1,0 +1,96 @@
+---
+title: Project agents
+description: Create reusable agent personas, select them for threads, and configure task delegation.
+---
+
+A Project agent gives an AI thread a name and a reusable working prompt. For
+example, a Reviewer agent can carry your review criteria so you do not have to
+paste them into every new thread.
+
+The agent, runtime, and connection have separate jobs. The Project agent supplies
+the persona and prompt. A runtime such as Claude Code or Codex executes the work.
+Your CLI profile and selected path choose the machine connection and working
+directory. Create a connection with [Install and connect](/docs/cli) before
+starting a thread.
+
+## Create a project agent
+
+1. Open your project's settings and choose **AI Agents**.
+2. Choose **New agent**. Enter a name, an optional description and category,
+   and a color.
+3. Write the agent's **Prompt**. Describe how it should work across tasks, rather
+   than putting one task's request here.
+4. Save the agent.
+
+For a Reviewer, a short prompt might be:
+
+```text
+Review the requested changes for correctness and regressions.
+Read the relevant specification before judging behavior.
+Give each finding a concrete trigger and a file location.
+Do not change files unless the user asks you to fix a finding.
+```
+
+Project admins and members can manage Project agents. Viewers can read them but
+cannot create, edit, delete, or delegate work to them. An agent has no project
+membership or permissions of its own. Threads run with the connecting user's
+access.
+
+## Start a thread with an agent
+
+In a new-thread composer, choose the agent in the context bar, select your
+connection, path, and runtime, then write and send the task request. **Default**
+starts without a Project agent. The agent selector appears when the project has
+active agents.
+
+Convoy binds the agent to that thread and copies its prompt at creation. The
+agent chip shows the binding alongside the thread's context. You cannot switch
+the agent on an existing thread. Editing or deleting the Project agent later
+does not change the prompt an existing thread uses; start a new thread to use
+the revised prompt.
+
+An agent can have no prompt. In that case its name still identifies the thread,
+but it adds no working instructions.
+
+## Reuse an agent
+
+The menu beside **New agent** offers **From template** and **From project**.
+
+Organization settings hold Agent templates. Installing one copies its name,
+prompt, description, category, and appearance into your project. You can edit
+the copy without changing the template. A newer template version makes
+**Update** available; **Reset** restores a locally edited copy to its current
+template. Both replace the copied fields after confirmation, so preserve any
+local prompt edits you want to keep before applying them.
+
+**From project** copies an agent from another project you can view. The imported
+agent is independent and has no template update relationship with the source.
+
+## Delegate a task
+
+Choose an agent under **AI Agents** in a task's assignee control. This sets the
+task's delegation. The human assignee remains accountable for the task. If the
+task has no owner, a normal delegation assigns ownership to you.
+
+Delegation alone records who is doing the work. A Project agent's optional
+**Automation** settings can also prepare a thread when you delegate through the
+web interface. Configure its first message, preferred runtime, model, effort,
+mode, and whether to work locally or in a new worktree.
+
+By default, delegation opens a prefilled composer with the task and agent
+attached. Check your connection and path, edit the request, then send. Canceling
+the composer keeps the delegation but creates no thread. The reusable agent
+Prompt and this first-message prompt are separate fields.
+
+You can opt into **Auto-start next time** when sending. This is your preference
+for that project, not a setting shared with teammates. Change it later in your
+user settings under **Agents**. Delegation through MCP, the CLI, or bulk updates
+does not trigger this web automation.
+
+Selecting an automation-enabled agent manually in a new-thread composer also
+seeds its configured defaults. You can change those defaults before sending;
+Convoy preserves text you have already edited. Each user still selects their
+own connection and path.
+
+For reusable messages, see [Prompts / Slash commands](/docs/using/prompts). For
+procedures an agent loads when needed, see [Skills in Convoy](/docs/using/skills).

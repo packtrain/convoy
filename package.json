@@ -1,0 +1,59 @@
+{
+  "name": "convoy",
+  "private": true,
+  "packageManager": "pnpm@10.13.1+sha512.37ebf1a5c7a30d5fabe0c5df44ee8da4c965ca0c5af3dbab28c3a1681b70a256218d05c81c9c0dcf767ef6b8551eb5b960042b9ed4300c59242336377e01cfad",
+  "engines": {
+    "pnpm": ">=10 <11"
+  },
+  "scripts": {
+    "devcontainer": "bash scripts/devcontainer.sh",
+    "sandbox": "bash scripts/devcontainer.sh sandbox",
+    "landing:dev": "pnpm --filter @convoy/landing run dev",
+    "landing:build": "pnpm --filter @convoy/landing run build",
+    "landing:start": "pnpm --filter @convoy/landing run start",
+    "landing:lint": "pnpm --filter @convoy/landing run lint",
+    "docs:dev": "pnpm --filter docs run dev",
+    "docs:build": "pnpm --filter docs run build",
+    "docs:lint": "pnpm --filter docs run lint",
+    "docs:types:check": "pnpm --filter docs run types:check",
+    "web:dev": "pnpm --filter @convoy/web run dev",
+    "web:build": "pnpm --filter @convoy/web run build",
+    "web:start": "pnpm --filter @convoy/web run start",
+    "web:lint": "pnpm --filter @convoy/web run lint",
+    "web:test": "pnpm --filter @convoy/web run test",
+    "web:test:once": "pnpm --filter @convoy/web run test:once",
+    "web:test:coverage": "pnpm --filter @convoy/web run test:coverage",
+    "web:convex:dev": "pnpm --filter @convoy/web exec convex dev --tail-logs always",
+    "worktree:setup": "node scripts/worktree-setup.mjs",
+    "worktree:convex:deploy": "node scripts/worktree-setup.mjs deploy",
+    "worktree:dev": "node scripts/worktree-setup.mjs dev",
+    "cli:dev": "tsx --tsconfig apps/cli/tsconfig.json apps/cli/bin/convoy.ts",
+    "cli:deploy": "tsx apps/cli/scripts/deploy.ts",
+    "cli:build": "pnpm --filter @useconvoy/cli run build",
+    "cli:start": "pnpm --filter @useconvoy/cli run start",
+    "cli:lint": "pnpm --filter @useconvoy/cli run lint",
+    "cli:test": "pnpm --filter @useconvoy/cli run test",
+    "cli:test:once": "pnpm --filter @useconvoy/cli run test:once",
+    "cli:test:coverage": "pnpm --filter @useconvoy/cli run test:coverage",
+    "desktop:dev": "pnpm --filter @convoy/desktop exec tauri dev",
+    "desktop:build": "pnpm --filter @convoy/desktop exec tauri build",
+    "desktop:types:check": "pnpm --filter @convoy/desktop exec tsc --noEmit",
+    "cli-agent-sdk:dev": "pnpm --filter @convoy/cli-agent-sdk run dev",
+    "cli-agent-sdk:build": "pnpm --filter @convoy/cli-agent-sdk run build",
+    "cli-agent-sdk:start": "pnpm --filter @convoy/cli-agent-sdk run start",
+    "ink-pg:dev": "pnpm --filter @convoy/ink-pg run dev",
+    "ink-pg:dev:watch": "pnpm --filter @convoy/ink-pg run dev:watch",
+    "ink-pg:build": "pnpm --filter @convoy/ink-pg run build",
+    "ink-pg:start": "pnpm --filter @convoy/ink-pg run start"
+  },
+  "devDependencies": {
+    "prettier": "3.8.3",
+    "tsx": "^4.21.0"
+  },
+  "pnpm": {
+    "overrides": {
+      "@types/react": "19.2.14",
+      "@types/react-dom": "19.2.3"
+    }
+  }
+}

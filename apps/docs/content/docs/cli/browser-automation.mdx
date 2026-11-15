@@ -1,0 +1,84 @@
+---
+title: Browser automation
+description: Use the standalone browser tool included in Convoy container templates.
+---
+
+## Browser automation
+
+The image preinstalls a pinned upstream `@playwright/cli` release (the Dockerfile's
+`PLAYWRIGHT_CLI_VERSION` build arg), matching Chromium and OS libraries. Use
+`playwright-cli` on PATH, independently of the Convoy CLI.
+The configuration below selects image-installed headless Chromium and explicitly
+disables its inner sandbox inside this dedicated container. Container/project
+isolation and the firewall remain in force. Do not copy this sandbox setting to
+an ordinary host.
+
+```bash
+playwright-cli -s=ui open --config=/usr/local/share/playwright-cli/config.json
+playwright-cli -s=ui goto <url>
+playwright-cli -s=ui set-color-scheme light
+playwright-cli -s=ui screenshot --filename=/tmp/page-light.png
+playwright-cli -s=ui set-color-scheme dark
+playwright-cli -s=ui screenshot --filename=/tmp/page-dark.png
+playwright-cli -s=ui close
+```
+
+Run inside the private project shell or agent when using project isolation.
+Use a unique session name for concurrent work and close that session when done.
+Profiles and session state belong to the invoking project; no host profile is
+imported. Color preference does not override a site's saved theme. Use upstream
+click and scripting commands for application-specific controls.
+
+Browser updates require an image rebuild. Updating Convoy does not install or
+update browsers. CLI 0.128.0 removes all `convoy browser` commands; rewrite old
+scripts to use the upstream CLI. Existing profiles are left untouched, without
+automatic migration. A managed environment's legacy browser cache volume is no
+longer mounted and goes away with `environment delete`.
+
+## Isolation and networking
+
+Session state belongs to the invoking project's private HOME. To verify A/B
+separation: in A, open a session, log in or set a cookie, save a screenshot and
+record `id`. From B, confirm you cannot read A's physical HOME under
+`/var/lib/convoy-projects/<a-identity>`, its workspace marker or its browser
+files. Check the marker exists from A before treating a denial as evidence. Open
+a session in B and confirm A's cookie is absent. Test both projects through real
+agent connections as well as their shells.
+
+Browser control uses pipes, not an open debugging port. The **application's**
+localhost port is still shared across projects. Authenticate services containing
+private data; file isolation does not protect credentials served over TCP.
+
+In strict container mode, allow the application's outbound hosts and all required
+asset, auth and redirect domains with `DEVCONTAINER_EXTRA_ALLOWED_DOMAINS`. Do
+not disable the firewall to make a login work. A denied page can also mean DNS,
+TLS or server failure. Verify the target from outside the firewall and inspect
+its deny counters before claiming network enforcement.
+
+## Host browser sessions
+
+Nothing attaches to your laptop's signed-in browser or copies cookies. Playwright
+supports CDP attachment, but that endpoint gives broad browser control, and Chrome
+136 and later require a non-default data directory for remote debugging. Forwarding
+port 9222 into a VM would expose it to other projects on the shared network, and
+CDP shares tabs and storage, so independent callers are not isolated by tab.
+A future bridge must grant one project access through an authenticated transport,
+handle conflicting clients and revoke access on disconnect. The recommended
+follow-up is a dedicated host automation profile behind a project-authorized broker.
+
+References: [CDP attachment](https://playwright.dev/docs/api/class-browsertype#browser-type-connect-over-cdp),
+[Chrome remote debugging changes](https://developer.chrome.com/blog/remote-debugging-port).
+
+## Outside the templates
+
+On machines outside these templates, browser setup belongs to the environment
+owner. See [upstream documentation](https://github.com/microsoft/playwright-cli).
+Convoy does not install browser tools during agent runs or CLI updates.
+
+For screenshot delivery, use the `convoy threads attach` command supplied for the
+current reply. Browser automation and attachment delivery are separate operations.
+
+For managed environments built before 0.128.0, first upgrade the host CLI and
+rebuild the environment image, then update the container CLI. The old image's
+update helper still expects a bundled browser. Rebuild replaces that helper and
+stops mounting the legacy cache without deleting its volume.

@@ -1,0 +1,504 @@
+@import '../styles/_variables.scss';
+@import '../styles/_keyframe-animations.scss';
+
+@import "tailwindcss";
+@import "tw-animate-css";
+@import "shadcn/tailwind.css";
+@import "yet-another-react-lightbox/styles.css";
+@import "@mdxeditor/editor/style.css";
+@import "../components/mdx-editor/theme.css";
+
+@custom-variant dark (&:is(.dark *));
+
+@theme inline {
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+  --font-sans: var(--font-sans);
+  --font-mono: var(--font-geist-mono);
+  --color-sidebar-ring: var(--sidebar-ring);
+  --color-sidebar-border: var(--sidebar-border);
+  --color-sidebar-accent-foreground: var(--sidebar-accent-foreground);
+  --color-sidebar-accent: var(--sidebar-accent);
+  --color-sidebar-primary-foreground: var(--sidebar-primary-foreground);
+  --color-sidebar-primary: var(--sidebar-primary);
+  --color-sidebar-foreground: var(--sidebar-foreground);
+  --color-sidebar: var(--sidebar);
+  --color-icon-muted: var(--icon-muted);
+  --color-chart-5: var(--chart-5);
+  --color-chart-4: var(--chart-4);
+  --color-chart-3: var(--chart-3);
+  --color-chart-2: var(--chart-2);
+  --color-chart-1: var(--chart-1);
+  --color-ring: var(--ring);
+  --color-input: var(--input);
+  --color-thread-composer-input: var(--thread-composer-input);
+  --color-thread-message-foreign: var(--thread-message-foreign);
+  --color-border: var(--border);
+  --color-danger-soft: var(--danger-soft);
+  --color-success: var(--success);
+  --color-success-soft: var(--success-soft);
+  --color-success-foreground: var(--success-foreground);
+  --color-warning: var(--warning);
+  --color-warning-soft: var(--warning-soft);
+  --color-warning-foreground: var(--warning-foreground);
+  --color-info: var(--info);
+  --color-info-soft: var(--info-soft);
+  --color-info-foreground: var(--info-foreground);
+  --color-code-surface: var(--code-surface);
+  --color-code-foreground: var(--code-foreground);
+  --color-highlight: var(--highlight);
+  --color-destructive: var(--destructive);
+  --color-accent-foreground: var(--accent-foreground);
+  --color-accent: var(--accent);
+  --color-muted-foreground: var(--muted-foreground);
+  --color-muted: var(--muted);
+  --color-secondary-foreground: var(--secondary-foreground);
+  --color-secondary: var(--secondary);
+  --color-primary-foreground: var(--primary-foreground);
+  --color-primary: var(--primary);
+  --color-popover-foreground: var(--popover-foreground);
+  --color-popover: var(--popover);
+  --color-card-foreground: var(--card-foreground);
+  --color-card: var(--card);
+  --radius-sm: calc(var(--radius) - 4px);
+  --radius-md: calc(var(--radius) - 2px);
+  --radius-lg: var(--radius);
+  --radius-xl: calc(var(--radius) + 4px);
+  --radius-2xl: calc(var(--radius) + 8px);
+  --radius-3xl: calc(var(--radius) + 12px);
+  --radius-4xl: calc(var(--radius) + 16px);
+}
+
+:root {
+  --mobile-nav-height: 3.5rem;
+  --mobile-nav-offset: 0.625rem;
+  --mobile-nav-gap: 0.5rem;
+  --mobile-nav-clearance: calc(var(--mobile-nav-height) + var(--mobile-nav-offset) + var(--mobile-nav-gap) + env(safe-area-inset-bottom, 0px));
+
+  --background: oklch(1 0 0);
+  --foreground: oklch(0.145 0 0);
+  --card: oklch(1 0 0);
+  --card-foreground: oklch(0.145 0 0);
+  --popover: oklch(1 0 0);
+  --popover-foreground: oklch(0.3 0 0);
+  --primary: oklch(0.205 0 0);
+  --primary-foreground: oklch(0.985 0 0);
+  --secondary: oklch(0.97 0 0);
+  --secondary-foreground: oklch(0.205 0 0);
+  --muted: oklch(0.97 0 0);
+  --muted-foreground: oklch(0.556 0 0);
+  /* A user message someone else authored (OS-1631). Distinct from `--secondary`,
+     the "what I said" bubble, which `--muted` and `--accent` both equal. */
+  --thread-message-foreign: #e4e9f2;
+  /* One step darker than `--muted` so hovers show on muted surfaces. */
+  --accent: #ebebeb;
+  --accent-foreground: oklch(0.205 0 0);
+  --destructive: oklch(0.58 0.22 27);
+  /* Status hues: text tokens hold 4.5:1 on background and card; `-foreground`
+     is copy on the `-soft` surface. Spec: docs/guidelines/frontend-development.md */
+  --success: #008236;
+  --success-soft: rgba(0, 201, 80, 0.1);
+  --success-foreground: #016630;
+  --warning: #bb4d00;
+  --warning-soft: rgba(254, 154, 0, 0.12);
+  --warning-foreground: #973c00;
+  --info: #155dfc;
+  --info-soft: rgba(43, 127, 255, 0.1);
+  --info-foreground: #193cb8;
+  /* Shared danger-callout palette — `components/custom/danger-callout.tsx`
+     applies it directly, so no `@theme` color namespace is needed. */
+  --danger-callout: oklch(0.39 0.22 27);
+  --danger-callout-accent: oklch(0.58 0.23 27);
+  --danger-callout-copy: oklch(0.36 0.18 27);
+  --danger-callout-foreground: oklch(0.985 0 0);
+  --border: oklch(0.922 0 0);
+  --input: oklch(0.922 0 0);
+  --thread-composer-input: #fff;
+  --ring: #737373;
+  /* Categorical data-series palette (CVD-validated for the light surface).
+     Assign slots to series in fixed order; never cycle or reorder. */
+  --chart-1: #2a78d6;
+  --chart-2: #1baf7a;
+  --chart-3: #eda100;
+  --chart-4: #4a3aa7;
+  --chart-5: #e34948;
+  --danger-soft: rgba(180, 35, 24, 0.08);
+  --code-surface: #18212f;
+  --code-foreground: #f4f7fb;
+  --highlight: rgba(253, 230, 138, 0.8);
+  --shadow-elevated: 0 28px 64px rgba(21, 31, 51, 0.12);
+  --shadow-soft: 0 18px 48px rgba(21, 31, 51, 0.08);
+  --radius: 0.625rem;
+  --icon-muted: #e5e5e5;
+  --sidebar: oklch(0.985 0 0);
+  --sidebar-foreground: oklch(0.345 0 0);
+  --sidebar-primary: oklch(0.205 0 0);
+  --sidebar-primary-foreground: oklch(0.985 0 0);
+  --sidebar-accent: oklch(0.97 0 0);
+  --sidebar-accent-foreground: oklch(0.205 0 0);
+  --sidebar-border: oklch(0.922 0 0);
+  --sidebar-ring: #737373;
+}
+
+.dark {
+  /* Exact 8-bit sRGB (rgb 19,19,19): oklch(0.185 0 0) sits on the 18/19
+     rounding boundary and causes visible banding between GPU layers. */
+  --background: #131313;
+  --foreground: oklch(0.93 0 0);
+  --card: #181818;
+  --card-foreground: oklch(0.93 0 0);
+  --popover: #1b1b1b;
+  --popover-foreground: oklch(0.93 0 0);
+  --primary: oklch(0.85 0.00 0);
+  --primary-foreground: oklch(0.205 0 0);
+  --secondary: #222222;
+  --secondary-foreground: oklch(0.93 0 0);
+  --muted: #222222;
+  --muted-foreground: oklch(0.65 0 0);
+  /* See the light-mode note. Cool-tinted, near-identical in luminance: the hue
+     carries the signal, and the badge is the explicit answer. */
+  --thread-message-foreign: #1b2431;
+  --accent: #2e2e2e;
+  --accent-foreground: oklch(0.93 0 0);
+  --destructive: oklch(0.704 0.191 22.216);
+  --success: #05df72;
+  --success-soft: rgba(0, 201, 80, 0.14);
+  --success-foreground: #b9f8cf;
+  --warning: #ffb900;
+  --warning-soft: rgba(254, 154, 0, 0.14);
+  --warning-foreground: #fee685;
+  --info: #51a2ff;
+  --info-soft: rgba(43, 127, 255, 0.16);
+  --info-foreground: #bedbff;
+  /* See the light-mode note. Only the copy shifts: pale on a dark surface. */
+  --danger-callout: oklch(0.39 0.22 27);
+  --danger-callout-accent: oklch(0.58 0.23 27);
+  --danger-callout-copy: oklch(0.87 0.07 24);
+  --danger-callout-foreground: oklch(0.985 0 0);
+  --border: oklch(1 0 0 / 12%);
+  --input: oklch(1 0 0 / 15%);
+  --thread-composer-input: #1d1d1d;
+  --ring: oklch(0.556 0 0);
+  /* Same categorical slots stepped for the dark surface. */
+  --chart-1: #3987e5;
+  --chart-2: #199e70;
+  --chart-3: #c98500;
+  --chart-4: #9085e9;
+  --chart-5: #e66767;
+  --danger-soft: rgba(248, 113, 113, 0.12);
+  --code-surface: #020617;
+  --code-foreground: #dbe4ee;
+  --highlight: rgba(250, 204, 21, 0.32);
+  --shadow-elevated: 0 28px 80px rgba(2, 6, 23, 0.5);
+  --shadow-soft: 0 18px 48px rgba(2, 6, 23, 0.36);
+  --icon-muted: #525252;
+  --sidebar: #171717;
+  --sidebar-foreground: oklch(0.985 0 0);
+  --sidebar-primary: oklch(0.488 0.243 264.376);
+  --sidebar-primary-foreground: oklch(0.985 0 0);
+  --sidebar-accent: oklch(0.269 0 0);
+  --sidebar-accent-foreground: oklch(0.985 0 0);
+  --sidebar-border: oklch(1 0 0 / 10%);
+  --sidebar-ring: oklch(0.556 0 0);
+}
+
+
+@layer base {
+  * {
+    @apply border-border outline-ring;
+  }
+  body {
+    @apply bg-background text-foreground;
+  }
+}
+
+/* Primary action inside a `DangerCallout`: solid callout red, white label and
+   icon. Plain CSS so it outranks the Button variant's utilities. */
+.danger-callout-action {
+  background-color: var(--danger-callout);
+  color: var(--danger-callout-foreground);
+}
+
+.danger-callout-action:hover {
+  background-color: color-mix(in oklab, var(--danger-callout) 88%, black);
+}
+
+/* Printing a thread (OS-1748). `[data-thread-print-clone]` is the copy of the
+   transcript that `thread-message-list.tsx` appends to <body> on `beforeprint`:
+   in place, the shell's fixed-height scrollers clip the print to one page.
+   Spec: docs/specs/cli-thread-print.md */
+[data-thread-print-clone] {
+  display: none;
+}
+
+@media print {
+  @page {
+    margin: 1.5cm;
+  }
+
+  html[data-printing-thread],
+  html[data-printing-thread] body {
+    display: block !important;
+    height: auto !important;
+    min-height: 0 !important;
+    max-height: none !important;
+    overflow: visible !important;
+  }
+
+  /* The whole app — sidebars, header, composer, portals, overlays — is a
+     sibling of the copy, so one rule keeps it all off the paper. */
+  html[data-printing-thread] body > *:not([data-thread-print-clone]) {
+    display: none !important;
+  }
+
+  [data-thread-print-clone] {
+    display: block !important;
+    /* Bubble backgrounds carry who-said-what, and dark-theme code blocks are
+       only legible on the Shiki background they were highlighted for. */
+    -webkit-print-color-adjust: exact;
+    print-color-adjust: exact;
+  }
+
+  /* The copied conversation column: page width replaces the on-screen max. */
+  [data-thread-print-clone] > * {
+    max-width: none !important;
+    padding: 0 !important;
+  }
+
+  /* Inner scrollers (diffs, tool output, tables) print in full. */
+  [data-thread-print-clone] * {
+    overflow: visible !important;
+    max-height: none !important;
+  }
+
+  [data-thread-print-clone] pre {
+    white-space: pre-wrap !important;
+    word-break: break-word;
+  }
+
+  /* Offscreen rows are collapsed for scroll perf; they would print blank. */
+  [data-thread-print-clone] [data-thread-message-row] {
+    content-visibility: visible !important;
+    contain-intrinsic-size: auto !important;
+    break-inside: avoid;
+  }
+
+  /* Dark theme on paper is near-white text on white: print the light tokens.
+     Values mirror the `:root` block above. */
+  .dark {
+    --background: oklch(1 0 0);
+    --foreground: oklch(0.145 0 0);
+    --card: oklch(1 0 0);
+    --card-foreground: oklch(0.145 0 0);
+    --popover: oklch(1 0 0);
+    --popover-foreground: oklch(0.3 0 0);
+    --primary: oklch(0.205 0 0);
+    --primary-foreground: oklch(0.985 0 0);
+    --secondary: oklch(0.97 0 0);
+    --secondary-foreground: oklch(0.205 0 0);
+    --muted: oklch(0.97 0 0);
+    --muted-foreground: oklch(0.45 0 0);
+    --accent: #ebebeb;
+    --accent-foreground: oklch(0.205 0 0);
+    --destructive: oklch(0.58 0.22 27);
+    --success: #008236;
+    --success-soft: rgba(0, 201, 80, 0.1);
+    --success-foreground: #016630;
+    --warning: #bb4d00;
+    --warning-soft: rgba(254, 154, 0, 0.12);
+    --warning-foreground: #973c00;
+    --info: #155dfc;
+    --info-soft: rgba(43, 127, 255, 0.1);
+    --info-foreground: #193cb8;
+    --border: oklch(0.85 0 0);
+    --thread-message-foreign: #e4e9f2;
+    --highlight: rgba(253, 230, 138, 0.8);
+  }
+}
+
+/* Hide Grammarly-injected elements inside dialogs to prevent layout gaps.
+   These custom elements have zero height but still receive CSS grid/flex gap
+   spacing, creating visible empty space. */
+[role="dialog"] > [data-grammarly-shadow-root],
+[role="dialog"] > grammarly-extension-vbars,
+[role="dialog"] > superhuman-go-underlines {
+  display: none !important;
+}
+
+/* ProseMirror dropcursor
+   The dropcursor element is appended to `editorView.dom.offsetParent`.
+   Make `.tiptap-theme` a positioned ancestor so the cursor stays inside
+   the theme scope (CSS variables like --tt-brand-color-500). */
+.tiptap-theme {
+  position: relative;
+}
+
+/* Optional: make sure it stays visible above content */
+.tiptap-theme .prosemirror-dropcursor-inline,
+.tiptap-theme .prosemirror-dropcursor-block {
+  z-index: 50;
+}
+
+.ui-playground-admonition {
+  display: flex;
+  gap: 0.75rem;
+  margin: 1.1rem 0;
+  padding: 1rem;
+  border-radius: 0;
+}
+
+.ui-playground-admonition__icon {
+  display: flex;
+  flex: none;
+  align-items: flex-start;
+  justify-content: center;
+  width: 1.25rem;
+  padding-top: 0.05rem;
+  font-size: 1rem;
+  line-height: 1.25rem;
+  font-weight: 700;
+}
+
+.ui-playground-admonition__body {
+  min-width: 0;
+}
+
+.ui-playground-admonition__content {
+  margin-top: 0.5rem;
+  font-size: 0.875rem;
+  line-height: 1.5rem;
+}
+
+.ui-playground-admonition__content > :first-child {
+  margin-top: 0;
+}
+
+.ui-playground-admonition__content > :last-child {
+  margin-bottom: 0;
+}
+
+.ui-playground-admonition__content ul,
+.ui-playground-admonition__content ol {
+  margin: 0;
+  padding-left: 1.25rem;
+}
+
+.light .ui-playground-admonition--note {
+  background: #eff6ff;
+}
+
+.light .ui-playground-admonition--note .ui-playground-admonition__icon {
+  color: #60a5fa;
+}
+
+.light .ui-playground-admonition--note .ui-playground-admonition__content {
+  color: #1d4ed8;
+}
+
+.light .ui-playground-admonition--tip {
+  background: #ecfdf5;
+}
+
+.light .ui-playground-admonition--tip .ui-playground-admonition__icon {
+  color: #34d399;
+}
+
+.light .ui-playground-admonition--tip .ui-playground-admonition__content {
+  color: #047857;
+}
+
+.light .ui-playground-admonition--info {
+  background: #f5f3ff;
+}
+
+.light .ui-playground-admonition--info .ui-playground-admonition__icon {
+  color: #a78bfa;
+}
+
+.light .ui-playground-admonition--info .ui-playground-admonition__content {
+  color: #6d28d9;
+}
+
+.light .ui-playground-admonition--caution {
+  background: #fffbeb;
+}
+
+.light .ui-playground-admonition--caution .ui-playground-admonition__icon {
+  color: #fbbf24;
+}
+
+.light .ui-playground-admonition--caution .ui-playground-admonition__content {
+  color: #b45309;
+}
+
+.light .ui-playground-admonition--danger {
+  background: #fef2f2;
+}
+
+.light .ui-playground-admonition--danger .ui-playground-admonition__icon {
+  color: #f87171;
+}
+
+.light .ui-playground-admonition--danger .ui-playground-admonition__content {
+  color: #dc2626;
+}
+
+.dark .ui-playground-admonition--note {
+  background: rgba(59, 130, 246, 0.14);
+}
+
+.dark .ui-playground-admonition--note .ui-playground-admonition__icon {
+  color: #93c5fd;
+}
+
+.dark .ui-playground-admonition--note .ui-playground-admonition__content {
+  color: #bfdbfe;
+}
+
+.dark .ui-playground-admonition--tip {
+  background: rgba(16, 185, 129, 0.16);
+}
+
+.dark .ui-playground-admonition--tip .ui-playground-admonition__icon {
+  color: #6ee7b7;
+}
+
+.dark .ui-playground-admonition--tip .ui-playground-admonition__content {
+  color: #a7f3d0;
+}
+
+.dark .ui-playground-admonition--info {
+  background: rgba(139, 92, 246, 0.14);
+}
+
+.dark .ui-playground-admonition--info .ui-playground-admonition__icon {
+  color: #c4b5fd;
+}
+
+.dark .ui-playground-admonition--info .ui-playground-admonition__content {
+  color: #ddd6fe;
+}
+
+.dark .ui-playground-admonition--caution {
+  background: rgba(234, 179, 8, 0.14);
+}
+
+.dark .ui-playground-admonition--caution .ui-playground-admonition__icon {
+  color: #fcd34d;
+}
+
+.dark .ui-playground-admonition--caution .ui-playground-admonition__content {
+  color: #fde68a;
+}
+
+.dark .ui-playground-admonition--danger {
+  background: rgba(239, 68, 68, 0.14);
+}
+
+.dark .ui-playground-admonition--danger .ui-playground-admonition__icon {
+  color: #fca5a5;
+}
+
+.dark .ui-playground-admonition--danger .ui-playground-admonition__content {
+  color: #fecaca;
+}

@@ -1,0 +1,44 @@
+{
+  "name": "docs",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "build": "react-router build",
+    "dev": "portless run --name docs.convoy react-router dev",
+    "start": "serve ./build/client --config ../../serve.json",
+    "types:check": "react-router typegen && fumadocs-mdx && tsc --noEmit",
+    "postinstall": "fumadocs-mdx",
+    "lint": "biome check",
+    "format": "biome format --write"
+  },
+  "dependencies": {
+    "@orama/orama": "^3.1.18",
+    "@react-router/node": "^7.13.2",
+    "fumadocs-core": "16.7.10",
+    "fumadocs-mdx": "14.2.11",
+    "fumadocs-ui": "16.7.10",
+    "isbot": "^5.1.36",
+    "lucide-react": "^1.7.0",
+    "mermaid": "^11.12.2",
+    "next-themes": "^0.4.6",
+    "react": "^19.2.4",
+    "react-dom": "^19.2.4",
+    "react-router": "^7.13.2",
+    "tailwind-merge": "^3.5.0"
+  },
+  "devDependencies": {
+    "@biomejs/biome": "^2.4.9",
+    "@react-router/dev": "^7.13.2",
+    "@tailwindcss/vite": "^4.2.2",
+    "@types/mdx": "^2.0.13",
+    "@types/node": "^25.5.0",
+    "@types/react": "^19.2.14",
+    "@types/react-dom": "^19.2.3",
+    "portless": "^0.9.2",
+    "react-router-devtools": "^6.2.0",
+    "serve": "^14.2.6",
+    "tailwindcss": "^4.2.2",
+    "typescript": "^6.0.2",
+    "vite": "^8.0.3"
+  }
+}

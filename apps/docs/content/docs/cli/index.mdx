@@ -1,0 +1,142 @@
+---
+title: Install and connect
+description: Install the CLI, log in with your browser, and run your first AI thread on your machine.
+---
+
+The Convoy CLI connects a project in the web app to a folder on your
+machine. While the connection is running, your AI threads can use the
+runtimes installed there. The CLI also offers
+[one-shot commands](/docs/cli/one-shot-commands) for task scripting.
+
+## Prerequisites
+
+- An account and project access on the Convoy deployment you want to use.
+- Its Convex deployment URL, such as `https://your-deployment.convex.cloud`.
+  Ask your deployment admin for this URL.
+- Node.js 22 or later and npm.
+- A local working folder and an installed, authenticated AI runtime.
+
+Convoy can execute Claude Code, Codex, OpenCode, and Cursor. Check the
+[runtime support table](/docs/reference/roadmap#runtime-execution) for
+capabilities and version requirements. Verify your chosen executable is on
+the same `PATH` as Convoy, for example `claude --version`, `codex --version`,
+`opencode --version`, or `cursor-agent --version`.
+
+Read the [security model](/docs/cli/security) before connecting a machine
+with access to sensitive files or credentials. Choose an
+[isolation option](/docs/cli/isolation-options) if the runtime needs a
+restricted environment.
+
+To create and manage an isolated Docker environment from your host terminal,
+start with [Managed local environments](/docs/cli/managed-environments).
+To reach a service on another machine over SSH, see
+[Remote targets](/docs/cli/remote-targets).
+
+To run several projects with separate Linux identities in one VM, follow
+[Isolated projects on Linux](/docs/cli/isolated-projects).
+
+## Install
+
+```bash
+npm install -g @useconvoy/cli
+convoy --help
+```
+
+A successful install prints the command help. On macOS, Linux, and Windows,
+the global command is `convoy`. To run without a global install, substitute
+`npx @useconvoy/cli` for `convoy` in the commands below.
+
+For a source checkout, follow the
+[contributor quickstart](/docs/quickstart-source). There, substitute
+`pnpm cli:dev` for `convoy`.
+
+## Login and connect
+
+Open a terminal in the repository or folder you want the agent to work in:
+
+```bash
+convoy login
+```
+
+The wizard asks for the Convex deployment URL, opens your browser for
+approval, then asks you to choose a project, profile name and key, and
+workspace folder. Browser approval issues a user-scoped API key
+automatically. You do not need to create one beforehand.
+
+If the CLI cannot open a browser, use its printed approval link. You can
+also open `/device` in the web app on another signed-in browser and enter
+the printed backup code.
+
+The wizard saves the profile in `~/.config/convoy/config.toml` and starts the connection. Leave that terminal running. Interactive `convoy setup`
+uses the same flow, with a choice between browser approval and pasting a
+key. For unattended setup, use
+[API keys for scripts and headless machines](/docs/cli/api-keys).
+
+A profile records the deployment, user credential, project, and local
+paths. After the connection starts, the web app shows your profile as
+online and lists its detected runtimes. In a second terminal, use
+`convoy status` to inspect the saved configuration.
+
+## Send your first thread
+
+1. Open the same project in the web app and start an AI thread.
+2. Select your online profile, working path, and an installed runtime.
+3. Send a small prompt, such as "Describe this repository's top-level folders."
+4. Watch the assistant response and tool activity appear in the thread.
+
+The thread should finish with a response. If it stays queued, confirm the
+selected profile is online and belongs to the intended project. If the
+runtime fails, check its authentication and executable in the terminal
+running the connection. See [CLI troubleshooting](/docs/cli/troubleshooting).
+
+## Reconnect and update
+
+After stopping the connection with Ctrl+C, reconnect from the saved folder:
+
+```bash
+convoy connect
+```
+
+You can select a saved profile with `convoy connect --profile work`.
+[Profiles, paths, and status](/docs/cli/profiles-paths-status) explains
+multiple checkouts and profile selection. For persistent workers, see
+[Running the CLI long-term](/docs/operations/running-the-cli-long-term).
+
+To update:
+
+```bash
+convoy update
+```
+
+Restart running connections after the update. The connection also checks
+npm at startup and prints an update notice when a newer release is
+available. An unreachable npm registry does not prevent connection.
+
+## Connection options
+
+Streaming is on by default. `--buffered` sends complete events instead of
+partial text deltas. Concurrency defaults to five threads and can be set
+with `--concurrency` or the profile configuration.
+
+Codex uses its app-server transport by default. `--codex-exec` selects the
+non-interactive transport, which has fewer capabilities. See the
+[runtime support table](/docs/reference/roadmap#runtime-execution) before
+choosing it. For sandboxing, use
+[isolation options](/docs/cli/isolation-options).
+
+The [CLI command reference](/docs/reference/cli-commands#convoy-connect)
+contains every flag, including debug fixture replay. Use
+`CONVOY_CLI_DEBUG=1 convoy connect` for debug logs, or set the value to `2`
+for untruncated JSON output.
+
+## Next steps
+
+- [AI threads](/docs/using/ai-threads) covers queues, steering, and sharing.
+- [Model provider keys](/docs/cli/provider-keys) configures runtime credentials.
+- [Integrations](/docs/integrations) connects external AI clients to Convoy.
+  Direct MCP access does not need a running CLI bridge.
+
+Use [Browser automation](/docs/cli/browser-automation) to run Chromium in a devcontainer or isolated Linux project.
+
+Run registered Linux projects after closing your terminal with the
+[persistent project service](/docs/cli/project-service).

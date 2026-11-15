@@ -1,0 +1,274 @@
+---
+title: CLI architecture and lifecycle
+sidebarTitle: CLI architecture
+description: System shape, session and thread lifecycle, claims/leases/retries, and the raw-to-normalized chunk pipeline.
+---
+
+This page is the single source of truth for how the CLI bridges the Convex
+backend to a local agent runtime. It replaces several older internals pages
+(architecture-overview, lifecycle, claims-heartbeats-retries-failures,
+message-and-chunk-data-model, protocols-and-payloads, claude-code-runtime).
+
+## System shape
+
+```text
+Web UI <-> Convex backend <-> Convoy CLI <-> local runtime (e.g. Claude Code)
+```
+
+- The web app owns user interaction and writes durable thread state to Convex.
+- Convex owns queue, claim, session, and message state.
+- The CLI owns local execution and filesystem access.
+- The runtime generates the streamed output. Claude Code uses an Agent SDK
+  query. Codex uses its app-server protocol by default, with an optional
+  `codex exec --json` transport. OpenCode uses a long-lived
+  `opencode serve` process driven through its SDK. Cursor uses a fresh
+  `cursor-agent` print-mode process for each turn.
+
+<Mermaid
+  chart={`sequenceDiagram
+  participant Browser
+  participant Convex
+  participant CLI as convoy connect
+  participant Runtime as Claude Code
+  participant Repo as Local worktree
+
+  Browser->>Convex: create user thread message
+  Convex-->>Browser: realtime pending state
+  CLI->>Convex: subscribe to pending threads
+  CLI->>Convex: claimThread (lease)
+  CLI->>Convex: startRunResponse (assistant envelope)
+  CLI->>Runtime: spawn in selected cwd
+  Runtime-->>CLI: stream JSON events
+  CLI->>Convex: appendRunContent (raw + normalized chunks)
+  Convex-->>Browser: realtime assistant stream
+  CLI->>Convex: complete or fail run
+  CLI->>Convex: releaseClaim when queue drains`}
+/>
+
+## Main code areas
+
+Backend (Convex):
+
+- `apps/web/convex/cliThreads.ts` — `listPendingThreads`, `claimThread`,
+  `heartbeatClaim`, `releaseClaim`
+- `apps/web/convex/cliMessages.ts` — Thread run lifecycle
+  (`startRunResponse`, `appendRunContent`, `complete`, `fail`, `retry`)
+- `apps/web/convex/cliSessions.ts` — CLI session registration and heartbeats
+- `apps/web/convex/http.ts` — `/api/agent/register`, `/api/agent/heartbeat`,
+  `/api/agent/disconnect`
+- `apps/web/convex/cli/lib/runtimes/registry.ts` — runtime registry and the
+  `CliNormalizedEvent` dispatch
+- `apps/web/convex/cli/lib/runtimes/claudeCode/normalizeChunk.ts` — Claude Code
+  raw-chunk → normalized-event mapping
+- `apps/web/convex/cli/lib/chunks/` — `normalizedEvents.ts`, `store.ts`
+- `apps/web/convex/lib/contracts/validators.ts` — `cliNormalizedEventValidator`
+  is the authoritative event union
+
+CLI:
+
+- `apps/cli/src/agent/app/runner.ts` — orchestrates registration, heartbeat,
+  pending-thread subscription, shutdown
+- `apps/cli/src/agent/app/thread-processor.ts` — FIFO queue of claimed threads;
+  owns the claim lease loop and run lifecycle
+- `apps/cli/src/agent/runtimes/registry.ts` — CLI-side runtime registry
+- `apps/cli/src/agent/runtimes/claudeCode/runner.ts` — spawns Claude Code,
+  yields JSON stream chunks
+- `apps/cli/src/agent/runtimes/codex/app-server-runner.ts` runs the default
+  Codex transport; `codex/runner.ts` runs the optional exec transport
+- `apps/cli/src/agent/runtimes/opencode/runner.ts` drives the OpenCode SDK
+- `apps/cli/src/agent/runtimes/cursor/runner.ts` executes Cursor print mode
+
+Frontend:
+
+- `apps/web/lib/cli-runtime-ui/` — icons, labels, selector metadata per
+  runtime slug
+- `apps/web/lib/cli-stream-ui/` — composer/recovery layer that turns normalized
+  events into AI SDK `UIMessage` parts
+
+## Session lifecycle
+
+1. CLI resolves a saved profile (`--profile`, `CONVOY_PROFILE`, cwd-path
+   match, or `default_profile`).
+2. CLI registers a session via HTTP `POST /api/agent/register` (API-key auth,
+   conflicts resolvable with `force=true`).
+3. CLI sends `POST /api/agent/heartbeat` every 30s. Sessions expire after 60s
+   of silence.
+4. CLI subscribes to `cliThreads.listPendingThreads` via realtime query.
+5. On SIGINT/SIGTERM, `POST /api/agent/disconnect` runs and the process exits.
+
+## Thread lifecycle
+
+```
+pending → claimed → streaming → claimed → … → (idle, claim released)
+```
+
+1. A user message arrives. Convex creates only the user message and flags the
+   thread pending (`hasPendingUserMessages`).
+2. CLI claims the thread via `cliThreads.claimThread`, which records
+   `claimedBySessionId`, `claimedAt`, and `claimLeaseExpiresAt`.
+3. CLI fetches unprocessed user messages and calls
+   `cliMessages.startRunResponse`, which creates one assistant envelope and
+   sets `activeAssistantMessageId`.
+4. CLI spawns the selected runtime in the profile's working directory.
+5. Each JSON line from the runtime is sent to
+   `cliMessages.appendRunContent`. Raw chunks are stored in
+   `cliMessageChunks` and the `normalizedEvent` is computed at insert time
+   (see below).
+6. On success, `cliMessages.complete` finalizes the assistant message. On
+   failure, `cliMessages.fail` marks it retryable.
+7. CLI loops: if new user messages arrived during streaming, it processes
+   them in the next run under the same claim. When the queue drains, the
+   claim is released and `activeAssistantMessageId` is cleared.
+
+## Claims, heartbeats, and retries
+
+Claims are thread-level, lease-based, and belong to exactly one session at a
+time. The message-level `claimed` status exists only for legacy rows and is
+not used to drive active work.
+
+Two separate health signals:
+
+- **Session heartbeat** — the CLI process is online (`cliSessions` table).
+- **Claim heartbeat** — this specific thread lease is still held
+  (`cliThreads.heartbeatClaim`).
+
+A session can be online while a particular claim goes stale. Stale claims are
+recoverable: the backend can release them, and the thread becomes re-claimable
+by another session without corrupting the message timeline.
+
+Invariants any code change in this area must preserve:
+
+1. `retry` on a failed assistant run must requeue the user messages in the run
+   **and remove the failed assistant message**. Leaving the failed message on
+   top of the new attempt produces a confusing duplicate state.
+2. Any path that ends or abandons streaming must clear the thread's stale
+   `activeAssistantMessageId`.
+3. Queue-state checks (e.g. "does this thread have remaining unprocessed user
+   messages?") must use a shared indexed helper with `.first()`, not repeated
+   `.collect().length`.
+4. `cliMessageStatusValidator` must remain backward-compatible with legacy
+   stored statuses until a migration explicitly removes them.
+
+## Message and chunk data model
+
+Three tables, three responsibilities:
+
+- `cliThreads` — thread-level queue and claim state. Source of truth for
+  "who is processing this and for how long".
+- `cliMessages` — user messages and the assistant envelope. Source of truth
+  for message-level lifecycle (`pending`, `streaming`, `completed`, `failed`).
+- `cliMessageChunks` — the streamed rows. Each row carries:
+  - raw `type` and `data` from the runtime
+  - a computed `normalizedEvent` (`CliNormalizedEvent`) used by the frontend
+
+The split exists because assistant output is streamed incrementally, but the
+thread still needs stable message-level lifecycle state while chunks flow in.
+
+## Normalized events
+
+The canonical union is
+[`cliNormalizedEventValidator`](https://github.com/packtrain/convoy/blob/main/apps/web/convex/lib/contracts/validators.ts)
+in `apps/web/convex/lib/contracts/validators.ts`. Kinds:
+
+| Kind                 | Purpose                                                     |
+|----------------------|-------------------------------------------------------------|
+| `text`               | Assistant text block                                        |
+| `reasoning`          | Model reasoning / thinking block                            |
+| `context-window`     | Token usage / window meter                                  |
+| `context-compaction` | Runtime compacted context                                   |
+| `tool-input`         | Tool call (id, name, input JSON)                            |
+| `tool-output`        | Tool result                                                 |
+| `tool-error`         | Tool result marked as error                                 |
+| `metadata`           | Session metadata, cost/duration, or a bundled event wrapper |
+| `runtime-notice`     | Runtime-level notice (e.g. Claude API retry)                |
+| `warning`            | Non-fatal warning                                           |
+| `unknown`            | Parser couldn't recognize the chunk (raw kept for debug)    |
+
+Clients page older history with `cli.messageChunks.listWindowByThread`,
+subscribe to new chunks with `cli.messageChunks.listLiveByThread` (delta
+cursor), and feed events through
+`apps/web/lib/cli-stream-ui/composer.ts` to produce AI SDK UI parts.
+
+### Example: assistant text block
+
+Raw chunk from the Claude Code stream:
+
+```json
+{
+  "type": "assistant",
+  "data": "{\"message\":{\"content\":[{\"type\":\"text\",\"text\":\"Hello world\"}]}}"
+}
+```
+
+Normalized event written to `cliMessageChunks.normalizedEvent`:
+
+```json
+{ "kind": "text", "text": "Hello world" }
+```
+
+### Example: tool call and result
+
+Raw assistant chunk with a `tool_use` block:
+
+```json
+{
+  "type": "assistant",
+  "data": "{\"message\":{\"content\":[{\"type\":\"tool_use\",\"id\":\"toolu_1\",\"name\":\"Read\",\"input\":{\"file_path\":\"/tmp/x\"}}]}}"
+}
+```
+
+→ `{ "kind": "tool-input", "toolCallId": "toolu_1", "toolName": "Read", "inputJson": "{\"file_path\":\"/tmp/x\"}" }`
+
+Subsequent user chunk with a `tool_result`:
+
+```json
+{
+  "type": "user",
+  "data": "{\"message\":{\"content\":[{\"type\":\"tool_result\",\"tool_use_id\":\"toolu_1\",\"content\":\"file contents\"}]}}"
+}
+```
+
+→ `{ "kind": "tool-output", "toolCallId": "toolu_1", "outputJson": "file contents" }`
+
+### Example: unknown chunk
+
+When the parser cannot recognize a chunk, raw data is preserved so operators
+can debug:
+
+```json
+{
+  "kind": "unknown",
+  "reason": "json-parse-error",
+  "rawType": "assistant",
+  "rawData": "{malformed..."
+}
+```
+
+### Bundling
+
+When a single raw chunk expands into multiple semantic events (a `result`
+chunk commonly emits both `metadata` and `context-window`), the normalizer
+returns a bundled `metadata` event whose `otherJson` payload holds
+`{ "events": [...] }`. The client-side composer unpacks these via
+`expandCliNormalizedEvent`.
+
+## Runtime-specific contracts
+
+Runtime-specific parsing lives inside
+`apps/web/convex/cli/lib/runtimes/<slug>/`. Generic runtime support is
+provided by `shared/genericRuntime.ts`; Claude Code has its own `claudeCode/`
+subfolder with `normalizeChunk.ts`, `models.ts`, `continuation.ts`, and
+`runtime.ts`. Keep runtime conditionals inside these subsystems — do not
+scatter `cliType === "claude-code"` checks across top-level Convex modules.
+
+## Current runtime status
+
+The CLI registers executable runners for Claude Code, Codex, OpenCode, and
+Cursor. Codex uses the app-server protocol by default; `convoy connect
+--codex-exec` selects its exec transport. Other runtime slugs have no
+registered CLI runner and fail when selected for execution.
+
+See [Supported runtimes](/docs/reference/roadmap#runtime-execution) for
+approval, steering, attachment, and isolation differences. See
+[Adding a runtime](/docs/contributing/adding-a-runtime) for how to add
+execution support.

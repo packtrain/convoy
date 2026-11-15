@@ -1,0 +1,489 @@
+---
+title: Model provider keys
+description: Manage isolated Codex and Claude Code API keys and legacy Claude providers locally.
+---
+
+Model provider keys let a CLI profile run Claude Code through AWS Bedrock
+or Mantle instead of inheriting the machine's default Claude configuration —
+or pin it to your Claude.ai subscription on a machine whose default
+configuration points at Bedrock. They are stored only on the machine running
+the Convoy CLI.
+
+These credentials are different from [Convoy API keys](/docs/cli/api-keys):
+
+- an **Convoy API key** authenticates the CLI and MCP clients with the
+  Convoy backend
+- a **model provider key** authenticates Claude Code with Bedrock or Mantle
+
+## Add a provider key
+
+Give each credential a local name and choose its provider:
+
+```bash
+convoy keys add work-bedrock \
+  --provider bedrock \
+  --region us-east-1
+```
+
+The CLI prompts for the token with masked input. Use `--provider mantle`
+for Mantle. The region is optional.
+
+You can pass `--token <token>` for non-interactive setup, but doing so may
+save the credential in shell history.
+
+For these legacy providers, running `add` again with the same name updates the stored key.
+
+## Pin a Claude.ai subscription
+
+`--provider anthropic` stores an entry with no credential at all:
+
+```bash
+convoy keys add claude-sub --provider anthropic
+```
+
+Assign it like any other entry, and profiles using it run Claude Code on the
+Claude sign-in of the machine the CLI runs on — your Claude.ai subscription.
+
+This is stronger than leaving a profile unassigned. An unassigned profile
+*follows* the machine's Claude configuration, so a `~/.claude/settings.json`
+(or a dev container) that enables Bedrock or Mantle wins. The `anthropic`
+entry is passed through Claude Code's command-line settings layer, which
+outranks that file, so the run stays on the subscription. A leftover
+`AWS_BEARER_TOKEN_BEDROCK` in the environment is ignored.
+
+`--token` and `--region` are rejected for this provider — there is nothing to
+store.
+
+## List stored keys
+
+```bash
+convoy keys list
+```
+
+Legacy entries show masked tokens and the profiles using them. Managed OpenAI
+entries show metadata without secret fragments.
+Credential-free `anthropic` entries list their token as `none`.
+`convoy keys ls` is an alias.
+
+## Assign a key to a profile
+
+From a directory that resolves to the intended profile:
+
+```bash
+convoy keys use work-bedrock
+```
+
+Or name the profile explicitly:
+
+```bash
+convoy keys use work-bedrock --profile work
+```
+
+The assignment is saved as the profile's `provider_key`. Restart
+`convoy connect` for the change to take effect.
+
+At connection time, provider selection follows this order:
+
+1. `convoy connect --provider-key <name>` — one-run override
+2. the resolved profile's assigned `provider_key`
+3. the machine's own Claude configuration, usually a Claude subscription
+
+The one-run override does not change `config.toml`:
+
+```bash
+convoy connect --provider-key work-bedrock
+```
+
+If an assigned or overridden key does not exist, `connect` stops with an
+error instead of silently falling back to another provider.
+
+## Unassign or remove a key
+
+Return a profile to the machine's Claude configuration:
+
+```bash
+convoy keys unassign --profile work
+```
+
+Delete a stored key:
+
+```bash
+convoy keys remove work-bedrock
+```
+
+`convoy keys rm` is an alias. Removal is refused while any profile still
+references the key; unassign it from those profiles first.
+
+## Run Codex on AWS Bedrock or Mantle
+
+Codex can use OpenAI models hosted on AWS through the same keys. Codex needs
+a Mantle or Bedrock key with a region, and its assignment is separate from
+Claude Code's:
+
+```bash
+convoy keys add work-mantle --provider mantle --region us-east-1
+convoy keys use work-mantle --runtime codex --profile work
+```
+
+Use `--provider bedrock` for Bedrock Runtime. Restart `convoy connect`; it
+prints `Codex provider: AWS Bedrock (Mantle) ("work-mantle", us-east-1)`. In
+the thread composer, Codex then offers GPT-6 Astra, GPT-6 Sol, GPT-6 Luna and
+GPT-5.6 Sol, Terra and Luna, and the menu shows the provider and region.
+
+What differs from Codex with an OpenAI login:
+
+- Fast mode and image generation are unavailable. Bedrock Runtime also has no
+  hosted web search. A `service_tier` set in `~/.codex/config.toml` fails the
+  run instead of being ignored.
+- `/usage` is unavailable; check usage in the AWS console.
+- The `--codex-exec` transport cannot be combined with an AWS key.
+- A thread started on another provider cannot continue on AWS. Start a new
+  thread.
+- A failed AWS run stays failed. Convoy never falls back to your OpenAI login.
+
+Switch Codex back to the machine's own Codex config and login with:
+
+```bash
+convoy keys unassign --runtime codex --profile work
+```
+
+## Storage and security
+
+Provider keys are stored under `[keys.<name>]` in
+`~/.config/convoy/config.toml`, while profile assignments use
+`provider_key` (Claude Code) and `codex_provider_key` (Codex). See the [config file reference](/docs/reference/config-toml)
+for the complete schema and an example.
+
+The tokens are not registered with Convoy or synchronized to its backend.
+Do not commit `config.toml`, paste tokens into shell history, or include them
+in support logs.
+
+## See also
+
+- [Profiles, paths, and status](/docs/cli/profiles-paths-status) — how the
+  CLI chooses a profile
+- [Install and connect](/docs/cli#login-and-connect) — configure and run the
+  agent bridge
+- [Security model](/docs/cli/security) — the complete local and backend
+  trust boundaries
+
+## OpenAI keys for isolated Codex projects
+
+CLI 0.71.1 adds centrally managed OpenAI API keys for the
+[Linux project environment](/docs/cli/isolated-projects). Run these commands as
+its control user, such as `ubuntu` on your VM, outside project shells.
+These keys use OpenAI API billing. They do not share a ChatGPT subscription.
+
+Store a key once with a masked prompt, then assign it to registered projects:
+
+```bash
+convoy keys add work-openai --provider openai --auth api-key
+convoy keys use work-openai --profile a --runtime codex
+convoy keys use work-openai --profile b --runtime codex
+convoy keys status
+```
+
+For automation, replace the prompt with `--from-env OPENAI_API_KEY` or `--stdin`.
+The variable name is your choice. Do not pass the secret as a command argument.
+New managed entries require an unused name; use `rotate` to replace a key.
+
+If A/B already run under the service, the assignments remain pending until you
+apply them. Each reload can interrupt all active runtimes in that project:
+
+```bash
+convoy service reload --profile a --interrupt
+convoy service reload --profile b --interrupt
+convoy keys status --json
+```
+
+Otherwise start `convoy service start --background`, or use
+`convoy connect --profile a` in the foreground. A direct connection needs a stop
+and reconnect to pick up later changes. Adding a key never starts the service.
+Other project identities keep their existing connections.
+
+Managed authentication applies to Codex tasks run by Convoy's app-server runner.
+Bare `codex` commands inside `convoy project shell` retain private native login.
+The distributed project image pins Codex 0.156.1. Managed runs check effective
+API/ephemeral settings, reject conflicting provider settings and do not fall back
+to subscription billing or `codex exec`.
+
+### AWS Bedrock and Mantle keys
+
+CLI 0.93.0 also stores Mantle and Bedrock Runtime keys for isolated Codex
+projects. Add `--auth api-key` and a Region:
+
+```bash
+convoy keys add work-mantle --provider mantle --auth api-key --region us-east-1
+convoy keys use work-mantle --profile a --runtime codex
+```
+
+Codex then runs on the GPT-6 and GPT-5.6 models of that provider and Region, as on an
+[ordinary profile](#run-codex-on-aws-bedrock-or-mantle). It never falls back
+to the project's native login. Rotation keeps the provider and Region; for
+another Region, add a new entry. With `--env`, adding the key also opens the
+provider's endpoint for that Region in the container firewall. Inside the
+container or on a VM, allow `bedrock-mantle.<region>.api.aws` or
+`bedrock-runtime.<region>.amazonaws.com` yourself.
+
+CLI 0.94.0 lets Claude Code use the same keys. Assign the entry with
+`--runtime claude-code`:
+
+```bash
+convoy keys use work-mantle --profile a --runtime claude-code
+```
+
+Claude Code then runs on that provider's Claude models, with the same model
+list as an ordinary profile. Codex and Claude Code keep separate assignments.
+`convoy keys unassign --runtime claude-code` turns Claude Code off for the
+project; add `--native-login` to use the project's own Claude sign-in again.
+
+### Anthropic API keys
+
+CLI 0.115.0 adds managed Anthropic API keys for isolated Claude Code projects.
+Claude Code then bills API usage on that key instead of the project's own
+Claude sign-in:
+
+```bash
+convoy keys add work-anthropic --provider anthropic --auth api-key
+convoy keys use work-anthropic --profile a --runtime claude-code
+```
+
+Without `--auth api-key`, `--provider anthropic` still stores the
+credential-free entry described in
+[Pin a Claude.ai subscription](#pin-a-claudeai-subscription). An Anthropic key
+serves Claude Code only; Codex refuses it.
+
+The assigned key beats the project's own settings, an inherited
+`ANTHROPIC_AUTH_TOKEN`, Bedrock or Mantle flags and the project's native
+login. Requests always go to `api.anthropic.com`; an `ANTHROPIC_BASE_URL` or
+`ANTHROPIC_CUSTOM_HEADERS` in the project's settings is overridden, so a project
+that needs a gateway keeps its own login or key. A rejected key fails the run
+instead of falling back to the sign-in.
+
+Before sending the prompt, Convoy checks that Claude Code will really use the
+key. A Claude apps gateway sign-in in the project, or administrator policy that
+outranks the key, fails the run with "Claude Code would not use the assigned
+Anthropic key"; sign out of the gateway in the project shell, or unassign the
+key. The project's agent can read its own assigned key, as with any credential
+in its environment; other projects cannot. The key travels
+to Claude Code in its environment and a private settings file, never on the
+command line. On a VM, rerun `install.py` after upgrading; older launchers
+refuse Anthropic keys.
+
+### Cursor account keys
+
+CLI 0.117.0 adds managed Cursor keys for isolated projects. Create a key in
+Cursor's dashboard; it belongs to a Cursor account, and Cursor bills that
+account. It is not an OpenAI or Anthropic key:
+
+```bash
+convoy keys add work-cursor --provider cursor --auth api-key
+convoy keys use work-cursor --profile a --runtime cursor
+convoy keys use work-cursor --profile b --runtime cursor
+```
+
+A Cursor key serves Cursor only; Codex and Claude Code refuse it. Assign a
+different key to a project to give it a different Cursor account.
+
+Convoy passes the key to `cursor-agent` in its environment, never on the
+command line, and removes any inherited `CURSOR_AUTH_TOKEN` or endpoint
+override, so requests go to Cursor with this key. Cursor keeps its login in
+memory for the run. The project's own `cursor-agent login` stays on disk,
+untouched, and a later `--native-login` uses it again. A key Cursor refuses
+fails the run with "Cursor rejected the assigned account key"; it never falls
+back to that login.
+
+Managed keys need Cursor Agent 2026.08.11 or newer. The project-isolation image
+installs 2026.10.22-27dcf5f; on a VM, install it as in
+[Install Cursor](/docs/cli/isolated-projects#install-cursor). Rerun `install.py` after upgrading the CLI; older
+launchers refuse Cursor keys and do not run Cursor at all.
+
+To use a project's own Cursor login instead:
+
+```bash
+convoy keys unassign --profile a --runtime cursor --native-login
+convoy project login a --runtime cursor
+```
+
+The login prints a link; open it in your PC's browser.
+
+### OpenCode provider keys
+
+CLI 0.118.0 lets OpenCode in an isolated project use managed OpenAI and
+Anthropic API keys, one of each per project. OpenCode uses the same entries as
+Codex and Claude Code:
+
+```bash
+convoy keys add work-openai --provider openai --auth api-key
+convoy keys add work-anthropic --provider anthropic --auth api-key
+convoy keys use work-openai --profile a --runtime opencode
+convoy keys use work-anthropic --profile a --runtime opencode
+convoy service reload --profile a --interrupt
+```
+
+Assigning a second OpenAI key replaces the first; the Anthropic key stays. Run
+`convoy keys status` to see each key's desired and applied revision.
+
+With any managed key, OpenCode sees only the assigned keys. It ignores the
+project's own `opencode auth login`, its cached ChatGPT login, keys or endpoints
+in a project `opencode.json`, and every other provider. Requests go to
+`api.openai.com` and `api.anthropic.com`. A thread whose model belongs to a
+provider without a usable key fails with `No usable <provider> key in this project`.
+An OpenCode config that sets `headers` on an assigned provider or one
+of its models fails the run, because those headers would replace the key.
+Remove them, or restore native login. A key the provider refuses fails the run;
+it never falls back to another login.
+
+Managed keys need OpenCode 1.18.18 or newer and no administrator config in
+`/etc/opencode`. The project-isolation image installs 1.19.5; on a VM, see
+[Install OpenCode](/docs/cli/isolated-projects#install-opencode). Rerun
+`install.py` after upgrading the CLI; older launchers refuse OpenCode keys.
+
+Every OpenCode server Convoy starts has its own password, so another project
+on the machine cannot use it. A's own agent can still read A's keys.
+
+To clear both keys:
+
+```bash
+convoy keys unassign --profile a --runtime opencode               # OpenCode disabled
+convoy keys unassign --profile a --runtime opencode --native-login
+convoy project login a --runtime opencode
+```
+
+### Replace, disable or remove a key
+
+```bash
+convoy keys rotate work-openai
+convoy keys status
+convoy service reload --profile a --interrupt
+convoy service reload --profile b --interrupt
+```
+
+Rotation stores a new revision; it does not prove the provider accepts it.
+Status distinguishes desired/applied revisions from the last observed Codex
+request result. A successful request is historical evidence, not a guarantee
+that the key remains valid. Status itself makes no model requests.
+
+To restore a retained revision, use `convoy keys rollback work-openai --revision 1`
+and reload the affected projects. The store retains up to 32 revisions. At that
+limit, stop workers, unassign and recreate the entry rather than silently deleting
+revisions a worker may still use.
+
+```bash
+convoy keys disable work-openai
+convoy service pause a --interrupt
+convoy service pause b --interrupt
+convoy keys unassign --profile a --runtime codex
+convoy keys unassign --profile b --runtime codex
+convoy keys remove work-openai
+```
+
+Disabling stops future credential delivery. Already running workers can still use
+an earlier key, so pause or reload them explicitly. Revoking the key at OpenAI is
+required to invalidate any copy outside Convoy. Removal refuses referenced keys
+and conservatively refuses while any project lease is active, including direct
+connections or shells.
+
+Unassignment disables Codex for that project. To explicitly return to its private
+native login instead, use:
+
+```bash
+convoy keys unassign --profile a --runtime codex --native-login
+convoy service reload --profile a --interrupt
+```
+
+Native mode uses the project's existing login and billing. It does not log you in.
+Profile aliases share the same identity binding, so assigning through one alias
+affects them all. Use the service's displayed canonical profile key for reloads.
+
+### Storage and upgrades
+
+The control user stores new entries in `~/.config/convoy/credentials-v1.json`,
+with a private directory and file permissions. The file contains plaintext secrets,
+including retained revisions; protect backups the same way. Back up its companion
+`credentials-v1.json.enabled` marker too. A missing store with that marker present
+fails closed; restore the store rather than deleting the marker to bypass it.
+The store is outside project
+mounts. Each worker receives only its assigned credential through a private pipe,
+and Codex keeps managed auth in memory. Project code can still use a key granted
+to its own project. Sharing a key also shares its provider permissions and usage.
+
+Legacy Claude entries remain in `config.toml`. There is no automatic migration.
+The desktop manages only those legacy entries; older CLI/service versions cannot
+enforce managed bindings. Stop the service and upgrade the CLI **and privileged
+launcher** before opting in. Do not mix old execution binaries with new bindings.
+
+For the existing Ubuntu VM, install the candidate archive and refresh the launcher
+as follows. The archive must first be copied into the VM; do not run these inside
+a project shell.
+
+```bash
+convoy service stop
+sudo npm install --prefix /opt/convoy ~/useconvoy-cli-0.71.1.tgz
+sudo npm install -g @openai/codex@0.156.1
+sudo python3 -I \
+  /opt/convoy/node_modules/@useconvoy/cli/dist/templates/project-isolation/install.py \
+  --control-user ubuntu \
+  --workspace /srv/convoy-workspaces \
+  --package-root /opt/convoy/node_modules/@useconvoy/cli \
+  --node "$(command -v node)"
+convoy --version
+codex --version
+convoy service start --background
+```
+
+Use your actual control account/workspace if different. Rebuild the distributed
+project devcontainer to get the new launcher and pinned Codex. Preserve its control
+and project-state volumes. A template pin can fetch 0.71.1 only after publication;
+for candidate testing in an existing project-isolation container, install the archive
+and update the template copies too. Otherwise its old post-start installer could
+restore the old launcher on the next restart:
+
+```bash
+convoy service stop
+sudo npm install --prefix /opt/convoy /path/to/useconvoy-cli-0.71.1.tgz
+sudo npm install -g @openai/codex@0.156.1
+sudo install -m 0644 \
+  /opt/convoy/node_modules/@useconvoy/cli/dist/templates/project-isolation/install.py \
+  /opt/convoy/node_modules/@useconvoy/cli/dist/templates/project-isolation/launcher.py \
+  /usr/local/share/convoy-projects/
+sudo python3 -I /usr/local/share/convoy-projects/install.py \
+  --control-user node --workspace /workspace \
+  --package-root /opt/convoy/node_modules/@useconvoy/cli \
+  --node "$(command -v node)"
+convoy service start --background
+```
+
+Use the existing configured workspace and administrator-owned Node path if they
+differ. This applies to a configured project-isolation container, not an ordinary
+unconfigured development container.
+
+### Acceptance on your A/B VM
+
+1. Assign a shared test key to A/B and complete a small Codex task in each through
+   Convoy. API billing applies to these tasks.
+2. Assign a separate A-only key. Confirm B cannot read the central store or A's
+   private files. Sharing the same key in both projects cannot prove that check.
+3. Rotate during work. Confirm status shows pending, reload A, and confirm B's
+   connection continues. Apply B afterward and test an explicit rollback.
+4. Test a rejected key, disable/unassign and explicit native restoration. Confirm
+   there is no silent switch to subscription billing after failure.
+5. Restart the service and repeat in the devcontainer. Check histories/worktrees
+   and existing private native auth files remain intact.
+
+Local protocol/fixture tests do not certify these real-provider or OS-boundary
+checks. Never paste keys or credential-store contents into task comments.
+
+
+Managed Codex runs display completed messages rather than partial text deltas,
+so a key split across streamed fragments cannot enter logs or uploaded chunks.
+Custom OpenAI proxy endpoints are not supported for managed keys.
+
+Rollback does not re-enable a disabled entry. Rotate to a replacement key to
+enable it again. Native-login restoration permits normal Codex runner selection,
+including exec mode. Without a service observation, applied credentials are
+reported as unknown.
+
+If a running project exits while a credential change is pending, the service
+starts its next worker with the desired configuration. It does not restart a
+healthy sibling to apply that change.

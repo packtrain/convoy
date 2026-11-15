@@ -1,0 +1,32 @@
+---
+title: Integrations overview
+sidebarTitle: Overview
+description: Connect an AI client to Convoy, install the task Skill, or automate work from a terminal.
+---
+
+Use integrations to read and update Convoy work from your existing tools.
+You do not need a running `convoy connect` process for any of these paths.
+That process is for executing [AI threads](/docs/using/ai-threads).
+
+| What you want to do | Start here |
+| --- | --- |
+| Read or update tasks from an editor or AI client | [Connect an MCP client](/docs/cli/mcp) with OAuth or an API key |
+| Teach a local AI client the Convoy task workflow | [Install Skills for AI clients](/docs/cli/skills) |
+| Automate task updates from a shell or CI | [Scripting with one-shot commands](/docs/cli/one-shot-commands) |
+
+MCP authentication and tool permissions belong to the signed-in user. Use a
+project-scoped endpoint to keep the client's work in the intended project.
+For scripts and machines without a browser, use an
+[API key](/docs/cli/api-keys).
+
+Local client Skills are separate from [Skills in Convoy](/docs/using/skills),
+which you manage in the web app and attach to project work.
+
+## Next steps
+
+- [MCP workflows and scoping](/docs/cli/mcp/workflows-and-scoping) explains
+  project selection and repository configuration.
+- [MCP troubleshooting](/docs/cli/mcp/troubleshooting) covers connection and
+  authentication failures.
+- [MCP tools](/docs/reference/mcp-tools) and [CLI commands](/docs/reference/cli-commands)
+  list the available operations.

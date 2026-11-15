@@ -1,0 +1,341 @@
+---
+title: Connect an MCP client
+description: Expose Convoy tasks and project context to MCP-aware AI clients.
+---
+
+Convoy ships an MCP (Model Context Protocol) server, so AI clients like
+Claude Code, Codex, and OpenCode can read and write your tasks directly from the
+editor — project-scoped task lookup and search, comments, artifacts, and
+task creation/updates. The full catalog is in the
+[`MCP tools reference`](/docs/reference/mcp-tools).
+
+MCP works independently of live thread execution. You do not need the
+Convoy CLI or a saved profile to connect directly. Use your deployment's
+MCP endpoint and authenticate through OAuth or a user API key.
+
+## Connect with OAuth (Claude Code)
+
+The fastest path for clients with OAuth support — no API key handling at all:
+
+```bash
+claude mcp add --transport http convoy \
+  "https://<DEPLOYMENT>.convex.site/api/mcp?project=<ORG_SLUG>/<PROJECT_ALIAS>"
+```
+
+Then run `/mcp` in Claude Code and follow the browser flow: sign in to
+Convoy, click **Approve**, done. The client receives its own API key
+automatically (visible under your account's API keys as
+`MCP (Claude Code)`); when it expires, `/mcp` re-authenticates with one
+click.
+
+For clients configured with a bearer token, use the header-based examples
+below. Create a user [API key](/docs/cli/api-keys) and copy the
+project-scoped endpoint from Convoy's **Configure MCP** dialog.
+
+## Prerequisites
+
+For direct configuration, you need the deployment URL, project scope, and
+an account with permission to access that project. OAuth handles sign-in
+in the browser; manual header configuration needs an API key.
+
+Only the optional CLI config generator below needs a saved profile. Use
+[Install and connect](/docs/cli) to set one up. Generated config embeds the
+profile's API key, so keep those files out of version control.
+
+## Generate the config
+
+From the repository or workspace you want the client to operate on:
+
+```bash
+convoy init mcp                # choose clients interactively
+convoy init mcp --cli claude   # writes .mcp.json
+convoy init mcp --cli codex    # writes .codex/config.toml
+convoy init mcp --cli opencode # writes opencode.json
+```
+
+Useful flags:
+
+- `--output-dir <path>` — write config somewhere other than the current
+  directory
+- `--force` — overwrite existing config without prompting (otherwise
+  Convoy asks first)
+
+## Verify
+
+1. Restart the client so it picks up the new config.
+2. Open the repo that now contains the config.
+3. Ask the client to list or search tasks — a working setup returns
+   project-scoped results.
+
+If nothing shows up, check that the generated config file exists at the
+expected path, the profile points at the correct project, and the API key
+is valid. See [`MCP troubleshooting`](/docs/cli/mcp/troubleshooting) for
+the longer symptom list.
+
+## Manual OpenCode configuration
+
+To configure OpenCode by hand instead of using `init`, add the server to
+`opencode.json` in the project folder (replace the URL with your
+deployment's and the token with your API key):
+
+```json
+{
+  "$schema": "https://opencode.ai/config.json",
+  "mcp": {
+    "convoy": {
+      "type": "remote",
+      "url": "https://your-deployment.convex.site/api/mcp?project=acme/WEB",
+      "headers": { "Authorization": "Bearer sk_user_..." },
+      "oauth": false
+    }
+  }
+}
+```
+
+`opencode.json` contains your API key — add it to `.gitignore`.
+
+## Manual Codex configuration
+
+To configure Codex by hand instead of using `init`, create
+`.codex/config.toml` in the project folder. Replace the URL with your
+Convex backend URL and project scope, and the bearer token with an API key
+from Convoy user settings:
+
+```toml
+[mcp_servers.convoy]
+url = "https://<DEPLOYMENT>.convex.site/api/mcp?project=<ORG_SLUG>/<PROJECT_ALIAS>"
+
+[mcp_servers.convoy.http_headers]
+Authorization = "Bearer <YOUR_API_KEY>"
+```
+
+The API key popup in Convoy fills in the backend URL at runtime; opened
+from a project route, it also scopes the URL with
+`?project=<ORG>/<ALIAS>`.
+
+You can also open the project header gear menu and choose **Configure MCP**
+to copy project-scoped `.mcp.json` and `.codex/config.toml` snippets for the
+current project.
+
+### Optional per-tool approvals
+
+Add `approval_mode = "approve"` blocks only for the Convoy tools you want
+Codex to run without asking each time:
+
+```toml
+[mcp_servers.convoy.tools.list_projects]
+approval_mode = "approve"
+
+[mcp_servers.convoy.tools.list_task_types]
+approval_mode = "approve"
+
+[mcp_servers.convoy.tools.list_task_lists]
+approval_mode = "approve"
+
+[mcp_servers.convoy.tools.create_task_list]
+approval_mode = "approve"
+
+[mcp_servers.convoy.tools.update_task_list]
+approval_mode = "approve"
+
+[mcp_servers.convoy.tools.list_task_labels]
+approval_mode = "approve"
+
+[mcp_servers.convoy.tools.create_task_label]
+approval_mode = "approve"
+
+[mcp_servers.convoy.tools.update_task_label]
+approval_mode = "approve"
+
+[mcp_servers.convoy.tools.delete_task_label]
+approval_mode = "approve"
+
+[mcp_servers.convoy.tools.list_checks]
+approval_mode = "approve"
+
+[mcp_servers.convoy.tools.get_checks]
+approval_mode = "approve"
+
+[mcp_servers.convoy.tools.create_check]
+approval_mode = "approve"
+
+[mcp_servers.convoy.tools.update_check]
+approval_mode = "approve"
+
+[mcp_servers.convoy.tools.delete_check]
+approval_mode = "approve"
+
+[mcp_servers.convoy.tools.list_checklists]
+approval_mode = "approve"
+
+[mcp_servers.convoy.tools.create_checklist]
+approval_mode = "approve"
+
+[mcp_servers.convoy.tools.update_checklist]
+approval_mode = "approve"
+
+[mcp_servers.convoy.tools.delete_checklist]
+approval_mode = "approve"
+
+[mcp_servers.convoy.tools.list_project_agents]
+approval_mode = "approve"
+
+[mcp_servers.convoy.tools.create_project_agent]
+approval_mode = "approve"
+
+[mcp_servers.convoy.tools.update_project_agent]
+approval_mode = "approve"
+
+[mcp_servers.convoy.tools.list_prompts]
+approval_mode = "approve"
+
+[mcp_servers.convoy.tools.create_prompt]
+approval_mode = "approve"
+
+[mcp_servers.convoy.tools.update_prompt]
+approval_mode = "approve"
+
+[mcp_servers.convoy.tools.list_skills]
+approval_mode = "approve"
+
+[mcp_servers.convoy.tools.get_skill]
+approval_mode = "approve"
+
+[mcp_servers.convoy.tools.create_skill]
+approval_mode = "approve"
+
+[mcp_servers.convoy.tools.update_skill]
+approval_mode = "approve"
+
+[mcp_servers.convoy.tools.delete_skill]
+approval_mode = "approve"
+
+[mcp_servers.convoy.tools.install_skill]
+approval_mode = "approve"
+
+[mcp_servers.convoy.tools.load_skill]
+approval_mode = "approve"
+
+[mcp_servers.convoy.tools.read_skill_file]
+approval_mode = "approve"
+
+[mcp_servers.convoy.tools.list_tasks]
+approval_mode = "approve"
+
+[mcp_servers.convoy.tools.search_tasks]
+approval_mode = "approve"
+
+[mcp_servers.convoy.tools.get_task]
+approval_mode = "approve"
+
+[mcp_servers.convoy.tools.get_tasks]
+approval_mode = "approve"
+
+[mcp_servers.convoy.tools.create_task]
+approval_mode = "approve"
+
+[mcp_servers.convoy.tools.create_task_comment]
+approval_mode = "approve"
+
+[mcp_servers.convoy.tools.update_task]
+approval_mode = "approve"
+
+[mcp_servers.convoy.tools.update_task_link]
+approval_mode = "approve"
+
+[mcp_servers.convoy.tools.move_task]
+approval_mode = "approve"
+
+[mcp_servers.convoy.tools.move_tasks_to_list]
+approval_mode = "approve"
+
+[mcp_servers.convoy.tools.delete_task]
+approval_mode = "approve"
+
+[mcp_servers.convoy.tools.list_task_artifacts]
+approval_mode = "approve"
+
+[mcp_servers.convoy.tools.get_task_artifact]
+approval_mode = "approve"
+
+[mcp_servers.convoy.tools.create_task_artifact]
+approval_mode = "approve"
+
+[mcp_servers.convoy.tools.update_task_artifact]
+approval_mode = "approve"
+
+[mcp_servers.convoy.tools.replace_in_task_artifact]
+approval_mode = "approve"
+
+[mcp_servers.convoy.tools.move_task_artifact]
+approval_mode = "approve"
+
+[mcp_servers.convoy.tools.delete_task_artifact]
+approval_mode = "approve"
+
+[mcp_servers.convoy.tools.list_artifact_comments]
+approval_mode = "approve"
+
+[mcp_servers.convoy.tools.create_artifact_comment]
+approval_mode = "approve"
+
+[mcp_servers.convoy.tools.reply_to_artifact_comment]
+approval_mode = "approve"
+
+[mcp_servers.convoy.tools.set_artifact_comment_status]
+approval_mode = "approve"
+
+[mcp_servers.convoy.tools.list_cli_profiles]
+approval_mode = "approve"
+
+[mcp_servers.convoy.tools.get_thread]
+approval_mode = "approve"
+
+[mcp_servers.convoy.tools.list_threads]
+approval_mode = "approve"
+
+[mcp_servers.convoy.tools.list_thread_messages]
+approval_mode = "approve"
+
+[mcp_servers.convoy.tools.create_thread]
+approval_mode = "approve"
+
+[mcp_servers.convoy.tools.send_thread_message]
+approval_mode = "approve"
+
+[mcp_servers.convoy.tools.mark_thread_done]
+approval_mode = "approve"
+
+[mcp_servers.convoy.tools.attach_task_to_thread]
+approval_mode = "approve"
+
+[mcp_servers.convoy.tools.attach_pull_request_to_thread]
+approval_mode = "approve"
+```
+
+Tool names must match the server catalog exactly — when tools are added or
+renamed, regenerate or update this list.
+
+MCP tool access and thread execution are separate capabilities. See
+[supported runtimes](/docs/reference/roadmap) for bridge capabilities.
+
+## Project vs. user scope
+
+Think about config scope before writing files:
+
+- use **project scope** when the config should travel with the repo —
+  preferred for shared team repos
+- use **user scope** when the config is machine-specific
+
+Generated config embeds your API key. Before committing project-scoped
+config, verify the file is ignored by version control or strip the key —
+see the [`Security model`](/docs/cli/security).
+
+## Next steps
+
+- [`MCP workflows and scoping`](/docs/cli/mcp/workflows-and-scoping) — keep
+  project, repo path, and client config aligned
+- [`MCP tools reference`](/docs/reference/mcp-tools) — the full tool
+  catalog
+- [`Skills`](/docs/cli/skills) — install the Convoy task skill alongside
+  MCP config

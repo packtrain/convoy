@@ -1,0 +1,80 @@
+---
+title: Supported runtimes and deployment status
+sidebarTitle: Runtime support
+description: Compare execution, approvals, steering, attachments, and isolation across runtimes.
+---
+
+A runtime appearing in configuration does not guarantee that it can execute
+a thread. This page records the runners and capabilities implemented in
+Convoy. Your machine also needs the runtime installed and authenticated.
+
+## Runtime execution
+
+| Runtime | Thread execution | Approvals and plan mode | Mid-run steering | Inline image input | Convoy `--isolated` |
+|---|---|---|---|---|---|
+| Claude Code | Supported through the Agent SDK | Interactive approvals and plan mode | Supported | JPEG, PNG, GIF, WebP | Supported |
+| Codex | Supported, app-server by default | Interactive approvals, questions, and plan mode on app-server | App-server only | Files referenced by local path | Supported |
+| OpenCode | Supported through `opencode serve` and its SDK | Interactive approvals, questions, and plan mode | Not supported | Files referenced by local path | Rejected |
+| Cursor | Supported through `cursor-agent` print mode | Non-interactive Act and Guarded modes; no approval prompts or plan mode | Not supported | Files referenced by local path | Rejected |
+| Amp, Droid, Gemini, CodeRabbit, GitHub Copilot, Other | No registered CLI runner | Unavailable | Unavailable | Unavailable | Unavailable |
+
+Steering sends a queued message into an active turn. Without steering,
+follow-up messages wait for the next turn. Inline image input means Convoy
+passes image content directly to the runtime. A path reference instead
+requires the runtime to read the downloaded file with its own tools.
+
+`--isolated` requests an OS sandbox through Convoy. Runtime permission
+modes are separate controls. OpenCode and Cursor fail an isolated run
+instead of silently running without that sandbox. See
+[Isolation options](/docs/cli/isolation-options).
+
+### Codex transports
+
+The default app-server transport requires codex-cli 0.142.0 or later. It
+supports approval prompts, questions, plan review, steering, live text
+deltas, and the context-window meter.
+
+`convoy connect --codex-exec` selects `codex exec --json`. Convoy also falls
+back to this transport with a warning when it detects an older Codex
+binary. Exec supports execution, model and reasoning selection, and
+resume. It does not support mid-run approvals, questions, plan review,
+steering, live token deltas, or the context-window meter. Approval-style
+modes degrade to sandboxed execution that never asks; Plan mode does not
+become read-only on this transport.
+
+### OpenCode and Cursor
+
+OpenCode requires version 1.14.19 or later. Its connection discovers the
+machine's model catalog and per-model variants. It supports streaming
+output and session resume.
+
+Cursor runs a fresh print-mode process for each turn and resumes the saved
+chat for follow-ups. Act allows commands through `--force`; Guarded follows
+the machine's permission configuration and skips denied commands. Neither
+mode asks for approval mid-run. Cursor streams coalesced output but does
+not report a context-window meter.
+
+See [Adding a runtime](/docs/contributing/adding-a-runtime) for the steps
+needed to add a runner. These capabilities were checked against the CLI
+runtime registry and runner implementations; they are not a claim that
+every runtime and deployment combination has been tested end to end.
+
+## Product guides
+
+[Workflows](/docs/using/workflows) has its own guide for authoring and
+running stages, lanes, and steps. Watch Tower's public docs scope needs
+verification before a guide is added.
+
+## Planned / experimental deployment paths
+
+[Docker deployment](/docs/deployment/self-hosting-convex) describes the
+self-hosted path and its validation status. The managed path starts with
+[Choose a deployment path](/docs/deployment). Follow the validation notes
+for the recipe you choose.
+
+## How to interpret "planned" copy elsewhere
+
+Use this page to check runtime execution and capability limits. Integration
+configuration, runtime execution, and deployment validation describe
+separate things; a working configuration file alone does not establish all
+three.

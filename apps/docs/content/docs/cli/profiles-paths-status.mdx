@@ -1,0 +1,47 @@
+---
+title: Profiles, paths, and status
+sidebarTitle: Profiles and paths
+description: Understand how the CLI resolves saved profiles and working directories.
+---
+
+A profile maps your local machine to a user, project, and one or more local paths.
+
+## Why profiles matter
+
+Profiles tell the CLI:
+
+- which Convex deployment to use
+- which API key to use
+- which project the commands should target by default
+- which local folders belong to the profile
+
+## Profile resolution
+
+The CLI resolves a profile in roughly this order:
+
+- explicit `--profile`
+- `CONVOY_PROFILE`
+- path match from the current working directory
+- configured default profile
+
+## Useful commands
+
+```bash
+convoy config list
+convoy config show
+convoy config default work
+convoy paths list
+convoy paths add /path/to/repo
+convoy status
+```
+
+## Typical practice
+
+- keep one profile per project or workstream
+- add every worktree path that should resolve to the same profile
+- use `convoy config show` when resolution is unclear
+
+## See also
+
+- [Config file (`config.toml`)](/docs/reference/config-toml) — full
+  schema and the exact profile-resolution priority order.

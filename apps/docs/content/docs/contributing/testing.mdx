@@ -1,0 +1,35 @@
+---
+title: Testing
+description: Run and extend the main test suites in Convoy.
+---
+
+## Main Test Areas
+
+- web and component tests
+- Convex backend tests
+- CLI tests
+
+## Common Commands
+
+```bash
+pnpm web:test:once
+pnpm web:lint
+cd apps/web && npx tsc --noEmit
+pnpm cli:test:once
+```
+
+## Backend Guidance
+
+Convex changes should include or update backend tests.
+
+Bug fixes should follow a failing-test-first workflow:
+
+1. write the test that reproduces the issue
+2. confirm it fails
+3. implement the fix
+4. confirm it passes
+
+## Source Material
+
+The helper utilities for Convex tests are documented in
+`apps/web/convex-testing/README.md`.

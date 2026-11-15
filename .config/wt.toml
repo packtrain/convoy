@@ -1,0 +1,12 @@
+# Worktrunk post-create hook (blocking). One chained command so ordering is
+# guaranteed: env files -> install -> Convex preview provisioning.
+# See docs/specs/worktree-preview-deployments.md.
+
+[post-create]
+setup = "cp {{ primary_worktree_path }}/apps/web/.env.local {{ worktree_path }}/apps/web/ && (cp {{ primary_worktree_path }}/apps/cli/.env.local {{ worktree_path }}/apps/cli/ || true) && pnpm i && node scripts/worktree-setup.mjs"
+
+# Kill any process still running inside the worktree (dev server + portless
+# wrapper) so nothing lingers serving a deleted directory. The Convex preview
+# deployment needs no teardown — Convex auto-deletes it 14 days after creation.
+[pre-remove]
+stop_servers = "pkill -f \"{{ worktree_path }}\" || true"

@@ -1,0 +1,141 @@
+---
+title: Workflows
+description: Build staged agent work, start it on your connection, and handle approvals and failed steps.
+---
+
+A Workflow is a saved sequence of prompts, human approval points, and Bash
+scripts for a project. Starting it creates a run that sends work to CLI threads
+and advances as the steps finish.
+
+You need a [CLI connection](/docs/cli) with the runtimes your workflow uses.
+Project admins and members can author workflows. Starting a run requires
+permission to create CLI threads and one of your own profiles for that project.
+
+## Stages, lanes, and steps
+
+The editor is a grid. Stages are rows, lanes are columns, and steps sit in their
+intersections.
+
+| Part | Execution rule |
+| --- | --- |
+| Stage | The next stage starts only after every step in the current stage completes or is skipped. |
+| Single lane | Uses one ongoing thread. Its steps run sequentially across stages. |
+| Parallel lane | Runs the current stage's steps concurrently, each in a fresh thread. |
+| Step | Sends a prompt, waits for human approval, or runs a Bash script. |
+
+Different lanes in the same stage can run concurrently. Moving a card lower
+than another lane's card does not make it wait for that card. Use consecutive
+stages to express that dependency.
+
+Every lane shares the run's selected machine and working directory, including
+its worktree if you choose one. When concurrent agents edit files, give them
+separate areas of responsibility.
+
+## Create and save a workflow
+
+1. Open project settings, then **Workflows**, and create a workflow.
+2. Enter its name and optional description, category, and color.
+3. Add a lane and choose its type. For a Single lane, configure the runtime,
+   model, effort, mode, and optional [Project agent](/docs/using/project-agents).
+4. Add stages and use **Add step...** in a grid cell to create steps. Open a
+   step to edit its content and settings.
+5. Save the workflow. Save stores the editable draft; starting a run validates
+   it and pins a version of that definition.
+
+A Single lane keeps its runtime and agent for the whole conversation. A prompt
+step can override its mode. In a Parallel lane, each prompt step needs its own
+runtime settings because each starts a separate thread.
+
+Prompt steps use the composer and can include
+[saved prompts](/docs/using/prompts). A **Wait for human** step needs an earlier
+executable step in its lane; it cannot be the lane's first step.
+
+For a Bash step, enter the script, timeout in minutes, and result handling:
+
+- **Report on failures** sends a failed script's result to the lane's agent,
+  which responds before the workflow continues. A passing script advances
+  without an agent turn.
+- **Always report to the agent** sends the result whether the script passed
+  or failed.
+- **Stop on failure** pauses on a nonzero exit or timeout for you to retry or
+  skip. Parallel-lane scripts use this option because they have no continuing
+  agent conversation.
+
+The default script timeout is 10 minutes. Script output remains in its thread.
+Scripts run on the selected machine with your credentials. In a Single lane,
+Act mode runs them directly; other modes wait for your approval. Scripts in a
+Parallel lane run without an approval gate.
+
+## Example: inspect, approve, then summarize
+
+Create a workflow named `Review a task` with one Single lane named `Reviewer`.
+Choose a runtime available on your connected machine, set its mode to Plan,
+and optionally select a Reviewer Project agent.
+
+| Stage | Step type | Content |
+| --- | --- | --- |
+| Inspect | Prompt | Read the attached task, relevant specification, and current diff. Identify correctness risks and missing tests. Do not change files. |
+| Approval | Wait for human | Review the findings before continuing. |
+| Summary | Prompt | Summarize the findings, unresolved questions, and checks performed for the attached task. Do not change files. |
+
+Save, then start a run with a task attached. The first step produces a review
+in the Reviewer's thread. Read it, ask follow-up questions if needed, and approve
+the waiting step. The last prompt runs in that same conversation and summarizes
+the review.
+
+## Start a run
+
+Open a new-thread composer on the Threads page or in a task's Activity area.
+Choose the workflow from the workflow selector in the context bar, then choose
+your connection and path. You can use the selected checkout or request a new
+worktree. The workflow's new-worktree preference only sets the initial selection;
+you can change it before starting.
+
+Convoy prefills the first lane's first prompt when the composer is empty. Edit
+it to describe this run's work, and optionally attach a task. Sending starts the
+run. The edited prompt affects this run only. The workflow's lanes and steps
+still supply runtime, model, and mode settings.
+
+If that first lane has no prompt step, text you enter becomes a run-specific
+**Kickoff** step before the saved stages. File attachments are not accepted for
+workflow starts.
+
+Keep the selected CLI connection running. Work can remain queued while its
+machine is offline. If a prompt step needs a runtime the online connection does
+not provide, that step fails with the reason; install or enable the runtime on
+the machine and retry the step.
+
+## Follow progress and intervene
+
+The Threads page groups the run's threads under one workflow item. Open it and
+use the **Workflow** tab to see steps grouped by stage, their status, and links
+to their threads. On larger screens, the step rail beside a thread also gives
+access to progress and controls.
+
+Only the user who started the run can operate its approval and recovery controls.
+
+- For a waiting human step or held Bash script, read the thread or script and
+  choose **Approve**. The approval also appears above the idle thread composer
+  when that step has a thread.
+- When an agent asks a question, answer in its thread. That response continues
+  the active step.
+- A failed step stops its lane. Other lanes can finish the current stage, but
+  the next stage waits. Use **Retry** after fixing the cause, or **Skip** to
+  advance without completing that step.
+- A failed agent turn can also recover through the thread's retry button or
+  a new corrective message. Dispatch failures still need the workflow's Retry
+  or Skip control.
+- Sending an extra message while a lane is otherwise progressing holds future
+  steps in that lane. Choose **Resume** on its blocked step when ready. Answers
+  to an active question, recovery messages after a failure, and messages while
+  waiting for approval do not create that hold.
+
+## Cancel or change future runs
+
+Choose **Cancel** in the run view and confirm to stop the workflow's running
+and queued work. Its threads remain available, but a canceled run cannot resume.
+Start a new run if you want to execute the workflow again.
+
+Editing and saving a workflow changes future runs. A running workflow keeps
+its pinned definition. Deleting the workflow cancels its active runs, including
+runs started by other users, while retaining run history.

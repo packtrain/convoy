@@ -1,0 +1,47 @@
+---
+title: MCP workflows and scoping
+description: Understand how MCP access maps to Convoy projects, profiles, and daily workflows.
+---
+
+MCP works best when you keep the Convoy project, repo path, and client config aligned.
+
+## Recommended workflow
+
+1. Save a Convoy profile for the project.
+2. Generate MCP config in the same repo or workspace.
+3. Open the supported AI client from that repo context.
+4. Use MCP tools against the matching Convoy project.
+
+## Why scoping matters
+
+Convoy is multi-tenant. A correct MCP setup should point at the right:
+
+- deployment URL
+- user identity or API key
+- project profile
+- working directory
+
+If those drift apart, the client may connect successfully but still operate against the wrong project or no project at all.
+
+## Best practices
+
+- keep one clear profile per project or worktree
+- prefer project-local config for shared team repos
+- document the expected setup in the repo onboarding guide
+- regenerate config after major client setup changes
+
+## When to use MCP vs. threads
+
+Use MCP when you want direct tool access from a client.
+
+Use Convoy threads when you want:
+
+- persistent conversation history in the app
+- streamed output back into Convoy
+- task-linked AI work visible to teammates
+
+## Related pages
+
+- [`Using Convoy`](/docs/using)
+- [`Set up MCP`](/docs/cli/mcp)
+- [`Skills`](/docs/cli/skills)

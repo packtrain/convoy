@@ -1,0 +1,78 @@
+/* Source: task-detail-metadata, assignee-selector and searchable-picker. */
+.scene { position: relative; container-type: inline-size; }
+.frame { width: 480px; max-width: 100%; min-height: 600px; margin: 0 auto; border: 1px solid oklch(1 0 0 / 12%); border-radius: 8px; background: #131313; color: oklch(.93 0 0); font: 14px/20px var(--font-preview-sans), Inter, Arial, sans-serif; }
+.frame, .frame * { box-sizing: border-box; }
+.frame button, .frame input { font: inherit; color: inherit; }
+.frame button { background: transparent; border: 0; cursor: pointer; }
+.frame button[aria-disabled] { cursor: default; }
+.frame svg { width: 16px; height: 16px; flex-shrink: 0; }
+.header { display: flex; height: 48px; align-items: center; gap: 6px; padding: 0 24px; border-bottom: 1px solid oklch(1 0 0 / 12%); color: oklch(.65 0 0); font: 12px monospace; }
+.header svg, .feature { color: #22c55e; }
+.content { padding: 24px; }
+.content h2 { margin: 0 0 24px; font-size: 20px; line-height: 28px; font-weight: 500; }
+.metadata { display: flex; flex-direction: column; gap: 16px; }
+.row { display: flex; align-items: center; gap: 16px; min-height: 20px; }
+.row > span:first-child { width: 96px; flex-shrink: 0; color: oklch(.65 0 0); }
+.row > span:last-child { display: flex; align-items: center; gap: 8px; }
+.assignment { position: relative; }
+.assignment .row > span:first-child { margin-right: -4px; }
+.trigger { display: flex; align-items: center; gap: 8px; min-width: 0; text-align: left; padding: 0; }
+.trigger > span:last-child { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.avatars { display: flex; flex-shrink: 0; align-items: center; }
+.avatar { display: inline-flex; align-items: center; justify-content: center; width: 20px; height: 20px; flex-shrink: 0; border-radius: 50%; font-size: 10px; font-weight: 500; color: #fff; }
+.avatars .avatar + .avatar { margin-left: -8px; box-shadow: 0 0 0 2px #131313; position: relative; }
+.menu { margin-top: 8px; width: 256px; max-width: 100%; border: 1px solid oklch(1 0 0 / 12%); border-radius: 6px; background: #1d1d1d; box-shadow: 0 4px 6px -1px #0003, 0 2px 4px -2px #0003; overflow: hidden; }
+.search { height: 41px; display: flex; align-items: center; gap: 8px; padding: 0 12px; border-bottom: 1px solid oklch(1 0 0 / 12%); }
+.search > svg { opacity: .5; }
+.search input { min-width: 0; width: 100%; border: 0; background: transparent; outline: none; padding: 0; }
+.search input::placeholder { color: oklch(.65 0 0); }
+.search button { display: flex; padding: 0; }
+.options { max-height: 260px; overflow-y: auto; padding: 4px; }
+.options > button, .group > button { display: flex; width: 100%; align-items: center; gap: 6px; padding: 4px 6px; border-radius: 6px; text-align: left; }
+.options button > span:not(.avatar):not(.srOnly) { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.options button > svg { color: oklch(.65 0 0); }
+.options small { margin-left: auto; font-size: 12px; color: oklch(.65 0 0); }
+.options > button:hover, .group > button:hover, .options > button:focus, .group > button:focus { background: #343434; outline: none; }
+.group { border-top: 1px solid oklch(1 0 0 / 12%); margin: 4px -4px 0; padding: 4px 4px 0; }
+.groupLabel { display: flex; align-items: center; justify-content: space-between; padding: 6px 8px; font-size: 12px; font-weight: 500; color: oklch(.65 0 0); }
+.groupLabel button { display: flex; align-items: center; justify-content: center; width: 20px; height: 20px; padding: 0; }
+.groupLabel svg { width: 14px; height: 14px; }
+.empty { padding: 6px 8px; color: oklch(.65 0 0); }
+.frame :focus-visible { outline: 2px solid #737373; outline-offset: 2px; }
+.frame input:focus-visible { outline: none; }
+.srOnly { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); white-space: nowrap; }
+
+.threads { align-items: flex-start; }
+.threads > span:first-child { padding-top: 4px; }
+.muted { color: oklch(.65 0 0); }
+.row > span:last-child { min-width: 0; }
+.tag { border: 1px solid oklch(1 0 0 / 12%); border-radius: 6px; padding: 1px 6px; font-size: 12px; }
+.description { border-top: 1px solid oklch(1 0 0 / 12%); margin-top: 16px; padding-top: 16px; }
+.description h3 { margin: 0 0 8px; font-size: 14px; font-weight: 500; }
+.description p { margin: 0; line-height: 21px; }
+
+.threadList { flex: 1; min-width: 0; margin: 0; padding: 0; list-style: none; display: flex; flex-direction: column; gap: 2px; }
+.threadList li { display: flex; align-items: center; gap: 8px; min-width: 0; }
+.thread { display: grid; grid-template-columns: 16px minmax(0,1fr) auto; align-items: center; gap: 8px; flex: 1; min-width: 0; margin-left: -6px; padding: 4px 6px; }
+.threadTitle { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-weight: 500; }
+.threadMeta { display: flex; align-items: center; gap: 6px; color: oklch(.65 0 0); font-size: 12px; }
+.frame .threadMeta svg { width: 14px; height: 14px; }
+.addThread { display: flex; align-items: center; justify-content: center; width: 28px; height: 28px; flex-shrink: 0; padding: 0; color: oklch(.65 0 0); }
+.frame .addThread svg { width: 14px; height: 14px; }
+.working { display: inline-flex; width: 16px; height: 16px; align-items: center; justify-content: center; }
+.snake { position: relative; width: 8px; height: 11px; }
+.snake i { position: absolute; width: 2px; height: 2px; background: currentColor; animation: snake .8s steps(1) infinite; }
+@keyframes snake { 0%, 80% { opacity: 1; } 80%, 90% { opacity: .5; } 90%, 100% { opacity: .1; } }
+@media (prefers-reduced-motion: reduce) { .snake i { animation: none; } .snake i:last-child { opacity: .1; } }
+
+.threadBlock { display: flex; align-items: flex-start; gap: 8px; flex: 1; min-width: 0; }
+
+/* Wide frames: the card steps back and left, the picker comes forward on the right. */
+@container (min-width: 760px) {
+  .frame { margin-left: calc(50% - 370px); }
+  .scene::after { content: ""; position: absolute; z-index: 1; top: 0; bottom: 0; left: calc(50% - 370px); width: 480px; border-radius: 8px; background: linear-gradient(90deg, rgb(8 8 13 / .4), rgb(8 8 13 / .75)); pointer-events: none; }
+  .assignment { position: static; }
+  .assignment .row { position: relative; z-index: 2; }
+  .menu { position: absolute; z-index: 3; top: 50%; translate: 0 -50%; left: calc(50% + 70px); width: 300px; margin: 0; box-shadow: 0 24px 64px -12px #000c, 0 4px 6px -1px #0003; }
+  .options { max-height: none; }
+}

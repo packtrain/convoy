@@ -1,0 +1,76 @@
+# See https://help.github.com/articles/ignoring-files/ for more about ignoring files.
+
+# dependencies
+node_modules
+*/.pnp
+.pnp.*
+*/.yarn/*
+!*/.yarn/patches
+!*/.yarn/plugins
+!*/.yarn/releases
+!*/.yarn/versions
+
+# testing
+*/coverage
+apps/*/coverage
+
+# next.js
+.next/
+apps/web/.next/
+apps/web/out/
+
+# production
+apps/web/build
+apps/cli/dist
+
+# misc
+.cmuxterm
+.DS_Store
+*.pem
+
+# debug
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+.pnpm-debug.log*
+
+# env files (can opt-in for committing if needed)
+.env*
+!.env.example
+
+# MCP config (contains API keys)
+.mcp.json
+
+# cli local config (created during testing)
+apps/cli/.convoy
+apps/cli/.claude/
+
+# disposable CLI-agent sandbox devcontainer (see sandbox/README.md)
+sandbox/
+
+# vendor clones read for reference (do not commit)
+# Anchored: unanchored, it also ignored apps/docs/content/docs/reference/.
+/reference/
+
+# vercel
+.vercel
+
+# typescript
+*.tsbuildinfo
+next-env.d.ts
+
+.claude_settings.json
+# `**/` so this reaches every workspace, not just the repo root: without it
+# `apps/web/.claude/settings.local.json` was a commit candidate.
+**/.claude/settings.local.json
+.convoy.local
+dist/
+.codex/config.toml
+.pnpm-store/
+.claude/worktrees/
+
+# Local CLI packages used for VM acceptance
+/apps/cli/*.tgz
+
+# Python test bytecode
+__pycache__/

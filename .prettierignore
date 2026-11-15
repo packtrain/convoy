@@ -1,0 +1,24 @@
+# Dependencies
+node_modules
+
+# Build outputs
+coverage
+*/coverage
+apps/*/coverage
+dist
+apps/cli/dist
+apps/web/.next
+apps/web/out
+apps/web/build
+
+# Generated code
+apps/web/convex/_generated
+apps/cli/src/convex
+next-env.d.ts
+*.tsbuildinfo
+
+# Docs use Biome formatting.
+apps/docs
+
+# Playground and vendored experiments are formatted independently.
+playground
