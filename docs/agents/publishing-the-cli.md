@@ -13,14 +13,18 @@ via `prepack`).
 1. Bump `version` in `apps/cli/package.json` (minor for features, patch for
    fixes — required in every change touching `apps/cli` anyway).
 2. Merge to `main`.
+3. Approve the staged version on npmjs.com: package → **Staged Packages** →
+   **Approve** (2FA), or `npm stage approve <stage-id>` (`npm stage list
+   @useconvoy/cli` shows the id). Nothing is live until then.
 
-The workflow runs on every push to `main`, but the first step asks npm whether
-`@useconvoy/cli@<version>` already exists. If it does, the job stops there and
-nothing is published. If it does not, the workflow lints, tests, builds
-(`prepack`), and publishes.
+The workflow runs on pushes to `main` that touch `apps/cli/package.json`, and
+the first step asks npm whether `@useconvoy/cli@<version>` already exists. If it
+does, the job stops there. If it does not, the workflow lints, tests, builds
+(`prepack`), and runs `npm stage publish`.
 
 The version check is the gate — there is no separate release trigger and no tag
-to push.
+to push. A staged version does not count as published, so another push touching
+`package.json` before approval stages it again; reject the duplicate.
 
 ## One-time npm setup
 
@@ -45,7 +49,9 @@ GitHub secrets.
    - Organization or user: `packtrain`
    - Repository: `convoy`
    - Workflow filename: `publish-cli.yml`
-   - Allowed actions: `npm publish`
+   - Allowed actions: leave **Allow npm publish** and **Allow npm dist-tag**
+     unchecked. `npm stage publish` is always allowed, so CI can only stage, and
+     a stolen CI token cannot ship a release without a maintainer's 2FA.
 3. Harden afterwards: set the package's Publishing access to **Require
    two-factor authentication and disallow tokens** (this does not affect OIDC),
    and revoke any unused automation tokens.

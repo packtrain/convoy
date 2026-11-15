@@ -1,10 +1,11 @@
 name: Publish CLI
 
-# Runs on every push to main but publishes only when the version in
-# apps/cli/package.json is not already on npm. See docs/agents/publishing-the-cli.md.
+# Stages a release when the version in apps/cli/package.json is not on npm yet.
+# A maintainer approves it on npmjs.com. See docs/agents/publishing-the-cli.md.
 on:
   push:
     branches: [main]
+    paths: [apps/cli/package.json, .github/workflows/publish-cli.yml]
   workflow_dispatch:
 
 jobs:
@@ -23,7 +24,7 @@ jobs:
           node-version: "24"
           registry-url: "https://registry.npmjs.org"
 
-      # Trusted publishing needs npm >= 11.5.1.
+      # Staged publishing needs npm >= 11.15.0.
       - run: npm install -g npm@latest
 
       - name: Check whether this version is already published
@@ -51,5 +52,5 @@ jobs:
 
       # prepack runs the build; provenance is automatic under OIDC.
       - if: steps.check.outputs.publish == 'true'
-        run: npm publish
+        run: npm stage publish
         working-directory: apps/cli
