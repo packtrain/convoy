@@ -11,6 +11,7 @@ import { Browser } from "../workflow.js";
 import type { BrowseState } from "../validators.js";
 import { plain } from "../formatters.js";
 import stringWidth from "string-width";
+import chalk from "chalk";
 import { inputBound, settle } from "./test-helpers.js";
 
 async function until(check: () => boolean) {
@@ -21,7 +22,7 @@ async function until(check: () => boolean) {
   }
   await inputBound();
 }
-const truecolor = process.env.FORCE_COLOR === "3";
+const truecolor = chalk.level === 3;
 const selectedFill = truecolor ? "\u001b[48;2;52;81;95m" : "\u001b[44m";
 /** Columns painted with the selection fill on one rendered line. */
 function filledColumns(line: string) {

@@ -47,8 +47,8 @@ try {
         await withEnvironmentLock(directory, async () => { throw new Error("Unexpected shell launch"); }, 600000, signal);
       }
       const child = spawn(process.argv[2] === "launch-failure" ? "/nonexistent-convoy-shell-fixture" : "/usr/bin/script",
-        ["--quiet", "--return", "--command", "/bin/bash --noprofile --norc", "/dev/null"],
-        { stdio: "inherit", cwd: workspace, env: { ...process.env, HOME: home, PS1: "PROJECT_SHELL> " } });
+        ["--quiet", "--return", "--command", "env 'PS1=PROJECT_SHELL> ' /bin/bash --noprofile --norc", "/dev/null"],
+        { stdio: "inherit", cwd: workspace, env: { ...process.env, HOME: home } });
       const abort = () => child.kill("SIGTERM");
       signal?.addEventListener("abort", abort, { once: true });
       const status = await new Promise<number | null>((resolve, reject) => { child.once("error", reject); child.once("close", resolve); });
