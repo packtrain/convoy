@@ -774,7 +774,7 @@ describe("createCodexAppServerRunner (fake app-server executable)", () => {
     const runner = createCodexAppServerRunner({ partialStreaming: true });
     const requests: InteractionRequestInput[] = [];
     const answers: Array<(response: string) => void> = [];
-    const run = collectChunks(runner.execute("/workspace", "test", {
+    const run = collectChunks(runner.execute(tmpDir, "test", {
       threadId: "thread_test", cliType: "codex",
       interactionBridge: {
         request(input, signal) {
@@ -805,7 +805,7 @@ describe("createCodexAppServerRunner (fake app-server executable)", () => {
     const runner = createCodexAppServerRunner();
     const requests: Array<{ input: InteractionRequestInput; signal: AbortSignal; resolve: (value: string) => void }> = [];
     const cancel = vi.fn();
-    const run = collectChunks(runner.execute("/workspace", "test", {
+    const run = collectChunks(runner.execute(tmpDir, "test", {
       threadId: "thread_test", cliType: "codex", interactionBridge: {
         request(input, signal) { return new Promise((resolve, reject) => {
           requests.push({ input, signal, resolve });
@@ -828,7 +828,7 @@ describe("createCodexAppServerRunner (fake app-server executable)", () => {
     vi.stubEnv("FAKE_REQUEST_METHOD", method);
     vi.stubEnv("FAKE_REQUEST_PARAMS", JSON.stringify(params));
     const requests: InteractionRequestInput[] = [];
-    const { chunks } = await collectChunks(createCodexAppServerRunner().execute("/workspace", "test", {
+    const { chunks } = await collectChunks(createCodexAppServerRunner().execute(tmpDir, "test", {
       threadId: "thread_test", cliType: "codex",
       interactionBridge: {
         async request(input) { requests.push(input); return JSON.stringify(response); },
