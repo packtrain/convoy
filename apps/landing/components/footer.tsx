@@ -23,7 +23,7 @@ export function Footer({ bg = "#07070b", email = "team@convoy.build" }: { bg?: s
             </a>
           </p>
           <nav aria-label="Resources" className="ml-auto flex gap-6">
-            <a href={site.docsUrl} className="transition-colors hover:text-[#f7f8f8]">Documentation</a>
+            <a href={`${site.docsUrl}docs`} className="transition-colors hover:text-[#f7f8f8]">Documentation</a>
             <a href={site.repoUrl} className="transition-colors hover:text-[#f7f8f8]">GitHub</a>
           </nav>
         </div>

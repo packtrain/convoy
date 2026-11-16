@@ -87,7 +87,7 @@ test('every repository link uses the configured repository URL', async () => {
   assert.equal(links.length, 5, 'header, hero, self-hosting, closing CTA and footer');
   for (const link of links) assert.equal(link, defaultRepo);
   assert.match(html, />packtrain\/convoy</, 'self-hosting label names the repository');
-  assert.match(html, /href="https:\/\/docs\.convoy\.build\/"/, 'footer links the documentation');
+  assert.match(html, /href="https:\/\/docs\.convoy\.build\/docs"/, 'footer links the docs index, not the redirecting root');
 });
 
 test('LANDING_REPO_URL overrides the repository and blank falls back to the default', async () => {

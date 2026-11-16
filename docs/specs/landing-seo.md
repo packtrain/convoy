@@ -18,6 +18,11 @@ Acceptance checks the rendered `href`, not the response. Every repository link
 uses it: the header, hero and closing-CTA buttons, the self-hosting link (its
 label is the URL path) and the footer. Changing the variable needs a rebuild.
 
+The footer "Documentation" link and the checks section's "How checks work" link
+are the homepage's links to the docs site. The footer goes to
+`https://docs.convoy.build/docs`, the docs index, not the bare origin. The
+origin only redirects there, and a crawler should reach content in one hop.
+
 ## Metadata
 
 The root layout sets `metadataBase` to the production origin, the shared title
