@@ -1,4 +1,4 @@
-import { readdir } from "node:fs/promises";
+import { copyFile, readdir } from "node:fs/promises";
 import path from "node:path";
 import type { Config } from "@react-router/dev/config";
 import { createGetUrl, getSlugs } from "fumadocs-core/source";
@@ -42,5 +42,13 @@ export default {
     }
 
     return paths;
+  },
+  // Static hosts serve 404.html with a 404 status. See docs/specs/docs-seo.md.
+  async buildEnd({ reactRouterConfig }) {
+    const client = path.join(reactRouterConfig.buildDirectory, "client");
+    await copyFile(
+      path.join(client, "__spa-fallback.html"),
+      path.join(client, "404.html"),
+    );
   },
 } satisfies Config;

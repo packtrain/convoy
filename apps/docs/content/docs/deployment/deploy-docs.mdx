@@ -18,22 +18,39 @@ The site is fully pre-rendered. Build output goes to `apps/docs/build/client/`.
 
 ## Deploy to Vercel
 
-Import the repository in Vercel and configure:
+Import the repository in Vercel and set **Root Directory** to `apps/docs`. Leave the other build settings alone. `apps/docs/vercel.json` sets them and overrides the dashboard:
 
-| Setting | Value |
+| Setting | Value in `vercel.json` |
 | --- | --- |
-| **Root Directory** | `apps/docs` |
+| **Framework Preset** | `null`, which selects "Other" |
 | **Build Command** | `npx react-router build` |
 | **Output Directory** | `build/client` |
-| **Install Command** | Leave as default |
 
 No environment variables are required. Click **Deploy**.
 
-The build command must use `npx react-router build` (not `react-router build`) because the binary is not globally installed.
+The build command uses `npx react-router build` (not `react-router build`) because the binary is not globally installed.
+
+Keep the framework preset off. Vercel's React Router preset answers every unknown URL with the root page and status 200, so `/robots.txt`, `/sitemap.xml`, and mistyped links all look like real pages to a crawler. With "Other", Vercel serves the build's `404.html` with status 404.
+
+`vercel.json` also redirects `/` to `/docs`, redirects URLs with a trailing slash to the URL without it, and caches the hashed files under `/assets/` as immutable.
+
+## Search engines
+
+The build writes `robots.txt`, `sitemap.xml`, and `404.html` into `build/client/`. Each page carries a canonical URL plus Open Graph and Twitter tags that point at `https://docs.convoy.build`. To host the docs on another domain, change `siteUrl` in `apps/docs/app/lib/shared.ts` and the `Sitemap:` line in `apps/docs/public/robots.txt`.
+
+After the first deploy, check the responses:
+
+```bash
+curl -sI https://docs.convoy.build/ | grep -iE '^(HTTP|location)'   # 308, /docs
+curl -sI https://docs.convoy.build/nope | grep -i '^HTTP'           # 404
+curl -s https://docs.convoy.build/robots.txt
+```
+
+Then submit `https://docs.convoy.build/sitemap.xml` in Google Search Console. Run `pnpm --filter docs test:seo` after a build to check the tags and crawler files locally.
 
 ## Deploy Elsewhere
 
-Since the output is static HTML in `build/client/`, you can deploy it to any static hosting provider (Cloudflare Pages, Netlify, GitHub Pages, etc.). Point the provider at the `build/client/` directory after running the build.
+The output is static HTML in `build/client/`, so any static host works. Point the provider at that directory after running the build. Cloudflare Pages, Netlify, and GitHub Pages serve `404.html` for unknown paths without extra setup. Add a redirect from `/` to `/docs` if the provider supports one. Without it, the root page redirects in the browser.
 
 ## Content
 

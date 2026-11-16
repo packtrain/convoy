@@ -43,19 +43,23 @@ pnpm types:check
 ## Deploy to Vercel
 
 1. Import the repository in Vercel
-2. Configure the project:
+2. Set **Root Directory** to `apps/docs`
+3. Deploy
 
-   | Setting | Value |
-   |---------|-------|
-   | **Root Directory** | `apps/docs` |
-   | **Build Command** | `npx react-router build` |
-   | **Output Directory** | `build/client` |
-   | **Install Command** | Leave as default |
+`vercel.json` sets the rest: the "Other" framework preset, the build command `npx react-router build`, the output directory `build/client`, the `/` to `/docs` redirect, and trailing-slash removal. No environment variables are required.
 
-3. No environment variables are required
-4. Deploy
+Keep the preset off. Vercel's React Router preset serves the root page with status 200 for every unknown URL, which hides the build's `404.html`. See [Deploying the docs site](content/docs/deployment/deploy-docs.mdx) and the [docs SEO spec](../../docs/specs/docs-seo.md).
 
-The `react-router build` command runs the static prerender defined in `react-router.config.ts`, which generates pages for all MDX content under `content/docs/`.
+The `react-router build` command runs the static prerender defined in `react-router.config.ts`, which generates pages for all MDX content under `content/docs/`, plus `sitemap.xml` and `404.html`.
+
+## SEO check
+
+```bash
+pnpm docs:build
+pnpm --filter docs test:seo
+```
+
+The test reads `build/client/` without a server.
 
 ## Content
 

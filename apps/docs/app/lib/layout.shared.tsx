@@ -1,6 +1,6 @@
 import type { BaseLayoutProps } from "fumadocs-ui/layouts/shared";
 import { LogoText } from "@/components/logo-text";
-import { gitConfig } from "./shared";
+import { docsRoute, gitConfig, landingUrl } from "./shared";
 
 export function baseOptions(): BaseLayoutProps {
   return {
@@ -11,7 +11,9 @@ export function baseOptions(): BaseLayoutProps {
           <span>Docs</span>
         </span>
       ),
+      url: docsRoute,
     },
+    links: [{ text: "convoy.build", url: landingUrl, external: true }],
     githubUrl: `https://github.com/${gitConfig.user}/${gitConfig.repo}`,
   };
 }

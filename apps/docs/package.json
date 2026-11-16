@@ -5,7 +5,8 @@
   "scripts": {
     "build": "react-router build",
     "dev": "portless run --name docs.convoy react-router dev",
-    "start": "serve ./build/client --config ../../serve.json",
+    "start": "serve ./build/client",
+    "test:seo": "node --test app/seo.test.mjs",
     "types:check": "react-router typegen && fumadocs-mdx && tsc --noEmit",
     "postinstall": "fumadocs-mdx",
     "lint": "biome check",

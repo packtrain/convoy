@@ -1,7 +1,9 @@
 # Public docs navigation
 
 Task: OS-1918. Approved proposal: Plan `n97an9hfac2d5xcjdp8hfrdysx8ebqv7`,
-Iteration 2. This spec covers the public site under `apps/docs`.
+Iteration 2. This spec covers the public site under `apps/docs`. Metadata,
+crawler files, 404 handling and the Vercel configuration are in
+[docs-seo.md](docs-seo.md).
 
 ## Reader paths
 
