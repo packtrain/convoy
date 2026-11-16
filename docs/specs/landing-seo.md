@@ -18,8 +18,10 @@ Acceptance checks the rendered `href`, not the response. Every repository link
 uses it: the header, hero and closing-CTA buttons, the self-hosting link (its
 label is the URL path) and the footer. Changing the variable needs a rebuild.
 
-The footer "Documentation" link and the checks section's "How checks work" link
-are the homepage's links to the docs site. The footer goes to
+The footer "Documentation" link, the checks section's "How checks work" link and
+the self-hosting section's "How to self-host" link are the homepage's links to
+the docs site. "How to self-host" goes to `/docs/deployment`, the overview of
+both deployment paths, and sits above the repository link. The footer goes to
 `https://docs.convoy.build/docs`, the docs index, not the bare origin. The
 origin only redirects there, and a crawler should reach content in one hop.
 
@@ -46,6 +48,22 @@ Serialization escapes `<` as `<` so copy can never close the script tag.
 There is no `Organization` until publisher identity is settled, and no
 `SoftwareApplication`. Google's software rich result needs a price plus a
 rating or review, and the page has neither.
+
+## Search terms
+
+Wording follows a Google Trends comparison from 2026-11-16 (worldwide, 12
+months). People search by tool name and by "coding agent(s)", which doubled over
+the year. "AI project management" is falling and draws unrelated intent.
+
+- The title carries the category term "AI coding agents" beside the "software
+  factory" tagline.
+- The description names Claude Code, Codex, OpenCode and Cursor and stays within
+  160 characters.
+- The body uses the words of the exact-fit queries: "web UI" in the coding-agent
+  introduction, "remotely" in the phone card, "Self-host" in "Run Convoy
+  yourself".
+- The page never says "open source". Convoy ships under the Elastic License 2.0,
+  which is source-available. Say "self-hosted" instead.
 
 ## Crawling
 
@@ -89,7 +107,8 @@ views, playgrounds included. There is no consent banner.
 
 `pnpm --filter @convoy/landing test:seo` reads the prerendered output after
 `pnpm landing:build` without a server. It checks absolute canonical and social
-URLs, card size and alt text, JSON-LD, crawler files, all 13 playground pages,
+URLs, the title, description and search terms, card size and alt text, JSON-LD,
+crawler files, all 13 playground pages,
 the 404 status, the Google tag, repository hrefs and the `LANDING_REPO_URL`
 override.
 `app/page.test.mjs` loads the built homepage with every script request aborted

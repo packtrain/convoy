@@ -150,18 +150,25 @@ they can adapt and improve together." Workflows here include the team's broader
 AI software development process, not only saved workflow runs.
 
 The coding-agent introduction reads "Use Claude Code, Codex, OpenCode, or Cursor
-with your team's workflows. Follow their work and review results in Convoy while
-agents run on your connected machines." The feature index retains the runtime
+with your team's workflows. Agents run on your connected machines. Follow their
+work and review results in Convoy's web UI." The feature index retains the runtime
 differences in steering and approvals.
 
 The closing CTA reads "Build your team's way of working with AI." Its supporting
 paragraph reads "Start with one workflow. Give your team a process they can reuse
 and improve."
 
-The site title reads "Convoy | Your team's software factory". The metadata
-description reads "Turn your team's expertise into reusable AI workflows. Share
-agents and skills across projects, coordinate tasks, and review work together
-in Convoy."
+The site title reads "Convoy | The software factory for AI coding agents". The
+metadata description reads "Run Claude Code, Codex, OpenCode and Cursor from one
+web UI. Share agents, skills and workflows across your team, assign tasks and
+review results together." Why these words:
+[landing-seo.md](landing-seo.md#search-terms).
+
+The phone card body reads "Your agent works on your code on a computer or server
+you connect to Convoy. Control it remotely from your phone's browser: see what
+the agent has done, answer its questions or ask for changes." The "Run Convoy
+yourself" paragraph opens "Self-host Convoy's web app and backend on your own
+infrastructure."
 
 The Watch Tower heading says "See which agents need your attention." The
 organization heading says "Keep tasks, files and pull requests together."

@@ -2,9 +2,9 @@
 
 export const site = {
   name: "Convoy",
-  title: "Convoy | Your team's software factory",
+  title: "Convoy | The software factory for AI coding agents",
   description:
-    "Turn your team's expertise into reusable AI workflows. Share agents and skills across projects, coordinate tasks, and review work together in Convoy.",
+    "Run Claude Code, Codex, OpenCode and Cursor from one web UI. Share agents, skills and workflows across your team, assign tasks and review results together.",
   url: "https://convoy.build",
   docsUrl: "https://docs.convoy.build/",
   repoUrl: process.env.LANDING_REPO_URL?.trim() || "https://github.com/packtrain/convoy",

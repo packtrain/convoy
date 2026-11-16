@@ -155,8 +155,8 @@ export default function Home() {
               </h2>
               <p className="mx-auto mt-6 max-w-[52ch] text-[17px] leading-[1.65] text-[#c6cad3]">
                 Use Claude Code, Codex, OpenCode, or Cursor with your team&apos;s workflows.
-                Follow their work and review results in Convoy while agents run on
-                your connected machines.
+                Agents run on your connected machines. Follow their work and review
+                results in Convoy&apos;s web UI.
               </p>
             </div>
             <CliLogoGrid />
@@ -230,16 +230,19 @@ export default function Home() {
                 Run Convoy yourself.
               </h2>
               <p className={`mt-4 max-w-[46ch] text-[15px] leading-relaxed ${DIM}`}>
-                Host Convoy&apos;s web app and backend on your own infrastructure.
-                Connect the machines where your agents work and manage them from
+                Self-host Convoy&apos;s web app and backend on your own infrastructure.
+                Connect the machines where your coding agents work and manage them from
                 your own Convoy instance.
               </p>
-              <a
-                href={site.repoUrl}
-                className="mt-7 inline-flex cursor-pointer items-center gap-2 text-[13px] text-[#c6cad3] transition-colors hover:text-[#f2f3f5]"
-              >
-                <GitHubIcon className="size-5" /> {new URL(site.repoUrl).pathname.slice(1)}
-              </a>
+              <div className="mt-7 flex flex-col items-start gap-4">
+                <a href={`${site.docsUrl}docs/deployment`} className="inline-flex items-center gap-2 text-[13px] text-[#c6cad3] hover:text-white">How to self-host <ArrowRight aria-hidden className="size-4" /></a>
+                <a
+                  href={site.repoUrl}
+                  className="inline-flex cursor-pointer items-center gap-2 text-[13px] text-[#c6cad3] transition-colors hover:text-[#f2f3f5]"
+                >
+                  <GitHubIcon className="size-5" /> {new URL(site.repoUrl).pathname.slice(1)}
+                </a>
+              </div>
             </div>
             <div data-preview="self-hosting" className="min-w-0 p-6 sm:p-10">
               <SelfHostingPreview />

@@ -47,7 +47,7 @@ const ITEMS = [
   },
   {
     title: "Check on your coding agent from your phone.",
-    body: "Your agent works on your code on a computer or server you connect to Convoy. Open Convoy in your phone's browser to see what the agent has done, answer its questions or ask for changes.",
+    body: "Your agent works on your code on a computer or server you connect to Convoy. Control it remotely from your phone's browser: see what the agent has done, answer its questions or ask for changes.",
     preview: <RemoteThreadPreview />,
     scene: "remote-thread",
   },

@@ -32,6 +32,20 @@ test('homepage has canonical, social and theme metadata with absolute URLs', asy
   assert.equal(html.match(/<main[\s>]/g)?.length, 1, 'one main landmark');
 });
 
+test('title and description carry the category term and the runtime names', async () => {
+  const html = await read('index.html');
+  assert.equal(html.match(/<title>([^<]*)<\/title>/)?.[1], 'Convoy | The software factory for AI coding agents');
+  const description = meta(html, 'description');
+  for (const runtime of ['Claude Code', 'Codex', 'OpenCode', 'Cursor']) assert.ok(description.includes(runtime), runtime);
+  assert.ok(description.length <= 160, `description is ${description.length} characters`);
+});
+
+test('homepage copy uses searched terms and never claims open source', async () => {
+  const text = (await read('index.html')).replace(/<script[\s\S]*?<\/script>/g, ' ').replace(/<[^>]+>/g, ' ');
+  for (const term of [/web UI/, /Control it remotely/, /Self-host Convoy/]) assert.match(text, term);
+  assert.doesNotMatch(text, /open[- ]source/i, 'Elastic License 2.0 is source-available');
+});
+
 test('homepage JSON-LD describes the website and cannot close its script', async () => {
   const html = await read('index.html');
   const scripts = [...html.matchAll(/<script type="application\/ld\+json">(.*?)<\/script>/gs)].map(m => m[1]);
@@ -88,6 +102,7 @@ test('every repository link uses the configured repository URL', async () => {
   for (const link of links) assert.equal(link, defaultRepo);
   assert.match(html, />packtrain\/convoy</, 'self-hosting label names the repository');
   assert.match(html, /href="https:\/\/docs\.convoy\.build\/docs"/, 'footer links the docs index, not the redirecting root');
+  assert.match(html, /href="https:\/\/docs\.convoy\.build\/docs\/deployment"[^>]*>How to self-host/, 'self-hosting section links the deployment guide');
 });
 
 test('LANDING_REPO_URL overrides the repository and blank falls back to the default', async () => {
