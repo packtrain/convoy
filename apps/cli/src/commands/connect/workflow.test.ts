@@ -1,4 +1,6 @@
 import * as fs from "node:fs";
+import * as os from "node:os";
+import { execFileSync } from "node:child_process";
 import * as path from "node:path";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
@@ -245,6 +247,29 @@ describe("connect command concurrency", () => {
     }
 
     expect(profileAtRunnerStart).toBe("bridge-profile");
+  });
+
+  it("puts a `convoy` on agent PATH that re-runs this bridge's own entry", async () => {
+    if (process.platform === "win32") return;
+    const dir = fs.mkdtempSync(path.join(os.tmpdir(), "convoy-entry-"));
+    const entry = path.join(dir, "it's convoy.mjs");
+    fs.writeFileSync(entry, "console.log(JSON.stringify(process.argv.slice(2)));\n");
+    const [beforeArgv, beforePath] = [process.argv[1], process.env.PATH];
+    process.argv[1] = entry;
+    process.env.PATH = "/usr/bin:/bin";
+    let output = "";
+    createAgentRunnerMock.mockImplementationOnce(async () => {
+      try { output = execFileSync("convoy", ["threads", "attach", "a b"], { encoding: "utf8" }); } catch (error) { output = String(error); }
+      return { run: vi.fn().mockResolvedValue(undefined), stop: vi.fn().mockResolvedValue(undefined) };
+    });
+    try {
+      await runConnect({ convexUrl: "https://example.convex.cloud", apiKey: "sk_test", projectId: "proj_test", paths: ["/tmp/repo"] });
+    } finally {
+      process.argv[1] = beforeArgv;
+      process.env.PATH = beforePath;
+    }
+
+    expect(output.trim()).toBe(JSON.stringify(["threads", "attach", "a b"]));
   });
 
   it("uses default concurrency when omitted", async () => {

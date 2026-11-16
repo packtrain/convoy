@@ -212,9 +212,15 @@ context. Spec: [task-checks.md](task-checks.md#reporting-agent-side).
   last bootstrap frame.
 - Script requests and runtime commands get no line.
 - The IDs are selectors, not credentials. The command authenticates with the
-  saved `convoy` credentials of the bridge's profile (see Profile above), so it
-  assumes an installed CLI on `PATH`.
+  saved `convoy` credentials of the bridge's profile (see Profile above).
   No environment variable carries them: the opencode server is shared across threads.
+- `convoy` on the agent's `PATH` is the bridge itself. Before any runtime
+  starts, the bridge writes a temporary `convoy` shell shim that re-runs its own
+  Node binary, Node flags, and entry script, then puts that folder first on
+  `PATH`. An agent therefore reaches the same CLI build as the bridge, also
+  when the bridge runs via `npx` or from source (`pnpm cli:dev`), where no
+  `convoy` is installed. The shim is POSIX `sh` only; on Windows the line
+  still assumes an installed CLI on `PATH`.
 
 ### Delivery invariants
 

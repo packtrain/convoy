@@ -1,3 +1,5 @@
+import * as fs from "node:fs";
+import * as os from "node:os";
 import * as path from "node:path";
 import { Command } from "commander";
 import chalk from "chalk";
@@ -38,6 +40,7 @@ import { runSetup } from "../setup/workflow.js";
 import { maybeLogMissingProjectSkillHint } from "../../lib/skill-install-guidance.js";
 import { checkForNewerVersion, getCliVersion } from "../../lib/version.js";
 import { ENV_PROFILE } from "../../lib/constants.js";
+import { shellQuote } from "../../lib/pagination.js";
 import { canPromptForUpdate, offerUpdate } from "../update/prompts.js";
 import {
   EXIT_FATAL,
@@ -403,6 +406,20 @@ export async function runConnect(config: RunConnectConfig): Promise<void> {
   } finally { release?.(); }
 }
 
+let selfBinDir: string | undefined;
+/** Agent-run `convoy` re-runs this bridge's own entry, even from source or npx. Spec: docs/specs/cli-thread-agents.md#reply-attachment-delivery-os-2091 */
+function exportSelfOnPath(): void {
+  // ponytail: POSIX sh shim only; Windows agents still need `convoy` installed.
+  if (process.platform === "win32" || !process.argv[1]) return;
+  if (!selfBinDir) {
+    const dir = selfBinDir = fs.mkdtempSync(path.join(os.tmpdir(), "convoy-bin-"));
+    process.on("exit", () => fs.rmSync(dir, { recursive: true, force: true }));
+  }
+  const command = [process.execPath, ...process.execArgv, process.argv[1]].map(shellQuote).join(" ");
+  fs.writeFileSync(path.join(selfBinDir, "convoy"), `#!/bin/sh\nexec ${command} "$@"\n`, { mode: 0o755 });
+  if (!(process.env.PATH ?? "").split(path.delimiter).includes(selfBinDir)) process.env.PATH = `${selfBinDir}${path.delimiter}${process.env.PATH ?? ""}`;
+}
+
 async function connectAgents(config: RunConnectConfig, shared?: { runtimes: string[]; loggedOut: string[] }): Promise<void> {
   const paths = config.paths ?? [process.cwd()];
   const concurrency = config.concurrency ?? DEFAULT_CONNECT_CONCURRENCY;
@@ -416,6 +433,7 @@ async function connectAgents(config: RunConnectConfig, shared?: { runtimes: stri
   }
   // Agent-run `convoy` commands target this bridge's profile. Spec: docs/specs/cli-thread-agents.md#thread-identity-delivery-os-1223
   if (config.profileKey) process.env[ENV_PROFILE] = config.profileKey;
+  exportSelfOnPath();
   // Isolated workers report the launcher's runtime state so clients can offer logins and warn.
   const launcherList = (name: string) => (process.env[name] ?? "").split(",").filter(Boolean);
   const native: Record<LoginRuntime, boolean> = {
