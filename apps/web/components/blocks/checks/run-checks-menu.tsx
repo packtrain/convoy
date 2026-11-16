@@ -26,8 +26,21 @@ const isPendingOrFailed = (check: TaskCheck) => {
   return status === undefined || status === "failed";
 };
 
-/** The prompt the menu sends: each Check's key, label, and instruction, then the attach command. */
-function runChecksPrompt(threadId: Id<"cliThreads">, data: TaskChecks, checks: TaskCheck[], scope: "pending" | "all", owner: "task" | "thread") {
+export type ChecksOwner = "task" | "thread" | "pull request";
+
+/**
+ * A Run checks prompt: each Check's key, label, and instruction, then the attach command.
+ * Without a thread yet (a new checks run), it points at the attach footer the CLI adds;
+ * `headSha` pins a PR run to the commit its results will belong to.
+ */
+export function runChecksPrompt(
+  threadId: Id<"cliThreads"> | null,
+  data: TaskChecks,
+  checks: TaskCheck[],
+  scope: "pending" | "all",
+  owner: ChecksOwner,
+  headSha?: string
+) {
   const catalog = new Set(data.catalog.map((definition) => definition.key));
   const lines = checks.map((check) => {
     // The CLI rejects a key outside the catalog without a label.
@@ -36,11 +49,21 @@ function runChecksPrompt(threadId: Id<"cliThreads">, data: TaskChecks, checks: T
   });
   return [
     scope === "pending" ? `Run the pending and failed checks for this ${owner}:` : `Run all checks for this ${owner}:`,
+    ...(headSha
+      ? [
+          "",
+          `Check commit ${headSha}, the pull request's head when this run started. If the working tree is on another commit, ` +
+            "check that one out first; report a check as not performed if you cannot.",
+        ]
+      : []),
     "",
     ...lines,
     "",
-    `Report each one with \`convoy threads attach ${threadId} [file...] --check <key> --passed | --warning | --failed | --not-performed --note <why>\`, ` +
-      "adding this reply's --message-id and --session-id. Attach the files that prove the result.",
+    threadId
+      ? `Report each one with \`convoy threads attach ${threadId} [file...] --check <key> --passed | --warning | --failed | --not-performed --note <why>\`, ` +
+        "adding this reply's --message-id and --session-id. Attach the files that prove the result."
+      : "Report each one with the `convoy threads attach` command from this prompt's footer, adding " +
+        "`--check <key> --passed | --warning | --failed | --not-performed --note <why>`. Attach the files that prove the result.",
   ].join("\n");
 }
 
@@ -72,8 +95,10 @@ export function RunChecksMenu({
   const send = useMutation(api.cli.messages.send);
   const switchChecklist = useSwitchChecklist(taskId ? { taskId } : { threadId }, data);
   const pending = data.checks.filter(isPendingOrFailed);
+  // A PR's Checks follow the project's Pull request checklist, so there is nothing to switch.
+  const owner: ChecksOwner = data.pullRequest ? "pull request" : taskId ? "task" : "thread";
   const run = (checks: TaskCheck[], scope: "pending" | "all") => {
-    send({ threadId, content: runChecksPrompt(threadId, data, checks, scope, taskId ? "task" : "thread") })
+    send({ threadId, content: runChecksPrompt(threadId, data, checks, scope, owner) })
       .then(() => toast.success(`Asked the agent to run ${checks.length} ${checks.length === 1 ? "check" : "checks"}`))
       .catch((error) => showConvexErrorToast(error, "Failed to send the checks prompt"));
   };
@@ -91,22 +116,26 @@ export function RunChecksMenu({
               Pending and failed
             </DropdownMenuItem>
             <DropdownMenuItem onSelect={() => run(data.checks, "all")}>All checks</DropdownMenuItem>
-            <DropdownMenuSeparator />
           </>
         ) : null}
-        <DropdownMenuLabel className="text-xs text-muted-foreground">Switch checklist</DropdownMenuLabel>
-        {readOnlyReason ? <p className="px-2 pb-1 text-xs text-muted-foreground">{readOnlyReason}</p> : null}
-        <DropdownMenuRadioGroup value={data.checklistId ?? NO_CHECKS} onValueChange={switchChecklist}>
-          <DropdownMenuRadioItem value={NO_CHECKS} disabled={readOnlyReason !== null}>
-            No checks
-          </DropdownMenuRadioItem>
-          {data.checklists.map((checklist) => (
-            <DropdownMenuRadioItem key={checklist._id} value={checklist._id} disabled={readOnlyReason !== null}>
-              <span className="flex-1">{checklist.name}</span>
-              {checklist.isDefault ? <span className="text-xs text-muted-foreground">Default</span> : null}
-            </DropdownMenuRadioItem>
-          ))}
-        </DropdownMenuRadioGroup>
+        {data.pullRequest ? null : (
+          <>
+            {data.checks.length > 0 ? <DropdownMenuSeparator /> : null}
+            <DropdownMenuLabel className="text-xs text-muted-foreground">Switch checklist</DropdownMenuLabel>
+            {readOnlyReason ? <p className="px-2 pb-1 text-xs text-muted-foreground">{readOnlyReason}</p> : null}
+            <DropdownMenuRadioGroup value={data.checklistId ?? NO_CHECKS} onValueChange={switchChecklist}>
+              <DropdownMenuRadioItem value={NO_CHECKS} disabled={readOnlyReason !== null}>
+                No checks
+              </DropdownMenuRadioItem>
+              {data.checklists.map((checklist) => (
+                <DropdownMenuRadioItem key={checklist._id} value={checklist._id} disabled={readOnlyReason !== null}>
+                  <span className="flex-1">{checklist.name}</span>
+                  {checklist.isDefault ? <span className="text-xs text-muted-foreground">Default</span> : null}
+                </DropdownMenuRadioItem>
+              ))}
+            </DropdownMenuRadioGroup>
+          </>
+        )}
       </DropdownMenuContent>
     </DropdownMenu>
   );

@@ -24,14 +24,14 @@ export async function findCheckDefinitionByKey(ctx: Ctx, projectId: Id<"projects
 
 export async function insertCheckDefinition(
   ctx: MutationCtx,
-  props: { projectId: Id<"projects">; key: string; label: string; instruction: string },
+  props: { projectId: Id<"projects">; key: string; label: string; instruction: string; showInPullRequestList?: boolean },
   createdBy: Id<"users">
 ): Promise<Id<"checkDefinitions">> {
   const now = Date.now();
   return ctx.db.insert("checkDefinitions", { ...props, createdBy, updatedBy: createdBy, createdAt: now, updatedAt: now });
 }
 
-export type CheckDefinitionUpdatePatch = { label?: string; instruction?: string };
+export type CheckDefinitionUpdatePatch = { label?: string; instruction?: string; showInPullRequestList?: boolean };
 
 export async function updateCheckDefinition(
   ctx: MutationCtx,

@@ -571,6 +571,8 @@ export type ThreadInsert = {
   title: string;
   associatedTaskId?: Id<"tasks">;
   attachedPullRequest?: AttachedPullRequest;
+  /** A Pull request checks run's head revision at launch (OS-2400). Set only here at creation. */
+  pullRequestChecks?: { headSha: string };
   /** How the task association was initiated — recorded on the task's `agentThreadWork` entry, not stored on the thread. */
   agentWorkSource?: AgentThreadWorkSource;
   /**
@@ -640,6 +642,7 @@ export async function insertCliThread(ctx: MutationCtx, thread: ThreadInsert, no
     workflowRunStepId: thread.workflowRunStepId,
     associatedTaskId: thread.associatedTaskId,
     attachedPullRequest: thread.attachedPullRequest,
+    pullRequestChecks: thread.pullRequestChecks,
     projectAgentId: thread.projectAgentId,
     agentPromptSnapshot: thread.agentPromptSnapshot,
     ...(thread.worktree || thread.executionBranch ? {

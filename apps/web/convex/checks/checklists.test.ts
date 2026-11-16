@@ -55,6 +55,96 @@ describe("checks.checklists", () => {
     });
   });
 
+  test("a project has one Pull request checklist; picking another takes it off the first (OS-2400)", async () => {
+    const { project, asUser } = await setupCatalog();
+    const feature = await asUser.mutation(api.checks.checklists.create, {
+      projectId: project._id,
+      name: "Feature",
+      checkKeys: ["tests"],
+      taskTypeKeys: ["feature"],
+      pullRequests: true,
+    });
+    const review = await asUser.mutation(api.checks.checklists.create, {
+      projectId: project._id,
+      name: "Review",
+      checkKeys: ["ui"],
+      taskTypeKeys: [],
+      pullRequests: true,
+    });
+    const flags = async () =>
+      Object.fromEntries(
+        (await asUser.query(api.checks.checklists.list, { projectId: project._id })).map((checklist) => [
+          checklist.name,
+          [checklist.pullRequests, checklist.taskTypeKeys],
+        ])
+      );
+    expect(await flags()).toEqual({ Feature: [false, ["feature"]], Review: [true, []] });
+
+    await asUser.mutation(api.checks.checklists.update, { checklistId: feature, pullRequests: true });
+    expect(await flags()).toEqual({ Feature: [true, ["feature"]], Review: [false, []] });
+
+    await asUser.mutation(api.checks.checklists.update, { checklistId: feature, pullRequests: false });
+    await asUser.mutation(api.checks.checklists.update, { checklistId: review, name: "Review 2" });
+    expect(await flags()).toEqual({ Feature: [false, ["feature"]], "Review 2": [false, []] });
+  });
+
+  test("setDefaults applies every type and the Pull request checklist in one go, leaving unlisted types alone", async () => {
+    const { project, asUser, createChecklist } = await setupCatalog();
+    const feature = await createChecklist("Feature", ["tests"], ["feature", "task", "epic"]);
+    const bugFix = await createChecklist("Bug fix", ["regression"], ["bug"]);
+    const review = await createChecklist("Review", ["ui"]);
+
+    await asUser.mutation(api.checks.checklists.setDefaults, {
+      projectId: project._id,
+      taskTypes: [
+        { key: "task", checklistId: bugFix },
+        { key: "bug", checklistId: bugFix },
+        { key: "feature", checklistId: feature },
+        { key: "chore", checklistId: null },
+      ],
+      pullRequests: review,
+    });
+
+    const list = await asUser.query(api.checks.checklists.list, { projectId: project._id });
+    expect(Object.fromEntries(list.map((checklist) => [checklist.name, [checklist.taskTypeKeys, checklist.pullRequests]]))).toEqual({
+      "Bug fix": [["bug", "task"], false],
+      Feature: [["feature", "epic"], false],
+      Review: [[], true],
+    });
+  });
+
+  test("setDefaults saves nothing when any part is invalid", async () => {
+    const { ctx, project, asUser, createChecklist } = await setupCatalog();
+    const feature = await createChecklist("Feature", ["tests"], ["feature"]);
+    const other = await ctx.setupProject();
+    const foreign = await other.asUser.mutation(api.checks.checklists.create, {
+      projectId: other.project._id,
+      name: "Foreign",
+      checkKeys: [],
+      taskTypeKeys: [],
+    });
+    const before = await asUser.query(api.checks.checklists.list, { projectId: project._id });
+
+    await expect(
+      asUser.mutation(api.checks.checklists.setDefaults, {
+        projectId: project._id,
+        taskTypes: [
+          { key: "feature", checklistId: null },
+          { key: "bug", checklistId: foreign },
+        ],
+        pullRequests: feature,
+      })
+    ).rejects.toThrow("Checklist not found");
+    await expect(
+      asUser.mutation(api.checks.checklists.setDefaults, {
+        projectId: project._id,
+        taskTypes: [{ key: "not-a-type", checklistId: feature }],
+        pullRequests: null,
+      })
+    ).rejects.toThrow("Invalid task type 'not-a-type'");
+    expect(await asUser.query(api.checks.checklists.list, { projectId: project._id })).toEqual(before);
+  });
+
   test("members cannot manage checklists", async () => {
     const { ctx, org, project, createChecklist } = await setupCatalog();
     const member = await ctx.user();
@@ -68,6 +158,9 @@ describe("checks.checklists", () => {
     ).rejects.toThrow();
     await expect(asMember.mutation(api.checks.checklists.update, { checklistId, name: "Nope" })).rejects.toThrow();
     await expect(asMember.mutation(api.checks.checklists.remove, { checklistId })).rejects.toThrow();
+    await expect(
+      asMember.mutation(api.checks.checklists.setDefaults, { projectId: project._id, taskTypes: [], pullRequests: checklistId })
+    ).rejects.toThrow();
   });
 });
 

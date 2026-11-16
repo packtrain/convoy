@@ -5,7 +5,7 @@ import type { Id } from "@/convex/_generated/dataModel";
 import { Badge } from "@/components/ui/badge";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { externalRoutes } from "@/lib/navigation";
-import { CheckRow, summarizeChecks } from "./check-row";
+import { CheckRow, isOutdated, summarizeChecks } from "./check-row";
 import { NO_CHECKS, RunChecksMenu, useSwitchChecklist } from "./run-checks-menu";
 import type { ProjectRoute, TaskChecks } from "./types";
 import { useThreadChecks } from "./use-thread-checks";
@@ -82,7 +82,15 @@ export function TaskChecksSection({
   const data = useThreadChecks(threadId, taskId);
   if (!data) return null;
   const rows = data.checks.map((check) => (
-    <CheckRow key={check.key} label={check.label} added={check.added} results={check.results} surface={surface} projectRoute={projectRoute} />
+    <CheckRow
+      key={check.key}
+      label={check.label}
+      added={check.added}
+      outdated={isOutdated(data, check.results[0])}
+      results={check.results}
+      surface={surface}
+      projectRoute={projectRoute}
+    />
   ));
 
   if (surface === "tab") {

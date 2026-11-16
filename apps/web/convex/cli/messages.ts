@@ -941,14 +941,20 @@ export const attachToResponse = mutation({
     if (!args.check) {
       return { messageId: message._id, storageIds };
     }
-    // A thread with no task owns the result until a task is attached (OS-2293).
-    const taskId = thread.associatedTaskId;
+    // A Pull request checks run reports on its PR's head, whatever task it gains later (OS-2400).
+    const pullRequest =
+      thread.pullRequestChecks && thread.attachedPullRequest
+        ? { ref: thread.attachedPullRequest.ref, headSha: thread.pullRequestChecks.headSha }
+        : undefined;
+    // Otherwise a thread with no task owns the result until a task is attached (OS-2293).
+    const taskId = pullRequest ? undefined : thread.associatedTaskId;
     if (taskId) {
       await requireAccessibleCliTask(ctx, principal, taskId, thread.projectId);
     }
     const checkResultId: Id<"checkResults"> = await ctx.runMutation(internal.checks.results.report, {
       projectId: thread.projectId,
       taskId,
+      pullRequest,
       threadId: thread._id,
       messageId: message._id,
       threadTitle: thread.title,

@@ -23,6 +23,8 @@ export const errors = {
   THREAD_PULL_REQUEST_ALREADY_ATTACHED: "This thread already has an attached pull request",
   ATTACH_PULL_REQUEST_TO_CONTAINER: "Groups and workflow runs cannot have an attached pull request",
   PULL_REQUEST_URL_INVALID: "Not a GitHub pull request URL",
+  PULL_REQUEST_CHECKS_NEED_CONNECTED_PULL_REQUEST: "Pull request checks need a pull request in a connected repository",
+  PULL_REQUEST_CHECKS_HEAD_MOVED: "The pull request has new commits. Run the checks again.",
   SELECTED_RUN_REQUIRED: "Select a run ID before cancelling from the service",
   SELECTED_RUN_CHANGED: "Selected run is no longer active",
   SERVICE_LOG_CURSOR_INVALID: "Invalid stored run log cursor",

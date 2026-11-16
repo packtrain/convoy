@@ -4,16 +4,20 @@ import { internalMutation, query, type MutationCtx, type QueryCtx } from "../_ge
 import { getOptionalAuthenticatedAccess } from "../lib/access/auth";
 import { authorizeProjectAccess, hasProjectAccess, type ProjectAccessPrincipal } from "../lib/access/permissions";
 import { ProjectPermission } from "../../lib/authz/permissions";
-import { checkReportInputValidator, cliMessageAttachmentValidator } from "../lib/contracts/validators";
+import { checkReportInputValidator, checkResultStatusValidator, cliMessageAttachmentValidator } from "../lib/contracts/validators";
 import { ensure } from "../lib/shared/ensure";
 import { getViewableThread } from "../cli/lib/permissions";
 import { getActiveTaskById } from "../tasks/lib/tasksRepo";
 import { getArtifactById, normalizeTaskArtifactId } from "../tasks/lib/taskArtifactsRepo";
 import { errors } from "./errors";
-import { MAX_CHECK_NOTE_LENGTH, MAX_CHECK_VALUE_LENGTH } from "./lib/constants";
-import { findCheckDefinitionByKey } from "./lib/checkDefinitionsRepo";
-import { getCheckResultById, insertCheckResult } from "./lib/checkResultsRepo";
+import { MAX_CHECK_NOTE_LENGTH, MAX_CHECK_VALUE_LENGTH, MAX_PULL_REQUEST_LIST_CHECKS, MAX_PULL_REQUEST_LIST_REFS } from "./lib/constants";
+import { findCheckDefinitionByKey, listCheckDefinitionsByProject } from "./lib/checkDefinitionsRepo";
+import { findLatestPullRequestResult, getCheckResultById, insertCheckResult } from "./lib/checkResultsRepo";
+import { listChecklistsByProject } from "./lib/checklistsRepo";
 import { validateCheckKey, validateCheckLabel } from "./lib/naming";
+import { parseAttachedPullRequest } from "../lib/contracts/github";
+import { findLinkedPullRequest } from "../integrations/github/lib/integrationPullRequestsRepo";
+import { listActiveRepositoryLinksForProject } from "../integrations/github/lib/integrationRepositoryLinksRepo";
 
 /**
  * Records one Check result for `convoy threads attach --check`, inside `cli.messages.attachToResponse`
@@ -23,6 +27,7 @@ export const report = internalMutation({
   args: {
     projectId: v.id("projects"),
     taskId: v.optional(v.id("tasks")),
+    pullRequest: v.optional(v.object({ ref: v.string(), headSha: v.string() })),
     threadId: v.id("cliThreads"),
     messageId: v.id("cliMessages"),
     threadTitle: v.string(),
@@ -78,7 +83,7 @@ async function requireReportableArtifact(
   return artifact;
 }
 
-/** Signed URLs for one result's files, gated by task access, or thread access while a thread owns it. */
+/** Signed URLs for one result's files, gated by task access, thread access while a thread owns it, or project access for a PR's. */
 export const getFileUrls = query({
   args: { resultId: v.id("checkResults"), apiKey: v.optional(v.string()) },
   returns: v.array(v.object({ storageId: v.id("_storage"), url: v.union(v.string(), v.null()) })),
@@ -95,9 +100,77 @@ export const getFileUrls = query({
 });
 
 async function canViewResults(ctx: QueryCtx, principal: ProjectAccessPrincipal, result: Doc<"checkResults">): Promise<boolean> {
+  // A PR's results are the project's, like the PR itself (docs/specs/github-integration.md → Pull request checks).
+  if (result.pullRequest) {
+    return (await authorizeProjectAccess(ctx, principal, result.projectId, ProjectPermission.PROJECT_VIEW)) !== null;
+  }
   if (result.taskId === undefined) {
     return (await getViewableThread(ctx, principal, result.threadId)) !== null;
   }
   const task = await getActiveTaskById(ctx, result.taskId);
   return task !== null && (await authorizeProjectAccess(ctx, principal, task.projectId, ProjectPermission.TASK_VIEW)) !== null;
 }
+
+
+/**
+ * Each listed PR's current result for the Checks marked "Show in pull request list", Pull request checklist order
+ * first, up to three per row. One index read per row and Check, plus the head for a row with results
+ * (docs/specs/github-integration.md → Pull request checks).
+ */
+export const listForPullRequestList = query({
+  args: { projectId: v.id("projects"), refs: v.array(v.string()) },
+  returns: v.array(
+    v.object({
+      ref: v.string(),
+      checks: v.array(
+        v.object({
+          key: v.string(),
+          label: v.string(),
+          /** Pending holds the Check's slot on a row that has other results, so each column is one Check. */
+          status: v.union(checkResultStatusValidator, v.literal("pending")),
+          value: v.optional(v.string()),
+          note: v.optional(v.string()),
+          /** Reported on an older head than the PR's stored one. */
+          outdated: v.boolean(),
+        })
+      ),
+    })
+  ),
+  handler: async (ctx, args) => {
+    const auth = await getOptionalAuthenticatedAccess(ctx);
+    if (!auth || !(await authorizeProjectAccess(ctx, auth.principal, args.projectId, ProjectPermission.PROJECT_VIEW))) {
+      return [];
+    }
+    const [definitions, checklists] = await Promise.all([
+      listCheckDefinitionsByProject(ctx, args.projectId),
+      listChecklistsByProject(ctx, args.projectId),
+    ]);
+    const order = checklists.find((checklist) => checklist.pullRequests)?.checkKeys ?? [];
+    const rank = (key: string) => (order.includes(key) ? order.indexOf(key) : order.length);
+    const shown = definitions
+      .filter((definition) => definition.showInPullRequestList)
+      .sort((a, b) => rank(a.key) - rank(b.key))
+      .slice(0, MAX_PULL_REQUEST_LIST_CHECKS);
+    const refs = [...new Set(args.refs)];
+    ensure(refs.length).lte(MAX_PULL_REQUEST_LIST_REFS, errors.pullRequestListTooManyRefs(MAX_PULL_REQUEST_LIST_REFS));
+    // Read once, and only if some row has results.
+    let linksRead: Promise<Doc<"integrationRepositoryLinks">[]> | undefined;
+    const links = () => (linksRead ??= listActiveRepositoryLinksForProject(ctx, args.projectId));
+    return Promise.all(
+      refs.map(async (ref) => {
+        const results = await Promise.all(shown.map((definition) => findLatestPullRequestResult(ctx, args.projectId, ref, definition.key)));
+        // A row nobody checked stays bare; only a checked one pays for its head read.
+        if (results.every((result) => result === null)) return { ref, checks: [] };
+        const parsed = parseAttachedPullRequest(ref);
+        const head = parsed ? (await findLinkedPullRequest(ctx, await links(), parsed))?.headSha : undefined;
+        const checks = shown.map(({ key, label }, index) => {
+          const result = results[index];
+          if (!result) return { key, label, status: "pending" as const, outdated: false };
+          const outdated = Boolean(head && result.pullRequest && result.pullRequest.headSha !== head);
+          return { key, label, status: result.status, value: result.value, note: result.note, outdated };
+        });
+        return { ref, checks };
+      })
+    );
+  },
+});

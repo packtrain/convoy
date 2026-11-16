@@ -2,35 +2,36 @@
  * @vitest-environment jsdom
  */
 import { afterEach, beforeEach, describe, expect, test, vi } from "vitest";
-import { cleanup, fireEvent, render, screen, within } from "@testing-library/react";
+import { cleanup, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import type { Id } from "@/convex/_generated/dataModel";
 import { BUILT_IN_TASK_TYPES } from "@/lib/tasks/task-types";
 import type { CheckDefinition, Checklist } from "./types";
 import { ChecklistDialog } from "./checklist-dialog";
 import { ChecksSettingsSection } from "./checks-settings-section";
 
-const data = vi.hoisted(() => ({ catalog: [] as unknown[], checklists: [] as unknown[] }));
+const data = vi.hoisted(() => ({ catalog: [] as unknown[], checklists: [] as unknown[], mutate: vi.fn() }));
 
 vi.mock("convex/react", () => ({
   useQuery: (ref: string) => (ref === "definitions.list" ? data.catalog : data.checklists),
-  useMutation: () => vi.fn(),
+  useMutation: () => data.mutate,
 }));
 vi.mock("@/convex/_generated/api", () => ({
   api: {
     checks: {
       definitions: { list: "definitions.list", create: "c", update: "u", remove: "r" },
-      checklists: { list: "checklists.list", create: "c", update: "u", remove: "r" },
+      checklists: { list: "checklists.list", create: "c", update: "u", remove: "r", setDefaults: "setDefaults" },
     },
   },
 }));
 
 const projectId = "project_1" as Id<"projects">;
-const check = (key: string): CheckDefinition => ({ _id: `check_${key}` as Id<"checkDefinitions">, key, label: `Label ${key}`, instruction: "" });
+const check = (key: string): CheckDefinition => ({ _id: `check_${key}` as Id<"checkDefinitions">, key, label: `Label ${key}`, instruction: "", showInPullRequestList: false });
 const checklist = (name: string, checkKeys: string[] = []): Checklist => ({
   _id: `checklist_${name}` as Id<"checklists">,
   name,
   checkKeys,
   taskTypeKeys: ["feature"],
+  pullRequests: false,
 });
 
 describe("ChecksSettingsSection", () => {
@@ -49,6 +50,7 @@ describe("ChecksSettingsSection", () => {
     cleanup();
     data.catalog = [];
     data.checklists = [];
+    data.mutate.mockReset();
   });
 
   test("the Checklists group stays hidden until there is a check", () => {
@@ -80,7 +82,7 @@ describe("ChecksSettingsSection", () => {
     render(<ChecksSettingsSection projectId={projectId} canEdit />);
 
     const pill = screen.getByText("Feature");
-    const row = pill.parentElement;
+    const row = pill.closest<HTMLElement>(".flex-wrap");
     expect(row?.className).toContain("flex-wrap");
     expect(within(row!).getByText("Bug")).toBeDefined();
     expect(screen.getByText("Everything").className).toContain("max-w-full");
@@ -105,7 +107,7 @@ describe("ChecksSettingsSection", () => {
 
   test("checks are picked from a checkbox dropdown and listed in pick order", () => {
     const catalog = ["tests", "ui", "lint"].map(check);
-    render(<ChecklistDialog projectId={projectId} checklist={undefined} catalog={catalog} checklists={[]} onClose={() => {}} />);
+    render(<ChecklistDialog projectId={projectId} checklist={undefined} catalog={catalog} onClose={() => {}} />);
 
     fireEvent.click(screen.getByRole("button", { name: "Add checks" }));
     fireEvent.click(screen.getByRole("checkbox", { name: /^Label ui/ }));
@@ -117,34 +119,81 @@ describe("ChecksSettingsSection", () => {
 
   test("the Add checks button sits below the picked checks", () => {
     const feature = checklist("Feature", ["tests"]);
-    render(<ChecklistDialog projectId={projectId} checklist={feature} catalog={[check("tests")]} checklists={[feature]} onClose={() => {}} />);
+    render(<ChecklistDialog projectId={projectId} checklist={feature} catalog={[check("tests")]} onClose={() => {}} />);
 
     const row = screen.getByRole("button", { name: "Drag to reorder Label tests" });
     const add = screen.getByRole("button", { name: "Add checks" });
     expect(row.compareDocumentPosition(add) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
   });
 
-  test("default task types render as inline removable pills above Add task types", () => {
-    const feature = { ...checklist("Feature"), taskTypeKeys: ["bug", "feature"] };
-    render(<ChecklistDialog projectId={projectId} checklist={feature} catalog={[]} checklists={[feature]} onClose={() => {}} />);
+  test("the checklist dialog no longer sets defaults", () => {
+    render(<ChecklistDialog projectId={projectId} checklist={checklist("Feature")} catalog={[]} onClose={() => {}} />);
 
-    const removeBug = screen.getByRole("button", { name: "Remove Bug" });
-    const add = screen.getByRole("button", { name: "Add task types" });
-    expect(removeBug.compareDocumentPosition(add) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
-    expect(removeBug.closest(".flex-wrap")?.contains(screen.getByRole("button", { name: "Remove Feature" }))).toBe(true);
+    expect(screen.queryByText("Default for")).toBeNull();
+    expect(screen.queryByRole("button", { name: "Add task types" })).toBeNull();
+  });
 
-    fireEvent.click(removeBug);
-    expect(screen.queryByRole("button", { name: "Remove Bug" })).toBeNull();
+  test("Defaults opens one picker per task type and pull requests, showing the current checklist", () => {
+    data.catalog = [check("tests")];
+    data.checklists = [{ ...checklist("Feature"), taskTypeKeys: ["task", "feature"] }, { ...checklist("Review"), taskTypeKeys: [], pullRequests: true }];
+    render(<ChecksSettingsSection projectId={projectId} canEdit />);
 
-    fireEvent.click(add);
-    fireEvent.click(screen.getByRole("checkbox", { name: /^Epic/ }));
-    expect(screen.getByRole("button", { name: "Remove Epic" })).toBeDefined();
+    fireEvent.click(screen.getByRole("button", { name: "Defaults" }));
+    const dialog = screen.getByRole("dialog", { name: "Default checklists" });
+    expect(within(dialog).getAllByRole("combobox")).toHaveLength(BUILT_IN_TASK_TYPES.length + 1);
+    expect(within(dialog).getByRole("combobox", { name: "Checklist for Task" }).textContent).toBe("Feature");
+    expect(within(dialog).getByRole("combobox", { name: "Checklist for Bug" }).textContent).toBe("No checks");
+    expect(within(dialog).getByRole("combobox", { name: "Checklist for Pull requests" }).textContent).toBe("Review");
+  });
+
+  test("viewers get no Defaults button", () => {
+    data.catalog = [check("tests")];
+    data.checklists = [checklist("Feature")];
+    render(<ChecksSettingsSection projectId={projectId} canEdit={false} />);
+
+    expect(screen.queryByRole("button", { name: "Defaults" })).toBeNull();
+  });
+
+  test("saving defaults sends every row in one setDefaults call", async () => {
+    data.catalog = [check("tests")];
+    const feature = { ...checklist("Feature"), taskTypeKeys: ["task", "feature"] };
+    data.checklists = [feature];
+    render(<ChecksSettingsSection projectId={projectId} canEdit />);
+
+    fireEvent.click(screen.getByRole("button", { name: "Defaults" }));
+    fireEvent.click(screen.getByRole("button", { name: "Save" }));
+
+    await waitFor(() => expect(data.mutate).toHaveBeenCalledTimes(1));
+    expect(data.mutate).toHaveBeenCalledWith({
+      projectId,
+      taskTypes: BUILT_IN_TASK_TYPES.map((type) => ({ key: type.key, checklistId: ["task", "feature"].includes(type.key) ? feature._id : null })),
+      pullRequests: null,
+    });
+  });
+
+  test("clicking a default's pill on a checklist row opens Defaults, not the checklist editor", () => {
+    data.catalog = [check("tests")];
+    data.checklists = [{ ...checklist("Feature"), pullRequests: true }];
+    render(<ChecksSettingsSection projectId={projectId} canEdit />);
+
+    expect(screen.getByRole("button", { name: "Change the default checklist for Pull requests" })).toBeDefined();
+    fireEvent.click(screen.getByRole("button", { name: "Change the default checklist for Feature" }));
+    expect(screen.getByRole("dialog", { name: "Default checklists" })).toBeDefined();
+    expect(screen.queryByRole("dialog", { name: "Edit checklist" })).toBeNull();
+  });
+
+  test("viewers' pills are plain, not buttons", () => {
+    data.catalog = [check("tests")];
+    data.checklists = [checklist("Feature")];
+    render(<ChecksSettingsSection projectId={projectId} canEdit={false} />);
+
+    expect(screen.queryByRole("button", { name: /default checklist/ })).toBeNull();
   });
 
   test("the checklist editor scrolls inside the viewport", () => {
     const keys = Array.from({ length: 50 }, (_, index) => `check-${index}`);
     const feature = checklist("Feature", keys);
-    render(<ChecklistDialog projectId={projectId} checklist={feature} catalog={keys.map(check)} checklists={[feature]} onClose={() => {}} />);
+    render(<ChecklistDialog projectId={projectId} checklist={feature} catalog={keys.map(check)} onClose={() => {}} />);
 
     const dialog = screen.getByRole("dialog");
     expect(dialog.className).toMatch(/max-h-/);

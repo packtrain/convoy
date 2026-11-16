@@ -164,7 +164,7 @@ A Check the project asks about every pull request, answered by an agent for one 
 _Avoid_: PR review, verdict, risk score
 
 **Checklist**:
-A named, ordered set of Checks. A task type may default to one.
+A named, ordered set of Checks. A task type may default to one, and one per project is the Pull request checklist.
 _Avoid_: List (that is a task List), check list
 
 **Check result**:

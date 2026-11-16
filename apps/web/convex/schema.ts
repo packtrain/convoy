@@ -507,6 +507,7 @@ export default defineSchema({
     key: v.string(),
     label: v.string(),
     instruction: v.string(),
+    showInPullRequestList: v.optional(v.boolean()), // a status icon on PR list rows (OS-2400)
     createdBy: v.id("users"),
     updatedBy: v.id("users"),
     createdAt: v.number(),
@@ -521,6 +522,7 @@ export default defineSchema({
     normalizedName: v.string(), // trimmed + lowercased, for per-project uniqueness
     checkKeys: v.array(v.string()),
     taskTypeKeys: v.array(v.string()),
+    pullRequests: v.optional(v.boolean()), // the project's Pull request checklist; at most one (OS-2400)
     createdBy: v.id("users"),
     updatedBy: v.id("users"),
     createdAt: v.number(),
@@ -531,7 +533,9 @@ export default defineSchema({
   // result per `checkKey` is current; older ones are history. Never edited.
   checkResults: defineTable({
     projectId: v.id("projects"),
-    taskId: v.optional(v.id("tasks")), // unset: owned by a thread with no task (OS-2293)
+    taskId: v.optional(v.id("tasks")), // unset: owned by a thread with no task (OS-2293), or by `pullRequest`
+    // Set: owned by this PR's head revision, never by a task or thread (OS-2400). `ref` is the Attached pull request's.
+    pullRequest: v.optional(v.object({ ref: v.string(), headSha: v.string() })),
     threadId: v.id("cliThreads"),
     messageId: v.id("cliMessages"),
     checkKey: v.string(),
@@ -547,7 +551,9 @@ export default defineSchema({
     reportedAt: v.number(),
   })
     .index("by_taskId_and_reportedAt", ["taskId", "reportedAt"])
-    .index("by_threadId_and_taskId_and_reportedAt", ["threadId", "taskId", "reportedAt"]),
+    .index("by_threadId_and_taskId_and_pullRequestRef_and_reportedAt", ["threadId", "taskId", "pullRequest.ref", "reportedAt"])
+    .index("by_projectId_and_pullRequestRef_and_reportedAt", ["projectId", "pullRequest.ref", "reportedAt"])
+    .index("by_projectId_and_pullRequestRef_and_checkKey_and_reportedAt", ["projectId", "pullRequest.ref", "checkKey", "reportedAt"]),
 
   // One row per blob a check result shows, so `lib/storageRepo` keeps it.
   checkResultFiles: defineTable({
@@ -966,6 +972,8 @@ export default defineSchema({
     associatedTaskId: v.optional(v.id("tasks")),
     // The first PR sent or attached; never replaced (docs/specs/github-integration.md → Pull requests in threads).
     attachedPullRequest: v.optional(attachedPullRequestValidator),
+    // A Pull request checks run (OS-2400): its results belong to `attachedPullRequest` at this head, set at creation.
+    pullRequestChecks: v.optional(v.object({ headSha: v.string() })),
     // A task-less thread's own Checklist (OS-2293); unset means no Checks, since a thread has no type.
     checklistId: v.optional(v.id("checklists")),
     // Immutable Project agent binding (OS-1138): set only at thread creation,

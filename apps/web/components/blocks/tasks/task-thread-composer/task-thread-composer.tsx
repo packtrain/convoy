@@ -41,13 +41,19 @@ type TaskThreadComposerSubject =
   | { pullRequest: AttachedPullRequest; task?: never };
 
 /** Appends text to the draft once and focuses (a PR card's Fix); the host clears it on `onSeeded`. */
-type TaskThreadComposerSeed = { seed?: never; onSeeded?: never } | { seed: string | undefined; onSeeded: () => void };
+type TaskThreadComposerSeed =
+  | { seed?: never; onSeeded?: never; seedReplacesDraft?: never }
+  | { seed: string | undefined; onSeeded: () => void; /** Replace the draft's text instead of appending. */ seedReplacesDraft?: boolean };
 
 type TaskThreadComposerProps = TaskThreadComposerSubject &
   TaskThreadComposerSeed & {
   projectId: Id<"projects">;
   organizationSlug: string;
   projectAlias: string;
+  /** Overrides the draft key, for a composer that must not share the subject's draft (Run pull request checks). */
+  draftKey?: string;
+  /** Starts a Pull request checks thread on this head (OS-2400). */
+  pullRequestChecks?: { headSha: string };
   focusRequestKey?: number;
   /** Focus the composer as soon as it is enabled (e.g. when opened in a popover). */
   autoFocus?: boolean;
@@ -77,6 +83,8 @@ function TaskThreadComposerContent({
   pullRequest,
   seed,
   onSeeded,
+  seedReplacesDraft,
+  pullRequestChecks,
   threadKey,
   focusRequestKey,
   autoFocus = false,
@@ -127,7 +135,7 @@ function TaskThreadComposerContent({
   useEffect(() => {
     if (seed === undefined) return;
     // Appended below what the member already typed, so a second Fix keeps the first.
-    const typed = draft?.text?.trim();
+    const typed = seedReplacesDraft ? undefined : draft?.text?.trim();
     setDraft({ text: typed ? `${typed}\n\n${seed}` : seed, composerContent: undefined });
     setSeedCount((count) => count + 1);
     onSeeded?.();
@@ -144,6 +152,7 @@ function TaskThreadComposerContent({
     setDraft,
     rememberCliModel,
     attachedTask: initialAttachedTask,
+    pullRequestChecks,
     // Re-key the composer so the locked initial task pill is restored after
     // ThreadComposer clears its internal attached-task state on submit.
     onCreated: (threadId) => {
@@ -270,7 +279,7 @@ function TaskThreadComposerContent({
 
 export function TaskThreadComposer(props: TaskThreadComposerProps) {
   const draftStorageKey = buildProjectDraftStorageKey(props.organizationSlug, props.projectAlias);
-  const threadKey = props.task ? `task:${String(props.task._id)}` : `pr:${props.pullRequest?.ref}`;
+  const threadKey = props.draftKey ?? (props.task ? `task:${String(props.task._id)}` : `pr:${props.pullRequest?.ref}`);
 
   return (
     <ThreadDraftProvider key={draftStorageKey} storageKey={draftStorageKey}>

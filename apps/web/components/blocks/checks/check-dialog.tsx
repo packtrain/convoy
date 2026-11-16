@@ -8,6 +8,7 @@ import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { Switch } from "@/components/ui/switch";
 import { Textarea } from "@/components/ui/textarea";
 import { showConvexErrorToast } from "@/lib/errors";
 import type { CheckDefinition } from "./types";
@@ -28,6 +29,7 @@ export function CheckDialog({
   const [key, setKey] = useState(check?.key ?? "");
   const [label, setLabel] = useState(check?.label ?? "");
   const [instruction, setInstruction] = useState(check?.instruction ?? "");
+  const [showInPullRequestList, setShowInPullRequestList] = useState(check?.showInPullRequestList ?? false);
   const [isSaving, setIsSaving] = useState(false);
   const canSave = key.trim() !== "" && label.trim() !== "" && !isSaving;
 
@@ -36,9 +38,9 @@ export function CheckDialog({
     setIsSaving(true);
     try {
       if (check) {
-        await updateCheck({ checkId: check._id, label, instruction });
+        await updateCheck({ checkId: check._id, label, instruction, showInPullRequestList });
       } else {
-        await createCheck({ projectId, key, label, instruction });
+        await createCheck({ projectId, key, label, instruction, showInPullRequestList });
       }
       onClose();
     } catch (error) {
@@ -92,6 +94,18 @@ export function CheckDialog({
               onChange={(event) => setInstruction(event.target.value)}
               placeholder="Run the test suite and attach the output."
               rows={3}
+            />
+          </div>
+          <div className="flex items-start justify-between gap-4">
+            <div className="space-y-1">
+              <Label htmlFor="check-pull-request-list">Show in pull request list</Label>
+              <p className="text-sm text-muted-foreground">A status icon on each pull request this check ran on.</p>
+            </div>
+            <Switch
+              id="check-pull-request-list"
+              checked={showInPullRequestList}
+              onCheckedChange={setShowInPullRequestList}
+              className="shrink-0 cursor-pointer"
             />
           </div>
           <DialogFooter>

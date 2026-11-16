@@ -26,12 +26,39 @@ export async function listCheckResultsByTask(ctx: Ctx, taskId: Id<"tasks">): Pro
 const ownedByThread = (ctx: Ctx, threadId: Id<"cliThreads">) =>
   ctx.db
     .query("checkResults")
-    .withIndex("by_threadId_and_taskId_and_reportedAt", (q) => q.eq("threadId", threadId).eq("taskId", undefined))
+    .withIndex("by_threadId_and_taskId_and_pullRequestRef_and_reportedAt", (q) =>
+      q.eq("threadId", threadId).eq("taskId", undefined).eq("pullRequest.ref", undefined)
+    )
     .order("desc");
 
 /** Results reported on a thread while it had no task, newest first (OS-2293). */
 export async function listCheckResultsOwnedByThread(ctx: Ctx, threadId: Id<"cliThreads">): Promise<Doc<"checkResults">[]> {
   return ownedByThread(ctx, threadId).take(TASK_RESULT_LIMIT);
+}
+
+/** A PR's results across its head revisions, newest first (OS-2400). */
+export async function listCheckResultsByPullRequest(ctx: Ctx, projectId: Id<"projects">, ref: string): Promise<Doc<"checkResults">[]> {
+  return ctx.db
+    .query("checkResults")
+    .withIndex("by_projectId_and_pullRequestRef_and_reportedAt", (q) => q.eq("projectId", projectId).eq("pullRequest.ref", ref))
+    .order("desc")
+    .take(TASK_RESULT_LIMIT);
+}
+
+/** The current result of one Check on a PR, for the list's status icons. */
+export async function findLatestPullRequestResult(
+  ctx: Ctx,
+  projectId: Id<"projects">,
+  ref: string,
+  checkKey: string
+): Promise<Doc<"checkResults"> | null> {
+  return ctx.db
+    .query("checkResults")
+    .withIndex("by_projectId_and_pullRequestRef_and_checkKey_and_reportedAt", (q) =>
+      q.eq("projectId", projectId).eq("pullRequest.ref", ref).eq("checkKey", checkKey)
+    )
+    .order("desc")
+    .first();
 }
 
 /** Attaching a task hands it the thread's results; newest-first reads make the newer one per Check current. */

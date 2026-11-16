@@ -25,10 +25,10 @@ import { showConvexErrorToast } from "@/lib/errors";
 import { resolveTaskTypeSummary } from "@/lib/tasks/task-types";
 import { TaskType } from "@/components/blocks/tasks/task-ref-with-type";
 import { CheckDialog } from "./check-dialog";
-import { ChecklistDialog } from "./checklist-dialog";
+import { ChecklistDialog, DefaultsDialog, PullRequestsPill } from "./checklist-dialog";
 import type { CheckDefinition, Checklist } from "./types";
 
-type Editing = { kind: "check"; check?: CheckDefinition } | { kind: "checklist"; checklist?: Checklist };
+type Editing = { kind: "check"; check?: CheckDefinition } | { kind: "checklist"; checklist?: Checklist } | { kind: "defaults" };
 type Deleting = { kind: "check"; check: CheckDefinition } | { kind: "checklist"; checklist: Checklist };
 
 /** Project settings → Checks: the check catalog and the Checklists built from it (docs/specs/task-checks.md). */
@@ -104,12 +104,19 @@ export function ChecksSettingsSection({ projectId, canEdit }: { projectId: Id<"p
           title="Checklists"
           createLabel="Create checklist"
           onCreate={canEdit && checklists.length > 0 ? () => setEditing({ kind: "checklist" }) : undefined}
+          action={
+            canEdit && checklists.length > 0 ? (
+              <Button type="button" variant="outline" size="settings" className="cursor-pointer" onClick={() => setEditing({ kind: "defaults" })}>
+                Defaults
+              </Button>
+            ) : null
+          }
         >
           {checklists.length === 0 ? (
             <EmptyState
               icon={ListChecks}
               title="No checklists yet"
-              description="Group checks into a checklist and make it the default for a task type."
+              description="Group checks into a checklist, then pick it under Defaults for a task type or for pull requests."
               action={
                 canEdit ? (
                   <Button type="button" variant="secondary" className="cursor-pointer" onClick={() => setEditing({ kind: "checklist" })}>
@@ -124,9 +131,23 @@ export function ChecksSettingsSection({ projectId, canEdit }: { projectId: Id<"p
                 <CatalogRow
                   key={checklist._id}
                   name={checklist.name}
-                  badges={checklist.taskTypeKeys.map((typeKey) => (
-                    <TaskType key={typeKey} taskType={resolveTaskTypeSummary(typeKey)} className="shrink-0" />
-                  ))}
+                  badges={
+                    <>
+                      {checklist.taskTypeKeys.map((typeKey) => {
+                        const type = resolveTaskTypeSummary(typeKey);
+                        return (
+                          <DefaultsPillButton key={typeKey} name={type.name} onClick={canEdit ? () => setEditing({ kind: "defaults" }) : undefined}>
+                            <TaskType taskType={type} />
+                          </DefaultsPillButton>
+                        );
+                      })}
+                      {checklist.pullRequests ? (
+                        <DefaultsPillButton name="Pull requests" onClick={canEdit ? () => setEditing({ kind: "defaults" }) : undefined}>
+                          <PullRequestsPill />
+                        </DefaultsPillButton>
+                      ) : null}
+                    </>
+                  }
                   detail={checklist.checkKeys.map((key) => labels.get(key) ?? key).join(" · ") || "No checks"}
                   onEdit={canEdit ? () => setEditing({ kind: "checklist", checklist }) : undefined}
                   onDelete={canEdit ? () => setDeleting({ kind: "checklist", checklist }) : undefined}
@@ -143,10 +164,10 @@ export function ChecksSettingsSection({ projectId, canEdit }: { projectId: Id<"p
           projectId={projectId}
           checklist={editing.checklist}
           catalog={catalog}
-          checklists={checklists}
           onClose={() => setEditing(null)}
         />
       ) : null}
+      {editing?.kind === "defaults" ? <DefaultsDialog projectId={projectId} checklists={checklists} onClose={() => setEditing(null)} /> : null}
       <DeleteDialog target={deleting} onClose={() => setDeleting(null)} />
     </div>
   );
@@ -156,11 +177,14 @@ function CatalogGroup({
   title,
   createLabel,
   onCreate,
+  action,
   children,
 }: {
   title?: string;
   createLabel: string;
   onCreate?: () => void;
+  /** Shown before the create button. */
+  action?: ReactNode;
   children: ReactNode;
 }) {
   return (
@@ -168,11 +192,14 @@ function CatalogGroup({
       {title ? (
         <div className="flex items-center justify-between gap-2">
           <h3 className="text-sm font-medium">{title}</h3>
-          {onCreate ? (
-            <Button type="button" variant="outline" size="settings" className="cursor-pointer" onClick={onCreate}>
-              <Plus /> {createLabel}
-            </Button>
-          ) : null}
+          <div className="flex items-center gap-2">
+            {action}
+            {onCreate ? (
+              <Button type="button" variant="outline" size="settings" className="cursor-pointer" onClick={onCreate}>
+                <Plus /> {createLabel}
+              </Button>
+            ) : null}
+          </div>
         </div>
       ) : null}
       {children}
@@ -204,19 +231,17 @@ function CatalogRow({
     </div>
   );
   return (
-    <div className="flex items-stretch transition-colors hover:bg-muted/50">
+    // The edit button covers the row, so badge buttons can sit on top without nesting inside it.
+    <div className="relative flex items-stretch transition-colors hover:bg-muted/50">
       {onEdit ? (
         <button
           type="button"
           onClick={onEdit}
           aria-label={`Edit ${name}`}
-          className="flex min-w-0 flex-1 cursor-pointer items-center p-4 text-left focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none"
-        >
-          {content}
-        </button>
-      ) : (
-        <div className="flex min-w-0 flex-1 items-center p-4">{content}</div>
-      )}
+          className="absolute inset-0 cursor-pointer focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none focus-visible:ring-inset"
+        />
+      ) : null}
+      <div className="pointer-events-none relative flex min-w-0 flex-1 items-center p-4 text-left">{content}</div>
       {onEdit && onDelete ? (
         <DropdownMenu>
           <DropdownMenuTrigger asChild>
@@ -225,7 +250,7 @@ function CatalogRow({
               variant="secondary"
               size="icon-sm"
               aria-label={`${name} actions`}
-              className="my-auto mr-4 shrink-0 text-muted-foreground"
+              className="relative my-auto mr-4 shrink-0 text-muted-foreground"
             >
               <Ellipsis />
             </Button>
@@ -241,6 +266,21 @@ function CatalogRow({
         </DropdownMenu>
       ) : null}
     </div>
+  );
+}
+
+/** A default's pill on a Checklist row; clicking it opens Defaults. */
+function DefaultsPillButton({ name, onClick, children }: { name: string; onClick?: () => void; children: ReactNode }) {
+  if (!onClick) return <span className="shrink-0">{children}</span>;
+  return (
+    <button
+      type="button"
+      aria-label={`Change the default checklist for ${name}`}
+      className="pointer-events-auto shrink-0 cursor-pointer rounded-md hover:opacity-80 focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none"
+      onClick={onClick}
+    >
+      {children}
+    </button>
   );
 }
 

@@ -12,6 +12,8 @@ import { isValidWorktreeBranchName } from "../../../../lib/threads/worktree-bran
 import { errors as agentErrors } from "../../../agents/errors";
 import { getProjectAgentById } from "../../../agents/lib/projectAgentsRepo";
 import { getActiveProjectById } from "../../../projects/lib/projectsRepo";
+import { findLinkedPullRequest } from "../../../integrations/github/lib/integrationPullRequestsRepo";
+import { listActiveRepositoryLinksForProject } from "../../../integrations/github/lib/integrationRepositoryLinksRepo";
 import { errors } from "../../errors";
 import { assertValidMessageAttachments, createAttachmentRefs } from "../../lib/messages/attachments";
 import { createUserMessage, normalizeMessageSelection } from "../../lib/messages/normalize";
@@ -94,6 +96,9 @@ async function resolveThreadSelection(
 
   const task = args.taskId ? await requireAccessibleCliTask(ctx, principal, args.taskId, profile.projectId) : null;
   const pullRequest = requireAttachedPullRequest(args.pullRequestUrl);
+  const pullRequestChecks = args.pullRequestChecks
+    ? await requirePullRequestChecksHead(ctx, profile.projectId, pullRequest, args.pullRequestChecks.headSha)
+    : undefined;
   const parent = args.worktree ? pathEntry : profile.paths.find((path) => path.id === pathEntry.parentPathId);
   const worktree = args.worktree
     ? { ...args.worktree, status: "pending" as const }
@@ -113,6 +118,7 @@ async function resolveThreadSelection(
       cliType: args.cliType,
       associatedTaskId: task?._id,
       attachedPullRequest: pullRequest,
+      pullRequestChecks,
       agentWorkSource: args.agentWorkSource,
       projectAgentId: args.projectAgentId,
       agentPromptSnapshot,
@@ -127,6 +133,22 @@ async function resolveThreadSelection(
       }),
     },
   };
+}
+
+/** The head a checks run reports on: the caller's, while it is still the stored PR's in a connected repository. */
+async function requirePullRequestChecksHead(
+  ctx: MutationCtx,
+  projectId: Id<"projects">,
+  pullRequest: AttachedPullRequest | undefined,
+  headSha: string
+): Promise<{ headSha: string }> {
+  const links = await listActiveRepositoryLinksForProject(ctx, projectId);
+  const row = await ensure(pullRequest ? findLinkedPullRequest(ctx, links, pullRequest) : null).notNull(
+    errors.PULL_REQUEST_CHECKS_NEED_CONNECTED_PULL_REQUEST
+  );
+  // The prompt names this head, so the run and its results agree on the revision.
+  ensure(row.headSha).eq(headSha, errors.PULL_REQUEST_CHECKS_HEAD_MOVED);
+  return { headSha };
 }
 
 /**

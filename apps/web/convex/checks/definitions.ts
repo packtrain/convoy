@@ -25,6 +25,8 @@ const checkDefinitionValidator = v.object({
   key: v.string(),
   label: v.string(),
   instruction: v.string(),
+  /** A status icon on pull request list rows (OS-2400). */
+  showInPullRequestList: v.boolean(),
 });
 
 function validateInstruction(raw: string): string {
@@ -50,7 +52,13 @@ export const list = query({
       return [];
     }
     const definitions = await listCheckDefinitionsByProject(ctx, args.projectId);
-    return definitions.map(({ _id, key, label, instruction }) => ({ _id, key, label, instruction }));
+    return definitions.map(({ _id, key, label, instruction, showInPullRequestList }) => ({
+      _id,
+      key,
+      label,
+      instruction,
+      showInPullRequestList: showInPullRequestList === true,
+    }));
   },
 });
 
@@ -60,6 +68,7 @@ export const create = mutation({
     key: v.string(),
     label: v.string(),
     instruction: v.string(),
+    showInPullRequestList: v.optional(v.boolean()),
     apiKey: v.optional(v.string()),
   },
   returns: v.id("checkDefinitions"),
@@ -75,7 +84,8 @@ export const create = mutation({
     ensure(definitions.length).lt(MAX_CHECKS_PER_PROJECT, errors.checkLimitReached(MAX_CHECKS_PER_PROJECT));
     await ensure(findCheckDefinitionByKey(ctx, args.projectId, key)).isNull(errors.CHECK_KEY_TAKEN);
 
-    return insertCheckDefinition(ctx, { projectId: args.projectId, key, label, instruction }, user._id);
+    const showInPullRequestList = args.showInPullRequestList || undefined;
+    return insertCheckDefinition(ctx, { projectId: args.projectId, key, label, instruction, showInPullRequestList }, user._id);
   },
 });
 
@@ -85,6 +95,7 @@ export const update = mutation({
     checkId: v.id("checkDefinitions"),
     label: v.optional(v.string()),
     instruction: v.optional(v.string()),
+    showInPullRequestList: v.optional(v.boolean()),
     apiKey: v.optional(v.string()),
   },
   returns: v.null(),
@@ -96,6 +107,7 @@ export const update = mutation({
     const patch = buildPatch<CheckDefinitionUpdatePatch>({
       label: mapDefined(args.label, validateCheckLabel),
       instruction: mapDefined(args.instruction, validateInstruction),
+      showInPullRequestList: args.showInPullRequestList,
     });
     if (Object.keys(patch).length > 0) {
       await updateCheckDefinition(ctx, definition._id, patch, user._id);

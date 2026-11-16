@@ -7,38 +7,43 @@ import { api } from "@/convex/_generated/api";
 import type { Id } from "@/convex/_generated/dataModel";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
-import { CheckRow, overallStatus, StatusGlyph, summarizeChecks } from "./check-row";
-import type { CheckGlyph, ProjectRoute } from "./types";
+import { CheckRow, isOutdated, overallStatus, StatusGlyph, summarizeChecks } from "./check-row";
+import type { CheckGlyph, ProjectRoute, TaskChecks } from "./types";
 
 /** Rows hidden until the header unfolds them: the claim held and nobody needs to look. */
 const SETTLED: ReadonlySet<CheckGlyph> = new Set(["passed", "warning"]);
 
+export type FailedCheck = { label: string; note?: string };
+
 /**
- * A Task's Checks as a card beside other content, such as a pull request's
- * Overview. Shows only rows that need attention until its header is clicked.
- * Spec: docs/specs/github-integration.md → PR reader (Evidence).
+ * Checks as a card beside other content, such as a pull request's Overview. Shows only rows
+ * that need attention until its header is clicked. Spec: docs/specs/github-integration.md → PR reader.
  */
-export function TaskEvidenceCard({
-  taskId,
+export function ChecksCard({
+  data,
   title,
   projectRoute,
   onFix,
+  action,
 }: {
-  taskId: Id<"tasks">;
-  title: ReactNode;
+  data: TaskChecks;
+  /** A function puts the pass count ("2/3") in the title instead of the subtitle. */
+  title: ReactNode | ((count: string) => ReactNode);
   projectRoute?: ProjectRoute;
   /** Offered while a check failed: drafts a thread from the failed rows and their notes. */
-  onFix?: (failed: { label: string; note?: string }[]) => void;
+  onFix?: (failed: FailedCheck[]) => void;
+  /** Sits beside Fix, e.g. Run checks. */
+  action?: ReactNode;
 }) {
-  const data = useQuery(api.checks.checklists.getForTask, { taskId });
   const [showSettled, setShowSettled] = useState(false);
-  if (!data || data.checks.length === 0) return null;
   const rows = data.checks.map((check) => ({ check, status: check.results[0]?.status ?? ("pending" as const) }));
   const statuses = rows.map((row) => row.status);
   const { passed, total, rest } = summarizeChecks(statuses);
+  const count = `${passed}/${total}`;
   const settled = rows.filter((row) => SETTLED.has(row.status)).length;
   const shown = showSettled ? rows : rows.filter((row) => !SETTLED.has(row.status));
   const checklist = data.checklists.find((candidate) => candidate._id === data.checklistId)?.name;
+  const outdated = data.checks.some((check) => isOutdated(data, check.results[0]));
   const failed = rows.filter((row) => row.status === "failed").map(({ check }) => ({ label: check.label, note: check.results[0]?.note }));
   return (
     <div className="overflow-hidden rounded-lg border">
@@ -47,16 +52,19 @@ export function TaskEvidenceCard({
           <StatusGlyph status={overallStatus(statuses)} className="size-4.5" />
         </div>
         <div className="flex min-w-0 flex-col">
-          <span className="text-sm font-medium">{title}</span>
+          <span className="text-sm font-medium tabular-nums">{typeof title === "function" ? title(count) : title}</span>
           <span className="truncate text-xs text-muted-foreground tabular-nums">
-            {[`${passed}/${total} passed`, checklist, rest].filter(Boolean).join(" · ")}
+            {[typeof title === "function" ? null : `${count} passed`, checklist, rest, outdated ? "Outdated" : null].filter(Boolean).join(" · ")}
           </span>
         </div>
-        {onFix && failed.length ? (
-          <Button size="xs" variant="ghost" className="relative z-10 ml-auto shrink-0" onClick={() => onFix(failed)}>
-            Fix
-          </Button>
-        ) : null}
+        <div className="relative z-10 ml-auto flex shrink-0 items-center gap-1">
+          {onFix && failed.length ? (
+            <Button size="xs" variant="ghost" onClick={() => onFix(failed)}>
+              Fix
+            </Button>
+          ) : null}
+          {action}
+        </div>
         {settled > 0 ? (
           <button
             type="button"
@@ -74,12 +82,36 @@ export function TaskEvidenceCard({
       {shown.length ? (
         <ul className="divide-y border-t">
           {shown.map(({ check }) => (
-            <li key={check.key} className="py-1">
-              <CheckRow label={check.label} added={check.added} results={check.results} surface="task" projectRoute={projectRoute} />
+            <li key={check.key}>
+              <CheckRow
+                label={check.label}
+                added={check.added}
+                outdated={isOutdated(data, check.results[0])}
+                results={check.results}
+                surface="card"
+                projectRoute={projectRoute}
+              />
             </li>
           ))}
         </ul>
       ) : null}
     </div>
   );
+}
+
+/** A Task's Checks as a card (the PR Overview's Evidence). */
+export function TaskEvidenceCard({
+  taskId,
+  title,
+  projectRoute,
+  onFix,
+}: {
+  taskId: Id<"tasks">;
+  title: ReactNode;
+  projectRoute?: ProjectRoute;
+  onFix?: (failed: FailedCheck[]) => void;
+}) {
+  const data = useQuery(api.checks.checklists.getForTask, { taskId });
+  if (!data || data.checks.length === 0) return null;
+  return <ChecksCard data={data} title={title} projectRoute={projectRoute} onFix={onFix} />;
 }

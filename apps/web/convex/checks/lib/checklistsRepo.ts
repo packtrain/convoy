@@ -47,7 +47,7 @@ export async function assertChecklistInProject(
 
 export async function insertChecklist(
   ctx: MutationCtx,
-  props: { projectId: Id<"projects">; name: string; checkKeys: string[]; taskTypeKeys: string[] },
+  props: { projectId: Id<"projects">; name: string; checkKeys: string[]; taskTypeKeys: string[]; pullRequests?: boolean },
   createdBy: Id<"users">
 ): Promise<Id<"checklists">> {
   const now = Date.now();
@@ -66,6 +66,7 @@ export type ChecklistUpdatePatch = {
   normalizedName?: string;
   checkKeys?: string[];
   taskTypeKeys?: string[];
+  pullRequests?: boolean;
 };
 
 export async function updateChecklist(

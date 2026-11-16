@@ -1,8 +1,9 @@
 /// <reference types="vite/client" />
-import { describe, expect, test } from "vitest";
+import { afterEach, beforeEach, describe, expect, test, vi } from "vitest";
 import { api, internal } from "../_generated/api";
 import type { Id } from "../_generated/dataModel";
 import { createTestContext } from "../../convex-testing";
+import { connectedProject, stubGithubAppEnv } from "../../convex-testing/github";
 import { deleteStorageIfUnreferenced } from "../lib/storageRepo";
 
 /** A feature task with the Feature checklist, a thread attached to it, and a live run. */
@@ -387,3 +388,215 @@ describe("a result's artifact (OS-2385)", () => {
     });
   });
 });
+
+describe("pull request checks (OS-2400)", () => {
+  beforeEach(async () => {
+    vi.useFakeTimers();
+    await stubGithubAppEnv();
+  });
+  afterEach(() => {
+    vi.useRealTimers();
+    vi.unstubAllEnvs();
+    vi.unstubAllGlobals();
+  });
+
+  const PR_1 = { owner: "acme", name: "repo-1", number: 1 };
+
+  /** A connected repository with PR #1 at `head-1`, a Pull request checklist, and a live checks run on #1. */
+  async function setupChecksRun() {
+    const setup = await connectedProject();
+    const { ctx, user, project, asUser, t } = setup;
+    for (const key of ["risk", "backend"]) {
+      await asUser.mutation(api.checks.definitions.create, { projectId: project._id, key, label: `Label ${key}`, instruction: "" });
+    }
+    await asUser.mutation(api.checks.checklists.create, {
+      projectId: project._id,
+      name: "PR",
+      checkKeys: ["risk", "backend"],
+      taskTypeKeys: [],
+      pullRequests: true,
+    });
+    const { key: apiKey, id: apiKeyId } = await asUser.mutation(api.apiKeys.core.create, {
+      name: "CLI Key",
+      expiresAt: Date.now() + 30 * 24 * 60 * 60 * 1000,
+    });
+    const profile = await ctx.cliProfile(user._id, project._id, { paths: [{ id: "repo", path: "/repo", label: "repo" }] });
+    const session = await ctx.cliSession(profile._id, apiKeyId);
+    const threadId = await asUser.mutation(api.cli.threads.core.create, {
+      profileId: profile._id,
+      pathId: "repo",
+      cliType: "codex",
+      content: "Run the pull request checks",
+      pullRequestUrl: "https://github.com/acme/repo-1/pull/1",
+      pullRequestChecks: { headSha: "head-1" },
+    });
+    const [message] = await asUser.query(api.cli.messages.listUnprocessedUserMessages, { threadId });
+    await t.mutation(api.cli.threads.runControl.claimThread, { threadId, sessionId: session._id, leaseMs: 60_000, apiKey });
+    const started = await t.mutation(api.cli.messages.startRunResponse, {
+      threadId,
+      sessionId: session._id,
+      userMessageIds: [message._id],
+      apiKey,
+    });
+    const attach = (check: { key: string; status: "passed" | "failed"; note?: string }) =>
+      t.mutation(api.cli.messages.attachToResponse, {
+        threadId,
+        messageId: started.assistantMessageId,
+        sessionId: session._id,
+        attachments: [],
+        check,
+        apiKey,
+      });
+    const push = (headSha: string) =>
+      t.run(async (run) => {
+        const row = await run.db.query("integrationPullRequests").withIndex("by_repositoryId_and_number", (q) => q.eq("repositoryId", setup.repositoryId).eq("number", 1)).unique();
+        await run.db.patch("integrationPullRequests", row!._id, { headSha });
+      });
+    return { ...setup, profile, threadId, attach, push };
+  }
+
+  test("a checks run reports on the PR's head; the card reads the results and marks them outdated after a push", async () => {
+    const { ctx, org, project, asUser, threadId, attach, push } = await setupChecksRun();
+    await attach({ key: "risk", status: "failed", note: "Touches auth" });
+
+    const teammate = await ctx.user({ name: "Teammate" });
+    await ctx.orgMember(org._id, teammate._id, "member");
+    await ctx.projectMember(project._id, teammate._id, "viewer");
+    const card = await ctx.asUser(teammate).query(api.checks.checklists.getForPullRequest, { projectId: project._id, ...PR_1 });
+    expect(card?.pullRequest).toEqual({ headSha: "head-1" });
+    expect(card?.checks.map((check) => [check.key, check.results.map((result) => [result.status, result.headSha])])).toEqual([
+      ["risk", [["failed", "head-1"]]],
+      ["backend", []],
+    ]);
+    expect(card?.checks[0]?.results[0]).toMatchObject({ reportedByViewer: false, threadId });
+
+    // The thread's own reads (Checks tab, `convoy threads checks`) are the PR's.
+    const forThread = await asUser.query(api.checks.checklists.getForThread, { threadId });
+    expect(forThread?.checks[0]?.results.map((result) => result.status)).toEqual(["failed"]);
+
+    await push("head-2");
+    const pushed = await asUser.query(api.checks.checklists.getForPullRequest, { projectId: project._id, ...PR_1 });
+    expect(pushed?.pullRequest).toEqual({ headSha: "head-2" });
+    expect(pushed?.checks[0]?.results[0]?.headSha).toBe("head-1");
+  });
+
+  test("a task attached later neither owns the results nor moves them; deleting the thread keeps them", async () => {
+    const { ctx, user, project, asUser, threadId, attach } = await setupChecksRun();
+    const task = await ctx.task(project._id, user._id);
+    await attach({ key: "risk", status: "failed", note: "Touches auth" });
+    await asUser.mutation(api.cli.threads.core.attachTask, { threadId, taskId: task._id });
+    await attach({ key: "risk", status: "passed" });
+
+    expect((await asUser.query(api.checks.checklists.getForTask, { taskId: task._id }))?.checks).toEqual([]);
+    expect((await asUser.query(api.checks.checklists.getForThread, { threadId }))?.checks[0]?.results).toHaveLength(2);
+
+    await asUser.mutation(api.cli.threads.core.remove, { threadId });
+    const card = await asUser.query(api.checks.checklists.getForPullRequest, { projectId: project._id, ...PR_1 });
+    expect(card?.checks[0]?.results.map((result) => result.status)).toEqual(["passed", "failed"]);
+  });
+
+  test("the list reads each row's current result for its shown Checks, and file URLs follow project access", async () => {
+    const { ctx, project, asUser, attach } = await setupChecksRun();
+    const risk = (await asUser.query(api.checks.definitions.list, { projectId: project._id })).find((check) => check.key === "risk")!;
+    await asUser.mutation(api.checks.definitions.update, { checkId: risk._id, showInPullRequestList: true });
+    await attach({ key: "risk", status: "failed", note: "Touches auth" });
+    await attach({ key: "backend", status: "passed" });
+    const { checkResultId } = await attach({ key: "risk", status: "passed" });
+
+    const rows = await asUser.query(api.checks.results.listForPullRequestList, { projectId: project._id, refs: ["acme/repo-1#1", "acme/repo-1#2"] });
+    expect(rows).toEqual([
+      { ref: "acme/repo-1#1", checks: [{ key: "risk", label: "Label risk", status: "passed", outdated: false }] },
+      { ref: "acme/repo-1#2", checks: [] },
+    ]);
+
+    const outsider = await ctx.user();
+    expect(await ctx.asUser(outsider).query(api.checks.results.listForPullRequestList, { projectId: project._id, refs: ["acme/repo-1#1"] })).toEqual([]);
+    expect(await ctx.asUser(outsider).query(api.checks.checklists.getForPullRequest, { projectId: project._id, ...PR_1 })).toBeNull();
+    expect(await ctx.asUser(outsider).query(api.checks.results.getFileUrls, { resultId: checkResultId! })).toEqual([]);
+  });
+
+  test("a checked row keeps a slot per shown Check, pending when unreported, and marks results from an older head", async () => {
+    const { project, asUser, attach, push } = await setupChecksRun();
+    for (const check of await asUser.query(api.checks.definitions.list, { projectId: project._id })) {
+      await asUser.mutation(api.checks.definitions.update, { checkId: check._id, showInPullRequestList: true });
+    }
+    const list = () => asUser.query(api.checks.results.listForPullRequestList, { projectId: project._id, refs: ["acme/repo-1#1", "acme/repo-1#2"] });
+    await attach({ key: "backend", status: "passed" });
+
+    // Checklist order (risk, backend), so a column is the same Check on every row; #2 was never checked.
+    expect(await list()).toEqual([
+      {
+        ref: "acme/repo-1#1",
+        checks: [
+          { key: "risk", label: "Label risk", status: "pending", outdated: false },
+          { key: "backend", label: "Label backend", status: "passed", outdated: false },
+        ],
+      },
+      { ref: "acme/repo-1#2", checks: [] },
+    ]);
+
+    await push("head-2");
+    expect((await list())[0].checks.map((check) => [check.key, check.status, check.outdated])).toEqual([
+      ["risk", "pending", false],
+      ["backend", "passed", true],
+    ]);
+  });
+
+  test("a checks run needs a PR stored in a connected repository", async () => {
+    const { asUser, profile } = await setupChecksRun();
+    await expect(
+      asUser.mutation(api.cli.threads.core.create, {
+        profileId: profile._id,
+        pathId: "repo",
+        cliType: "codex",
+        content: "Run",
+        pullRequestUrl: "https://github.com/acme/repo-1/pull/99",
+        pullRequestChecks: { headSha: "head-99" },
+      })
+    ).rejects.toThrow("Pull request checks need a pull request in a connected repository");
+  });
+
+  test("a launch names the head it checks; a PR that moved since is rejected", async () => {
+    const { asUser, profile, push } = await setupChecksRun();
+    await push("head-2");
+    await expect(
+      asUser.mutation(api.cli.threads.core.create, {
+        profileId: profile._id,
+        pathId: "repo",
+        cliType: "codex",
+        content: "Run",
+        pullRequestUrl: "https://github.com/acme/repo-1/pull/1",
+        pullRequestChecks: { headSha: "head-1" },
+      })
+    ).rejects.toThrow("The pull request has new commits. Run the checks again.");
+  });
+
+  test("the card reads the PR's newest results, whatever their keys sort as", async () => {
+    const { t, project, asUser, threadId, attach } = await setupChecksRun();
+    await attach({ key: "risk", status: "passed" });
+    // 500 older results for a key that sorts after "risk".
+    await t.run(async (run) => {
+      const result = (await run.db.query("checkResults").first())!;
+      for (let index = 0; index < 500; index++) {
+        await run.db.insert("checkResults", { ...omitSystem(result), checkKey: "zeta", label: "Zeta", reportedAt: index });
+      }
+    });
+    const card = await asUser.query(api.checks.checklists.getForPullRequest, { projectId: project._id, ...PR_1 });
+    expect(card?.checks.find((check) => check.key === "risk")?.results).toHaveLength(1);
+    expect(threadId).toBeDefined();
+  });
+
+  test("the list takes at most 100 refs a call", async () => {
+    const { project, asUser } = await setupChecksRun();
+    const refs = Array.from({ length: 101 }, (_, index) => `acme/repo-1#${index + 1}`);
+    await expect(asUser.query(api.checks.results.listForPullRequestList, { projectId: project._id, refs })).rejects.toThrow(
+      "Ask for at most 100 pull requests at a time"
+    );
+  });
+});
+
+function omitSystem<T extends { _id: unknown; _creationTime: unknown }>({ _id, _creationTime, ...rest }: T) {
+  void _id;
+  void _creationTime;
+  return rest;
+}

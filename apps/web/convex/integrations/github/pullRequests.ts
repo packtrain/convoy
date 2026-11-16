@@ -6,7 +6,6 @@ import type { Doc, Id } from "../../_generated/dataModel";
 import { ProjectPermission } from "../../../lib/authz/permissions";
 import { getOptionalAuthenticatedAccess } from "../../lib/access/auth";
 import { authorizeProjectAccess } from "../../lib/access/permissions";
-import { isSameRepository } from "../../lib/contracts/github";
 import { taskSummaryValidator, toTaskSummary, type TaskSummary } from "../../lib/contracts/taskSummaries";
 import { getActiveProjectByAlias, getProjectById } from "../../projects/lib/projectsRepo";
 import { findTaskByRefNumber } from "../../tasks/lib/tasksRepo";
@@ -24,7 +23,7 @@ import {
   record,
   str,
 } from "./lib/parsers";
-import { getPullRequestByNumber, listStackPullRequests, paginatePullRequests } from "./lib/integrationPullRequestsRepo";
+import { findLinkedPullRequest, getPullRequestByNumber, listStackPullRequests, paginatePullRequests } from "./lib/integrationPullRequestsRepo";
 import { getRepositoryById, updateRepositorySync } from "./lib/integrationRepositoriesRepo";
 import { getReadableRepositoryLink, getReadableRepositoryLinks } from "./lib/permissions";
 import {
@@ -147,9 +146,8 @@ export const getAttached = query({
   args: { projectId: v.id("projects"), owner: v.string(), name: v.string(), number: v.number() },
   returns: v.union(pullRequestSummaryValidator, v.null()),
   handler: async (ctx, args) => {
-    const scoped = await readableRepositories(ctx, args.projectId, undefined);
-    const match = scoped.find(({ repository }) => isSameRepository(repository, args));
-    const row = match ? await getPullRequestByNumber(ctx, match.repository._id, args.number) : null;
+    const links = await getReadableRepositoryLinks(ctx, args.projectId);
+    const row = links ? await findLinkedPullRequest(ctx, links, args) : null;
     return row ? toPullRequestSummary(row) : null;
   },
 });

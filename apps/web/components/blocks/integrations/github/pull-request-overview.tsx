@@ -16,7 +16,7 @@ import {
   X,
 } from "lucide-react";
 import { MessageResponse } from "@/components/ai-elements/message";
-import { TaskEvidenceCard } from "@/components/blocks/checks";
+import { PullRequestChecksCard, TaskEvidenceCard } from "@/components/blocks/checks";
 import { EmptyValue } from "@/components/blocks/tasks/task-table/badges";
 import { TaskRefWithType } from "@/components/blocks/tasks/task-ref-with-type";
 import { TimelineHeader, TimelineThreadRowCard } from "@/components/blocks/tasks/task-timeline";
@@ -646,6 +646,18 @@ export function PullRequestOverviewTab({
           )}
         </section>
         <div className="mt-8 space-y-3">
+          {pullRequest ? (
+            <section aria-label="Pull request checks" className="empty:hidden">
+              <PullRequestChecksCard
+                projectId={projectId}
+                organizationSlug={organizationSlug}
+                projectAlias={projectAlias}
+                pullRequest={pullRequest}
+                onFix={(failed) => fix(bulletList("Fix the failed pull request checks:", failed.map((row) => [row.label, row.note])))}
+              />
+            </section>
+          ) : null}
+          {/* After Pull request checks: these stand in for the GitHub cards below it. */}
           {state.kind === "loading" ? (
             <>
               <CardSkeleton label="Loading checks" />

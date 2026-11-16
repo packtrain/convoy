@@ -13,7 +13,7 @@ import { api } from "@/convex/_generated/api";
 import { formatAbsoluteTime, formatRelativeTime } from "@/lib/format-relative-time";
 import { AppLink, appRoute, useRouteParams } from "@/lib/navigation";
 import { cn } from "@/lib/utils";
-import type { CheckGlyph, CheckResult, ProjectRoute } from "./types";
+import type { CheckGlyph, CheckResult, ProjectRoute, TaskChecks } from "./types";
 
 const GLYPHS: Record<CheckGlyph, { icon: typeof Circle; className: string; word: string }> = {
   passed: { icon: CircleCheck, className: "text-success", word: "Passed" },
@@ -44,10 +44,19 @@ export function overallStatus(statuses: CheckGlyph[]): CheckGlyph {
   return statuses.length > 0 && statuses.every((status) => status === "passed") ? "passed" : "pending";
 }
 
+/** A pull request's result reported on an older head than the PR's current one. */
+export function isOutdated(data: Pick<TaskChecks, "pullRequest">, result: CheckResult | undefined): boolean {
+  const head = data.pullRequest?.headSha;
+  return Boolean(head && result?.headSha && result.headSha !== head);
+}
+
 const isMedia = (file: CheckResult["files"][number]) => file.contentType.startsWith("image/") || file.contentType.startsWith("video/");
 
-/** `transcript` is one reply's own results, so it skips time, provenance, and history. */
-type Surface = "tab" | "task" | "transcript";
+/**
+ * `transcript` is one reply's own results, so it skips time, provenance, and history. `card` is a framed
+ * card's rows (the PR page): the transcript's layout, with provenance and history.
+ */
+type Surface = "tab" | "task" | "transcript" | "card";
 
 /** `inSentence` lowercases the first letter, for "Reported just now". */
 function ResultTime({ at, inSentence }: { at: number; inSentence?: boolean }) {
@@ -162,12 +171,15 @@ function Section({ title, children }: { title: string; children: React.ReactNode
 export function CheckRow({
   label,
   added,
+  outdated = false,
   results,
   surface,
   projectRoute,
 }: {
   label: string;
   added: boolean;
+  /** The current result is a pull request's from an older head (OS-2400). */
+  outdated?: boolean;
   /** Newest first; the first is shown, the rest are history. */
   results: CheckResult[];
   surface: Surface;
@@ -180,6 +192,8 @@ export function CheckRow({
   const open = toggled ?? Boolean(latest?.files.some(isMedia));
   const status: CheckGlyph = latest?.status ?? "pending";
   const table = surface === "transcript";
+  // Full-width rows inset like the card header, with the open parts stacked under the label.
+  const framed = table || surface === "card";
   // The header value is one line; the card repeats it only if the header cut it off.
   const valueRef = useRef<HTMLSpanElement>(null);
   const [valueClipped, setValueClipped] = useState(false);
@@ -199,7 +213,7 @@ export function CheckRow({
       <CollapsibleTrigger
         className={cn(
           "group/check-row flex w-full min-w-0 items-center gap-2 text-left enabled:cursor-pointer",
-          table ? "px-3 py-2 enabled:hover:bg-muted/50" : "rounded-md px-2 enabled:hover:bg-muted/60",
+          framed ? "px-3 py-2 enabled:hover:bg-muted/50" : "rounded-md px-2 enabled:hover:bg-muted/60",
           surface === "tab" && "py-1.5",
           surface === "task" && "py-1"
         )}
@@ -217,6 +231,11 @@ export function CheckRow({
             Added
           </Badge>
         ) : null}
+        {outdated ? (
+          <Badge variant="outline" shape="rounded" className="text-warning" title="Reported on an older commit">
+            Outdated
+          </Badge>
+        ) : null}
         {surface === "tab" ? (
           <span className="shrink-0 text-xs text-muted-foreground">{latest ? <ResultTime at={latest.reportedAt} /> : "Pending"}</span>
         ) : null}
@@ -229,10 +248,10 @@ export function CheckRow({
       </CollapsibleTrigger>
       {latest && hasCard ? (
         <CollapsibleContent>
-          {/* The transcript card is already a framed table, so there the parts stack plainly under the label. */}
+          {/* A framed card is already a table, so there the parts stack plainly under the label. */}
           <div
             className={cn(
-              table ? "flex flex-col gap-3 pr-3 pb-3 pl-9" : "mt-1 mb-3 divide-y divide-border/70 rounded-md bg-muted/50 *:px-3.5 *:py-2.5"
+              framed ? "flex flex-col gap-3 pr-3 pb-3 pl-9" : "mt-1 mb-3 divide-y divide-border/70 rounded-md bg-muted/50 *:px-3.5 *:py-2.5"
             )}
           >
             {valueClipped ? (
@@ -277,7 +296,7 @@ export function CheckRow({
             ) : null}
             {table ? null : (
               // A footer, not a section: who and when, with the older-results toggle.
-              <footer className="flex items-center gap-3 py-2! text-xs text-muted-foreground">
+              <footer className={cn("flex items-center gap-3 text-xs text-muted-foreground", !framed && "py-2!")}>
                 <span className="min-w-0 flex-1 truncate" title={latest.threadTitle}>
                   Reported <Reported result={latest} projectRoute={projectRoute} inSentence />
                 </span>

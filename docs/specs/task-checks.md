@@ -181,6 +181,14 @@ Nothing is pushed into every prompt. Checks run when someone asks:
   thread's message refs still hold them. Results that belong to a Task stay, and
   so do their files.
 
+- A Pull request checks run (`cliThreads.pullRequestChecks`) owns nothing: its
+  results belong to its PR's head revision
+  ([github-integration.md](github-integration.md#pull-request-checks)), so an
+  attached Task neither owns nor receives them, and deleting the thread keeps
+  them. `getForThread` returns the PR's Checks for such a thread, with
+  `pullRequest.headSha` set, and the Checks tab's Run checks menu has no
+  Switch checklist.
+
 ## Visibility
 
 - Results on a Task are visible to everyone who can see the Task, with their
@@ -196,6 +204,7 @@ Nothing is pushed into every prompt. Checks run when someone asks:
   sidebar's task tab.
 - Results owned by a thread are visible only to whoever can view the thread
   (owner or share). `getFileUrls` gates them the same way.
+- A PR's results are visible to everyone in the project, like the PR.
 - A read-only project role sees the Checklist selector disabled.
 
 ## UI
@@ -277,7 +286,7 @@ Files with no check render below as reply attachments do today.
 
 ### The row and its card (OS-2385)
 
-All three surfaces (transcript card, Checks tab, task sidebar) share
+All four surfaces (transcript card, PR page cards, Checks tab, task sidebar) share
 `CheckRow`. The design was settled in `/playground/check-rows`.
 
 - The header is one button on one line: status, label, value, badge, time,
@@ -308,6 +317,10 @@ All three surfaces (transcript card, Checks tab, task sidebar) share
 - The transcript card is one reply's own results, so it has no footer or
   Older results. It is already a framed table, so its parts stack plainly
   under the label, without the tinted card or dividers.
+- The PR page's cards (Pull request checks and a task's Evidence,
+  `ChecksCard`) use the transcript card's framed layout: full-width rows
+  inset 12px, in line with the header's icon box and chevron, and parts
+  stacked under the label. They keep the footer and Older results.
 
 ### Task sidebar
 
@@ -330,9 +343,17 @@ Checklists (name, ordered Checks, task types that default to it). Anyone who can
 see the project's tasks can read both; only project admins (`project:update`)
 edit them. Clicking a row opens its edit dialog; the `⋯` menu also holds
 Delete. A Checklist row shows its default task types as task type pills. The
-Checklist dialog lists its Checks in order, reordered by drag, with an "Add
-checks" button below that opens a checkbox dropdown. Default task types work
-the same way, shown inline as removable task type pills above "Add task types".
+row's edit button sits under the pills, so the pills are buttons of their own
+rather than nested in it. The
+Checklist dialog holds the name and the Checks in order, reordered by drag,
+with an "Add checks" button below that opens a checkbox dropdown. A
+"Defaults" button next to "Create checklist" opens one row per task type, plus
+Pull requests, each rendered as its pill with a Checklist picker ("No checks"
+or a Checklist). One picker per row makes it visible that a type has one
+default; moving a type off a Checklist happens in plain sight, not as a side
+effect of ticking it elsewhere. Clicking a default's pill on a Checklist row
+opens the same popup. Save sends every row in one `checklists.setDefaults`
+mutation, so the defaults change together or not at all.
 The Checklists group stays hidden until the project has a Check or a
 Checklist, since a Checklist needs Checks to group. Until then the Checks group
 drops its heading too, leaving only the "No checks yet" empty state.
@@ -417,6 +438,21 @@ Shipped (OS-2293):
 - `checks.checklists.getForThread({ threadId })` returns the same shape as
   `getForTask`. With no task, `followsTypeDefault` is false and no Checklist
   is the default.
+
+Shipped (OS-2400, pull request checks):
+
+- `checklists.pullRequests` (at most one per project) and
+  `checkDefinitions.showInPullRequestList`, both optional booleans.
+- `cliThreads.pullRequestChecks: { headSha }`, set only at creation.
+- `checkResults.pullRequest: { ref, headSha }`. Indexed
+  `by_projectId_and_pullRequestRef_and_reportedAt` for the card's newest 500,
+  and `by_projectId_and_pullRequestRef_and_checkKey_and_reportedAt` for the
+  list's current result per Check. The thread index is
+  `by_threadId_and_taskId_and_pullRequestRef_and_reportedAt`, so a thread's own
+  results, the attach move, and thread deletion skip PR results.
+- `getForTask`/`getForThread`/`getForPullRequest` rows carry each result's
+  `headSha`, and the answer carries `pullRequest: { headSha }` (the stored PR's
+  current head, or null) when a PR owns the Checks.
 
 ## Later
 

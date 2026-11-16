@@ -439,32 +439,87 @@ writes itself, label and instruction, and the agent answers each with
 passed, warning, failed, or not performed, a justification, and Evidence. Convoy adds
 no verdict, size label, or rollup of its own beyond the pass count.
 
-- They come from the project's check catalog. Its Checks settings have a
-  Pull requests row next to the task types that picks one Pull request
-  checklist per project.
+Status: the run, results, card, and list icons are built (OS-2400).
+Publishing to GitHub is next (OS-2401).
+
+- They come from the project's check catalog. The Checks settings
+  "Defaults" popup has a Pull requests row after the task types; at most one
+  Checklist per project has it (`checklists.pullRequests`). The settings row
+  shows it as a Pull requests pill.
 - An instruction may tell the agent to run shell commands in the PR's
   worktree (`git diff --stat -- apps/web/convex`). The agent runs them like
   any other step. Command Checks that run without an agent (exit code is
   the status, output is the Evidence) are V2, behind a confirm that shows
   the commands first.
 - Results belong to the PR's head revision. After a push they show as
-  outdated, like an Outdated guide, until someone runs them again.
+  outdated, like an Outdated guide, until someone runs them again. A row whose
+  current result names an older head than the stored PR's `headSha` gets an
+  Outdated badge, and the card's subtitle says Outdated.
 - They are separate from the referenced Task's Checks and never count
   toward them: a PR may have no Task, or its Task Checks may never have run.
 - V1: a member with the CLI thread permission runs them by hand from the PR
   page, on their own CLI profile. Everyone in the project reads them. V2:
   automatic runs on new PRs and pushes, configured as an automation
   (OS-2173).
-- A checks run is its own thread, separate from any Guide run, with its own
-  launch popup (profile, path, worktree, runtime, model, effort) remembered
-  separately. A Guide can fill most of a model's context, so the two run in
+- A checks run is its own thread, separate from any Guide run, started from
+  its own popup: the PR page's thread composer (profile, path, worktree,
+  runtime, model, effort, attachments) with the PR pill locked and the text
+  prefilled with the checks prompt, which the member may edit before sending.
+  The composer's send button starts the run; the popup has no footer. A Guide can fill most of a model's context, so the two run in
   parallel, each on the model that suits it.
+  - Run checks sits in the card's header. It is hidden without the CLI thread
+    permission, and disabled with the reason when no CLI profile is online or
+    the Pull request checklist has no Checks.
+  - The popup's choices are a draft of their own per member and project
+    (draft key `pull-request-checks:<userId>`), apart from the PR's Activity
+    composer draft. Each open replaces the draft's text with a fresh prompt,
+    since the prompt names the current head. The model picked is remembered
+    like any new-thread composer's.
+  - The run is a CLI thread with the PR as its Attached pull request.
+    `cli.threads.core.create` takes `pullRequestChecks: { headSha }`, the head
+    the card shows, and stores it as `cliThreads.pullRequestChecks.headSha`.
+    It must still be the stored PR's head, else "The pull request has new
+    commits. Run the checks again." A PR outside the project's connected
+    repositories is rejected: "Pull request checks need a pull request in a
+    connected repository". Run checks is disabled until Convoy has synced the
+    PR.
+  - The prompt names that commit and asks the agent to check it out if the
+    working tree is elsewhere, then lists each Check in the Pull request
+    checklist (key, label, instruction) and points at the attach footer's
+    `convoy threads attach` command, as the Checks tab's Run checks does
+    ([task-checks.md](task-checks.md#requesting-a-run)).
+- Ownership: a checks run's `convoy threads attach --check` writes results
+  owned by the project, the PR ref, and the launch head
+  (`checkResults.pullRequest`), never by a task, even one attached to the
+  thread later. The thread's Checks tab, `convoy threads checks`, and MCP
+  `get_checks` read the PR's Checks (`getForThread`), so the CLI needs no
+  change. Deleting the thread keeps them.
 - Each run publishes to GitHub as a check run (Checks: write), with
   `warning` as the `neutral` conclusion ([task-checks.md](task-checks.md#statuses)), so results
   also show on github.com and can feed branch protection.
-- The PR page shows them as a card before GitHub checks. Each Check has a
-  "Show in pull request list" switch; the list shows a status icon for each
-  shown Check, up to three, with the label and note in a tooltip.
+- The PR page shows them as a card before GitHub checks: "Pull request
+  checks: 2/3", the checklist and the "1 failed" tail, passed and warning rows
+  folded until the header is clicked. It reuses the Evidence card and
+  `CheckRow`. With a failed row the card has Fix, which drafts "Fix the failed
+  pull request checks:" and one line per failed row in the Activity composer.
+  The card is hidden while the project has no Pull request checklist and the
+  PR has no results. Anyone who can read the PR reads them
+  (`checks.checklists.getForPullRequest`: project access and an active link to
+  the PR's repository), with the "Reported by…" rule from
+  [task-checks.md](task-checks.md#visibility).
+- Each Check has a "Show in pull request list" switch
+  (`checkDefinitions.showInPullRequestList`). Up to three shown Checks,
+  Pull request checklist order first, are the list's icon columns. A PR with
+  any result shows one icon per column, so a column is the same Check on
+  every row: an unreported Check is the pending circle ("Not reported on this
+  pull request" in its tooltip), and a result from an older head than the
+  stored PR's is dimmed ("Outdated: reported on an older commit"). A PR
+  nobody checked shows no icons. The tooltip has the label, value, and note.
+  Search hits show them too. Only the rows on screen (loaded rows, or the
+  search's hits) are read (`checks.results.listForPullRequestList`, at most
+  100 refs a call, so the list sends one call per 100 rows): one index read
+  per row and shown Check, plus, for a row with results, the stored PR's head
+  (the project's links, read once per call, and the PR row).
 
 ## Disconnect, revocation, and reconnect
 

@@ -13,7 +13,10 @@ import { resolveTaskTypeKey } from "@/lib/tasks/task-types";
 import { getActiveTaskById } from "../tasks/lib/tasksRepo";
 import { getUsersByIds } from "../users/lib/usersRepo";
 import { checkResultStatusValidator, cliMessageAttachmentValidator } from "../lib/contracts/validators";
-import { listCheckResultsByTask, listCheckResultsOwnedByThread } from "./lib/checkResultsRepo";
+import { listCheckResultsByPullRequest, listCheckResultsByTask, listCheckResultsOwnedByThread } from "./lib/checkResultsRepo";
+import { toAttachedPullRequest, type AttachedPullRequest } from "../lib/contracts/github";
+import { findLinkedPullRequest } from "../integrations/github/lib/integrationPullRequestsRepo";
+import { listActiveRepositoryLinksForProject } from "../integrations/github/lib/integrationRepositoryLinksRepo";
 import { errors } from "./errors";
 import { MAX_CHECKLISTS_PER_PROJECT, MAX_CHECKLIST_NAME_LENGTH } from "./lib/constants";
 import { listCheckDefinitionsByProject } from "./lib/checkDefinitionsRepo";
@@ -35,6 +38,8 @@ const checklistValidator = v.object({
   name: v.string(),
   checkKeys: v.array(v.string()),
   taskTypeKeys: v.array(v.string()),
+  /** The project's Pull request checklist (OS-2400). */
+  pullRequests: v.boolean(),
 });
 
 const checkResultItemValidator = v.object({
@@ -51,6 +56,8 @@ const checkResultItemValidator = v.object({
   files: v.array(cliMessageAttachmentValidator),
   artifactId: v.optional(v.id("taskArtifacts")),
   artifactName: v.optional(v.string()),
+  /** A PR's result: the head revision it was reported on. */
+  headSha: v.optional(v.string()),
   reportedAt: v.number(),
 });
 
@@ -81,6 +88,8 @@ const taskChecksValidator = v.object({
       results: v.array(checkResultItemValidator),
     })
   ),
+  /** Set when a PR owns the Checks: its current head, null while Convoy has no stored row for it. */
+  pullRequest: v.optional(v.object({ headSha: v.union(v.string(), v.null()) })),
 });
 
 type TaskChecks = Infer<typeof taskChecksValidator>;
@@ -112,17 +121,20 @@ async function assertNameFree(ctx: MutationCtx, projectId: Id<"projects">, name:
   ensure(existing !== null && existing._id !== selfId).isFalse(errors.CHECKLIST_NAME_TAKEN);
 }
 
-/** A task type defaults to one checklist, so mapping it here takes it off any other. */
-async function releaseTaskTypes(
+/** A task type defaults to one checklist, and a project has one Pull request checklist, so claiming either here takes it off any other. */
+async function releaseDefaults(
   ctx: MutationCtx,
   checklists: Doc<"checklists">[],
   selfId: Id<"checklists"> | null,
-  taskTypeKeys: string[],
+  claim: { taskTypeKeys: string[]; pullRequests: boolean },
   userId: Id<"users">
 ) {
   for (const other of checklists) {
-    if (other._id === selfId || !other.taskTypeKeys.some((key) => taskTypeKeys.includes(key))) continue;
-    await updateChecklist(ctx, other._id, { taskTypeKeys: other.taskTypeKeys.filter((key) => !taskTypeKeys.includes(key)) }, userId);
+    if (other._id === selfId) continue;
+    const taskTypeKeys = other.taskTypeKeys.filter((key) => !claim.taskTypeKeys.includes(key));
+    const releasesPullRequests = claim.pullRequests && other.pullRequests === true;
+    if (taskTypeKeys.length === other.taskTypeKeys.length && !releasesPullRequests) continue;
+    await updateChecklist(ctx, other._id, { taskTypeKeys, ...(releasesPullRequests ? { pullRequests: false } : {}) }, userId);
   }
 }
 
@@ -140,7 +152,13 @@ export const list = query({
       return [];
     }
     const checklists = await listChecklistsByProject(ctx, args.projectId);
-    return checklists.map(({ _id, name, checkKeys, taskTypeKeys }) => ({ _id, name, checkKeys, taskTypeKeys }));
+    return checklists.map(({ _id, name, checkKeys, taskTypeKeys, pullRequests }) => ({
+      _id,
+      name,
+      checkKeys,
+      taskTypeKeys,
+      pullRequests: pullRequests === true,
+    }));
   },
 });
 
@@ -150,6 +168,7 @@ export const create = mutation({
     name: v.string(),
     checkKeys: v.array(v.string()),
     taskTypeKeys: v.array(v.string()),
+    pullRequests: v.optional(v.boolean()),
     apiKey: v.optional(v.string()),
   },
   returns: v.id("checklists"),
@@ -165,8 +184,9 @@ export const create = mutation({
     ensure(checklists.length).lt(MAX_CHECKLISTS_PER_PROJECT, errors.checklistLimitReached(MAX_CHECKLISTS_PER_PROJECT));
     await assertNameFree(ctx, args.projectId, name);
 
-    await releaseTaskTypes(ctx, checklists, null, taskTypeKeys, user._id);
-    return insertChecklist(ctx, { projectId: args.projectId, name, checkKeys, taskTypeKeys }, user._id);
+    const pullRequests = args.pullRequests === true;
+    await releaseDefaults(ctx, checklists, null, { taskTypeKeys, pullRequests }, user._id);
+    return insertChecklist(ctx, { projectId: args.projectId, name, checkKeys, taskTypeKeys, pullRequests: pullRequests || undefined }, user._id);
   },
 });
 
@@ -176,6 +196,7 @@ export const update = mutation({
     name: v.optional(v.string()),
     checkKeys: v.optional(v.array(v.string())),
     taskTypeKeys: v.optional(v.array(v.string())),
+    pullRequests: v.optional(v.boolean()),
     apiKey: v.optional(v.string()),
   },
   returns: v.null(),
@@ -190,8 +211,9 @@ export const update = mutation({
     }
     const checkKeys = args.checkKeys === undefined ? undefined : await validateCheckKeys(ctx, checklist.projectId, args.checkKeys);
     const taskTypeKeys = mapDefined(args.taskTypeKeys, validateTaskTypeKeys);
-    if (taskTypeKeys !== undefined) {
-      await releaseTaskTypes(ctx, await listChecklistsByProject(ctx, checklist.projectId), checklist._id, taskTypeKeys, user._id);
+    if (taskTypeKeys !== undefined || args.pullRequests) {
+      const claim = { taskTypeKeys: taskTypeKeys ?? [], pullRequests: args.pullRequests === true };
+      await releaseDefaults(ctx, await listChecklistsByProject(ctx, checklist.projectId), checklist._id, claim, user._id);
     }
 
     const patch = buildPatch<ChecklistUpdatePatch>({
@@ -199,9 +221,42 @@ export const update = mutation({
       normalizedName: mapDefined(name, normalizeChecklistName),
       checkKeys,
       taskTypeKeys,
+      pullRequests: args.pullRequests,
     });
     if (Object.keys(patch).length > 0) {
       await updateChecklist(ctx, checklist._id, patch, user._id);
+    }
+    return null;
+  },
+});
+
+/** Sets the default Checklist of each listed task type and the Pull request checklist in one transaction; unlisted types stay. */
+export const setDefaults = mutation({
+  args: {
+    projectId: v.id("projects"),
+    taskTypes: v.array(v.object({ key: v.string(), checklistId: v.union(v.id("checklists"), v.null()) })),
+    pullRequests: v.union(v.id("checklists"), v.null()),
+    apiKey: v.optional(v.string()),
+  },
+  returns: v.null(),
+  handler: async (ctx, args) => {
+    const { user, principal } = await getAuthenticatedAccess(ctx, args.apiKey);
+    await requireAuthorizedProject(ctx, principal, args.projectId, ProjectPermission.PROJECT_UPDATE);
+    const checklists = await listChecklistsByProject(ctx, args.projectId);
+    const ids = new Set(checklists.map((checklist) => checklist._id));
+    for (const { key, checklistId } of args.taskTypes) {
+      validateTaskTypeKey(key);
+      ensure(checklistId === null || ids.has(checklistId)).isTrue(errors.CHECKLIST_NOT_FOUND);
+    }
+    ensure(args.pullRequests === null || ids.has(args.pullRequests)).isTrue(errors.CHECKLIST_NOT_FOUND);
+
+    const owners = new Map(args.taskTypes.map(({ key, checklistId }) => [key, checklistId]));
+    for (const checklist of checklists) {
+      const kept = checklist.taskTypeKeys.filter((key) => !owners.has(key) || owners.get(key) === checklist._id);
+      const added = [...owners].flatMap(([key, owner]) => (owner === checklist._id && !kept.includes(key) ? [key] : []));
+      const pullRequests = args.pullRequests === checklist._id;
+      if (kept.length === checklist.taskTypeKeys.length && added.length === 0 && pullRequests === (checklist.pullRequests === true)) continue;
+      await updateChecklist(ctx, checklist._id, { taskTypeKeys: [...kept, ...added], pullRequests }, user._id);
     }
     return null;
   },
@@ -262,6 +317,7 @@ async function loadChecks(
       files: result.files,
       artifactId: result.artifactId,
       artifactName: result.artifactName,
+      headSha: result.pullRequest?.headSha,
       reportedAt: result.reportedAt,
     })),
   }));
@@ -315,6 +371,9 @@ export const getForThread = query({
       return null;
     }
     const { thread } = viewable;
+    if (thread.pullRequestChecks && thread.attachedPullRequest) {
+      return loadPullRequestChecks(ctx, auth.user._id, thread.projectId, thread.attachedPullRequest);
+    }
     if (thread.associatedTaskId) {
       return loadTaskChecks(ctx, auth, thread.associatedTaskId);
     }
@@ -323,5 +382,43 @@ export const getForThread = query({
       checklistId: thread.checklistId ?? null,
       results: await listCheckResultsOwnedByThread(ctx, thread._id),
     });
+  },
+});
+
+/** A PR's Checks: the project's Pull request checklist and the PR's results on every head (OS-2400). */
+async function loadPullRequestChecks(
+  ctx: QueryCtx,
+  viewerId: Id<"users">,
+  projectId: Id<"projects">,
+  pullRequest: AttachedPullRequest
+): Promise<TaskChecks> {
+  const [checklists, links, results] = await Promise.all([
+    listChecklistsByProject(ctx, projectId),
+    listActiveRepositoryLinksForProject(ctx, projectId),
+    listCheckResultsByPullRequest(ctx, projectId, pullRequest.ref),
+  ]);
+  const row = await findLinkedPullRequest(ctx, links, pullRequest);
+  const checks = await loadChecks(ctx, viewerId, {
+    projectId,
+    checklistId: checklists.find((checklist) => checklist.pullRequests)?._id ?? null,
+    results,
+  });
+  return { ...checks, pullRequest: { headSha: row?.headSha ?? null } };
+}
+
+/** The Pull request checks of a PR in one of the project's connected repositories (docs/specs/github-integration.md → Pull request checks). */
+export const getForPullRequest = query({
+  args: { projectId: v.id("projects"), owner: v.string(), name: v.string(), number: v.number() },
+  returns: v.union(taskChecksValidator, v.null()),
+  handler: async (ctx, args) => {
+    // Whoever can read the PR reads its results: project access and the project's own active link.
+    const auth = await getOptionalAuthenticatedAccess(ctx);
+    const access = auth ? await authorizeProjectAccess(ctx, auth.principal, args.projectId, ProjectPermission.PROJECT_VIEW) : null;
+    const links = access ? await listActiveRepositoryLinksForProject(ctx, args.projectId) : [];
+    const row = await findLinkedPullRequest(ctx, links, args);
+    if (!auth || !row) {
+      return null;
+    }
+    return loadPullRequestChecks(ctx, auth.user._id, args.projectId, toAttachedPullRequest(args));
   },
 });

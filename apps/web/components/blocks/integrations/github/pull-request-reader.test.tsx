@@ -13,6 +13,7 @@ let stored: unknown;
 let tasks: unknown[] = [];
 let layers: unknown[] = [];
 let taskChecks: unknown = null;
+let pullRequestChecks: unknown = null;
 let prThreads: unknown[] = [];
 const readDiff = vi.fn();
 const readOverview = vi.fn();
@@ -29,6 +30,7 @@ vi.mock("convex/react", () => ({
       [name(api.integrations.github.pullRequests.referencedTasks)]: tasks,
       [name(api.integrations.github.pullRequests.stack)]: layers,
       [name(api.checks.checklists.getForTask)]: taskChecks,
+      [name(api.checks.checklists.getForPullRequest)]: pullRequestChecks,
       [name(api.cli.threads.lists.listByAttachedPullRequest)]: prThreads,
     }[name(fn)];
   },
@@ -83,6 +85,7 @@ beforeEach(() => {
   tasks = [];
   layers = [];
   taskChecks = null;
+  pullRequestChecks = null;
   readDiff.mockResolvedValue(diff);
   readOverview.mockResolvedValue(overview);
 });
@@ -533,6 +536,21 @@ describe("PullRequestReader threads (OS-2193)", () => {
       projectAlias="WEB"
     />
   );
+
+  test("the loading placeholders sit below Pull request checks, where their cards render", () => {
+    pullRequestChecks = {
+      checklists: [{ _id: "pr", name: "PR", isDefault: false, checkKeys: ["risk"], taskTypeKeys: [] }],
+      checklistId: "pr",
+      followsTypeDefault: false,
+      catalog: [],
+      checks: [{ key: "risk", label: "Merge risk", instruction: "", added: false, results: [] }],
+      pullRequest: { headSha: "head-1" },
+    };
+    readOverview.mockReturnValue(new Promise(() => {}));
+    render(connected());
+    const card = screen.getByText("Pull request checks: 0/1");
+    expect(card.compareDocumentPosition(screen.getByLabelText("Loading checks")) & Node.DOCUMENT_POSITION_FOLLOWING).toBe(4);
+  });
 
   beforeEach(() => {
     seeded.length = 0;

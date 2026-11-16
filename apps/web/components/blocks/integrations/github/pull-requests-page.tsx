@@ -27,6 +27,8 @@ import { useGithubIntegrationEnabled } from "@/lib/dev-mode/use-dev-mode";
 import { AppLink, appRoute, useNavigation, useRouteParams } from "@/lib/navigation";
 import { useCurrentOrgProject } from "@/lib/routing/current-org-project-context";
 import { NoAccess } from "@/components/blocks/no-access";
+import { PullRequestCheckIcons, usePullRequestListChecks } from "@/components/blocks/checks";
+import { toAttachedPullRequest } from "@/convex/lib/contracts/github";
 import { PullRequestBrowser, PullRequestBrowserSkeleton, repositoryName } from "./pull-request-browser";
 import { PullRequestReader, PullRequestReaderSkeleton } from "./pull-request-reader";
 import { StackBadge } from "./pull-request-stack";
@@ -239,6 +241,14 @@ function PullRequestList({
   // With nothing to show and every repository failing, the empty state carries the error instead.
   const allFailed = failed.length > 0 && failed.length === scope.length;
   const notice = search.active ? null : coverageNotice(list.coveredSince, options);
+  const refOf = (pr: { repositoryId: Id<"integrationRepositories">; number: number }) => {
+    const repository = repositories.get(pr.repositoryId);
+    return repository ? toAttachedPullRequest({ owner: repository.owner, name: repository.name, number: pr.number }).ref : undefined;
+  };
+  // Search hits are PRs too, so they show the same icons as stored rows.
+  const shown = search.active ? search.results : results;
+  const listChecks = usePullRequestListChecks(projectId, shown.flatMap((pr) => refOf(pr) ?? []));
+  const checksOf = (pr: { repositoryId: Id<"integrationRepositories">; number: number }) => listChecks.get(refOf(pr) ?? "");
 
   return (
     <>
@@ -338,6 +348,7 @@ function PullRequestList({
       {search.active ? (
         <SearchResults
           search={search}
+          checksOf={checksOf}
           projectId={projectId}
           repositories={repositories}
           organizationSlug={organizationSlug}
@@ -352,6 +363,7 @@ function PullRequestList({
             <PullRequestRow
               key={pr._id}
               pr={pr}
+              checks={checksOf(pr)}
               projectId={projectId}
               repository={repositories.get(pr.repositoryId)}
               organizationSlug={organizationSlug}
@@ -381,12 +393,14 @@ function PullRequestList({
 /** Live results: temporary rows that never store a PR, with GitHub's partial and failed answers named. */
 function SearchResults({
   search,
+  checksOf,
   projectId,
   repositories,
   organizationSlug,
   projectAlias,
 }: {
   search: ReturnType<typeof usePullRequestSearch>;
+  checksOf: (pr: PullRequestSearchHit) => Parameters<typeof PullRequestCheckIcons>[0]["checks"];
   projectId: Id<"projects">;
   repositories: Map<string, Connection["repository"]>;
   organizationSlug: string;
@@ -414,6 +428,7 @@ function SearchResults({
             <PullRequestRow
               key={`${pr.repositoryId}#${pr.number}`}
               pr={pr}
+              checks={checksOf(pr)}
               projectId={projectId}
               repository={repositories.get(pr.repositoryId)}
               organizationSlug={organizationSlug}
@@ -490,12 +505,15 @@ function EmptyList({
 
 function PullRequestRow({
   pr,
+  checks,
   projectId,
   repository,
   organizationSlug,
   projectAlias,
 }: {
   pr: Summary | PullRequestSearchHit;
+  /** Its current results for the Checks shown in the list (OS-2400). */
+  checks?: Parameters<typeof PullRequestCheckIcons>[0]["checks"];
   projectId: Id<"projects">;
   repository: Connection["repository"] | undefined;
   organizationSlug: string;
@@ -520,6 +538,7 @@ function PullRequestRow({
           {repository ? `${repository.owner}/${repository.name}` : ""} #{pr.number} · {pr.author} · updated {formatDistanceToNow(pr.providerUpdatedAt, { addSuffix: true })}
         </span>
       </span>
+      <PullRequestCheckIcons checks={checks} />
       {stored?.conflicts ? (
         <Badge variant="outline" className="shrink-0 text-destructive">
           <CircleX />

@@ -60,6 +60,8 @@ interface UseCreateThreadSubmitOptions {
    */
   attachedTask?: ThreadComposerAttachedTask | null;
   agentWorkSource?: CreateThreadArgs["agentWorkSource"];
+  /** A Pull request checks run (OS-2400) on the attached PR at this head. */
+  pullRequestChecks?: CreateThreadArgs["pullRequestChecks"];
   /**
    * Add-to-group flow (OS-1477): when set, submit calls
    * `addThreadToGroup` instead of creating a root thread.
@@ -92,6 +94,7 @@ export function useCreateThreadSubmit({
   rememberCliModel,
   attachedTask,
   agentWorkSource,
+  pullRequestChecks,
   sourceThreadId,
   onCreated,
 }: UseCreateThreadSubmitOptions) {
@@ -150,6 +153,7 @@ export function useCreateThreadSubmit({
           attachments: uploadedAttachments.length > 0 ? uploadedAttachments : undefined,
           taskId: message.taskId,
           pullRequestUrl: message.pullRequestUrl,
+          pullRequestChecks,
           agentWorkSource,
           projectAgentId,
         };
@@ -195,6 +199,7 @@ export function useCreateThreadSubmit({
     [
       attachedTask,
       agentWorkSource,
+      pullRequestChecks,
       clearAfterSubmit,
       setDraft,
       createThread,

@@ -250,6 +250,26 @@ describe("TaskThreadComposer", () => {
     expect(screen.getByTestId("thread-composer-focus-request").textContent).toBe("1");
   });
 
+  test("a PR checks run keeps its own draft, replaces its text with the seed, and starts a checks thread (OS-2400)", async () => {
+    const pullRequest = { owner: "Contoso", name: "Convoy", number: 482, ref: "contoso/convoy#482" };
+    const onSeeded = vi.fn();
+    renderFooter({
+      task: undefined,
+      pullRequest,
+      draftKey: "pull-request-checks:user_1",
+      seed: "Run the checks",
+      seedReplacesDraft: true,
+      onSeeded,
+      pullRequestChecks: { headSha: "abc123" },
+    });
+
+    expect(useThreadDraftMock).toHaveBeenCalledWith("pull-request-checks:user_1");
+    // Replaced, not appended: the prompt names the current head, so last time's text is stale.
+    expect(setDraftMock).toHaveBeenCalledWith({ text: "Run the checks", composerContent: undefined });
+    fireEvent.click(screen.getByRole("button", { name: "Submit task thread" }));
+    await waitFor(() => expect(createThreadMutationMock).toHaveBeenCalledWith(expect.objectContaining({ pullRequestChecks: { headSha: "abc123" } })));
+  });
+
   test("forwards the route organization so the task composer can load prompts", () => {
     renderFooter();
 

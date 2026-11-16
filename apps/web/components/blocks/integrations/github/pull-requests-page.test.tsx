@@ -13,11 +13,21 @@ let project: unknown = { _id: "project_1" };
 let results: unknown[] = [];
 let pageStatus = "Exhausted";
 let locationSearch = "";
+let listChecks: unknown[] = [];
 const paginatedArgs = vi.fn();
+const listChecksArgs = vi.fn();
 
 vi.mock("convex/react", () => ({
-  useQuery: (fn: Parameters<typeof getFunctionName>[0], args: unknown) =>
-    getFunctionName(fn) === getFunctionName(api.projects.core.getByAlias) ? project : args === "skip" ? undefined : status,
+  useQuery: (fn: Parameters<typeof getFunctionName>[0], args: unknown) => {
+    if (getFunctionName(fn) === getFunctionName(api.projects.core.getByAlias)) return project;
+    return args === "skip" ? undefined : status;
+  },
+  // Only the list's status icons read through useQueries: one entry per batch of rows.
+  useQueries: (queries: Record<string, { args: { refs: string[] } }>) => {
+    const batches = Object.values(queries).map((query) => query.args);
+    listChecksArgs(batches);
+    return Object.fromEntries(Object.keys(queries).map((key, index) => [key, index === 0 ? listChecks : []]));
+  },
   usePaginatedQuery: (_fn: unknown, args: unknown) => {
     paginatedArgs(args);
     return { results, status: pageStatus, loadMore: vi.fn() };
@@ -46,7 +56,9 @@ afterEach(() => {
   results = [];
   pageStatus = "Exhausted";
   locationSearch = "";
+  listChecks = [];
   paginatedArgs.mockClear();
+  listChecksArgs.mockClear();
   search.mockReset();
 });
 
@@ -176,6 +188,23 @@ describe("PullRequestsPage", () => {
     expect(screen.getByRole("button", { name: "Stack 2/3" })).toBeTruthy();
   });
 
+  test("a row shows the current results of the Checks shown in the list (OS-2400)", () => {
+    status = connected({ syncStatus: "synced", openCount: 1 });
+    results = [{ ...pr, repositoryId: "repo_1" }];
+    listChecks = [{ ref: "acme/web#12", checks: [{ key: "risk", label: "Merge risk", status: "failed", value: "High", note: "Touches auth" }] }];
+    render(<PullRequestsPage />);
+    expect(listChecksArgs).toHaveBeenLastCalledWith([{ projectId: "project_1", refs: ["acme/web#12"] }]);
+    const icons = screen.getByLabelText("Pull request checks");
+    expect(icons.querySelector('[aria-label="Failed"]')).toBeTruthy();
+  });
+
+  test("the status icons read loaded rows in batches the server accepts", () => {
+    status = connected({ syncStatus: "synced", openCount: 120 });
+    results = Array.from({ length: 120 }, (_, index) => ({ ...pr, _id: `pr_${index}`, repositoryId: "repo_1", number: index + 1 }));
+    render(<PullRequestsPage />);
+    expect(listChecksArgs.mock.lastCall?.[0].map((batch: { refs: string[] }) => batch.refs.length)).toEqual([100, 20]);
+  });
+
   test("the list has no footnote about automatic updates", () => {
     status = connected({ syncStatus: "synced" });
     results = [pr];
@@ -270,5 +299,23 @@ describe("PullRequestsPage", () => {
     fireEvent.click(screen.getByRole("button", { name: /^Open/ }));
     expect((screen.getByRole("searchbox", { name: "Search pull requests" }) as HTMLInputElement).value).toBe("");
     expect(screen.getByText("Fix the login flow")).toBeTruthy();
+  });
+
+  test("a search hit keeps the status icons of its Checks (OS-2400)", async () => {
+    status = connected({ syncStatus: "synced", openCount: 1 });
+    results = [{ ...pr, repositoryId: "repo_1" }];
+    listChecks = [{ ref: "acme/web#40", checks: [{ key: "risk", label: "Merge risk", status: "failed", note: "Touches auth" }] }];
+    search.mockResolvedValue({
+      pullRequests: [{ repositoryId: "repo_1", number: 40, title: "Old fix", author: "sam", state: "closed", draft: false, labels: [], providerCreatedAt: 1, providerUpdatedAt: Date.now() }],
+      hasMore: false,
+      incomplete: false,
+      omittedRepositories: 0,
+      failures: [],
+    });
+    render(<PullRequestsPage />);
+    fireEvent.change(screen.getByRole("searchbox", { name: "Search pull requests" }), { target: { value: "old" } });
+    expect(await screen.findByRole("link", { name: "Old fix" })).toBeTruthy();
+    expect(listChecksArgs).toHaveBeenLastCalledWith([{ projectId: "project_1", refs: ["acme/web#40"] }]);
+    expect(screen.getByLabelText("Pull request checks").querySelector('[aria-label="Failed"]')).toBeTruthy();
   });
 });

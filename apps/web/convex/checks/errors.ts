@@ -24,4 +24,5 @@ export const errors = {
   checklistNameTooLong: (max: number) => `Checklist name must be at most ${max} characters`,
   checklistLimitReached: (max: number) => `A project can have up to ${max} checklists`,
   checklistUnknownCheck: (key: string) => `Unknown check '${key}'`,
+  pullRequestListTooManyRefs: (max: number) => `Ask for at most ${max} pull requests at a time`,
 } as const;

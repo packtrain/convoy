@@ -258,6 +258,8 @@ export const threadSelectionArgs = {
   agentWorkSource: v.optional(agentThreadWorkSourceValidator),
   /** A github.com PR URL: the message's and thread's Attached pull request. */
   pullRequestUrl: v.optional(v.string()),
+  /** Run the project's Pull request checks on that PR at this head, which must still be its stored one (OS-2400). */
+  pullRequestChecks: v.optional(v.object({ headSha: v.string() })),
   // Immutable Project agent binding (OS-1138). The agent's prompt is
   // snapshotted onto the thread at creation; no update path exists.
   projectAgentId: v.optional(v.id("projectAgents")),
