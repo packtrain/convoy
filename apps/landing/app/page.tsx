@@ -220,9 +220,9 @@ export default function Home() {
             </div>
           </section>
 
-          {/* Open source */}
+          {/* Self-hosting */}
           <section
-            id="open-source"
+            id="self-hosting"
             className={`reveal grid border-b ${LINE} lg:grid-cols-[320px_minmax(0,1fr)]`}
           >
             <div className={`min-w-0 border-white/[0.07] p-8 max-lg:border-b lg:border-r sm:p-10`}>

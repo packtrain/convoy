@@ -189,7 +189,7 @@ test('built homepage renders all shared previews and keeps interactions local', 
     assert.match(projectFrame.fade, /gradient/, 'project frame fades out at the bottom');
     assert.equal(projectFrame.bottom, '0px', 'faded edge has no bottom border');
     const lower = await page.evaluate(() => {
-      const heading = document.querySelector('#agents h2'), own = document.getElementById('open-source');
+      const heading = document.querySelector('#agents h2'), own = document.getElementById('self-hosting');
       const section = own.getBoundingClientRect(), diagram = document.querySelector('[data-preview="self-hosting"]').getBoundingClientRect();
       return {
         headingBreak: !!heading.querySelector('br'),
@@ -201,7 +201,7 @@ test('built homepage renders all shared previews and keeps interactions local', 
       };
     });
     assert.ok(lower.headingBreak && lower.headingLines === 2, `agents heading breaks after its first sentence, ${lower.headingLines} lines`);
-    assert.equal(await page.locator('#environments + #open-source').count(), 1, 'environment management immediately precedes self-hosting');
+    assert.equal(await page.locator('#environments + #self-hosting').count(), 1, 'environment management immediately precedes self-hosting');
     assert.equal(await page.locator('[data-preview="environments"] figure').count(), 1, 'TUI is rendered as HTML');
     assert.ok(lower.beforeIndex, 'Run Convoy yourself sits above the feature index');
     assert.ok(lower.diagramRight, 'self-hosting diagram sits right of its copy');
