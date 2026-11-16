@@ -33,6 +33,24 @@ Each docs page sets, in its prerendered HTML:
 The page component in `app/routes/docs.tsx` renders the tags and React hoists
 them into `<head>`. They change with the page on client navigation.
 
+## Search terms
+
+Four pages take a `title` in the wording people search for and keep their short
+name as `sidebarTitle`, so navigation is unchanged. Each opens with a sentence
+that uses the same wording. Reasoning and the Trends data:
+[landing-seo.md](landing-seo.md#search-terms).
+
+| Page | Title |
+| --- | --- |
+| `/docs/using/ai-threads` | A web UI for Claude Code, Codex and OpenCode |
+| `/docs/using/skills` | Share agent skills across your team |
+| `/docs/reference/roadmap` | Claude Code, Codex, OpenCode and Cursor support |
+| `/docs/deployment/self-hosting-convex` | Self-hosted coding agents: Docker deployment |
+
+Descriptions stay within 160 characters. The Skills title says "agent skills",
+not "Claude Code skills": Convoy delivers Skills through MCP and does not write
+them into a local client's configuration. Docs never call Convoy open source.
+
 ## Share card
 
 All pages share one static card, `public/og.png`, 1200 × 630 and under 200 KB.
