@@ -335,7 +335,7 @@ const markdownComponents: NonNullable<StreamdownProps["components"]> = {
 export type MessageResponseProps = ComponentProps<typeof Streamdown>;
 
 export const MessageResponse = memo(
-  ({ className, ...props }: MessageResponseProps) => {
+  ({ className, components, ...props }: MessageResponseProps) => {
     const { markdown: codeThemes } = useCodeTheme();
     type StreamdownShikiTheme = NonNullable<MessageResponseProps["shikiTheme"]>;
     type CodePluginThemes = NonNullable<
@@ -383,7 +383,7 @@ export const MessageResponse = memo(
         plugins={plugins}
         shikiTheme={shikiTheme}
         {...props}
-        components={markdownComponents}
+        components={components ? { ...markdownComponents, ...components } : markdownComponents}
       />
     );
   },

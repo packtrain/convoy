@@ -994,7 +994,10 @@ compact), and the reader's header, tab row, and Overview.
   the rest; its thread links use the task's own project), the folded
   Commits card, and Activity: the task timeline's header over opened, commits,
   reviews, and comments, read-only, with no Threads source yet. Comments
-  carry the author's GitHub avatar. An inline review comment shows under
+  carry the author's GitHub avatar. Images in the description and comments
+  sit inline with their text, as on GitHub, so bot tables keep each icon
+  beside its label: they get no download button, and a superscript
+  holding only an image is dropped so it doesn't lift the image (OS-2403). An inline review comment shows under
   the Comments source laid out like any other comment: avatar, author
   and time, then a bordered card that quotes the file, "Line 3" (or
   "Lines 2–3"), and the commented lines, then the comment. The quote

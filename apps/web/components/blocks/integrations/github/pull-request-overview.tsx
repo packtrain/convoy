@@ -15,7 +15,6 @@ import {
   RotateCcw,
   X,
 } from "lucide-react";
-import { MessageResponse } from "@/components/ai-elements/message";
 import { PullRequestChecksCard, TaskEvidenceCard } from "@/components/blocks/checks";
 import { EmptyValue } from "@/components/blocks/tasks/task-table/badges";
 import { TaskRefWithType } from "@/components/blocks/tasks/task-ref-with-type";
@@ -33,6 +32,7 @@ import { AppLink, appRoute, type RouteTarget } from "@/lib/navigation";
 import type { TimelineSortDirection, TimelineThreadRow } from "@/lib/tasks/timeline/rows";
 import { cn } from "@/lib/utils";
 import { checksRollup, GithubCheckList, ROLLUP_ICONS } from "./github-checks";
+import { GithubMarkdown } from "./github-markdown";
 import { reviewerStates, type ReviewerState } from "./pull-request-merge-status";
 import { layerBelow, StackMap } from "./pull-request-stack";
 import { displayState, PullRequestStateIcon } from "./pull-request-state-icon";
@@ -381,7 +381,7 @@ function Activity({
                   </a>
                 </p>
                 {first.quote ? <CommentQuote quote={first.quote} /> : null}
-                <MessageResponse className="text-sm">{first.body}</MessageResponse>
+                <GithubMarkdown>{first.body}</GithubMarkdown>
               </div>
             </article>
           );
@@ -641,7 +641,7 @@ export function PullRequestOverviewTab({
         <section aria-label="Description" className="mt-8">
           <h3 className="mb-3 text-xs font-medium text-muted-foreground">Description</h3>
           {pr.description.trim() ? (
-            <MessageResponse className="text-sm">{pr.description}</MessageResponse>
+            <GithubMarkdown>{pr.description}</GithubMarkdown>
           ) : (
             <p className="text-sm text-muted-foreground">No description.</p>
           )}

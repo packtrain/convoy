@@ -75,3 +75,16 @@ describe("MessageResponse link safety", () => {
     expect(screen.queryByRole("dialog")).toBeNull();
   });
 });
+
+describe("MessageResponse components", () => {
+  test("uses a caller's component override (OS-2403)", () => {
+    const { container } = render(
+      <MessageResponse components={{ img: (props) => <i data-testid="caller-img" title={props.alt} /> }}>
+        {"![Ready](https://example.com/ready.svg)"}
+      </MessageResponse>
+    );
+
+    expect(screen.getByTestId("caller-img").title).toBe("Ready");
+    expect(container.querySelector('[data-streamdown="image-wrapper"]')).toBeNull();
+  });
+});

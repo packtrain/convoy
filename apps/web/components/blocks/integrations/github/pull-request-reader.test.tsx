@@ -77,7 +77,16 @@ vi.mock("@/components/blocks/tasks/task-thread-composer", async () => {
 vi.mock("@/components/blocks/thread/thread-list-item", () => ({
   ThreadListItem: ({ chat }: { chat: { title: string } }) => <span>{chat.title}</span>,
 }));
-vi.mock("@/components/ai-elements/message", () => ({ MessageResponse: ({ children }: { children: string }) => <div>{children}</div> }));
+type ImgOverride = (props: { src: string; alt: string }) => React.ReactNode;
+// Calls a caller's `img` override for a markdown image, so tests see what GitHub bodies render.
+vi.mock("@/components/ai-elements/message", () => ({
+  MessageResponse: ({ children, components }: { children: string; components?: { img?: ImgOverride } }) => (
+    <div>
+      {children}
+      {children.includes("![") ? components?.img?.({ src: "https://vercel.com/static/status/ready.svg", alt: "Ready" }) : null}
+    </div>
+  ),
+}));
 
 beforeEach(() => {
   localStorage.clear();
@@ -456,6 +465,19 @@ describe("PullRequestReader overview layout", () => {
     render(reader());
     const body = await screen.findByText("Nice work");
     expect(body.closest("article")?.querySelector("img")?.getAttribute("src")).toBe("https://avatars.githubusercontent.com/u/2");
+  });
+
+  test("images in comments and the description sit inline with their text, as on GitHub (OS-2403)", async () => {
+    stored = { pullRequest: { ...pullRequest, description: "![Ready](ready.svg) Ready" } };
+    readOverview.mockResolvedValue({
+      ...overview,
+      comments: [{ ...overview.comments[0], body: "![Ready](ready.svg) Deployed" }],
+    });
+    render(reader());
+    await screen.findByText(/Deployed/);
+    const images = screen.getAllByAltText("Ready");
+    expect(images).toHaveLength(2);
+    for (const image of images) expect(image.className).toContain("inline");
   });
 
   test("while the PR loads, the skeleton keeps the reader's header, tab row, and overview cards", () => {
