@@ -26,6 +26,7 @@ export const projectValidator = v.object({
   defaultListGroupBy: v.optional(listGroupByValidator),
   defaultBoardRowGroupBy: v.optional(boardRowGroupByValidator),
   showArtifactsCount: v.optional(v.boolean()),
+  publishPullRequestChecks: v.optional(v.boolean()),
   defaultListId: v.optional(v.id("taskLists")),
   pinnedSystemLists: v.optional(v.array(pinnedSystemTaskListValidator)),
   isArchived: v.boolean(),

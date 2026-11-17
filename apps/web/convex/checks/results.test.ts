@@ -699,6 +699,21 @@ describe("pull request checks (OS-2400)", () => {
     expect(github.state.createdCheckRuns).toEqual([]);
   });
 
+  test("a project that keeps results in Convoy publishes nothing and flags nothing; turning it back on publishes the next run (OS-2406)", async () => {
+    const { t, project, asUser, github, attach } = await setupChecksRun();
+    await asUser.mutation(api.projects.core.update, { id: project._id, publishPullRequestChecks: false });
+    await attach({ key: "risk", status: "failed", note: "Touches auth" });
+    await drain(t, 5_000);
+    expect(github.state.createdCheckRuns).toEqual([]);
+    const kept = await t.run((run) => run.db.query("checkResults").first());
+    expect(kept?.githubPublishError).toBeUndefined();
+
+    await asUser.mutation(api.projects.core.update, { id: project._id, publishPullRequestChecks: true });
+    await attach({ key: "risk", status: "passed" });
+    await drain(t, 5_000);
+    expect(github.state.createdCheckRuns.map((run) => run.conclusion)).toEqual(["success"]);
+  });
+
   test("the list takes at most 100 refs a call", async () => {
     const { project, asUser } = await setupChecksRun();
     const refs = Array.from({ length: 101 }, (_, index) => `acme/repo-1#${index + 1}`);

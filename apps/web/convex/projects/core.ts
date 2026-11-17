@@ -314,6 +314,7 @@ export const update = mutation({
     defaultListGroupBy: v.optional(listGroupByValidator),
     defaultBoardRowGroupBy: v.optional(boardRowGroupByValidator),
     showArtifactsCount: v.optional(v.boolean()),
+    publishPullRequestChecks: v.optional(v.boolean()),
   },
   returns: v.null(),
   handler: async (ctx, args) => {
@@ -338,6 +339,7 @@ export const update = mutation({
       defaultListGroupBy: args.defaultListGroupBy,
       defaultBoardRowGroupBy: args.defaultBoardRowGroupBy,
       showArtifactsCount: args.showArtifactsCount,
+      publishPullRequestChecks: args.publishPullRequestChecks,
     });
 
     await updateProject(ctx, args.id, patch);

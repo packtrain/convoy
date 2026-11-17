@@ -20,7 +20,9 @@ import {
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
+import { Label } from "@/components/ui/label";
 import { Skeleton } from "@/components/ui/skeleton";
+import { Switch } from "@/components/ui/switch";
 import { showConvexErrorToast } from "@/lib/errors";
 import { resolveTaskTypeSummary } from "@/lib/tasks/task-types";
 import { TaskType } from "@/components/blocks/tasks/task-ref-with-type";
@@ -32,7 +34,16 @@ type Editing = { kind: "check"; check?: CheckDefinition } | { kind: "checklist";
 type Deleting = { kind: "check"; check: CheckDefinition } | { kind: "checklist"; checklist: Checklist };
 
 /** Project settings → Checks: the check catalog and the Checklists built from it (docs/specs/task-checks.md). */
-export function ChecksSettingsSection({ projectId, canEdit }: { projectId: Id<"projects"> | null; canEdit: boolean }) {
+export function ChecksSettingsSection({
+  projectId,
+  canEdit,
+  publishPullRequestChecks = true,
+}: {
+  projectId: Id<"projects"> | null;
+  canEdit: boolean;
+  /** The project's setting; unset means on. */
+  publishPullRequestChecks?: boolean;
+}) {
   const catalog = useQuery(api.checks.definitions.list, projectId ? { projectId } : "skip");
   const checklists = useQuery(api.checks.checklists.list, projectId ? { projectId } : "skip");
   const [editing, setEditing] = useState<Editing | null>(null);
@@ -158,6 +169,12 @@ export function ChecksSettingsSection({ projectId, canEdit }: { projectId: Id<"p
         </CatalogGroup>
       ) : null}
 
+      {checklists.some((checklist) => checklist.pullRequests) ? (
+        <CatalogGroup title="Pull requests" createLabel="">
+          <PublishSwitch projectId={projectId} checked={publishPullRequestChecks} canEdit={canEdit} />
+        </CatalogGroup>
+      ) : null}
+
       {editing?.kind === "check" ? <CheckDialog projectId={projectId} check={editing.check} onClose={() => setEditing(null)} /> : null}
       {editing?.kind === "checklist" ? (
         <ChecklistDialog
@@ -265,6 +282,37 @@ function CatalogRow({
           </DropdownMenuContent>
         </DropdownMenu>
       ) : null}
+    </div>
+  );
+}
+
+/** Whether Pull request check results leave Convoy, on every Git host (docs/specs/github-integration.md → Pull request checks). */
+function PublishSwitch({ projectId, checked, canEdit }: { projectId: Id<"projects">; checked: boolean; canEdit: boolean }) {
+  const update = useMutation(api.projects.core.update);
+  const [isSaving, setIsSaving] = useState(false);
+  const handleChange = async (publishPullRequestChecks: boolean) => {
+    setIsSaving(true);
+    try {
+      await update({ id: projectId, publishPullRequestChecks });
+    } catch (error) {
+      showConvexErrorToast(error, "Failed to save");
+    } finally {
+      setIsSaving(false);
+    }
+  };
+  return (
+    <div className="flex items-start justify-between gap-4 rounded-lg border p-4">
+      <div className="space-y-1">
+        <Label>Publish results to the Git host</Label>
+        <p className="text-sm text-muted-foreground">On GitHub, each Pull request check result becomes a check run on the PR&apos;s commit.</p>
+      </div>
+      <Switch
+        aria-label="Publish results to the Git host"
+        checked={checked}
+        onCheckedChange={(value) => void handleChange(value)}
+        disabled={!canEdit || isSaving}
+        className="shrink-0 cursor-pointer"
+      />
     </div>
   );
 }

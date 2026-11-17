@@ -132,7 +132,9 @@ export function ProjectSettingsPageContent({
   }
 
   if (section === "checks") {
-    return <ChecksSettingsSection projectId={projectId} canEdit={canEditProject} />;
+    return (
+      <ChecksSettingsSection projectId={projectId} canEdit={canEditProject} publishPullRequestChecks={project?.publishPullRequestChecks ?? true} />
+    );
   }
 
   if (section === "customization") {

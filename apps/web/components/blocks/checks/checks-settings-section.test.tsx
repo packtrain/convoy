@@ -21,6 +21,7 @@ vi.mock("@/convex/_generated/api", () => ({
       definitions: { list: "definitions.list", create: "c", update: "u", remove: "r" },
       checklists: { list: "checklists.list", create: "c", update: "u", remove: "r", setDefaults: "setDefaults" },
     },
+    projects: { core: { update: "projects.update" } },
   },
 }));
 
@@ -180,6 +181,30 @@ describe("ChecksSettingsSection", () => {
     fireEvent.click(screen.getByRole("button", { name: "Change the default checklist for Feature" }));
     expect(screen.getByRole("dialog", { name: "Default checklists" })).toBeDefined();
     expect(screen.queryByRole("dialog", { name: "Edit checklist" })).toBeNull();
+  });
+
+  test("with a Pull requests checklist, an admin can keep results off the Git host (OS-2406)", async () => {
+    data.catalog = [check("tests")];
+    data.checklists = [{ ...checklist("Review"), pullRequests: true }];
+    render(<ChecksSettingsSection projectId={projectId} canEdit publishPullRequestChecks />);
+
+    const toggle = screen.getByRole("switch", { name: "Publish results to the Git host" });
+    expect(toggle.getAttribute("aria-checked")).toBe("true");
+    fireEvent.click(toggle);
+    await waitFor(() => expect(data.mutate).toHaveBeenCalledWith({ id: projectId, publishPullRequestChecks: false }));
+  });
+
+  test("the publish switch waits for a Pull requests checklist and is read-only for viewers (OS-2406)", () => {
+    data.catalog = [check("tests")];
+    data.checklists = [checklist("Feature")];
+    const { rerender } = render(<ChecksSettingsSection projectId={projectId} canEdit publishPullRequestChecks />);
+    expect(screen.queryByRole("switch")).toBeNull();
+
+    data.checklists = [{ ...checklist("Review"), pullRequests: true }];
+    rerender(<ChecksSettingsSection projectId={projectId} canEdit={false} publishPullRequestChecks={false} />);
+    const toggle = screen.getByRole("switch", { name: "Publish results to the Git host" });
+    expect(toggle.getAttribute("aria-checked")).toBe("false");
+    expect(toggle.hasAttribute("disabled")).toBe(true);
   });
 
   test("viewers' pills are plain, not buttons", () => {

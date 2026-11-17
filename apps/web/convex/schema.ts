@@ -272,6 +272,8 @@ export default defineSchema({
     // Whether task rows show the resource count indicator (OS-882).
     // Absent means shown; counts are always maintained regardless.
     showArtifactsCount: v.optional(v.boolean()),
+    // Whether Pull request check results go to the Git host (OS-2406). Absent means on.
+    publishPullRequestChecks: v.optional(v.boolean()),
     // Project-wide default List (the persisted "Inbox"). Optional during the
     // OS-842 widen/backfill window; OS-844 narrows it to required once
     // Backlog/Archived also become system Lists.

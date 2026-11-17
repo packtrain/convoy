@@ -444,7 +444,8 @@ passed, warning, failed, or not performed, a justification, and Evidence. Convoy
 no verdict, size label, or rollup of its own beyond the pass count.
 
 Status: built. The run, results, card, and list icons (OS-2400), and
-publishing to GitHub (OS-2401).
+publishing to GitHub (OS-2401), and the project setting to keep results in
+Convoy (OS-2406).
 
 - They come from the project's check catalog. The Checks settings
   "Defaults" popup has a Pull requests row after the task types; at most one
@@ -534,6 +535,14 @@ publishing to GitHub (OS-2401).
     next run publishes again.
   - A push leaves the new commit without Convoy's runs until the checks run
     on it.
+  - The project setting "Publish results to the Git host"
+    (`projects.publishPullRequestChecks`, unset means on, OS-2406) sits under
+    Pull requests in the Checks settings once a Checklist is the Pull requests
+    default. Off keeps every result in Convoy: `getPublishTarget` returns
+    nothing, so no run and no Not on GitHub badge. It covers every Git host
+    the project connects, so a GitLab connection would publish under the
+    same switch. Turning it off removes nothing already on the host; turning
+    it on publishes the next run, not earlier results.
   - Known ceiling: the Overview reads the first 100 check runs of the head
     and drops Convoy's afterwards, so on a commit with more than 100 runs
     Convoy's can push CI runs off the GitHub checks card.

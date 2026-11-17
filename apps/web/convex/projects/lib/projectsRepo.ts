@@ -115,6 +115,8 @@ export type ProjectUpdatePatch = {
   defaultBoardRowGroupBy?: BoardRowGroupBy;
   // Task-row resource count indicator visibility; absent means shown.
   showArtifactsCount?: boolean;
+  // Pull request check results go to the Git host; absent means on.
+  publishPullRequestChecks?: boolean;
   // Sidebar pins for system Lists (Backlog etc.), which have no `taskLists` row.
   pinnedSystemLists?: NonNullable<Doc<"projects">["pinnedSystemLists"]>;
   // The project-wide default List pointer. Use `setProjectDefaultList` for the

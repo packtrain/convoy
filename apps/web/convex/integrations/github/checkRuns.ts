@@ -37,7 +37,7 @@ const runValidator = v.object({
 });
 type CheckRun = Infer<typeof runValidator>;
 
-/** A PR result's repository, if the project still connects it; null for a result that is gone or not a PR's. */
+/** A PR result's repository, if the project still connects it; null for a result that is gone, not a PR's, or kept in Convoy. */
 export const getPublishTarget = internalQuery({
   args: { resultId: v.id("checkResults") },
   returns: v.union(v.null(), v.object({ error: v.string() }), v.object({ context: syncContextValidator, run: runValidator })),
@@ -46,7 +46,7 @@ export const getPublishTarget = internalQuery({
     const pr = result?.pullRequest ? parseAttachedPullRequest(result.pullRequest.ref) : null;
     const project = result && pr ? await getProjectById(ctx, result.projectId) : null;
     const organization = project ? await getOrganizationById(ctx, project.organizationId) : null;
-    if (!result?.pullRequest || !pr || !project || !organization) return null;
+    if (!result?.pullRequest || !pr || !project || !organization || project.publishPullRequestChecks === false) return null;
     const linked = await findLinkedRepository(ctx, await listActiveRepositoryLinksForProject(ctx, result.projectId), pr);
     if (!linked) return { error: errors.NOT_CONNECTED };
     const { checkKey, label, status, value, note, reportedAt } = result;
