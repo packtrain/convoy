@@ -59,11 +59,13 @@ export function runChecksPrompt(
     "",
     ...lines,
     "",
-    threadId
-      ? `Report each one with \`convoy threads attach ${threadId} [file...] --check <key> --passed | --warning | --failed | --not-performed --note <why>\`, ` +
-        "adding this reply's --message-id and --session-id. Attach the files that prove the result."
-      : "Report each one with the `convoy threads attach` command from this prompt's footer, adding " +
-        "`--check <key> --passed | --warning | --failed | --not-performed --note <why>`. Attach the files that prove the result.",
+    (threadId
+      ? `Report each Check with its own \`convoy threads attach ${threadId} [file...] --check <key>\` command, adding this reply's --message-id and --session-id`
+      : "Report each Check with its own `convoy threads attach` command: the one in this prompt's footer, plus `--check <key>`") +
+      ", and one of `--passed`, `--warning`, `--failed` or `--not-performed` (the last three need `--note <why>`). " +
+      "Add `--value <answer>` or `--artifact <artifactId>` when the Check asks for one, and the files that prove the result. " +
+      // An agent once kept the IDs in `$F`; zsh passed them as one argument and every report failed.
+      "Write each command out in full, without shell variables.",
   ].join("\n");
 }
 

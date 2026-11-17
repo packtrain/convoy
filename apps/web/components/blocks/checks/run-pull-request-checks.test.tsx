@@ -62,5 +62,8 @@ describe("RunPullRequestChecksButton (OS-2400)", () => {
     });
     expect(composer.props?.seed).toContain("abc123");
     expect(composer.props?.seed).toContain("`risk` Merge risk: Rate it");
+    // A Check that asks for a value or artifact gets the flag, and the agent writes each command out (OS-2401).
+    expect(composer.props?.seed).toContain("Add `--value <answer>` or `--artifact <artifactId>` when the Check asks for one");
+    expect(composer.props?.seed).toContain("Write each command out in full, without shell variables");
   });
 });

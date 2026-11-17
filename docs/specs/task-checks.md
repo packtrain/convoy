@@ -145,7 +145,10 @@ Nothing is pushed into every prompt. Checks run when someone asks:
 - The user types it in the thread. No composer control exists for it.
 - The Checks tab's "Run checks" menu sends the thread a prompt for "Pending
   and failed" or "All checks". The prompt lists each Check's key, label, and
-  instruction, plus the attach command. It goes through `cli.messages.send`
+  instruction, plus the attach command: one call per Check with a status flag,
+  `--note` for anything but passed, and `--value` or `--artifact` when the Check
+  asks for one. It tells the agent to write each command out in full, since an
+  unquoted shell variable reaches the CLI as one argument in zsh. It goes through `cli.messages.send`
   like a typed message, so it queues behind a running turn and inherits the
   thread's last mode, model, and effort.
   - "Pending and failed" takes Checks with no result or a current `failed`

@@ -507,6 +507,7 @@ describe("Run checks menu (OS-2292)", () => {
     expect(content).toContain("`ui` UI verified");
     expect(content).not.toContain("`lint`");
     expect(content).toContain(`convoy threads attach ${threadId} [file...] --check <key>`);
+    expect(content).toContain("Add `--value <answer>` or `--artifact <artifactId>` when the Check asks for one");
   });
 
   test("All checks sends every row", () => {
