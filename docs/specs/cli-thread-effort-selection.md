@@ -17,7 +17,7 @@ Effort slots are registry-owned (`apps/web/convex/cli/lib/runtimes/`), provider-
 | Runtime | Slots | Run mapping |
 |---|---|---|
 | `claude-code` | `default`, `low`, `medium`, `high`, `xhigh`, `ultracode` | Agent SDK `effort` query option (`max` intentionally omitted — model-dependent); `ultracode` sends `effort: "xhigh"` plus `ultracode: true` in the `--settings` JSON (see below) |
-| `codex` | `default`, `low`, `medium`, `high`, `xhigh`; GPT-6 Astra, 6.1 Sol, and Sol also offer `max`, `ultra`; GPT-6 Luna also offers `max` | `codex exec -c model_reasoning_effort="<value>"` or app-server `effort` |
+| `codex` | `default`, `low`, `medium`, `high`, `xhigh`; GPT-6.2 Astra, 6.2 Sol, GPT-6 Astra, 6.1 Sol, and GPT-6 Sol also offer `max`, `ultra`; GPT-6 Luna also offers `max` | `codex exec -c model_reasoning_effort="<value>"` or app-server `effort` |
 | `opencode` | **dynamic per model**: `default` + the selected advertised model's variant keys | `promptAsync({ variant })` |
 | `cursor` | **dynamic per model**: `default` + the selected model's tiers (see `docs/specs/cli-cursor-runtime.md`) | `--model` name suffix |
 | all others | none | selector hidden |
@@ -32,7 +32,7 @@ Effort slots are registry-owned (`apps/web/convex/cli/lib/runtimes/`), provider-
 
 ### Codex model-specific efforts
 
-- `gpt-6-astra`, `gpt-6.1-sol`, and `gpt-6-sol` offer `max` and `ultra`; `gpt-6-luna` offers `max`. Other models, including `default`, retain the base catalog.
+- `gpt-6.2-astra`, `gpt-6.2-sol`, `gpt-6-astra`, `gpt-6.1-sol`, and `gpt-6-sol` offer `max` and `ultra`; `gpt-6-luna` offers `max`. Other models, including `default`, retain the base catalog.
 - Support checks and storage normalization without a model accept all known Codex efforts. With a model context, they enforce that model's catalog.
 - Run resolution without a model uses the base catalog, so it never sends GPT-6-only efforts to an unknown configured model.
 - See `docs/specs/cli-codex-runtime.md` for the catalog sources and transport mapping.

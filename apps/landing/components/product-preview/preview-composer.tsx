@@ -35,7 +35,7 @@ export function PreviewComposer({ task }: { task?: { id: string; title: string }
           <div className={styles.footer}>
             <div className={styles.tools}>
               <button type="button" className={styles.add} aria-label="Add attachment" aria-disabled="true"><Plus /></button>
-              <button type="button" className={styles.control} aria-disabled="true"><OpenAIIcon /><span>GPT-6 Astra</span><ChevronDown className={styles.chevron} /></button>
+              <button type="button" className={styles.control} aria-disabled="true"><OpenAIIcon /><span>GPT-6.2 Astra</span><ChevronDown className={styles.chevron} /></button>
               <button type="button" className={styles.control} aria-label="Agent mode: Act" aria-disabled="true"><MousePointerClick /><span>Act</span><ChevronDown className={styles.chevron} /></button>
             </div>
             <button type="button" className={styles.send} aria-label="Send message" aria-disabled="true"><CornerDownLeft /></button>

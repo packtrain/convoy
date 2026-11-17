@@ -27,6 +27,8 @@ describe("catalog coverage", () => {
   it("explicitly classifies every current Codex slot", () => {
     expect(Object.fromEntries(CODEX_MODEL_SLOTS.map((slot) => [slot, resolveModelPricing(slot).status]))).toEqual({
       default: "unpriced",
+      "gpt-6.2-astra": "resolved",
+      "gpt-6.2-sol": "resolved",
       "gpt-6-astra": "resolved",
       "gpt-6.1-sol": "resolved",
       "gpt-6-sol": "resolved",

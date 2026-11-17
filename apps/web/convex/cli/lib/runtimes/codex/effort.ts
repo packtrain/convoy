@@ -40,6 +40,8 @@ function catalogForModel(context?: CliRuntimeEffortContext) {
     return isAwsCodexModelSlot(context?.cliModel) ? maxEffortCatalog : baseEffortCatalog;
   }
   switch (context?.cliModel) {
+    case "gpt-6.2-astra":
+    case "gpt-6.2-sol":
     case "gpt-6-astra":
     case "gpt-6.1-sol":
     case "gpt-6-sol":

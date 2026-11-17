@@ -4,6 +4,8 @@ import type { CodexAvailableCli } from "./validators";
 
 export const CODEX_MODEL_SLOTS = [
   "default",
+  "gpt-6.2-astra",
+  "gpt-6.2-sol",
   "gpt-6-astra",
   "gpt-6.1-sol",
   "gpt-6-sol",
@@ -41,14 +43,24 @@ const CODEX_MODEL_OPTIONS: Record<CodexModelSlot, CodexResolvedModel> = {
     label: "Default",
     description: "Use the connected machine's configured Codex model",
   },
+  "gpt-6.2-astra": {
+    label: "GPT-6.2 Astra",
+    description: "Latest flagship model",
+    runModel: "gpt-6.2-astra",
+  },
+  "gpt-6.2-sol": {
+    label: "GPT-6.2 Sol",
+    description: "Latest workhorse model for coding and everyday work",
+    runModel: "gpt-6.2-sol",
+  },
   "gpt-6-astra": {
     label: "GPT-6 Astra",
-    description: "Latest flagship model",
+    description: "Previous flagship model",
     runModel: "gpt-6-astra",
   },
   "gpt-6.1-sol": {
     label: "GPT-6.1 Sol",
-    description: "Latest workhorse model for coding and everyday work",
+    description: "Previous workhorse model",
     runModel: "gpt-6.1-sol",
   },
   "gpt-6-sol": {
@@ -111,6 +123,8 @@ export function normalizeCodexModel(cliModel: CliRuntimeModel | undefined): stri
  * `global.` inference profiles. Saved slots stay the same across providers.
  */
 const AWS_CODEX_MODEL_SLOTS = [
+  "gpt-6.2-astra",
+  "gpt-6.2-sol",
   "gpt-6-astra",
   "gpt-6-sol",
   "gpt-6-luna",

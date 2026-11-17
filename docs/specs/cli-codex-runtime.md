@@ -236,10 +236,10 @@ Compatibility was checked on codex-cli 0.142.0 and 0.153.4 using real app-server
 
 ## Models
 
-- Selectable slots: `default`, `gpt-6-astra`, `gpt-6.1-sol`, `gpt-6-sol`, `gpt-6-luna`, `gpt-5.6-sol`, `gpt-5.6-terra`, `gpt-5.6-luna`.
+- Selectable slots: `default`, `gpt-6.2-astra`, `gpt-6.2-sol`, `gpt-6-astra`, `gpt-6.1-sol`, `gpt-6-sol`, `gpt-6-luna`, `gpt-5.6-sol`, `gpt-5.6-terra`, `gpt-5.6-luna`.
 - Retired slots `gpt-5.5`, `gpt-5.4`, `gpt-5.4-mini`, and `gpt-5.3-codex-spark` are no longer offered in the model catalog. They remain valid for stored drafts, messages, favorites, and recent selections, keep their labels, and still resolve to `--model <slug>`.
-- GPT-6 Astra, 6.1 Sol, Sol, and Luna appear first after `default`, labeled "GPT-6 Astra", "GPT-6.1 Sol", "GPT-6 Sol", and "GPT-6 Luna". Adding them does not change the default selection.
-- GPT-5.6 Sol/Terra/Luna and older models keep the shared reasoning-effort catalog. Astra, 6.1 Sol, and Sol add `max` and `ultra`; Luna adds `max`.
+- The GPT-6 family appears first after `default`: "GPT-6.2 Astra", "GPT-6.2 Sol" (OS-2420), "GPT-6 Astra", "GPT-6.1 Sol", "GPT-6 Sol", and "GPT-6 Luna". Adding them does not change the default selection.
+- GPT-5.6 Sol/Terra/Luna and older models keep the shared reasoning-effort catalog. Every GPT-6 slot except Luna adds `max` and `ultra`; Luna adds `max`.
 - `default` sends no `--model` flag — Codex uses the machine's `~/.codex/config.toml` model.
 - Every other slot resolves 1:1 to a `--model <slug>` argument.
 - Unknown stored model values resolve to no run model (never leak into `--model`).
@@ -248,7 +248,8 @@ Compatibility was checked on codex-cli 0.142.0 and 0.153.4 using real app-server
 ## Reasoning Effort
 
 - Base slots: `default`, `low`, `medium`, `high`, `xhigh`.
-- `gpt-6-astra`, `gpt-6.1-sol`, and `gpt-6-sol` also offer `max` and `ultra`. `gpt-6-luna` also offers `max`, without `ultra`. Sol and Luna levels come from the Codex model catalog (`~/.codex/models_cache.json`, client 0.155.1) inspected on 2026-09-24.
+- `gpt-6.2-astra`, `gpt-6.2-sol`, `gpt-6-astra`, `gpt-6.1-sol`, and `gpt-6-sol` also offer `max` and `ultra`. `gpt-6-luna` also offers `max`, without `ultra`. Sol and Luna levels come from the Codex model catalog (`~/.codex/models_cache.json`, client 0.155.1) inspected on 2026-09-24.
+- GPT-6.2 Astra and 6.2 Sol levels come from the Codex model catalog (`~/.codex/models_cache.json`, client 0.167.0) inspected on 2026-11-17, which lists `low` through `ultra` for both.
 - GPT-6.1 Sol levels come from Codex's bundled catalog (`codex-rs/models-manager/models.json` on `main`) inspected on 2026-09-29. Its [model documentation](https://developers.openai.com/api/docs/models/gpt-6.1-sol) lists `low` through `max` for the API.
 - For Astra, the [official model documentation](https://developers.openai.com/api/docs/models/gpt-6-astra) confirms the model ID and `low` through `max`. The Codex 0.153.4 model catalog inspected on 2026-09-07 also advertises `ultra`, described as maximum reasoning with automatic task delegation. No GPT-6 model offers `none` or `minimal`.
 - Non-default efforts pass unchanged as `model_reasoning_effort` to exec and as `effort` to app-server. Plan mode also receives the effort in `collaborationMode.settings.reasoning_effort`. A `/goal <objective>` or `/goal resume` run sends no `turn/start`, so it sets the same `effort` and `collaborationMode` through `thread/settings/update` before the goal starts ([cli-thread-goal.md](cli-thread-goal.md#run-lifecycle)).

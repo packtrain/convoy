@@ -49,6 +49,10 @@ describe("model pricing resolution", () => {
   });
 
   it.each([
+    ["gpt-6.2-astra", 0.000008, 0.00004],
+    ["openai/gpt-6.2-astra", 0.000008, 0.00004],
+    ["gpt-6.2-sol", 0.000002, 0.00001],
+    ["openai/gpt-6.2-sol", 0.000002, 0.00001],
     ["gpt-6.1-sol", 0.000002, 0.00001],
     ["openai/gpt-6.1-sol", 0.000002, 0.00001],
     ["gpt-6-sol", 0.000002, 0.00001],
@@ -71,6 +75,8 @@ describe("model pricing resolution", () => {
     ["us.anthropic.claude-fable-5-2", "claude-fable-5-2", 1.1],
     ["global.openai.gpt-6-sol", "gpt-6-sol", 1],
     ["us.openai.gpt-6-astra", "gpt-6-astra", 1.1],
+    ["global.openai.gpt-6.2-astra", "gpt-6.2-astra", 1],
+    ["bedrock_mantle/openai.gpt-6.2-sol", "gpt-6.2-sol", 1.1],
     ["bedrock_mantle/openai.gpt-6-luna", "gpt-6-luna", 1.1],
   ] as const)("prices Bedrock ID %s at its own AWS rates", (model, direct, factor) => {
     const result = resolveModelPricing(model);

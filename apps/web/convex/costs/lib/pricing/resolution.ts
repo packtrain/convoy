@@ -5,12 +5,16 @@ export const pricingCatalog = snapshot as PricingCatalog;
 
 // Reviewed spellings only. Bedrock geo and Mantle IDs are catalog rows with AWS rates.
 export const modelAliases: Readonly<Record<string, string>> = {
+  "openai/gpt-6.2-astra": "gpt-6.2-astra",
+  "openai/gpt-6.2-sol": "gpt-6.2-sol",
   "openai/gpt-6-astra": "gpt-6-astra",
   "openai/gpt-6.1-sol": "gpt-6.1-sol",
   "openai/gpt-6-sol": "gpt-6-sol",
   "openai/gpt-6-luna": "gpt-6-luna",
   "openai/gpt-5.3-codex": "gpt-5.3-codex",
   // Codex on Mantle reports bare model IDs (OS-2105); LiteLLM keys Mantle rates by provider.
+  "openai.gpt-6.2-astra": "bedrock_mantle/openai.gpt-6.2-astra",
+  "openai.gpt-6.2-sol": "bedrock_mantle/openai.gpt-6.2-sol",
   "openai.gpt-6-astra": "bedrock_mantle/openai.gpt-6-astra",
   "openai.gpt-6-sol": "bedrock_mantle/openai.gpt-6-sol",
   "openai.gpt-6-luna": "bedrock_mantle/openai.gpt-6-luna",

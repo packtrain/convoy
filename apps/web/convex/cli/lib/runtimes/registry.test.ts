@@ -127,6 +127,8 @@ describe("cli runtime registry", () => {
     const bedrock = [{ type: "codex" as const, version: "0.156.1", provider: "bedrock" as const, region: "us-east-1" }];
     expect(getCliModelOptions({ cliType: "codex", availableClis: mantle }).map((option) => [option.value, option.runModel]))
       .toEqual([
+        ["gpt-6.2-astra", "openai.gpt-6.2-astra"],
+        ["gpt-6.2-sol", "openai.gpt-6.2-sol"],
         ["gpt-6-astra", "openai.gpt-6-astra"],
         ["gpt-6-sol", "openai.gpt-6-sol"],
         ["gpt-6-luna", "openai.gpt-6-luna"],
@@ -138,6 +140,8 @@ describe("cli runtime registry", () => {
       .toBe("global.openai.gpt-6-sol");
     expect(resolveCliRunModel({ cliType: "codex", cliModel: "gpt-5.6-terra", availableClis: bedrock }))
       .toBe("global.openai.gpt-5.6-terra");
+    expect(resolveCliRunModel({ cliType: "codex", cliModel: "gpt-6.2-astra", availableClis: bedrock }))
+      .toBe("global.openai.gpt-6.2-astra");
     // Default and native-only slots stay readable but never run on AWS.
     for (const cliModel of ["default", "gpt-6.1-sol", "gpt-5.5"]) {
       expect(resolveCliRunModel({ cliType: "codex", cliModel, availableClis: mantle })).toBeUndefined();
@@ -148,8 +152,10 @@ describe("cli runtime registry", () => {
 
   test("offers AWS Codex efforts without ultra (OS-2105)", () => {
     const availableClis = [{ type: "codex" as const, version: "0.156.1", provider: "mantle" as const, region: "us-east-1" }];
-    expect(getCliEffortOptions("codex", { cliModel: "gpt-6-astra", availableClis }).map((option) => option.value))
-      .toEqual(["default", "low", "medium", "high", "xhigh", "max"]);
+    for (const cliModel of ["gpt-6.2-astra", "gpt-6.2-sol", "gpt-6-astra"]) {
+      expect(getCliEffortOptions("codex", { cliModel, availableClis }).map((option) => option.value))
+        .toEqual(["default", "low", "medium", "high", "xhigh", "max"]);
+    }
     expect(resolveCliRunEffort({ cliType: "codex", cliEffort: "ultra", context: { cliModel: "gpt-6-astra", availableClis } }))
       .toBeUndefined();
     // Codex's Bedrock catalog also gives the GPT-5.6 family `max`.
@@ -538,7 +544,7 @@ describe("cli runtime registry", () => {
     expect(
       normalizeCliModelForStorage({ cliType: "codex", cliModel: "gpt-6-astra" }),
     ).toBe("gpt-6-astra");
-    for (const cliModel of ["gpt-6-astra", "gpt-6.1-sol", "gpt-6-sol", "gpt-6-luna"]) {
+    for (const cliModel of ["gpt-6.2-astra", "gpt-6.2-sol", "gpt-6-astra", "gpt-6.1-sol", "gpt-6-sol", "gpt-6-luna"]) {
       expect(resolveCliRunModel({ cliType: "codex", cliModel })).toBe(cliModel);
     }
     expect(
@@ -569,6 +575,8 @@ describe("cli runtime registry", () => {
     const options = getCliModelOptions({ cliType: "codex" });
     expect(options.map((option) => option.value)).toEqual([
       "default",
+      "gpt-6.2-astra",
+      "gpt-6.2-sol",
       "gpt-6-astra",
       "gpt-6.1-sol",
       "gpt-6-sol",
@@ -577,6 +585,12 @@ describe("cli runtime registry", () => {
       "gpt-5.6-terra",
       "gpt-5.6-luna",
     ]);
+    expect(options.find((option) => option.value === "gpt-6.2-astra")?.label).toBe(
+      "GPT-6.2 Astra",
+    );
+    expect(options.find((option) => option.value === "gpt-6.2-sol")?.label).toBe(
+      "GPT-6.2 Sol",
+    );
     expect(options.find((option) => option.value === "gpt-6-astra")?.label).toBe(
       "GPT-6 Astra",
     );

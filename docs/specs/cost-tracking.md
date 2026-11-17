@@ -217,10 +217,14 @@ attribution together with pricing and source/completeness metadata.
 
 `convex/costs/lib/pricing/catalog.json` is a checked-in, pruned LiteLLM
 snapshot. Convex never fetches prices at runtime. The current snapshot uses
-[upstream revision 31a9a99](https://github.com/BerriAI/litellm/blob/31a9a99eb9b227f41350d2ce0682d44df3dc8590/model_prices_and_context_window.json),
-retrieved on 2026-11-09. It contains 108 direct OpenAI and Anthropic model
-entries and 130 AWS Bedrock entries. This revision adds Fable 5.2, GPT-6.1
-Terra, `gpt-6-astra-law`, `gpt-6-cyber`, `gpt-6-rosalind`, and Bedrock
+[upstream revision 5231680](https://github.com/BerriAI/litellm/blob/52316808d9befffe79c099f834d97e09c8358a26/model_prices_and_context_window.json),
+retrieved on 2026-11-17. It contains 112 direct OpenAI and Anthropic model
+entries and 144 AWS Bedrock entries. This revision (OS-2420) adds GPT-6.2
+Astra and Sol (direct, `global.`, `us.` and Mantle rows), `gpt-6.2-astra-law`,
+Mythos 5.2, Bedrock GPT-5.6 Cyber, and Mantle rows for older Claude models.
+Upstream also added the 10% Mantle uplift to Haiku 4.5; every other prior rate
+is unchanged. The previous revision (31a9a99, 2026-11-09) added Fable 5.2,
+GPT-6.1 Terra, `gpt-6-astra-law`, `gpt-6-cyber`, `gpt-6-rosalind`, and Bedrock
 Mythos 5.2 rows; every prior rate is unchanged. Upstream `alias_of` pointer
 rows (`claude-fable-latest`) carry no rates and are skipped. An earlier
 revision (f81e657, 2026-10-16) added `gpt-5.5-cyber-preview` and the Bedrock
@@ -258,9 +262,11 @@ long-context tariff from tokens aggregated across calls or runs.
 `resolveModelPricing` checks exact catalog keys before the explicit
 `modelAliases` map in `resolution.ts`. The initial aliases cover:
 
-- `openai/gpt-6-astra`, `openai/gpt-6.1-sol`, `openai/gpt-6-sol`,
+- `openai/gpt-6.2-astra`, `openai/gpt-6.2-sol`, `openai/gpt-6-astra`,
+  `openai/gpt-6.1-sol`, `openai/gpt-6-sol`,
   `openai/gpt-6-luna`, and `openai/gpt-5.3-codex`.
-- Codex's Mantle model IDs `openai.gpt-6-astra`, `openai.gpt-6-sol`,
+- Codex's Mantle model IDs `openai.gpt-6.2-astra`, `openai.gpt-6.2-sol`,
+  `openai.gpt-6-astra`, `openai.gpt-6-sol`,
   `openai.gpt-6-luna` (OS-2105) and `openai.gpt-5.6-sol`, `-terra`, `-luna`
   resolve to their `bedrock_mantle/` rows. Its
   Bedrock Runtime profiles (`global.openai.<model>`, `us.openai.<model>`) are
@@ -268,6 +274,8 @@ long-context tariff from tokens aggregated across calls or runs.
   catalog can send resolves to an AWS row. GPT-6.1 Sol uses $2
   input, $10 output, $0.10 cache read, and $2.50 base cache write per
   million tokens. These match the [official rates](https://developers.openai.com/api/docs/models/gpt-6.1-sol).
+  GPT-6.2 Sol has the same rates. GPT-6.2 Astra uses $8 input, $40 output,
+  $0.40 cache read, and $10 base cache write per million tokens (LiteLLM).
 - `anthropic/claude-fable-5-2` and `anthropic.claude-fable-5-2`. Fable 5.2 uses $8 input,
   $40 output, $0.20 cache read, and $10 base cache write per million tokens.
   Source: [pricing](https://platform.claude.com/docs/en/about-claude/pricing).
@@ -290,7 +298,7 @@ Other aliases identify the direct API baseline and do not apply a vendor's
 billable tariff. Bare `anthropic.` IDs are in-region Bedrock spellings; they
 keep the direct rate. There is no general prefix, region, or date stripping.
 Unknown IDs and `default` remain unpriced. Every current Codex model slot has
-an explicit coverage assertion. GPT-6 Astra/Sol/Luna, GPT-6.1 Sol, GPT-5.6 Sol/Terra/Luna, GPT-5.5,
+an explicit coverage assertion. GPT-6.2 Astra/Sol, GPT-6 Astra/Sol/Luna, GPT-6.1 Sol, GPT-5.6 Sol/Terra/Luna, GPT-5.5,
 GPT-5.4, and GPT-5.4 Mini have prices. Spark has no direct priced entry in
 this snapshot. Its `chatgpt/` entry has no token rates, so it remains unpriced.
 

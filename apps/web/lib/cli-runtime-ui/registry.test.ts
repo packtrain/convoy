@@ -40,6 +40,8 @@ describe("cli runtime ui registry", () => {
     expect(isSupportedCliModel("claude-code", "invalid")).toBe(false);
     expect(isSupportedCliModel("codex", "opus")).toBe(false);
     expect(isSupportedCliModel("codex", "default")).toBe(true);
+    expect(isSupportedCliModel("codex", "gpt-6.2-astra")).toBe(true);
+    expect(isSupportedCliModel("codex", "gpt-6.2-sol")).toBe(true);
     expect(isSupportedCliModel("codex", "gpt-6-astra")).toBe(true);
     expect(isSupportedCliModel("codex", "gpt-6.1-sol")).toBe(true);
     expect(isSupportedCliModel("codex", "gpt-6-sol")).toBe(true);
@@ -79,6 +81,8 @@ describe("cli runtime ui registry", () => {
   test("codex exposes its model catalog and trigger labels", () => {
     expect(getCliModelOptions("codex").map((option) => option.value)).toEqual([
       "default",
+      "gpt-6.2-astra",
+      "gpt-6.2-sol",
       "gpt-6-astra",
       "gpt-6.1-sol",
       "gpt-6-sol",
@@ -88,6 +92,8 @@ describe("cli runtime ui registry", () => {
       "gpt-5.6-luna",
     ]);
     expect(getCliTriggerLabel("codex", "default")).toBe("Codex");
+    expect(getCliTriggerLabel("codex", "gpt-6.2-astra")).toBe("GPT-6.2 Astra");
+    expect(getCliTriggerLabel("codex", "gpt-6.2-sol")).toBe("GPT-6.2 Sol");
     expect(getCliTriggerLabel("codex", "gpt-6-astra")).toBe("GPT-6 Astra");
     expect(getCliTriggerLabel("codex", "gpt-6.1-sol")).toBe("GPT-6.1 Sol");
     expect(getCliTriggerLabel("codex", "gpt-6-sol")).toBe("GPT-6 Sol");
@@ -145,8 +151,8 @@ describe("cli runtime ui registry", () => {
     ).toEqual(["default", "low", "high"]);
   });
 
-  test("codex forwards Astra model context to the reasoning picker", () => {
-    const context = { cliModel: "gpt-6-astra" };
+  test.each(["gpt-6.2-astra", "gpt-6.2-sol", "gpt-6-astra"])("codex forwards %s model context to the reasoning picker", (cliModel) => {
+    const context = { cliModel };
     expect(getCliEffortOptions("codex", context).map((option) => option.value))
       .toEqual(["default", "low", "medium", "high", "xhigh", "max", "ultra"]);
     expect(isSupportedCliEffort("codex", "ultra", context)).toBe(true);

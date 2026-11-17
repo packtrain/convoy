@@ -9,7 +9,7 @@ function PromptCard({ children, runtime }: { children: React.ReactNode; runtime?
       <div className={styles.cardBody}>
         <h4>{children}</h4>
         <div className={styles.pills}>
-          {runtime && <span className={styles.runtime}><RuntimeIcon runtime={runtime} /><span>{runtime === "codex" ? "GPT-6 Astra" : "Claude Code"}</span></span>}
+          {runtime && <span className={styles.runtime}><RuntimeIcon runtime={runtime} /><span>{runtime === "codex" ? "GPT-6.2 Astra" : "Claude Code"}</span></span>}
           <span className={styles.pill}>{runtime ? "Plan" : "Act"}</span>
         </div>
       </div>
@@ -45,7 +45,7 @@ function WorkflowGrid() {
     <div className={styles.grid} role="table" aria-label="Webhook delivery workflow">
       <div className={styles.row} role="row">
         <div className={`${styles.header} ${styles.stage}`} role="columnheader">Stage</div>
-        <div className={styles.header} role="columnheader"><span className={styles.laneName}>Engineering</span><span className={styles.selector}><RuntimeIcon runtime="codex" /><span>GPT-6 Astra</span><ChevronDown /></span></div>
+        <div className={styles.header} role="columnheader"><span className={styles.laneName}>Engineering</span><span className={styles.selector}><RuntimeIcon runtime="codex" /><span>GPT-6.2 Astra</span><ChevronDown /></span></div>
         <div className={styles.header} role="columnheader"><span className={styles.laneName}>Review</span><span className={styles.selector}><Zap /><span>Parallel</span><ChevronDown /></span></div>
       </div>
       {stages.map((stage, index) => <div key={stage.name} role="rowgroup">

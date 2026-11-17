@@ -60,10 +60,13 @@ This document specifies Claude Code model selection behavior for CLI thread comp
 When the profile's Codex runtime reports `provider: "mantle"` or `"bedrock"`
 (see `cli-provider-keys.md` → Codex on AWS Bedrock and Mantle):
 
-- The Codex menu offers only GPT-6 Astra, GPT-6 Sol, GPT-6 Luna and the GPT-5.6
-  family (Sol, Terra, Luna), all served by Mantle and Bedrock Runtime. Codex
-  0.156.1's own Bedrock catalog lists the GPT-5.6 models and GPT-6 Astra. `Default` is hidden because a machine
-  default could be a model the provider does not have.
+- The Codex menu offers only GPT-6.2 Astra, GPT-6.2 Sol, GPT-6 Astra, GPT-6 Sol,
+  GPT-6 Luna and the GPT-5.6 family (Sol, Terra, Luna), all served by Mantle and Bedrock
+  Runtime. Codex 0.156.1's own Bedrock catalog lists the GPT-5.6 models and
+  GPT-6 Astra. On 2026-11-17 (OS-2420), Bedrock Runtime answered for
+  `global.openai.gpt-6.2-astra` and `-sol`, and Mantle recognized both IDs.
+  `Default` is hidden because a machine default could be a model the provider
+  does not have.
 - Stored slots stay the same. Mantle resolves `gpt-6-sol` to
   `openai.gpt-6-sol`; Bedrock Runtime resolves it to the `global.` inference
   profile `global.openai.gpt-6-sol`. Switching a profile between providers
