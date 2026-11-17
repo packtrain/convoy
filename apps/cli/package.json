@@ -1,6 +1,6 @@
 {
   "name": "@useconvoy/cli",
-  "version": "0.143.1",
+  "version": "0.143.2",
   "description": "CLI agent for Convoy",
   "license": "Elastic-2.0",
   "homepage": "https://docs.convoy.build/docs/cli/install",

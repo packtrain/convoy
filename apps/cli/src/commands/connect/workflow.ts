@@ -415,6 +415,8 @@ function exportSelfOnPath(): void {
     const dir = selfBinDir = fs.mkdtempSync(path.join(os.tmpdir(), "convoy-bin-"));
     process.on("exit", () => fs.rmSync(dir, { recursive: true, force: true }));
   }
+  // tsx keeps `--tsconfig` relative to the bridge's folder; agents run `convoy` from their own.
+  if (process.env.TSX_TSCONFIG_PATH) process.env.TSX_TSCONFIG_PATH = path.resolve(process.env.TSX_TSCONFIG_PATH);
   const command = [process.execPath, ...process.execArgv, process.argv[1]].map(shellQuote).join(" ");
   fs.writeFileSync(path.join(selfBinDir, "convoy"), `#!/bin/sh\nexec ${command} "$@"\n`, { mode: 0o755 });
   if (!(process.env.PATH ?? "").split(path.delimiter).includes(selfBinDir)) process.env.PATH = `${selfBinDir}${path.delimiter}${process.env.PATH ?? ""}`;

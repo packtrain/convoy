@@ -221,6 +221,9 @@ context. Spec: [task-checks.md](task-checks.md#reporting-agent-side).
   when the bridge runs via `npx` or from source (`pnpm cli:dev`), where no
   `convoy` is installed. The shim is POSIX `sh` only; on Windows the line
   still assumes an installed CLI on `PATH`.
+- From source, tsx keeps `--tsconfig apps/cli/tsconfig.json` relative in
+  `TSX_TSCONFIG_PATH`, which agents inherit. The bridge makes it absolute
+  before writing the shim, so an agent's `convoy` starts from any folder.
 
 ### Delivery invariants
 

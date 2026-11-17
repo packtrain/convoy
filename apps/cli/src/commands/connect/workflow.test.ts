@@ -272,6 +272,33 @@ describe("connect command concurrency", () => {
     expect(output.trim()).toBe(JSON.stringify(["threads", "attach", "a b"]));
   });
 
+  it("the agent's `convoy` finds a source bridge's tsconfig from any folder", async () => {
+    if (process.platform === "win32") return;
+    const dir = fs.mkdtempSync(path.join(os.tmpdir(), "convoy-entry-"));
+    const entry = path.join(dir, "convoy.mjs");
+    fs.writeFileSync(entry, "console.log(process.env.TSX_TSCONFIG_PATH);\n");
+    const [beforeArgv, beforePath, beforeTsconfig] = [process.argv[1], process.env.PATH, process.env.TSX_TSCONFIG_PATH];
+    process.argv[1] = entry;
+    process.env.PATH = "/usr/bin:/bin";
+    // `pnpm cli:dev` runs `tsx --tsconfig apps/cli/tsconfig.json`, which tsx keeps relative to the bridge's folder.
+    process.env.TSX_TSCONFIG_PATH = "apps/cli/tsconfig.json";
+    let output = "";
+    createAgentRunnerMock.mockImplementationOnce(async () => {
+      try { output = execFileSync("convoy", [], { encoding: "utf8", cwd: dir }); } catch (error) { output = String(error); }
+      return { run: vi.fn().mockResolvedValue(undefined), stop: vi.fn().mockResolvedValue(undefined) };
+    });
+    try {
+      await runConnect({ convexUrl: "https://example.convex.cloud", apiKey: "sk_test", projectId: "proj_test", paths: ["/tmp/repo"] });
+    } finally {
+      process.argv[1] = beforeArgv;
+      process.env.PATH = beforePath;
+      if (beforeTsconfig === undefined) delete process.env.TSX_TSCONFIG_PATH;
+      else process.env.TSX_TSCONFIG_PATH = beforeTsconfig;
+    }
+
+    expect(output.trim()).toBe(path.resolve("apps/cli/tsconfig.json"));
+  });
+
   it("uses default concurrency when omitted", async () => {
     await runConnect({
       convexUrl: "https://example.convex.cloud",
