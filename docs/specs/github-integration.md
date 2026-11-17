@@ -331,9 +331,9 @@ steps. Every member can read every Guide; members with the CLI thread
 permission can request one, so viewers cannot today. Closed and merged PRs
 can have Guides.
 
-Status: requesting, reading, and deleting a Guide are built (OS-2412).
-Failed guides and Retry (OS-2413), Don't ask again (OS-2414), several Guides
-and the duplicate-run warning (OS-2415), the project's Guide prompt
+Status: requesting, reading, switching between, and deleting Guides are
+built (OS-2412). Failed guides and Retry (OS-2413), Don't ask again
+(OS-2414), the duplicate-run warning (OS-2415), the project's Guide prompt
 (OS-2416), Outdated guides and Follow-up guides (OS-2417), and the MCP tools
 (OS-2418) are planned.
 
