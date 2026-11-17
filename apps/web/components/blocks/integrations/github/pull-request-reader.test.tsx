@@ -498,7 +498,12 @@ describe("PullRequestReader overview layout", () => {
     const activity = screen.getByLabelText("Loading activity");
     expect(within(activity).getByRole("heading", { name: "Activity" })).toBeTruthy();
     expect(activity.querySelector(".size-8.rounded-full")).toBeTruthy();
-    expect(activity.querySelector(".w-px.bg-border")).toBeTruthy();
+    // The rail is a skeleton too, running only between the pulsing circles, never behind them.
+    const rail = activity.querySelector('[data-slot="skeleton"].w-px');
+    expect(rail).toBeTruthy();
+    expect(rail?.className).not.toContain("absolute");
+    expect(rail?.previousElementSibling?.querySelector(".size-5.rounded-full")).toBeTruthy();
+    expect(rail?.nextElementSibling?.querySelector(".size-5.rounded-full")).toBeTruthy();
   });
 
   test("loading placeholders are shaped like the cards they stand for", () => {

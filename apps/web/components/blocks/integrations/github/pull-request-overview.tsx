@@ -132,16 +132,17 @@ function ActivitySkeleton({ composer }: { composer?: ReactNode }) {
           <Skeleton className="h-4 w-3/5" />
         </div>
       </div>
-      <div className="relative py-1 pl-8">
-        <span aria-hidden className="absolute top-4 bottom-4 left-[13px] w-px bg-border" />
-        {["w-64", "w-72"].map((width) => (
-          <div key={width} className="flex items-center py-1.5">
-            <Skeleton className="absolute left-1 size-5 rounded-full" />
-            <span className="flex h-5 items-center">
-              <Skeleton className={cn("h-3.5", width)} />
-            </span>
-          </div>
-        ))}
+      {/* The rail pulses with the circles and sits between them, not behind (pulsing is translucent). */}
+      <div className="py-2.5">
+        <div className="flex h-5 items-center gap-2 pl-1">
+          <Skeleton className="size-5 rounded-full" />
+          <Skeleton className="h-3.5 w-64" />
+        </div>
+        <Skeleton className="ml-[13.5px] h-3 w-px rounded-none" />
+        <div className="flex h-5 items-center gap-2 pl-1">
+          <Skeleton className="size-5 rounded-full" />
+          <Skeleton className="h-3.5 w-72" />
+        </div>
       </div>
     </section>
   );
