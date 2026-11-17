@@ -32,7 +32,7 @@ import {
 import { cancelStreamWatchdog } from "./lib/messages/streamWatchdog";
 import { clampPageSize, EMPTY_PAGE } from "../lib/shared/pagination";
 import { ensure } from "../lib/shared/ensure";
-import { getCliMessageChunkById } from "./lib/cliMessageChunksRepo";
+import { getCliMessageChunkById, listChunksByMessage } from "./lib/cliMessageChunksRepo";
 import { errors } from "./errors";
 import { ProjectPermission } from "../../lib/authz/permissions";
 import {
@@ -1385,6 +1385,9 @@ export const requestSteer = mutation({
   },
 });
 
+/** A user message is one text row from `send`; the cap only bounds the read. */
+const QUEUED_TEXT_CHUNK_LIMIT = 100;
+
 /**
  * Delete a queued user message so its content can be edited and re-sent. Rejected
  * once processed or while a steer is in flight — the run may already have it.
@@ -1392,14 +1395,18 @@ export const requestSteer = mutation({
  * By default refs are removed and unreferenced blobs deleted. With
  * `preserveAttachments` (the Edit action) the blobs stay: refs become pending-upload
  * rows — the same lifecycle as a freshly uploaded attachment — and their summaries
- * come back so the composer can re-attach without re-uploading.
+ * come back with the message text so the composer can restore both without re-uploading.
  */
 export const removeQueued = mutation({
   args: {
     messageId: v.id("cliMessages"),
     preserveAttachments: v.optional(v.boolean()),
   },
-  returns: v.array(cliMessageAttachmentSummaryValidator),
+  returns: v.object({
+    /** The message's text, read before deletion so Edit never restores a partial client copy (OS-2422). */
+    text: v.string(),
+    attachments: v.array(cliMessageAttachmentSummaryValidator),
+  }),
   handler: async (ctx, args) => {
     const user = await getAuthenticatedUser(ctx);
 
@@ -1412,8 +1419,13 @@ export const removeQueued = mutation({
     ensure(message.steerRequestedAt).isNull(errors.MESSAGE_NOT_QUEUED);
 
     const now = Date.now();
+    const chunks = await listChunksByMessage(ctx, message.threadId, message._id, QUEUED_TEXT_CHUNK_LIMIT);
+    const text = chunks
+      .flatMap((chunk) => expandCliNormalizedEvent(chunk.normalizedEvent))
+      .flatMap((event) => (event.kind === "text" ? [event.text] : []))
+      .join("");
 
-    const restored = await deleteUserMessageWithAttachments(ctx, {
+    const attachments = await deleteUserMessageWithAttachments(ctx, {
       message,
       chat,
       userId: user._id,
@@ -1424,7 +1436,7 @@ export const removeQueued = mutation({
     const hasRemainingUnprocessed = await hasUnprocessedUserMessages(ctx, message.threadId);
     await setThreadPendingUserMessages(ctx, message.threadId, hasRemainingUnprocessed, now);
 
-    return restored;
+    return { text, attachments };
   },
 });
 

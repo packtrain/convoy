@@ -5401,14 +5401,16 @@ describe("cliMessages", () => {
         preserveAttachments: true,
       });
 
-      expect(restored).toHaveLength(1);
-      expect(restored[0]).toMatchObject({
+      // Edit restores this text, not the client's possibly unloaded copy (OS-2422).
+      expect(restored.text).toBe("with file");
+      expect(restored.attachments).toHaveLength(1);
+      expect(restored.attachments[0]).toMatchObject({
         storageId,
         fileName: "f.png",
         fileSize: 3,
         contentType: "image/png",
       });
-      expect(restored[0]?.url).toBeTruthy();
+      expect(restored.attachments[0]?.url).toBeTruthy();
 
       await t.run(async (runCtx) => {
         expect(await runCtx.db.get("cliMessages", messageId)).toBeNull();

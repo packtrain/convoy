@@ -537,8 +537,6 @@ export function ThreadView({
   // Remove a queued message and restore it into the composer.
   const handleEditQueued = useCallback(
     async (messageId: Id<"cliMessages">) => {
-      const queuedText = userTextById.get(messageId) ?? "";
-
       let restored;
       try {
         restored = await removeQueuedMessage(messageId, { preserveAttachments: true });
@@ -549,9 +547,9 @@ export function ThreadView({
         return;
       }
 
-      restoreMessageToComposer(queuedText, restored);
+      restoreMessageToComposer(restored.text, restored.attachments);
     },
-    [removeQueuedMessage, restoreMessageToComposer, userTextById]
+    [removeQueuedMessage, restoreMessageToComposer]
   );
 
   // Branch from here (OS-1397): fork at the reply's run, then open the fork.

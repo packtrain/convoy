@@ -134,6 +134,8 @@ type QueryRouterOptions = {
   window?: unknown;
   olderWindow?: unknown;
   live?: unknown;
+  /** `listNormalizedByMessages` result, for queued messages outside the window. */
+  byMessages?: unknown;
 };
 
 function mockCliQueryRouter(options: QueryRouterOptions): void {
@@ -162,6 +164,10 @@ function mockCliQueryRouter(options: QueryRouterOptions): void {
 
     if (functionName === getFunctionName(api.cli.messageChunks.listLiveByThread)) {
       return options.live;
+    }
+
+    if (functionName === getFunctionName(api.cli.messageChunks.listNormalizedByMessages)) {
+      return options.byMessages;
     }
 
     return undefined;
@@ -984,6 +990,53 @@ describe("useCliMessages", () => {
     });
 
     expect(result.current.userTextById.get("message_user")).toBe("Hello");
+  });
+
+  test("reads a queued message's text outside the chunk window (OS-2422)", async () => {
+    const envelope = (id: string, role: "user" | "assistant", createdAt: number, processedAt?: number) => ({
+      _id: id as Id<"cliMessages">,
+      threadId: "thread_1" as Id<"cliThreads">,
+      role,
+      profileId: "profile_1" as Id<"cliProfiles">,
+      cliType: "claude-code",
+      attachments: [],
+      status: role === "assistant" ? ("streaming" as const) : ("completed" as const),
+      chunkCount: 1,
+      hasLegacyContent: false,
+      createdAt,
+      updatedAt: createdAt,
+      ...(processedAt !== undefined ? { processedAt } : {}),
+    });
+    const textRow = (messageId: string, createdAt: number, text: string) => ({
+      messageId: messageId as Id<"cliMessages">,
+      threadId: "thread_1" as Id<"cliThreads">,
+      createdAt,
+      chunkOrder: 0,
+      timestamp: createdAt,
+      event: { kind: "text" as const, text },
+    });
+
+    // A long run pushed the queued message's only chunk below the newest window.
+    mockCliQueryRouter({
+      envelopes: [envelope("message_queued", "user", 3), envelope("message_assistant", "assistant", 2), envelope("message_prompt", "user", 1, 2)],
+      window: {
+        page: [textRow("message_assistant", 9, "Reviewing")],
+        nextOlderCursor: { createdAt: 9, messageId: "message_assistant" as Id<"cliMessages">, chunkOrder: 0 },
+        hasMore: true,
+      },
+      live: { page: [], nextCursor: null, resetRequired: false },
+      byMessages: { page: [textRow("message_queued", 3, "/compact")], nextCursor: null, resetRequired: false },
+    });
+
+    const { result } = renderHook(() => useCliMessages("thread_1" as Id<"cliThreads">));
+
+    await waitFor(() => {
+      expect(result.current.userTextById.get("message_queued")).toBe("/compact");
+    });
+    expect(useQueryMock).toHaveBeenCalledWith(expect.anything(), {
+      threadId: "thread_1",
+      messageIds: ["message_queued"],
+    });
   });
 
   test("builds visible message ids from loaded chunks plus the latest streaming assistant row before first chunk", async () => {

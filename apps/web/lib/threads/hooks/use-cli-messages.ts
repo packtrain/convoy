@@ -631,6 +631,27 @@ export function useCliMessages(
   );
   const loadedChunkCount = stream.eventStore.rows.length;
 
+  // The queued strip lists every unprocessed message, but a long run can push one's chunks
+  // below the history window, so those are read by id instead (OS-2422).
+  const unloadedQueuedIds = useMemo(
+    () =>
+      envelopes
+        .filter((message) => message.role === "user" && message.processedAt === undefined && !loadedMessageIds.has(message._id))
+        .map((message) => message._id),
+    [envelopes, loadedMessageIds]
+  );
+  const unloadedQueuedRows = useQuery(
+    api.cli.messageChunks.listNormalizedByMessages,
+    threadId && unloadedQueuedIds.length > 0 ? { threadId, messageIds: unloadedQueuedIds } : "skip"
+  )?.page;
+  const unloadedQueuedParts = useMemo(
+    () =>
+      unloadedQueuedRows
+        ? initComposerFromStore({ rows: unloadedQueuedRows as NormalizedChunkRow[], dedupKeys: new Set(), cursor: null }).messages
+        : undefined,
+    [unloadedQueuedRows]
+  );
+
   const userTextById = useMemo(() => {
     const textMap = new Map<string, string>();
 
@@ -639,11 +660,14 @@ export function useCliMessages(
         return;
       }
 
-      textMap.set(message._id, extractUserText(renderStateByMessageId.get(message._id)));
+      textMap.set(
+        message._id,
+        extractUserText(renderStateByMessageId.get(message._id) ?? unloadedQueuedParts?.get(message._id))
+      );
     });
 
     return textMap;
-  }, [envelopes, renderStateByMessageId]);
+  }, [envelopes, renderStateByMessageId, unloadedQueuedParts]);
 
   const sendMessage = useCallback(
     async (

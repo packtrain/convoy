@@ -28,13 +28,19 @@ default; absent under `convoy connect --codex-exec`).
   badge before the text, next to the queue icon, so it doesn't read as an
   action button (OS-1877). Both are non-interactive — Edit restores the
   attachments into the composer for inspection.
+- A row's text never depends on the loaded history window. A long run can
+  write more chunks after a queued message than the window holds, so the
+  thread view reads the chunks of unprocessed messages outside the window by
+  id (`cli.messageChunks.listNormalizedByMessages`) for the strip text.
+  Edit does not use the client's copy: `removeQueued` reads the text from the
+  message's chunk rows before deleting them and returns it (OS-2422).
 - Each strip row also offers **Edit**: `cli.messages.removeQueued({
   messageId, preserveAttachments: true })` (web/user-auth) deletes the queued
   message (chunk rows and attachment refs) and recomputes
   `hasPendingUserMessages`, but keeps the attachment blobs: each ref is
   converted into a `cliMessagePendingUploads` row (the same lifecycle as a
-  freshly uploaded, not-yet-sent attachment) and the attachment summaries
-  are returned. The client restores the message text into the composer and
+  freshly uploaded, not-yet-sent attachment). It returns `{ text, attachments }`:
+  the message text and the attachment summaries. The client restores that text into the composer and
   re-attaches the returned storage ids without re-uploading (seeded into the
   upload queue in `done` state, with matching composer file parts whose URL
   is the signed URL for preview). Exact, unambiguous `#filename` references
