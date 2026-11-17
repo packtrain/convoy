@@ -8,6 +8,11 @@ interface PlaygroundLink {
 
 const ACTIVE_PLAYGROUNDS: PlaygroundLink[] = [
   {
+    href: "/playground/single-project-sidebar",
+    title: "Single-project sidebar",
+    description: "Left sidebar scoped to one project: a selector at the top, then that project's notifications, Watch Tower, threads, PRs and lists (OS-1755).",
+  },
+  {
     href: "/playground/software-factory",
     title: "Software factory",
     description: "Landing-page candidate: an isometric conveyor line where an agent, checks and a review gate process task cards.",
