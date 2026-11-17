@@ -1,3 +1,9 @@
 packages:
   - "apps/*"
   - "playground/*"
+
+# Agent containers share the Mac's node_modules; install Linux native binaries too.
+supportedArchitectures:
+  os: [current, linux]
+  cpu: [current, arm64]
+  libc: [current, glibc]
