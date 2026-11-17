@@ -2,7 +2,7 @@
 
 import { useState, type ReactNode } from "react";
 import { useMutation, useQuery } from "convex/react";
-import { Ellipsis, ListChecks, Lock, Pencil, Plus, Trash2 } from "lucide-react";
+import { Ellipsis, ListChecks, Lock, Pencil, Plus, Settings, Trash2 } from "lucide-react";
 import { api } from "@/convex/_generated/api";
 import type { Id } from "@/convex/_generated/dataModel";
 import { SettingsCatalogListFrame } from "@/components/blocks/settings-catalog/settings-catalog-list-frame";
@@ -118,7 +118,7 @@ export function ChecksSettingsSection({
           action={
             canEdit && checklists.length > 0 ? (
               <Button type="button" variant="outline" size="settings" className="cursor-pointer" onClick={() => setEditing({ kind: "defaults" })}>
-                Defaults
+                <Settings /> Defaults
               </Button>
             ) : null
           }
