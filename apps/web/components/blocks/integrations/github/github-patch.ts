@@ -4,6 +4,8 @@ import type { CliRunDiffFile } from "@/convex/lib/contracts/validators";
 
 export type PullRequestDiff = FunctionReturnType<typeof api.integrations.github.pullRequests.readDiff>;
 export type PullRequestDiffFile = PullRequestDiff["files"][number];
+/** The reader's diff read: the Diff and Guide tabs both render it. */
+export type DiffState = { kind: "loading" } | { kind: "loaded"; diff: PullRequestDiff } | { kind: "error"; message: string };
 
 // ponytail: the shared section header has no rename kind, so a rename shows its new path only.
 const SECTION_KIND: Record<PullRequestDiffFile["status"], CliRunDiffFile["kind"]> = {

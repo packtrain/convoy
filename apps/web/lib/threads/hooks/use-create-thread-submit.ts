@@ -62,6 +62,8 @@ interface UseCreateThreadSubmitOptions {
   agentWorkSource?: CreateThreadArgs["agentWorkSource"];
   /** A Pull request checks run (OS-2400) on the attached PR at this head. */
   pullRequestChecks?: CreateThreadArgs["pullRequestChecks"];
+  /** A Guide run (OS-2412) on the attached PR at this head; its model stays out of the new-thread defaults. */
+  pullRequestGuide?: CreateThreadArgs["pullRequestGuide"];
   /**
    * Add-to-group flow (OS-1477): when set, submit calls
    * `addThreadToGroup` instead of creating a root thread.
@@ -95,6 +97,7 @@ export function useCreateThreadSubmit({
   attachedTask,
   agentWorkSource,
   pullRequestChecks,
+  pullRequestGuide,
   sourceThreadId,
   onCreated,
 }: UseCreateThreadSubmitOptions) {
@@ -154,6 +157,7 @@ export function useCreateThreadSubmit({
           taskId: message.taskId,
           pullRequestUrl: message.pullRequestUrl,
           pullRequestChecks,
+          pullRequestGuide,
           agentWorkSource,
           projectAgentId,
         };
@@ -170,7 +174,8 @@ export function useCreateThreadSubmit({
           threadId = await createThread(createArgs);
         }
 
-        rememberCliModel(draftState.cliType, draftState.cliModel, draftState.cliEffort);
+        // A Guide's model is picked for Guides; its own draft keeps it.
+        if (!pullRequestGuide) rememberCliModel(draftState.cliType, draftState.cliModel, draftState.cliEffort);
         // Awaited, and the draft cleared only after: the composer stays on
         // screen with its text while `onCreated` holds for the created thread's
         // data, so the swap lands on real content instead of placeholders
@@ -200,6 +205,7 @@ export function useCreateThreadSubmit({
       attachedTask,
       agentWorkSource,
       pullRequestChecks,
+      pullRequestGuide,
       clearAfterSubmit,
       setDraft,
       createThread,

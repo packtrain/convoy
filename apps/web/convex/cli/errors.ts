@@ -25,6 +25,8 @@ export const errors = {
   PULL_REQUEST_URL_INVALID: "Not a GitHub pull request URL",
   PULL_REQUEST_CHECKS_NEED_CONNECTED_PULL_REQUEST: "Pull request checks need a pull request in a connected repository",
   PULL_REQUEST_CHECKS_HEAD_MOVED: "The pull request has new commits. Run the checks again.",
+  GUIDE_NEEDS_CONNECTED_PULL_REQUEST: "Guides need a pull request in a connected repository",
+  GUIDE_HEAD_MOVED: "The pull request has new commits. Generate the guide again.",
   SELECTED_RUN_REQUIRED: "Select a run ID before cancelling from the service",
   SELECTED_RUN_CHANGED: "Selected run is no longer active",
   SERVICE_LOG_CURSOR_INVALID: "Invalid stored run log cursor",

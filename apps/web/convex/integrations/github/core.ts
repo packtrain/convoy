@@ -24,9 +24,13 @@ import {
 } from "./lib/integrationRepositoryLinksRepo";
 import { deleteRepository, getRepositoryById, updateRepositorySync } from "./lib/integrationRepositoriesRepo";
 import { deletePullRequestsBatch } from "./lib/integrationPullRequestsRepo";
+import { deleteGuidesBatch } from "./lib/integrationPullRequestGuidesRepo";
 import { findSetupByIdString } from "./lib/integrationSetupsRepo";
 
 // Project connection lifecycle (docs/specs/github-integration.md).
+
+/** Guides per purge batch: each goes with its steps, up to 800 KB, so far more than a PR row. */
+const GUIDE_PURGE_BATCH = 10;
 
 /** Retained links shown in settings, beside the active ones. */
 const RETAINED_LINKS_SHOWN = 30;
@@ -216,6 +220,11 @@ export const purge = internalMutation({
       link.deleteAfter === undefined ||
       link.deleteAfter > Date.now()
     ) {
+      return null;
+    }
+    // The project's Guides go with its link; another project's link keeps its own.
+    if ((await deleteGuidesBatch(ctx, link.projectId, link.repositoryId, GUIDE_PURGE_BATCH)) === GUIDE_PURGE_BATCH) {
+      await ctx.scheduler.runAfter(0, internal.integrations.github.core.purge, args);
       return null;
     }
     if (!(await hasOtherRepositoryLink(ctx, link.repositoryId, link._id))) {

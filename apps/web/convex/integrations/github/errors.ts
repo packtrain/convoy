@@ -23,4 +23,8 @@ export const errors = {
   ACCESS_REMOVED: "GitHub access to this repository was removed",
   CHECK_RUN_REFUSED: "GitHub refused the check run. The Convoy GitHub App needs Checks: write on this repository.",
   CURSOR_INVALID: "Invalid repository list cursor",
+  GUIDE_NOT_FOUND: "The guide was deleted.",
+  GUIDE_NOT_FOR_THREAD: "This thread is not writing a guide. Start one with Generate guide on the pull request's Guide tab.",
+  GUIDE_ALREADY_SUBMITTED: "This guide was already submitted. Use New guide to write another one.",
+  GUIDE_DELETE_NOT_ALLOWED: "Only the requester and project admins can delete a guide",
 } as const;

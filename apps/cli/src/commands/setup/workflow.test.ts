@@ -103,6 +103,7 @@ function setupClient(projects: ProjectChoice[]) {
     secrets: [],
     query,
     mutation: vi.fn(),
+    action: vi.fn(),
     subscribe: vi.fn(),
     close,
   });

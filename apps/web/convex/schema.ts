@@ -75,6 +75,8 @@ import { appEventValidator, eventSubjectValidator } from "./lib/contracts/appEve
 import { integrationProviderValidator, integrationSetupStatusValidator } from "./lib/contracts/integrations";
 import {
   attachedPullRequestValidator,
+  guideStatusValidator,
+  guideStepValidator,
   normalizedPullRequestValidator,
   repositoryLinkStatusValidator,
   repositorySyncStatusValidator,
@@ -977,6 +979,8 @@ export default defineSchema({
     attachedPullRequest: v.optional(attachedPullRequestValidator),
     // A Pull request checks run (OS-2400): its results belong to `attachedPullRequest` at this head, set at creation.
     pullRequestChecks: v.optional(v.object({ headSha: v.string() })),
+    // Marks a Guide run (OS-2412), set at creation; its `integrationPullRequestGuides` row is found by thread. The head is the one requested.
+    pullRequestGuide: v.optional(v.object({ headSha: v.string() })),
     // A task-less thread's own Checklist (OS-2293); unset means no Checks, since a thread has no type.
     checklistId: v.optional(v.id("checklists")),
     // Immutable Project agent binding (OS-1138): set only at thread creation,
@@ -1529,6 +1533,32 @@ export default defineSchema({
     .index("by_repositoryId_and_state_and_providerUpdatedAt", ["repositoryId", "state", "providerUpdatedAt"])
     .index("by_repositoryId_and_state_and_providerCreatedAt", ["repositoryId", "state", "providerCreatedAt"])
     .index("by_repositoryId_and_stackId", ["repositoryId", "stack.id"]),
+
+  // A Guide: an agent-written walkthrough of one PR revision (docs/specs/github-integration.md → Guides).
+  // Owned by the project, so another project linking the same repository never sees it.
+  integrationPullRequestGuides: defineTable({
+    projectId: v.id("projects"),
+    repositoryId: v.id("integrationRepositories"),
+    number: v.number(),
+    requesterId: v.id("users"),
+    threadId: v.id("cliThreads"),
+    status: guideStatusValidator,
+    // The stored PR's revision when the Guide was requested.
+    baseSha: v.string(),
+    headSha: v.string(),
+    cliType: cliTypeValidator,
+    cliModel: v.optional(cliModelValidator),
+    createdAt: v.number(),
+    completedAt: v.optional(v.number()),
+  })
+    .index("by_projectId_and_repositoryId_and_number", ["projectId", "repositoryId", "number"])
+    .index("by_threadId", ["threadId"]),
+
+  // A ready Guide's steps, up to 800 KB, apart from its row so the Guide menu never reads them.
+  integrationPullRequestGuideSteps: defineTable({
+    guideId: v.id("integrationPullRequestGuides"),
+    steps: v.array(guideStepValidator),
+  }).index("by_guideId", ["guideId"]),
 
   // A 10-minute connect flow bound to one user and project. The encrypted
   // user token lets repository selection recheck GitHub admin permission.

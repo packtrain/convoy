@@ -34,6 +34,7 @@ Use established page widths instead of inventing a new one for each screen.
 
 - Settings edit pages: `max-w-4xl`.
 - Modal/dialog content: follow the existing dialog component or the nearest feature dialog.
+- A `p-0` dialog with the default close button puts its title in `DialogTitleBar`, which centres it on the X. Hand-set top padding drifts with the title's line height.
 - Lists and dashboards: use the existing page shell width for that product area.
 
 Do not widen a single page to fit a local form. If a form feels cramped, adjust field spans, break the form into sections, or move large editors into their own section.

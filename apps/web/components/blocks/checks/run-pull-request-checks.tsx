@@ -6,7 +6,7 @@ import { ListChecks } from "lucide-react";
 import { toast } from "sonner";
 import { TaskThreadComposer } from "@/components/blocks/tasks/task-thread-composer";
 import { Button } from "@/components/ui/button";
-import { Dialog, DialogContent, DialogDescription, DialogTitle } from "@/components/ui/dialog";
+import { Dialog, DialogContent, DialogDescription, DialogTitle, DialogTitleBar } from "@/components/ui/dialog";
 import { api } from "@/convex/_generated/api";
 import type { Id } from "@/convex/_generated/dataModel";
 import type { AttachedPullRequest } from "@/convex/lib/contracts/github";
@@ -74,10 +74,10 @@ function LaunchDialog({
         // Radix would focus the profile pill, which opens its card; the composer focuses itself.
         onOpenAutoFocus={(event) => event.preventDefault()}
       >
-        <div className="px-4 pt-4">
+        <DialogTitleBar>
           <DialogTitle className="text-sm">Run pull request checks</DialogTitle>
           <DialogDescription className="sr-only">Start a thread that checks this pull request.</DialogDescription>
-        </div>
+        </DialogTitleBar>
         <TaskThreadComposer
           {...target}
           draftKey={`pull-request-checks:${viewerId}`}

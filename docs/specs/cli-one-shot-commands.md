@@ -55,6 +55,7 @@ Commands covered:
 - `convoy threads attach <threadId> [file...] --message-id <id> --session-id <id> [--inline] [--check <key> ...]`
 - `convoy threads attach-task <threadId> <task>`
 - `convoy threads attach-pr <threadId> <pullRequest>`
+- `convoy threads submit-guide <threadId> <file|->`
 - `convoy threads checks <threadId>`
 - `convoy profiles list`
 
@@ -759,6 +760,16 @@ PR to a thread that has none, via `api.cli.threads.core.attachPullRequest`.
 the server parses it. JSON output is `{ threadId, pullRequest }`. Errors
 (another PR attached, container, not a PR) exit nonzero without a success
 message. Rules: `github-integration.md` → Pull requests in threads.
+
+### `threads submit-guide`
+
+`convoy threads submit-guide <threadId> <file|-> [--json]` hands a Guide run's
+Guide back, via the action `api.integrations.github.guides.submit`. The file
+(or stdin for `-`) is `{ "headSha", "steps" }`; the command checks only that
+shape and sends it. Convoy validates the steps against the revision's changed
+files and returns every error, which the command prints as a list and exits
+nonzero, so the agent can fix and resubmit. JSON output is
+`{ status: "accepted", guideId }`. Rules: `github-integration.md` → Guides.
 
 ## Project creation onboarding
 

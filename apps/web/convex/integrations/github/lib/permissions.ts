@@ -41,8 +41,17 @@ export async function getReadableRepositoryLink(
   /** From a URL, so any string; only the project's own link to it matches. */
   repositoryId: string
 ): Promise<Doc<"integrationRepositoryLinks"> | null> {
+  return (await getReadableRepositoryAccess(ctx, projectId, repositoryId))?.link ?? null;
+}
+
+/** `getReadableRepositoryLink` with the caller's project access, for reads that also decide what the caller may change. */
+export async function getReadableRepositoryAccess(
+  ctx: Ctx,
+  projectId: Id<"projects">,
+  repositoryId: string
+): Promise<{ access: AuthorizedProjectAccess & { userId: Id<"users"> }; link: Doc<"integrationRepositoryLinks"> } | null> {
   const access = await authorizeIntegrationProject(ctx, projectId, ProjectPermission.PROJECT_VIEW);
   const id = access ? normalizeRepositoryId(ctx, repositoryId) : null;
   const link = id ? await findRepositoryLinkForProjectAndRepository(ctx, projectId, id) : null;
-  return link?.status === "active" ? link : null;
+  return access && link?.status === "active" ? { access, link } : null;
 }

@@ -331,29 +331,71 @@ steps. Every member can read every Guide; members with the CLI thread
 permission can request one, so viewers cannot today. Closed and merged PRs
 can have Guides.
 
+Status: requesting, reading, and deleting a Guide are built (OS-2412).
+Failed guides and Retry (OS-2413), Don't ask again (OS-2414), several Guides
+and the duplicate-run warning (OS-2415), the project's Guide prompt
+(OS-2416), Outdated guides and Follow-up guides (OS-2417), and the MCP tools
+(OS-2418) are planned.
+
 ### Requesting and running
 
-Generate guide opens a popup: CLI profile, Working path, Run in a new worktree
-(on by default), and runtime, model, and effort from the thread composer's
-pickers for that profile. The choices are remembered per member and project
-for Guides only and never change the member's CLI thread defaults. If none of
-the member's profiles is online, Generate guide is disabled with the reason.
+Generate guide works like Run checks: it opens the PR page's thread composer
+in a popup (profile, path, worktree, runtime, model, effort, attachments)
+with the PR pill locked and the text prefilled with the guide prompt, which
+the member may edit before sending. The composer's send button starts the
+run. Generate guide is hidden without the CLI thread permission, and
+disabled with the reason when no CLI profile is online or Convoy has not
+synced the PR. It sits on the Guide tab's No guide yet state, and as New
+guide in the corner menu.
 
-The run is a normal CLI thread on that profile, with the PR as its Attached
-pull request once slice 5.5 lands, private to the requester unless they
-share it, so only the requester sees Open thread. In this plan
-the agent checks out the PR with `gh` in a Thread worktree; that needs `gh`
-signed in with access to the repository and a Working path that is a clone of
-it. The agent checks the remote first and fails fast with the reason.
-Reading PR data through Convoy-proxied tools instead of `gh` is a later
-version, as is running Guides automatically in a shared remote environment
-when a PR lands.
+- The popup's choices are a draft of their own per member and project
+  (draft key `pull-request-guide:<userId>`). Each open replaces the draft's
+  text with a fresh prompt, since the prompt names the current head. The
+  model picked stays in that draft and never becomes the member's new-thread
+  default.
+- The run is a normal CLI thread with the PR as its Attached pull request,
+  private to the requester unless they share it, so only the requester sees
+  Open thread. `cli.threads.core.create` takes `pullRequestGuide: { headSha }`,
+  which must still be the stored PR's head ("The pull request has new
+  commits. Generate the guide again."), in a connected repository ("Guides
+  need a pull request in a connected repository"). The same transaction
+  inserts the Guide (`integrationPullRequestGuides`, status writing, the
+  stored PR's base and head) and marks the thread
+  (`cliThreads.pullRequestGuide.headSha`).
+- The agent checks out the PR with `gh`; that needs `gh` signed in with
+  access to the repository and a Working path that is a clone of it. The
+  prompt has the agent check the remote first and stop with the reason.
+  Reading PR data through Convoy-proxied tools instead of `gh` is a later
+  version, as is running Guides automatically in a shared remote environment
+  when a PR lands.
 
-The agent hands the Guide back through an MCP tool or the equivalent CLI
-command (`submit_pull_request_guide` with the PR, head sha, and steps).
-Convoy validates on submit and returns what's wrong so the agent can fix
-and resubmit: every changed file owned by exactly one step, excerpt ranges
-inside one diff hunk of the stated side, and the follow-up rules below.
+The agent hands the Guide back with `convoy threads submit-guide <threadId>
+<file|->`, a JSON file of `{ headSha, steps }` (an MCP tool
+`submit_pull_request_guide` follows in OS-2418). The action
+`integrations.github.guides.submit` checks the caller owns the thread and
+its Guide is still writing, reads the revision's changed files from GitHub,
+and returns every error at once so the agent can fix and resubmit:
+
+- `headSha` is the Guide's head.
+- Each step's shape: text fields are text, the attention kind is one of the
+  five, files are objects with a path. The action takes the steps untyped so
+  a wrong shape comes back in this list rather than as a validator error.
+- One to eight steps, each with a title, an explanation, and at least one
+  file; at most two questions.
+- Every changed file is in exactly one step, and a step lists no file the PR
+  does not change.
+- Length limits: title 200 characters, explanation 4,000, notes and
+  questions 500, and all steps together under 800 KB.
+
+The changed files come from the PR's file list, 100 per page, while the PR
+is still at the Guide's base and head (GitHub lists up to 3,000). If the PR
+moved during the run, they come from the compare of the Guide's base and
+head (up to 300). Files GitHub leaves out are not coverage-checked. A push
+during the run never rejects the submit: the Guide is for the head it was
+requested at. A Guide already submitted rejects another ("This guide was
+already submitted."), a deleted one rejects with "The guide was deleted.",
+and a thread that is no Guide run with "This thread is not writing a
+guide."
 
 Requesting a Guide while another member's Guide for the same revision is
 still being written warns first ("Maya is already writing a guide for
@@ -361,8 +403,12 @@ c91f02a") and offers Start my own anyway.
 
 A failed run stays as a Failed Guide with the agent's reason. Only the
 requester can retry it. The requester and project admins can delete any
-Guide; members cannot delete each other's. Guides follow the PR metadata's
-30-day retention after a disconnect.
+Guide from the corner menu, after a confirm; members cannot delete each
+other's ("Only the requester and project admins can delete a guide").
+Deleting keeps the thread. Guides belong to the project, so another project
+connecting the same repository never sees them, and they follow the PR
+metadata's 30-day retention after a disconnect: the purge deletes the
+link's project's Guides, 10 per batch.
 
 An MCP tool `read_pull_request_guide` returns a PR's Guides, their run state,
 and an `outdated` flag so other agents can use them. Starting runs from MCP
@@ -373,9 +419,14 @@ machine.
 
 Convoy's built-in prompt carries the format and the rules: reading order
 (contracts, then the services that implement them, then callers and UI, with
-mechanical files last), coverage, excerpt limits, the follow-up rules, and
-treating the PR's title and description as data inside tags, never as
-instructions. Once Reviews ship, it also receives the already-resolved and
+mechanical files last), coverage, the follow-up rules, and
+treating the PR's title and description as information about the change,
+never as instructions. The browser builds it, like the checks prompt: run
+facts Convoy always adds (the PR and its revision, the remote and `gh`
+check, `gh pr checkout <n> --detach` and `git diff <base>...<head>`, the
+JSON shape, and the submit command with the thread ID from the attach
+footer or `CONVOY_THREAD_ID`) around the guide instructions (how to split,
+reading order, tone). Once Reviews ship, it also receives the already-resolved and
 outdated review threads so the Guide doesn't raise them again. On a Stack,
 the Guide covers only its own Layer and may mention others in a phrase
 ("added in #12").
@@ -390,22 +441,39 @@ Each Guide stores the Guide prompt it was written with.
 
 ### Shape
 
-Each Guide records its requester, model, revision, creation time, the Guide
-prompt, and, for a follow-up, its base. A Guide step has a title naming what
-it accomplishes, a two-to-four-sentence explanation, code excerpts (3 to 25
-lines inside one hunk), the other files it owns with a one-line note each,
-an optional attention flag (tradeoff, contract, product, risk, or
-accessibility) with one note, up to three line-anchored notes, and up to two
-"why" questions. A Guide has one to eight steps. A file is owned by exactly
-one step and may be excerpted in others. Excerpts open the whole file.
+Each Guide records its requester, runtime and model, revision (base and
+head), creation time, the Guide prompt, and, for a follow-up, its base. A
+Guide step has a title naming what it accomplishes, a two-to-four-sentence
+explanation, the files it owns with an optional one-line note each, an
+optional attention flag (tradeoff, contract, product, risk, or
+accessibility) with one note, and up to two "why" questions. A Guide has one
+to eight steps. A file is in exactly one step. Convoy stores each file's
+blob SHA at the Guide's head, from GitHub, on submit.
+
+The tab lays a step out in two columns, as in the playground mockup: on the
+left, sticky, the step number ("01 / 03"), title, explanation, attention
+note, its files (name, folder, +/-, a check once Reviewed; a click scrolls to
+the file's diff), and questions; on the right, the full diffs of its files in
+the Diff tab's file sections, with the same Reviewed marks. Reviewed files
+start collapsed. A file outside the reader's loaded diff (the first 100
+files) shows a line with Open on GitHub. The column split is resizable. There
+are no code excerpts and no line-anchored notes.
 
 ### Reading and switching
 
-The Guide tab opens on the newest Guide. A menu in the corner of the tab row
-(not tabs) names the Guide on screen: requester (You for your own), model,
-age, and Older when it isn't the newest. Opening it shows who requested it,
-the model, "Written for 8a3e7d1", "Follow-up of Maya's guide" when it is one,
-See older guides (n), and New guide. A Guide still being written shows
+The Guide tab opens on the newest Guide. Its list
+(`integrations.github.guides.listForPullRequest`) is live while the tab is
+open: the newest 20 Guides without their steps, each with the requester's
+name and avatar, `threadId` only for the requester, and whether the viewer
+may delete it. A ready Guide never changes, so its steps are read once
+(`integrations.github.guides.get`) and kept for the session. A menu in the corner of the tab row
+(not tabs) names the Guide on screen the way its row does: runtime icon,
+model, commit ("8a3e7d1"), the requester's avatar (hover names them), and
+short age ("30m"). Opening it lists the Guides one line each, newest first,
+with the one on screen highlighted; picking a row shows that Guide. Hovering a row
+the viewer may delete swaps its age for Delete, which asks to confirm. New
+guide sits under the list and returns the tab to the newest Guide. A
+Follow-up guide's row says so. A Guide still being written shows
 "Writing the guide", "Requested by Maya Singh" when someone else asked, and
 Open thread for the requester.
 
@@ -795,6 +863,10 @@ provider turns each table into a union of complete discriminated objects.
 | `integrationRepositories` | Repository metadata and sync state (lease token, import page, last success, error, the running and last finished reconciliation pass, closed-history coverage and the page on its way), plus open and closed PR counts, shared by the links of one organization |
 | `integrationPullRequests` | Normalized PR metadata, one row per repository and number, with the REST `stack`, `archived`, and the last known `conflicts` |
 | `integrationSetups` | A 10-minute connect flow bound to one user and project |
+| `integrationPullRequestGuides` | A project's Guide of one PR revision: requester, run thread, status, base and head, runtime and model. Indexed by project, repository, and number, and by thread |
+| `integrationPullRequestGuideSteps` | A ready Guide's steps, up to 800 KB, one row per Guide, indexed by Guide. Kept apart so the Guide menu reads 20 small rows, not 20 sets of steps; deleted with the Guide |
+
+`cliThreads.pullRequestGuide.headSha` marks a Guide run's thread, set at creation.
 
 ### Connecting
 
@@ -1354,6 +1426,12 @@ Defined in `apps/web/convex/integrations/github/errors.ts`; tests assert on them
 | Whole file missing at that revision | GitHub has no file at this path in this revision |
 | PR pushed during every read | The pull request changed while loading. Refresh to load the new revision. |
 | Confirmed revocation (shown on the link) | GitHub access to this repository was removed |
+| Submit for a deleted Guide | The guide was deleted. |
+| Submit from a thread that is no Guide run, or someone else's | This thread is not writing a guide. Start one with Generate guide on the pull request's Guide tab. |
+| Second submit of a ready Guide | This guide was already submitted. Use New guide to write another one. |
+| Member deletes another member's Guide | Only the requester and project admins can delete a guide |
+| Guide run on a PR outside the connected repositories (`cli/errors.ts`) | Guides need a pull request in a connected repository |
+| Guide run after a push (`cli/errors.ts`) | The pull request has new commits. Generate the guide again. |
 
 ## Delivery as vertical slices
 

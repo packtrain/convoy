@@ -16,17 +16,18 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { PR_STACK_LAYER_ABOVE_HOTKEY, PR_STACK_LAYER_BELOW_HOTKEY } from "@/lib/browser/hotkeys";
 import { getErrorMessage } from "@/lib/errors";
 import { useNavigation, type RouteTarget } from "@/lib/navigation";
-import type { PullRequestDiff } from "./github-patch";
+import type { DiffState } from "./github-patch";
 import { PullRequestChanges } from "./pull-request-changes";
+import { GuideMenu, PullRequestGuideTab, usePullRequestGuides } from "./pull-request-guide";
 import { MergeStatus } from "./pull-request-merge-status";
 import { PullRequestOverviewSkeleton, PullRequestOverviewTab, type OverviewState } from "./pull-request-overview";
 import { StackBadge, useStackLayers } from "./pull-request-stack";
 import { PullRequestStateIcon } from "./pull-request-state-icon";
 import type { PullRequestView } from "./types";
 import { useReviewedMarks } from "./use-reviewed-marks";
+import { useGenerateGuide } from "./run-pull-request-guide";
 import type { IntegrationStatus } from "./use-integration-status";
 
-type DiffState = { kind: "loading" } | { kind: "loaded"; diff: PullRequestDiff } | { kind: "error"; message: string };
 type Revision = { baseSha: string; headSha: string };
 type Held = { request: number; diff: DiffState; overview: OverviewState; seen?: Revision };
 
@@ -87,6 +88,14 @@ export function PullRequestReader({
   const pr: PullRequestView | null = stored ?? (readable ? heldPr : null);
   const layers = useStackLayers(pr?.stack ? { projectId, repositoryId, stackId: pr.stack.id } : null) ?? [];
   const load = () => setRequest((value) => value + 1);
+  const repository = status?.connections.find((connection) => connection.repositoryId === repositoryId)?.repository;
+  const attached = repository ? toAttachedPullRequest({ owner: repository.owner, name: repository.name, number }) : null;
+  // Live only while the Guide tab shows.
+  const guides = usePullRequestGuides(tab === "guide" ? args : "skip");
+  const launch = useGenerateGuide(
+    attached ? { projectId, organizationSlug, projectAlias, pullRequest: attached } : null,
+    stored ? { baseSha: stored.baseSha, headSha: stored.headSha } : null
+  );
 
   useEffect(() => {
     if (!readable) return;
@@ -145,7 +154,6 @@ export function PullRequestReader({
   }
   if (!pr) return <PullRequestReaderSkeleton />;
 
-  const repository = status?.connections.find((connection) => connection.repositoryId === repositoryId)?.repository;
   const githubUrl = repository ? `${repository.htmlUrl}/pull/${number}` : null;
   const loadedDiff = diffState.kind === "loaded" ? diffState.diff : null;
   // New only when the stored revision moved past both the diff and what was stored when it loaded.
@@ -194,7 +202,9 @@ export function PullRequestReader({
             <TabsTrigger value="guide">Guide</TabsTrigger>
             <TabsTrigger value="diff">Diff</TabsTrigger>
           </TabsList>
-          {loadedDiff ? (
+          {tab === "guide" && guides.shown ? (
+            <GuideMenu state={guides} launch={launch} />
+          ) : loadedDiff ? (
             <span className="truncate font-mono text-xs text-muted-foreground" aria-label="Displayed revision">
               {pr.baseRef} → {loadedDiff.headSha.slice(0, 7)}
             </span>
@@ -225,11 +235,19 @@ export function PullRequestReader({
             organizationSlug={organizationSlug}
             projectId={projectId}
             projectAlias={projectAlias}
-            pullRequest={repository ? toAttachedPullRequest({ owner: repository.owner, name: repository.name, number }) : null}
+            pullRequest={attached}
           />
         </TabsContent>
         <TabsContent value="guide" className="overflow-auto">
-          <EmptyState icon={GitPullRequest} title="No guide yet" description="Guides that walk through a pull request step by step aren't available yet." />
+          <PullRequestGuideTab
+            state={guides}
+            launch={launch}
+            diffState={diffState}
+            onRetryDiff={load}
+            marks={marks}
+            organizationSlug={organizationSlug}
+            projectAlias={projectAlias}
+          />
         </TabsContent>
         <TabsContent value="diff" className="flex min-h-0 flex-1 flex-col gap-0">
           {diffState.kind === "loading" ? <Skeleton className="m-4 h-48 rounded-lg" aria-label="Loading changes" /> : null}
@@ -245,6 +263,7 @@ export function PullRequestReader({
           {loadedDiff ? <PullRequestChanges diff={loadedDiff} projectId={projectId} repositoryId={repositoryId} number={number} marks={marks} /> : null}
         </TabsContent>
       </Tabs>
+      {launch.dialog}
     </div>
   );
 }

@@ -888,6 +888,20 @@ shows on the PR. `<pullRequest>` is a github.com PR URL or `owner/repo#number`.
 Re-attaching the same PR does nothing; a thread already attached to another PR
 is rejected. JSON output is `{ "threadId": "...", "pullRequest": "..." }`.
 
+### `convoy threads submit-guide <threadId> <file>`
+
+```bash
+convoy threads submit-guide <threadId> guide.json
+cat guide.json | convoy threads submit-guide <threadId> -
+```
+
+Submits the pull request Guide a Guide run was started to write. The file is
+JSON: `{ "headSha": "...", "steps": [...] }`, where each step has a `title`, an
+`explanation`, its `files` (`{ "path", "note"? }`), an optional `attention`
+(`{ "kind", "note" }`), and up to two `questions`. Convoy checks that every
+changed file is in exactly one step and prints what to fix; the command then
+exits nonzero. The Guide prompt spells out the format.
+
 ## See also
 
 - [`One-shot commands`](/docs/cli/one-shot-commands) — usage patterns and

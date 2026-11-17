@@ -123,6 +123,8 @@ export function createFakeGithub() {
     pulls: new Map<number, FakePullRequest[]>(),
     /** File contents by `<repositoryId>:<ref>:<path>`, served base64 by the Contents API. */
     contents: new Map<string, string>(),
+    /** Changed files of a compare by `<base>...<head>`, for a revision the PR has moved past. */
+    compares: new Map<string, FakePullRequest["files"]>(),
     /** Status codes to answer instead, consumed per matching request. */
     failures: [] as { match: RegExp; status: number; headers?: Record<string, string>; message?: string }[],
     /** Called between the two PR reads of a diff, to simulate a push mid-read. */
@@ -337,8 +339,10 @@ export function createFakeGithub() {
     }
     match = /^\/repositories\/(\d+)\/compare\/([^.]+)\.\.\.(.+)$/.exec(path);
     if (match) {
+      const compared = state.compares.get(`${match[2]}...${match[3]}`);
+      if (compared) return json(200, { behind_by: 0, files: compared });
       const pr = pullForSha(Number(match[1]), match[3]);
-      return pr ? json(200, { behind_by: pr.behindBy ?? 0 }) : json(404, {});
+      return pr ? json(200, { behind_by: pr.behindBy ?? 0, files: pr.files }) : json(404, {});
     }
     match = /^\/repositories\/(\d+)\/contents\/(.+)$/.exec(path);
     if (match) {
@@ -383,7 +387,9 @@ export function createFakeGithub() {
       const pr = pulls.find((candidate) => candidate.number === Number(match[2]));
       if (!pr) return json(404, {});
       if (match[3]) {
-        const files = pr.files.slice(0, Number(url.searchParams.get("per_page")));
+        const perPage = Number(url.searchParams.get("per_page"));
+        const page = Number(url.searchParams.get("page") ?? 1);
+        const files = pr.files.slice((page - 1) * perPage, page * perPage);
         state.onFilesRead?.();
         return json(200, files);
       }

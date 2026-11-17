@@ -39,6 +39,7 @@ import { attachToResponseCommand } from "./attach.js";
 import { attachTaskToThreadCommand } from "./attach-task.js";
 import { attachPullRequestToThreadCommand } from "./attach-pr.js";
 import { listThreadChecksCommand } from "./checks.js";
+import { submitGuideCommand } from "./submit-guide.js";
 
 const threadRow = {
   threadId: "thr_1",
@@ -78,6 +79,7 @@ function isFunction(reference: unknown, expected: FunctionReference<"query" | "m
 describe("threads write commands", () => {
   const query = vi.fn();
   const mutation = vi.fn();
+  const action = vi.fn();
   const spinner = { fail: vi.fn(), start: vi.fn(), succeed: vi.fn() };
 
   const queriedFunctions = () =>
@@ -104,7 +106,7 @@ describe("threads write commands", () => {
 
     runOneShotCommandMock.mockImplementation(async (_cmd: unknown, run: (ctx: unknown) => Promise<void>) => {
       await run({
-        client: { query, mutation, subscribe: vi.fn(), close: vi.fn(), client: {} as never },
+        client: { query, mutation, action, subscribe: vi.fn(), close: vi.fn(), client: {} as never },
         config: { convexUrl: "https://example.convex.cloud", apiKey: "sk_user_test", projectId: "proj_web_1" },
       });
     });
@@ -583,6 +585,35 @@ describe("threads write commands", () => {
       await invoke(attachPullRequestToThreadCommand, ["thr_1", "contoso/convoy#482"]);
       expect(mutation).toHaveBeenCalledWith(api.cli.threads.core.attachPullRequest, { threadId: "thr_1", pullRequest: "contoso/convoy#482" });
       expect(console.log).toHaveBeenCalledWith(chalk.green("✓") + " Pull request attached to thread");
+    });
+  });
+
+  describe("threads submit-guide", () => {
+    const guide = { headSha: "head-1", steps: [{ title: "Schema", explanation: "Adds the table.", files: [{ path: "convex/schema.ts" }] }] };
+
+    it("submits the guide file", async () => {
+      readFileMock.mockResolvedValueOnce(JSON.stringify(guide));
+      action.mockResolvedValueOnce({ status: "accepted", guideId: "guide_1" });
+      await invoke(submitGuideCommand, ["thr_1", "guide.json"]);
+      expect(readFileMock).toHaveBeenCalledWith("guide.json", "utf8");
+      expect(action).toHaveBeenCalledWith(api.integrations.github.guides.submit, { threadId: "thr_1", ...guide });
+      expect(console.log).toHaveBeenCalledWith(chalk.green("✓") + " Guide submitted");
+    });
+
+    it("prints every error Convoy returns", async () => {
+      readFileMock.mockResolvedValueOnce(JSON.stringify(guide));
+      action.mockResolvedValueOnce({ status: "rejected", errors: ["src/a.ts is not in any step.", "Step 1 has no files."] });
+      await expect(invoke(submitGuideCommand, ["thr_1", "guide.json"])).rejects.toThrow(
+        "Convoy did not accept the guide. Fix these and submit again:\n- src/a.ts is not in any step.\n- Step 1 has no files."
+      );
+    });
+
+    it("rejects a file that is not a guide before calling Convoy", async () => {
+      readFileMock.mockResolvedValueOnce("{ nope");
+      await expect(invoke(submitGuideCommand, ["thr_1", "guide.json"])).rejects.toThrow("guide.json is not valid JSON");
+      readFileMock.mockResolvedValueOnce(JSON.stringify({ steps: [] }));
+      await expect(invoke(submitGuideCommand, ["thr_1", "guide.json"])).rejects.toThrow('"headSha"');
+      expect(action).not.toHaveBeenCalled();
     });
   });
 

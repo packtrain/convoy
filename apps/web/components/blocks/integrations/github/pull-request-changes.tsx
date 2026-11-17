@@ -2,21 +2,21 @@
 
 import { useCallback, useMemo, useRef, useState } from "react";
 import { useAction } from "convex/react";
-import { File as FileView, PatchDiff } from "@pierre/diffs/react";
-import { ArrowUpRight, FileText, PanelRight, X } from "lucide-react";
+import { File as FileView } from "@pierre/diffs/react";
+import { ArrowUpRight, PanelRight, X } from "lucide-react";
 import { api } from "@/convex/_generated/api";
 import type { Id } from "@/convex/_generated/dataModel";
 import { ThreadWorkspaceSplitPane } from "@/components/blocks/thread/thread-workspace-split-pane";
 import { ChangesViewToggles } from "@/components/custom/diff/changes-view-toggles";
 import { FileTabStrip } from "@/components/custom/diff/file-tab-strip";
-import { PatchFileSection, usePatchDiffOptions } from "@/components/custom/diff/patch-file-sections";
+import { usePatchDiffOptions } from "@/components/custom/diff/patch-file-sections";
 import { WorktreeFileTree } from "@/components/custom/diff/worktree-file-tree";
 import { Button } from "@/components/ui/button";
-import { Checkbox } from "@/components/ui/checkbox";
 import { Skeleton } from "@/components/ui/skeleton";
 import { useIsMobile } from "@/hooks/browser/use-mobile";
 import { getErrorMessage } from "@/lib/errors";
-import { toSectionFile, toUnifiedPatch, type PullRequestDiff, type PullRequestDiffFile } from "./github-patch";
+import { toSectionFile, type PullRequestDiff, type PullRequestDiffFile } from "./github-patch";
+import { PullRequestFileSection } from "./pull-request-file-section";
 import type { useReviewedMarks } from "./use-reviewed-marks";
 
 type FileState =
@@ -25,27 +25,6 @@ type FileState =
   | { kind: "binary" }
   | { kind: "tooLarge" }
   | { kind: "error"; message: string };
-
-/** Why a file has no diff here; GitHub doesn't say which, so name every cause. */
-function NoTextDiff({ file, htmlUrl }: { file: PullRequestDiffFile; htmlUrl: string }) {
-  const renamedOnly = file.status === "renamed" && file.additions + file.deletions === 0;
-  return (
-    <p className="px-4 py-2 text-xs text-muted-foreground">
-      {renamedOnly ? (
-        <>
-          Renamed from <code>{file.previousPath}</code>. File contents are unchanged.
-        </>
-      ) : (
-        <>
-          GitHub sent no text diff for this file: it may be binary, too large, or over this view&apos;s limit.{" "}
-          <a href={`${htmlUrl}/files`} target="_blank" rel="noreferrer" className="underline">
-            Open on GitHub
-          </a>
-        </>
-      )}
-    </p>
-  );
-}
 
 /** The Diff tab: files as collapsible sections with Reviewed marks, a closable file tree, and whole files in tabs. */
 export function PullRequestChanges({
@@ -192,48 +171,20 @@ export function PullRequestChanges({
           {activeFile ? (
             <WholeFile file={activeFile} state={contents.get(activeFile.path)} options={options} htmlUrl={diff.htmlUrl} />
           ) : (
-            diff.files.map((file) => {
-              const patch = toUnifiedPatch(file);
-              return (
-                <PatchFileSection
-                  key={file.path}
-                  file={toSectionFile(file)}
-                  patch={patch ?? undefined}
-                  collapsed={isCollapsed(file.path)}
-                  onToggle={toggle}
-                  registerSection={registerSection}
-                  actions={
-                    <>
-                      <label className="ml-2 flex cursor-pointer items-center gap-1.5 text-xs text-muted-foreground">
-                        <Checkbox
-                          aria-label={`Reviewed ${file.path}`}
-                          checked={marks.isReviewed(file)}
-                          onCheckedChange={(checked) => setReviewed(file, checked === true)}
-                        />
-                        Reviewed
-                      </label>
-                      <Button
-                        variant="ghost"
-                        size="icon-sm"
-                        className="size-6"
-                        aria-label={`Open ${file.path}`}
-                        title={file.status === "removed" ? "File before deletion" : "Open file"}
-                        onClick={() => openFile(file)}
-                      >
-                        <FileText className="size-3.5" />
-                      </Button>
-                    </>
-                  }
-                >
-                  {file.previousPath && patch ? (
-                    <p className="px-4 py-1.5 text-xs text-muted-foreground">
-                      Renamed from <code>{file.previousPath}</code>
-                    </p>
-                  ) : null}
-                  {patch ? <PatchDiff patch={patch} options={options} /> : <NoTextDiff file={file} htmlUrl={diff.htmlUrl} />}
-                </PatchFileSection>
-              );
-            })
+            diff.files.map((file) => (
+              <PullRequestFileSection
+                key={file.path}
+                file={file}
+                htmlUrl={diff.htmlUrl}
+                options={options}
+                collapsed={isCollapsed(file.path)}
+                onToggle={toggle}
+                registerSection={registerSection}
+                reviewed={marks.isReviewed(file)}
+                onReviewedChange={(reviewed) => setReviewed(file, reviewed)}
+                onOpen={() => openFile(file)}
+              />
+            ))
           )}
         </div>
       </div>

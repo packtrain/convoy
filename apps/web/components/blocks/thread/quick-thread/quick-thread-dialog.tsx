@@ -5,7 +5,7 @@ import { useQuery } from "convex/react";
 import { toast } from "sonner";
 import { api } from "@/convex/_generated/api";
 import type { Id } from "@/convex/_generated/dataModel";
-import { Dialog, DialogContent, DialogDescription, DialogTitle } from "@/components/ui/dialog";
+import { Dialog, DialogContent, DialogDescription, DialogTitle, DialogTitleBar } from "@/components/ui/dialog";
 import { Kbd } from "@/components/ui/kbd";
 import { ThreadComposer, type ThreadComposerSubmitMessage } from "@/components/blocks/thread/thread-composer";
 import { ThreadDraftProvider, useThreadDraft } from "@/components/blocks/thread/thread-draft-provider";
@@ -226,10 +226,10 @@ export function QuickThreadDialog({ organizationId, organizationSlug, projectAli
         // Radix would focus the profile pill, which opens its card; the composer focuses itself.
         onOpenAutoFocus={(event) => event.preventDefault()}
       >
-        <div className="px-4 pt-3">
+        <DialogTitleBar>
           <DialogTitle className="text-sm">New thread in {project.alias}</DialogTitle>
           <DialogDescription className="sr-only">Start a thread without leaving this page.</DialogDescription>
-        </div>
+        </DialogTitleBar>
         <ThreadDraftProvider storageKey={buildProjectDraftStorageKey(organizationSlug, project.alias)}>
           <QuickThreadComposer projectId={project._id} organizationId={organizationId} onStarted={handleStarted} />
         </ThreadDraftProvider>

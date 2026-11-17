@@ -113,6 +113,22 @@ export function createConvexClient(options: ConvexClientOptions) {
     },
 
     /**
+     * Execute an action with API key authentication
+     */
+    async action<Action extends FunctionReference<"action">>(
+      action: Action,
+      args: Omit<FunctionArgs<Action>, "apiKey"> & { apiKey?: string }
+    ): Promise<FunctionReturnType<Action>> {
+      const argsWithApiKey = {
+        ...args,
+        apiKey: args.apiKey ?? options.apiKey,
+      } as FunctionArgs<Action>;
+      return client.action(action, argsWithApiKey).catch((error: unknown) => {
+        throw scrubError(error);
+      });
+    },
+
+    /**
      * Subscribe to a query with API key authentication
      */
     subscribe<Query extends FunctionReference<"query">>(

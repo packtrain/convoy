@@ -85,3 +85,39 @@ export function parseAttachedPullRequest(input: string): AttachedPullRequest | n
 export function attachedPullRequestUrl(pr: PullRequestName): string {
   return `https://github.com/${pr.owner}/${pr.name}/pull/${pr.number}`;
 }
+
+// --- Guides (docs/specs/github-integration.md → Guides) ---
+
+export const guideAttentionKindValidator = v.union(
+  v.literal("tradeoff"),
+  v.literal("contract"),
+  v.literal("product"),
+  v.literal("risk"),
+  v.literal("accessibility")
+);
+export type GuideAttentionKind = Infer<typeof guideAttentionKindValidator>;
+/** Every attention kind, for messages and checks on what the agent sent. */
+export const GUIDE_ATTENTION_KINDS = Object.keys({
+  tradeoff: true,
+  contract: true,
+  product: true,
+  risk: true,
+  accessibility: true,
+} satisfies Record<GuideAttentionKind, true>) as GuideAttentionKind[];
+
+/** Limits Convoy enforces on submit; the prompt states them. */
+export const GUIDE_MAX_STEPS = 8;
+export const GUIDE_MAX_QUESTIONS = 2;
+
+/** A stored step: each file carries its blob at the Guide's head, filled in by Convoy on submit. */
+export const guideStepValidator = v.object({
+  title: v.string(),
+  explanation: v.string(),
+  attention: v.optional(v.object({ kind: guideAttentionKindValidator, note: v.string() })),
+  files: v.array(v.object({ path: v.string(), note: v.optional(v.string()), sha: v.optional(v.string()) })),
+  questions: v.array(v.string()),
+});
+export type GuideStep = Infer<typeof guideStepValidator>;
+
+export const guideStatusValidator = v.union(v.literal("writing"), v.literal("ready"));
+export type GuideStatus = Infer<typeof guideStatusValidator>;

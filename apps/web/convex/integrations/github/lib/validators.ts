@@ -1,6 +1,9 @@
 import { v, type Infer } from "convex/values";
 import type { Doc, Id } from "../../../_generated/dataModel";
+import { cliModelValidator, cliTypeValidator } from "../../../lib/contracts/validators";
 import {
+  guideStatusValidator,
+  guideStepValidator,
   type NormalizedPullRequest,
   pullRequestStackValidator,
   pullRequestStateValidator,
@@ -300,3 +303,44 @@ export const pullRequestOverviewValidator = v.object({
   milestone: v.union(v.object({ title: v.string(), url: v.string() }), v.null()),
 });
 export type PullRequestOverview = Infer<typeof pullRequestOverviewValidator>;
+
+/** A Guide in the PR's Guide menu; the steps come from `guides.get`. */
+export const guideSummaryValidator = v.object({
+  _id: v.id("integrationPullRequestGuides"),
+  status: guideStatusValidator,
+  baseSha: v.string(),
+  headSha: v.string(),
+  cliType: cliTypeValidator,
+  cliModel: v.optional(cliModelValidator),
+  createdAt: v.number(),
+  completedAt: v.optional(v.number()),
+  requester: v.object({ name: v.union(v.string(), v.null()), avatarUrl: v.union(v.string(), v.null()), isViewer: v.boolean() }),
+  /** Only for the requester: the run is a private thread. */
+  threadId: v.optional(v.id("cliThreads")),
+  canDelete: v.boolean(),
+});
+export type GuideSummary = Infer<typeof guideSummaryValidator>;
+
+export function toGuideSummary(
+  row: Doc<"integrationPullRequestGuides">,
+  requester: Doc<"users"> | null,
+  viewer: { userId: Id<"users">; canManage: boolean }
+): GuideSummary {
+  const isViewer = row.requesterId === viewer.userId;
+  return {
+    _id: row._id,
+    status: row.status,
+    baseSha: row.baseSha,
+    headSha: row.headSha,
+    cliType: row.cliType,
+    cliModel: row.cliModel,
+    createdAt: row.createdAt,
+    completedAt: row.completedAt,
+    requester: { name: requester?.name ?? null, avatarUrl: requester?.avatarUrl ?? null, isViewer },
+    threadId: isViewer ? row.threadId : undefined,
+    canDelete: isViewer || viewer.canManage,
+  };
+}
+
+export const guideDetailValidator = guideSummaryValidator.extend({ steps: v.array(guideStepValidator) });
+export type GuideDetail = Infer<typeof guideDetailValidator>;

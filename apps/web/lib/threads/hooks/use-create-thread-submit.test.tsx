@@ -89,3 +89,16 @@ test("a permission denial (role revoked mid-session) toasts friendly copy, not t
   expect(toastErrorMock).toHaveBeenCalledWith(PERMISSION_DENIED_MESSAGE);
   cleanup();
 });
+
+test("a Guide run passes its head and leaves the new-thread model default alone (OS-2412)", async () => {
+  const rememberCliModel = vi.fn();
+  const { result } = setup({ rememberCliModel, pullRequestGuide: { headSha: "h1" } });
+  await act(() => result.current.handleSubmit({ text: "Write a guide", files: [] }));
+  expect(create).toHaveBeenCalledWith(expect.objectContaining({ pullRequestGuide: { headSha: "h1" } }));
+  expect(rememberCliModel).not.toHaveBeenCalled();
+  cleanup();
+
+  const plain = setup({ rememberCliModel });
+  await act(() => plain.result.current.handleSubmit({ text: "Hello", files: [] }));
+  expect(rememberCliModel).toHaveBeenCalled();
+});

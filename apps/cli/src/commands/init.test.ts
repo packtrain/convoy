@@ -101,6 +101,7 @@ describe("runInitMcp", () => {
   const mockClient = {
     query: vi.fn(),
     mutation: vi.fn(),
+    action: vi.fn(),
     subscribe: vi.fn(),
     close: vi.fn(),
     client: {} as unknown,
@@ -915,6 +916,7 @@ describe("initCommand", () => {
         },
       ]),
       mutation: vi.fn(),
+      action: vi.fn(),
       subscribe: vi.fn(),
       close: vi.fn(),
       client: {} as unknown,
@@ -953,6 +955,7 @@ describe("initCommand", () => {
         },
       ]),
       mutation: vi.fn(),
+      action: vi.fn(),
       subscribe: vi.fn(),
       close: vi.fn(),
       client: {} as unknown,

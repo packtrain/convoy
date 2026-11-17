@@ -9,6 +9,7 @@ import { attachToResponseCommand } from "./attach.js";
 import { attachTaskToThreadCommand } from "./attach-task.js";
 import { attachPullRequestToThreadCommand } from "./attach-pr.js";
 import { listThreadChecksCommand } from "./checks.js";
+import { submitGuideCommand } from "./submit-guide.js";
 
 export const threadsCommand = new Command("threads")
   .description("CLI thread commands")
@@ -21,4 +22,5 @@ export const threadsCommand = new Command("threads")
   .addCommand(attachTaskToThreadCommand)
   .addCommand(attachPullRequestToThreadCommand)
   .addCommand(attachToResponseCommand)
-  .addCommand(listThreadChecksCommand);
+  .addCommand(listThreadChecksCommand)
+  .addCommand(submitGuideCommand);

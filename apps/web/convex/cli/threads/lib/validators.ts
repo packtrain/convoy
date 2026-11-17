@@ -276,4 +276,6 @@ export const createThreadArgs = {
   // delivered raw instead of as prose. Spec: `docs/specs/cli-runtime-commands.md`.
   runtimeCommand: v.optional(v.boolean()),
   attachments: v.optional(v.array(cliMessageAttachmentInputValidator)),
+  /** Write a Guide of the attached PR at this head, which must still be its stored one (OS-2412). */
+  pullRequestGuide: v.optional(v.object({ headSha: v.string() })),
 };

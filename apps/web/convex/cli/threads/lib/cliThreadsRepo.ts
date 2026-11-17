@@ -573,6 +573,8 @@ export type ThreadInsert = {
   attachedPullRequest?: AttachedPullRequest;
   /** A Pull request checks run's head revision at launch (OS-2400). Set only here at creation. */
   pullRequestChecks?: { headSha: string };
+  /** A Guide run's head revision at launch (OS-2412). Set only here at creation. */
+  pullRequestGuide?: { headSha: string };
   /** How the task association was initiated — recorded on the task's `agentThreadWork` entry, not stored on the thread. */
   agentWorkSource?: AgentThreadWorkSource;
   /**
@@ -643,6 +645,7 @@ export async function insertCliThread(ctx: MutationCtx, thread: ThreadInsert, no
     associatedTaskId: thread.associatedTaskId,
     attachedPullRequest: thread.attachedPullRequest,
     pullRequestChecks: thread.pullRequestChecks,
+    pullRequestGuide: thread.pullRequestGuide,
     projectAgentId: thread.projectAgentId,
     agentPromptSnapshot: thread.agentPromptSnapshot,
     ...(thread.worktree || thread.executionBranch ? {

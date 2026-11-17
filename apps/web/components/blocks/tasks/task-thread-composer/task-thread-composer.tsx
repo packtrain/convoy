@@ -54,6 +54,8 @@ type TaskThreadComposerProps = TaskThreadComposerSubject &
   draftKey?: string;
   /** Starts a Pull request checks thread on this head (OS-2400). */
   pullRequestChecks?: { headSha: string };
+  /** Starts a Guide run on this head (OS-2412). Its model does not become the new-thread default. */
+  pullRequestGuide?: { headSha: string };
   focusRequestKey?: number;
   /** Focus the composer as soon as it is enabled (e.g. when opened in a popover). */
   autoFocus?: boolean;
@@ -85,6 +87,7 @@ function TaskThreadComposerContent({
   onSeeded,
   seedReplacesDraft,
   pullRequestChecks,
+  pullRequestGuide,
   threadKey,
   focusRequestKey,
   autoFocus = false,
@@ -153,6 +156,7 @@ function TaskThreadComposerContent({
     rememberCliModel,
     attachedTask: initialAttachedTask,
     pullRequestChecks,
+    pullRequestGuide,
     // Re-key the composer so the locked initial task pill is restored after
     // ThreadComposer clears its internal attached-task state on submit.
     onCreated: (threadId) => {

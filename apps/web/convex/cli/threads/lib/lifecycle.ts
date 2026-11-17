@@ -14,6 +14,7 @@ import { getProjectAgentById } from "../../../agents/lib/projectAgentsRepo";
 import { getActiveProjectById } from "../../../projects/lib/projectsRepo";
 import { findLinkedPullRequest } from "../../../integrations/github/lib/integrationPullRequestsRepo";
 import { listActiveRepositoryLinksForProject } from "../../../integrations/github/lib/integrationRepositoryLinksRepo";
+import { insertGuide } from "../../../integrations/github/lib/integrationPullRequestGuidesRepo";
 import { errors } from "../../errors";
 import { assertValidMessageAttachments, createAttachmentRefs } from "../../lib/messages/attachments";
 import { createUserMessage, normalizeMessageSelection } from "../../lib/messages/normalize";
@@ -142,13 +143,25 @@ async function requirePullRequestChecksHead(
   pullRequest: AttachedPullRequest | undefined,
   headSha: string
 ): Promise<{ headSha: string }> {
-  const links = await listActiveRepositoryLinksForProject(ctx, projectId);
-  const row = await ensure(pullRequest ? findLinkedPullRequest(ctx, links, pullRequest) : null).notNull(
-    errors.PULL_REQUEST_CHECKS_NEED_CONNECTED_PULL_REQUEST
-  );
-  // The prompt names this head, so the run and its results agree on the revision.
-  ensure(row.headSha).eq(headSha, errors.PULL_REQUEST_CHECKS_HEAD_MOVED);
+  await requireStoredPullRequestAtHead(ctx, projectId, pullRequest, headSha, {
+    notConnected: errors.PULL_REQUEST_CHECKS_NEED_CONNECTED_PULL_REQUEST,
+    moved: errors.PULL_REQUEST_CHECKS_HEAD_MOVED,
+  });
   return { headSha };
+}
+
+/** The stored PR in a connected repository, still at the head the caller's prompt names, so the run and its output agree on the revision. */
+async function requireStoredPullRequestAtHead(
+  ctx: MutationCtx,
+  projectId: Id<"projects">,
+  pullRequest: AttachedPullRequest | undefined,
+  headSha: string,
+  messages: { notConnected: string; moved: string }
+): Promise<Doc<"integrationPullRequests">> {
+  const links = await listActiveRepositoryLinksForProject(ctx, projectId);
+  const row = await ensure(pullRequest ? findLinkedPullRequest(ctx, links, pullRequest) : null).notNull(messages.notConnected);
+  ensure(row.headSha).eq(headSha, messages.moved);
+  return row;
 }
 
 /**
@@ -200,6 +213,12 @@ export async function createThreadCore(
   const { user } = access;
   const { parentThreadId, spawnedByThreadId, workflowRunId, workflowLaneId, workflowLaneType, workflowRunStepId, scriptRequest } = lineage ?? {};
   const { profile, task, pullRequest, insert } = await resolveThreadSelection(ctx, access, args);
+  const guidePullRequest = args.pullRequestGuide
+    ? await requireStoredPullRequestAtHead(ctx, profile.projectId, pullRequest, args.pullRequestGuide.headSha, {
+        notConnected: errors.GUIDE_NEEDS_CONNECTED_PULL_REQUEST,
+        moved: errors.GUIDE_HEAD_MOVED,
+      })
+    : null;
 
   const now = Date.now();
   const attachments = assertValidMessageAttachments(args.attachments);
@@ -241,6 +260,7 @@ export async function createThreadCore(
     {
       ...insert,
       title,
+      pullRequestGuide: guidePullRequest ? { headSha: guidePullRequest.headSha } : undefined,
       parentThreadId,
       spawnedByThreadId,
       workflowRunId,
@@ -249,6 +269,22 @@ export async function createThreadCore(
     },
     now
   );
+  if (guidePullRequest) {
+    // The Guide row is born with its run; `guides.submit` finds it by thread (docs/specs/github-integration.md → Guides).
+    await insertGuide(ctx, {
+      projectId: profile.projectId,
+      repositoryId: guidePullRequest.repositoryId,
+      number: guidePullRequest.number,
+      requesterId: user._id,
+      threadId,
+      status: "writing",
+      baseSha: guidePullRequest.baseSha,
+      headSha: guidePullRequest.headSha,
+      cliType: args.cliType,
+      cliModel: args.cliModel,
+      createdAt: now,
+    });
+  }
 
   // Create initial user message
   const userMessage = createUserMessage({
