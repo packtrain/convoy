@@ -80,6 +80,12 @@ column and its title shifts left of every running row. For such a row the slot
 holds an `aria-hidden` spacer — reserving the column *is* the point, not drawing
 a glyph.
 
+Back-to-back thread cards join into one group: no gap, a single divider between
+them, and only the first and last corners rounded. It is CSS-only (sibling and
+`:has(+…)` selectors on `data-timeline-thread-card`), so any surface that
+renders `TimelineThreadRowCard` as siblings gets it, the PR overview included,
+and a comment or activity row between two cards breaks the group.
+
 ### A thread row words its status
 
 It also passes `showStatusLabel`, so the state reads as a word — `Working`,

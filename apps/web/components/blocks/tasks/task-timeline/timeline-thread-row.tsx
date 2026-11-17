@@ -19,6 +19,10 @@ import { THREAD_CARD_RAIL_OFFSET_CLASS } from "./rail-geometry";
 * `agentThreadWork`: a drift class and an extra hot-path write, to avoid a dead end reached
 * only by clicking someone else's unshared run.
 */
+/** Back-to-back cards join into one rounded group with dividers between them. */
+const STACKED_CARD_CLASS =
+  "py-1 [[data-timeline-thread-card]+&]:pt-0 [[data-timeline-thread-card]+&]:*:rounded-t-none [[data-timeline-thread-card]+&]:*:border-t-0 has-[+[data-timeline-thread-card]]:pb-0 has-[+[data-timeline-thread-card]]:*:rounded-b-none";
+
 export function TimelineThreadRowCard({
   thread,
   organizationSlug,
@@ -37,7 +41,7 @@ export function TimelineThreadRowCard({
       in `rail-geometry.ts`; it comes off *both* sides so the card only shifts,
       staying symmetric in the sidebar rather than looking indented.
     */
-    <div className={cn(THREAD_CARD_RAIL_OFFSET_CLASS, "py-1")}>
+    <div data-timeline-thread-card className={cn(THREAD_CARD_RAIL_OFFSET_CLASS, STACKED_CARD_CLASS)}>
       <div className="group relative rounded-md border border-border bg-card transition-colors hover:bg-muted">
         {/*
           The link is a positioned overlay rather than a wrapper, matching
