@@ -1284,6 +1284,10 @@ OS-2193 attaches PRs to threads.
 - Thread rows show the Attached pull request's `#number` beside the task
   ref, muted and linked like the branch PR badge. When it is the branch's
   own PR, only the branch badge shows.
+- The thread header shows the same `#number` after the task ref (inside the
+  thread tab in full view and the group strip). Like the task ref, a plain
+  click opens the sidebar on the `#number` tab; a modified click opens GitHub
+  (OS-2405).
 - The "+" menu item and live pills sit behind the GitHub integration
   developer toggle.
 - The reader header has Refresh, which re-reads the diff and overview from

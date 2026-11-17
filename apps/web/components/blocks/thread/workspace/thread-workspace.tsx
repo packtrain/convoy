@@ -111,6 +111,7 @@ import type {
   CliRunDiffSummaryPreview,
 } from "@/convex/lib/contracts/validators";
 import { ThreadTaskRefLink } from "@/components/blocks/thread/thread-task-link";
+import { ThreadAttachedPrRefLink } from "@/components/blocks/thread/thread-pr-badge";
 import { ThreadStatusIndicator } from "@/components/blocks/thread/thread-status-indicator";
 import {
   getThreadDisplayStatus,
@@ -1436,6 +1437,17 @@ function ThreadWorkspaceBody({
     return byThreadId;
   }, [chat, group, threadId]);
 
+  const githubIntegrationEnabled = useGithubIntegrationEnabled();
+  const attachedPullRequest = githubIntegrationEnabled ? chat?.attachedPullRequest : undefined;
+  // Not URL-backed like the task tab, so it is a plain panel pick (OS-2405).
+  const openPullRequestTab = () => {
+    setActivePanel("pullRequest");
+    if (!isFullView) openSidebar();
+  };
+  const attachedPrRefLink = attachedPullRequest ? (
+    <ThreadAttachedPrRefLink attached={attachedPullRequest} onOpen={openPullRequestTab} />
+  ) : null;
+
   // Per-tab decoration. The ref belongs to the thread, so it rides inside the
   // tab — the active underline runs beneath it instead of starting
   // mid-header. The row context menu stays on the active tab (OS-1478).
@@ -1462,23 +1474,28 @@ function ThreadWorkspaceBody({
       ) : undefined,
       // Only the active tab's ref links to the task; on the others the whole
       // tab selects the thread, so a link there would fire both navigations.
-      leading: task ? (
-        isActiveTab ? (
-          <ThreadTaskRefLink
-            task={task}
-            href={threadWorkspace.taskLinkHref(task)}
-            onNavigate={() => handleOpenTaskInSidebar(task)}
-          />
-        ) : (
-          <TaskRefWithType
-            refId={task.refId}
-            taskType={task.taskType}
-            refInteractive={false}
-            className="gap-1.5"
-            refClassName="text-xs font-medium text-muted-foreground"
-            typeClassName="shrink-0"
-          />
-        )
+      leading: isActiveTab ? (
+        task || attachedPrRefLink ? (
+          <span className="flex items-center gap-2">
+            {task ? (
+              <ThreadTaskRefLink
+                task={task}
+                href={threadWorkspace.taskLinkHref(task)}
+                onNavigate={() => handleOpenTaskInSidebar(task)}
+              />
+            ) : null}
+            {attachedPrRefLink}
+          </span>
+        ) : undefined
+      ) : task ? (
+        <TaskRefWithType
+          refId={task.refId}
+          taskType={task.taskType}
+          refInteractive={false}
+          className="gap-1.5"
+          refClassName="text-xs font-medium text-muted-foreground"
+          typeClassName="shrink-0"
+        />
       ) : undefined,
       // No menu for the round trip after a tab switch: it can't be made inert
       // the way the header cluster is, and the row it would render is the
@@ -1566,8 +1583,6 @@ function ThreadWorkspaceBody({
     </Button>
   ) : null;
 
-  const githubIntegrationEnabled = useGithubIntegrationEnabled();
-  const attachedPullRequest = githubIntegrationEnabled ? chat?.attachedPullRequest : undefined;
   const panelTabs: ThreadTab<ThreadSidebarPanelKind>[] = [
     {
       id: "changes",
@@ -1979,6 +1994,7 @@ function ThreadWorkspaceBody({
                     onNavigate={() => handleOpenTaskInSidebar(associatedTask)}
                   />
                 ) : null}
+                {!isFullView && !showGroupStrip ? attachedPrRefLink : null}
               </>
             }
             actions={

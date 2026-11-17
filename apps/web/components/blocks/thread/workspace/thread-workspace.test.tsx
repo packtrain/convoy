@@ -1651,6 +1651,22 @@ describe("ThreadWorkspace", () => {
     expect(pullRequestReaderMounts).toHaveBeenCalledTimes(1);
   });
 
+  test("the header's pull request ref opens the sidebar on the pull request tab (OS-2405)", () => {
+    const { thread } = useCliThreadMock.getMockImplementation()?.() ?? useCliThreadMock();
+    useCliThreadMock.mockReturnValue({
+      isLoading: false,
+      thread: { ...thread, attachedPullRequest: { owner: "acme", name: "web", number: 7, ref: "acme/web#7" } },
+    });
+    renderWorkspace();
+    expect(screen.queryByTestId("thread-detail-sidebar")).toBeNull();
+
+    fireEvent.click(screen.getByRole("link", { name: "Attached pull request acme/web#7" }));
+
+    const sidebar = screen.getByTestId("thread-detail-sidebar");
+    expect(within(sidebar).getByRole("tab", { name: "#7" }).getAttribute("aria-selected")).toBe("true");
+    expect(within(sidebar).getByText("Pull request reader")).toBeDefined();
+  });
+
   test("opens and toggles the Tasks panel from the T shortcut", () => {
     renderWorkspace();
 
@@ -1856,6 +1872,20 @@ describe("ThreadWorkspace", () => {
       expect(
         within(column).getByRole("button", { name: "Thread actions" })
       ).toBeDefined();
+    });
+
+    test("the thread tab's pull request ref selects the pull request tab (OS-2405)", () => {
+      const { thread } = useCliThreadMock.getMockImplementation()?.() ?? useCliThreadMock();
+      useCliThreadMock.mockReturnValue({
+        isLoading: false,
+        thread: { ...thread, attachedPullRequest: { owner: "acme", name: "web", number: 7, ref: "acme/web#7" } },
+      });
+      renderWorkspace();
+
+      fireEvent.click(screen.getByRole("link", { name: "Attached pull request acme/web#7" }));
+
+      expect(screen.getByRole("tab", { name: "#7" }).getAttribute("aria-selected")).toBe("true");
+      expect(screen.getByText("Pull request reader")).toBeDefined();
     });
 
     test("the T shortcut swaps between Tasks and the thread", () => {
