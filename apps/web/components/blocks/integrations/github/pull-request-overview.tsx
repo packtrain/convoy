@@ -113,6 +113,40 @@ function CardSkeleton({ label }: { label: string }) {
   );
 }
 
+/** Activity's header, composer, a comment row, and an activity rail while the overview loads. */
+function ActivitySkeleton({ composer }: { composer?: ReactNode }) {
+  return (
+    <section aria-label="Loading activity" className="mt-8">
+      <div className="flex items-center justify-between py-2">
+        <h3 className="text-sm font-medium text-foreground">Activity</h3>
+        <Skeleton className="size-7 rounded-md" />
+      </div>
+      {composer}
+      <div className="flex gap-3 py-3">
+        <Skeleton className="size-8 shrink-0 rounded-full" />
+        <div className="flex-1 space-y-2">
+          <span className="flex h-5 items-center">
+            <Skeleton className="h-3.5 w-40" />
+          </span>
+          <Skeleton className="h-4 w-full" />
+          <Skeleton className="h-4 w-3/5" />
+        </div>
+      </div>
+      <div className="relative py-1 pl-8">
+        <span aria-hidden className="absolute top-4 bottom-4 left-[13px] w-px bg-border" />
+        {["w-64", "w-72"].map((width) => (
+          <div key={width} className="flex items-center py-1.5">
+            <Skeleton className="absolute left-1 size-5 rounded-full" />
+            <span className="flex h-5 items-center">
+              <Skeleton className={cn("h-3.5", width)} />
+            </span>
+          </div>
+        ))}
+      </div>
+    </section>
+  );
+}
+
 /** A one-line property value while the overview loads. */
 const PropertySkeleton = () => <Skeleton className="h-4 w-32" aria-label="Loading" />;
 
@@ -464,6 +498,7 @@ export function PullRequestOverviewSkeleton() {
           <CardSkeleton label="Loading checks" />
           <CardSkeleton label="Loading commits" />
         </div>
+        <ActivitySkeleton />
       </div>
       <div className="hidden space-y-6 @4xl:block">
         {["Status", "Tasks", "Reviewers"].map((label) => (
@@ -738,8 +773,10 @@ export function PullRequestOverviewTab({
             threads={pullRequest ? (threads ?? []).map(toTimelineThreadRow) : undefined}
             composer={composer}
           />
-        ) : (
+        ) : state.kind === "loading" ? (
           // Evidence's Fix and the Threads "+" need the composer before GitHub's overview arrives.
+          <ActivitySkeleton composer={composer} />
+        ) : (
           composer
         )}
       </div>

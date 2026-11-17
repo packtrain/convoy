@@ -489,6 +489,16 @@ describe("PullRequestReader overview layout", () => {
     expect(skeleton.querySelector(".h-\\[41px\\].border-b")).toBeTruthy();
     expect(skeleton.contains(screen.getByLabelText("Loading checks"))).toBe(true);
     expect(skeleton.contains(screen.getByLabelText("Loading commits"))).toBe(true);
+    expect(skeleton.contains(screen.getByLabelText("Loading activity"))).toBe(true);
+  });
+
+  test("while the overview loads, Activity keeps its header, a comment row, and an activity rail", () => {
+    readOverview.mockReturnValue(new Promise(() => {}));
+    render(reader());
+    const activity = screen.getByLabelText("Loading activity");
+    expect(within(activity).getByRole("heading", { name: "Activity" })).toBeTruthy();
+    expect(activity.querySelector(".size-8.rounded-full")).toBeTruthy();
+    expect(activity.querySelector(".w-px.bg-border")).toBeTruthy();
   });
 
   test("loading placeholders are shaped like the cards they stand for", () => {

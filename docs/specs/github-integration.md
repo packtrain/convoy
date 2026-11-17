@@ -1008,8 +1008,9 @@ compact), and the reader's header, tab row, and Overview.
   the commented line, so it costs no extra request; an outdated comment
   keeps the lines it was left on. A review
   with a body shows as a comment ("maya requested changes"), so its text
-  stays readable. While the overview loads, placeholders keep the cards'
-  and properties' shapes; a property with no value shows the task table's
+  stays readable. While the overview loads, placeholders keep the cards',
+  properties', and Activity's shapes (its header, the composer, a comment
+  row, and an activity rail); a property with no value shows the task table's
   dash. Properties:
   Status, Tasks, Stack, Reviewers (a re-request wins, then the latest
   approval or change request, then a comment; the author's own review
