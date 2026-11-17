@@ -392,6 +392,25 @@ describe("CliTypeSelector", () => {
     expect(screen.queryByRole("button", { name: /^Composer 2.5$/i })).toBeNull();
   });
 
+  test("model search sits flush with the menu rows below it", () => {
+    render(
+      <CliTypeSelector
+        value="claude-code"
+        cliModel="default"
+        onChange={vi.fn()}
+        onCliModelChange={vi.fn()}
+      />
+    );
+
+    // The menu already pads p-1 and rows are 28px; the search must not add its own inset.
+    const search = screen.getByPlaceholderText("Search models…");
+    const wrapper = search.closest("[data-slot=dropdown-search-input-wrapper]");
+    const frame = search.closest("[data-slot=input-group]");
+    expect(wrapper?.className).toContain("p-0");
+    expect(wrapper?.className).toContain("pb-1");
+    expect(frame?.className).toContain("h-7");
+  });
+
   test("selecting a reasoning effort updates cli type and effort", () => {
     const onChange = vi.fn();
     const onCliEffortChange = vi.fn();

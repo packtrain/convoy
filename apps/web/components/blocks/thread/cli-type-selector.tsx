@@ -390,6 +390,9 @@ export function CliTypeSelector({
       <DropdownSearchInput
         value={modelSearch}
         placeholder="Search models…"
+        // Match DropdownMenuItem rows: menu already pads p-1, rows are h-7 with px-1.5; pb-1 spaces the first row.
+        wrapperClassName="p-0 pb-1"
+        className="h-7 *:data-[slot=input-group-addon]:pl-1.5"
         onChange={(event) => setModelSearch(event.target.value)}
         onKeyDown={(event) => {
           // Keep typing out of the menu's typeahead; Escape still

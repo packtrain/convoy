@@ -18,6 +18,8 @@ interface DropdownSearchInputBaseProps {
   inputClassName?: string;
   onClear?: () => void;
   showClearButton?: boolean;
+  /** Overrides the wrapper's `p-1 pb-0` inset, e.g. inside an already padded menu. */
+  wrapperClassName?: string;
 }
 
 type NativeDropdownSearchInputProps = DropdownSearchInputBaseProps &
@@ -46,9 +48,10 @@ function DropdownSearchInputFrame({
   clearLabel,
   onClear,
   showClearButton,
+  wrapperClassName,
 }: DropdownSearchInputBaseProps & { children: ReactNode }) {
   return (
-    <div data-slot="dropdown-search-input-wrapper" className="p-1 pb-0">
+    <div data-slot="dropdown-search-input-wrapper" className={cn("p-1 pb-0", wrapperClassName)}>
       <InputGroup
         className={cn(
           "rounded-none border-0 bg-transparent shadow-none transition-none dark:bg-transparent has-[[data-slot=input-group-control]:focus-visible]:border-transparent has-[[data-slot=input-group-control]:focus-visible]:ring-0",
@@ -91,6 +94,7 @@ export function DropdownSearchInput(props: DropdownSearchInputProps) {
       mode,
       onClear,
       showClearButton = false,
+      wrapperClassName,
       ...inputProps
     } = props;
 
@@ -100,6 +104,7 @@ export function DropdownSearchInput(props: DropdownSearchInputProps) {
         clearLabel={clearLabel}
         onClear={onClear}
         showClearButton={showClearButton}
+        wrapperClassName={wrapperClassName}
       >
         <CommandPrimitive.Input
           data-slot="input-group-control"
@@ -121,6 +126,7 @@ export function DropdownSearchInput(props: DropdownSearchInputProps) {
     mode,
     onClear,
     showClearButton = false,
+    wrapperClassName,
     ...inputProps
   } = props;
 
@@ -130,6 +136,7 @@ export function DropdownSearchInput(props: DropdownSearchInputProps) {
       clearLabel={clearLabel}
       onClear={onClear}
       showClearButton={showClearButton}
+      wrapperClassName={wrapperClassName}
     >
       <InputGroupInput
         type="text"
