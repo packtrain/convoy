@@ -3,7 +3,7 @@
 import { useCallback, useEffect, useState } from "react";
 import { useAction, useMutation } from "convex/react";
 import type { FunctionReturnType } from "convex/server";
-import { LockKeyhole, Plus, RefreshCw, RotateCcw } from "lucide-react";
+import { ExternalLink, LockKeyhole, RefreshCw, RotateCcw } from "lucide-react";
 import { api } from "@/convex/_generated/api";
 import type { Id } from "@/convex/_generated/dataModel";
 import { Button } from "@/components/ui/button";
@@ -47,38 +47,40 @@ export function RepositoryPickerDialog({
   const active = connections.filter((connection) => connection.status === "active");
   const activeIds = new Set(active.map((connection) => connection.repository.providerRepositoryId));
   const [listed, setRepositories] = useState<Candidate[] | null>(null);
-  const [nextCursor, setNextCursor] = useState<string | null>(null);
   const [loadError, setLoadError] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
   const [selected, setSelected] = useState<Set<number>>(() => new Set(activeIds));
   const [shareConsent, setShareConsent] = useState(false);
   const [connecting, setConnecting] = useState(false);
 
-  const fetchPage = useCallback(
-    (cursor?: string) =>
-      listRepositories({ setupId, cursor })
-        .then((page) => {
-          setRepositories((current) => (cursor !== undefined && current ? [...current, ...page.repositories] : page.repositories));
-          setNextCursor(page.nextCursor);
-        })
-        .catch((error: unknown) => setLoadError(getErrorMessage(error, "Could not load your GitHub repositories")))
-        .finally(() => setLoading(false)),
-    [listRepositories, setupId]
-  );
+  // Follows every cursor (one per App installation page) and lists all at once, so a reload never shrinks the list.
+  const fetchAll = useCallback(async () => {
+    try {
+      const all: Candidate[] = [];
+      let cursor: string | undefined;
+      do {
+        const page = await listRepositories({ setupId, cursor });
+        all.push(...page.repositories);
+        cursor = page.nextCursor ?? undefined;
+      } while (cursor);
+      setRepositories(all);
+    } catch (error) {
+      setLoadError(getErrorMessage(error, "Could not load your GitHub repositories"));
+    } finally {
+      setLoading(false);
+    }
+  }, [listRepositories, setupId]);
 
-  // One request at a time: Load more stays disabled until it settles.
-  const load = useCallback(
-    (cursor?: string) => {
-      setLoading(true);
-      setLoadError(null);
-      void fetchPage(cursor);
-    },
-    [fetchPage]
-  );
+  // One request chain at a time: Refresh and the focus reload wait until it settles.
+  const load = useCallback(() => {
+    setLoading(true);
+    setLoadError(null);
+    void fetchAll();
+  }, [fetchAll]);
 
   useEffect(() => {
-    void fetchPage();
-  }, [fetchPage]);
+    void fetchAll();
+  }, [fetchAll]);
 
   // Installing the App happens in a GitHub tab; coming back reloads the list.
   useEffect(() => {
@@ -191,14 +193,9 @@ export function RepositoryPickerDialog({
           {installUrl ? (
             <Button variant="outline" size="sm" asChild>
               <a href={installUrl} target="_blank" rel="noreferrer">
-                <Plus />
-                Add repository
+                <ExternalLink />
+                Manage access on GitHub
               </a>
-            </Button>
-          ) : null}
-          {nextCursor ? (
-            <Button variant="outline" size="sm" disabled={loading} onClick={() => load(nextCursor)}>
-              Load more
             </Button>
           ) : null}
           {repositories?.length ? (

@@ -841,15 +841,18 @@ manage it.
    derived from the App's client secret) until the setup ends.
 3. The GitHub integration page opens the repository picker
    (`?setup=<id>`, `appRoute.projectGithubIntegration`). It lists the
-   repositories of the App installations the user can reach, 30 at a time;
-   ones the user does not administer are disabled, grouped by owner, with the
-   project's connected repositories checked. **Add repository** opens
+   repositories of every App installation the user can reach. The server
+   pages 30 at a time, one installation after another; the picker follows
+   every cursor and shows the whole list at once, with no Load more, so the
+   user who just granted access sees every repository without another click.
+   Ones the user does not administer are disabled, grouped by owner, with the
+   project's connected repositories checked. **Manage access on GitHub** opens
    the App's install page in a new tab, where the user installs the App or
    adds repositories to it. The App's Setup URL is the callback page (with
    Redirect on update on), which says the install is done and closes its tab
    when the browser allows; returning to the Convoy tab reloads the list.
    With repositories listed, a Refresh icon reloads them too; with none yet,
-   Add repository is the dialog's only action.
+   Manage access on GitHub is the dialog's only action.
 4. **Save repositories** applies the selection in one transaction: it
    disconnects the connected repositories the user unchecked (a Convoy check
    only, so a repository the user no longer administers on GitHub, or cannot

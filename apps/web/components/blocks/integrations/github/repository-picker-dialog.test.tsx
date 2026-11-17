@@ -72,27 +72,26 @@ function renderPicker(connections: ReturnType<typeof connection>[] = [], onClose
 const consent = () => screen.getByRole("checkbox", { name: /Every member of this project/ });
 
 describe("RepositoryPickerDialog", () => {
-  test("Load more appends the next page once, even on a double click", async () => {
-    listRepositoriesMock.mockResolvedValueOnce({ repositories: [repo(1)], nextCursor: "0:2" });
+  test("loads every page before listing, with no Load more, even if the tab regains focus", async () => {
+    const second = deferred<{ repositories: ReturnType<typeof repo>[]; nextCursor: null }>();
+    listRepositoriesMock
+      .mockResolvedValueOnce({ repositories: [repo(1)], nextCursor: "1:1" })
+      .mockReturnValueOnce(second.promise);
     renderPicker();
-    await screen.findByRole("checkbox", { name: /acme\/repo-1/ });
-
-    const next = deferred<{ repositories: ReturnType<typeof repo>[]; nextCursor: null }>();
-    listRepositoriesMock.mockReturnValueOnce(next.promise);
-    const loadMore = screen.getByRole("button", { name: "Load more" });
-    fireEvent.click(loadMore);
-    fireEvent.click(loadMore);
+    await waitFor(() => expect(listRepositoriesMock).toHaveBeenCalledTimes(2));
     fireEvent.focus(window);
-    next.resolve({ repositories: [repo(2)], nextCursor: null });
+    second.resolve({ repositories: [repo(2)], nextCursor: null });
     await screen.findByRole("checkbox", { name: /acme\/repo-2/ });
+    expect(listRepositoriesMock).toHaveBeenLastCalledWith({ setupId: "setup_1", cursor: "1:1" });
     expect(listRepositoriesMock).toHaveBeenCalledTimes(2);
     expect(screen.getAllByRole("checkbox", { name: /acme\/repo/ })).toHaveLength(2);
+    expect(screen.queryByRole("button", { name: "Load more" })).toBeNull();
   });
 
-  test("no repositories yet: one Add repository action that opens the App install page", async () => {
+  test("no repositories yet: one Manage access on GitHub action that opens the App install page", async () => {
     listRepositoriesMock.mockResolvedValueOnce({ repositories: [], nextCursor: null });
     renderPicker();
-    const add = await screen.findByRole("link", { name: "Add repository" });
+    const add = await screen.findByRole("link", { name: "Manage access on GitHub" });
     expect(add.getAttribute("href")).toBe(INSTALL_URL);
     expect(add.getAttribute("target")).toBe("_blank");
     expect(screen.queryByRole("button", { name: "Refresh" })).toBeNull();
@@ -102,18 +101,18 @@ describe("RepositoryPickerDialog", () => {
   test("returning to the tab reloads the list", async () => {
     listRepositoriesMock.mockResolvedValueOnce({ repositories: [], nextCursor: null });
     renderPicker();
-    await screen.findByRole("link", { name: "Add repository" });
+    await screen.findByRole("link", { name: "Manage access on GitHub" });
     listRepositoriesMock.mockResolvedValueOnce({ repositories: [repo(3)], nextCursor: null });
     fireEvent.focus(window);
     await screen.findByRole("checkbox", { name: /acme\/repo-3/ });
-    expect(screen.getByRole("link", { name: "Add repository" })).toBeTruthy();
+    expect(screen.getByRole("link", { name: "Manage access on GitHub" })).toBeTruthy();
   });
 
-  test("with repositories listed, a Refresh icon reloads them next to an outlined Add repository", async () => {
+  test("with repositories listed, a Refresh icon reloads them next to an outlined Manage access on GitHub", async () => {
     listRepositoriesMock.mockResolvedValueOnce({ repositories: [repo(1)], nextCursor: null });
     renderPicker();
     await screen.findByRole("checkbox", { name: /acme\/repo-1/ });
-    expect(screen.getByRole("link", { name: "Add repository" }).getAttribute("data-variant")).toBe("outline");
+    expect(screen.getByRole("link", { name: "Manage access on GitHub" }).getAttribute("data-variant")).toBe("outline");
 
     listRepositoriesMock.mockResolvedValueOnce({ repositories: [repo(1), repo(4)], nextCursor: null });
     fireEvent.click(screen.getByRole("button", { name: "Refresh" }));
