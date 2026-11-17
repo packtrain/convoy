@@ -163,8 +163,8 @@ function quoteLines(hunk: string, side: "old" | "new", count: number): QuoteLine
   return lines.slice(-Math.max(1, count));
 }
 
-/** GitHub's PR, commits, reviews, comments, check runs, combined status, and compare, narrowed for the Overview. */
-export function normalizeOverview(raw: {
+/** GitHub's PR, commits, reviews, comments, check runs, combined status, and compare, narrowed for the Overview. `appId` marks Convoy's own runs. */
+export function normalizeOverview(appId: string, raw: {
   pr: unknown;
   commits: unknown;
   reviews: unknown;
@@ -184,6 +184,7 @@ export function normalizeOverview(raw: {
       state: checkRunState(run),
       summary: text(output.title) || text(run.conclusion) || text(run.status),
       url: text(run.html_url) || text(run.details_url) || null,
+      fromConvoy: String(record(run.app ?? {}).id) === appId,
     };
   });
   const statuses = list(record(raw.status).statuses ?? []).map((value) => {
@@ -194,6 +195,7 @@ export function normalizeOverview(raw: {
       state: statusState(str(status.state)),
       summary: text(status.description),
       url: text(status.target_url) || null,
+      fromConvoy: false,
     };
   });
   return {

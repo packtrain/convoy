@@ -2,6 +2,7 @@ import type { Doc, Id } from "../../../_generated/dataModel";
 import type { MutationCtx, QueryCtx } from "../../../_generated/server";
 import type { PaginationOptions, PaginationResult } from "convex/server";
 import type { IntegrationProvider } from "../../../lib/contracts/integrations";
+import { isSameRepository } from "../../../lib/contracts/github";
 
 type Ctx = QueryCtx | MutationCtx;
 
@@ -16,6 +17,19 @@ export type RepositoryDetails = Pick<Doc<"integrationRepositories">, "owner" | "
 
 export async function getRepositoryById(ctx: Ctx, id: Id<"integrationRepositories">): Promise<Doc<"integrationRepositories"> | null> {
   return ctx.db.get("integrationRepositories", id);
+}
+
+/** The link and repository among `links` that hold the named repository. */
+export async function findLinkedRepository(
+  ctx: Ctx,
+  links: Doc<"integrationRepositoryLinks">[],
+  pr: { owner: string; name: string }
+): Promise<{ link: Doc<"integrationRepositoryLinks">; repository: Doc<"integrationRepositories"> } | null> {
+  for (const link of links) {
+    const repository = await getRepositoryById(ctx, link.repositoryId);
+    if (repository && isSameRepository(repository, pr)) return { link, repository };
+  }
+  return null;
 }
 
 /** A repository id from a URL, or null when it names no repository row. */

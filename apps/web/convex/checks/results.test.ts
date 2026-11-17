@@ -3,7 +3,9 @@ import { afterEach, beforeEach, describe, expect, test, vi } from "vitest";
 import { api, internal } from "../_generated/api";
 import type { Id } from "../_generated/dataModel";
 import { createTestContext } from "../../convex-testing";
-import { connectedProject, stubGithubAppEnv } from "../../convex-testing/github";
+import { connectedProject, drain, stubGithubAppEnv } from "../../convex-testing/github";
+import { errors as githubErrors } from "../integrations/github/errors";
+import { getAppUrlBase } from "../lib/shared/appUrl";
 import { deleteStorageIfUnreferenced } from "../lib/storageRepo";
 
 /** A feature task with the Feature checklist, a thread attached to it, and a live run. */
@@ -438,7 +440,7 @@ describe("pull request checks (OS-2400)", () => {
       userMessageIds: [message._id],
       apiKey,
     });
-    const attach = (check: { key: string; status: "passed" | "failed"; note?: string }) =>
+    const attach = (check: { key: string; status: "passed" | "warning" | "failed" | "not_performed"; note?: string; label?: string; value?: string }) =>
       t.mutation(api.cli.messages.attachToResponse, {
         threadId,
         messageId: started.assistantMessageId,
@@ -584,6 +586,117 @@ describe("pull request checks (OS-2400)", () => {
     const card = await asUser.query(api.checks.checklists.getForPullRequest, { projectId: project._id, ...PR_1 });
     expect(card?.checks.find((check) => check.key === "risk")?.results).toHaveLength(1);
     expect(threadId).toBeDefined();
+  });
+
+  test("each result publishes a check run named by its Check on its head; the Overview's GitHub checks leave them out (OS-2401)", async () => {
+    const { t, project, asUser, repositoryId, github, attach } = await setupChecksRun();
+    github.state.pulls.get(1)![0].checkRuns = [{ id: 1, name: "ci", status: "completed", conclusion: "success", app: { id: 999 } }];
+    for (const [key, label] of [["tests", "Tests"], ["docs", "Docs"]]) {
+      await asUser.mutation(api.checks.definitions.create, { projectId: project._id, key, label, instruction: "" });
+    }
+    await attach({ key: "risk", status: "passed", value: "Low" });
+    await attach({ key: "backend", status: "warning", note: "One new index" });
+    await attach({ key: "tests", status: "failed", note: "2 failing" });
+    await attach({ key: "docs", status: "not_performed", note: "No docs here" });
+    await drain(t, 5_000);
+
+    // The four publishes run in parallel, so GitHub sees them in any order.
+    const runs = github.state.createdCheckRuns.map(({ head_sha, name, conclusion, output }) => [head_sha, name, conclusion, output]);
+    expect(runs).toHaveLength(4);
+    expect(runs).toEqual(
+      expect.arrayContaining([
+        ["head-1", "Label risk", "success", { title: "Low", summary: "Low" }],
+        ["head-1", "Label backend", "neutral", { title: "Warning", summary: "One new index" }],
+        ["head-1", "Tests", "failure", { title: "Failed", summary: "2 failing" }],
+        ["head-1", "Docs", "skipped", { title: "Not performed", summary: "No docs here" }],
+      ])
+    );
+    const overview = await asUser.action(api.integrations.github.pullRequests.readOverview, {
+      projectId: project._id,
+      repositoryId,
+      number: 1,
+      baseSha: "base",
+      headSha: "head-1",
+    });
+    // Flagged, not dropped: the GitHub checks card hides them, Merge status counts them as GitHub does.
+    expect(overview.checks.filter((check) => !check.fromConvoy).map((check) => check.name)).toEqual(["ci"]);
+    expect(overview.checks.filter((check) => check.fromConvoy)).toHaveLength(4);
+
+    // GitHub orders runs by report time, keys them by Check, and links Details to the PR in Convoy.
+    const risk = github.state.createdCheckRuns.find((run) => run.name === "Label risk")!;
+    const result = await t.run((run) => run.db.query("checkResults").filter((q) => q.eq(q.field("checkKey"), "risk")).first());
+    expect(risk.completed_at).toBe(new Date(result!.reportedAt).toISOString());
+    expect(risk.external_id).toBe("risk");
+    const org = await t.run((run) => run.db.get("organizations", project.organizationId));
+    expect(risk.details_url).toBe(`${getAppUrlBase()}/o/${org!.slug}/${project.alias}/pull-requests?repo=${repositoryId}&pr=1`);
+  });
+
+  test("an off-catalog result stays in Convoy: the agent cannot name a check run on GitHub (OS-2401)", async () => {
+    const { t, project, asUser, github, attach } = await setupChecksRun();
+    await attach({ key: "build", status: "passed", label: "build" });
+    await drain(t, 5_000);
+    expect(github.state.createdCheckRuns).toEqual([]);
+    const card = await asUser.query(api.checks.checklists.getForPullRequest, { projectId: project._id, ...PR_1 });
+    expect(card?.checks.find((check) => check.key === "build")?.results[0]?.githubPublishError).toBeUndefined();
+  });
+
+  test("each GitHub failure records its own reason (OS-2401)", async () => {
+    const { t, github, attach } = await setupChecksRun();
+    const cases: [RegExp, number, string][] = [
+      [/^POST \/app\/installations\/77\/access_tokens$/, 422, githubErrors.CHECK_RUN_REFUSED],
+      [/^POST \/repositories\/1\/check-runs$/, 404, githubErrors.ACCESS_REMOVED],
+      [/^POST \/repositories\/1\/check-runs$/, 429, githubErrors.GITHUB_RATE_LIMITED],
+      [/^POST \/repositories\/1\/check-runs$/, 502, githubErrors.GITHUB_UNAVAILABLE],
+    ];
+    for (const [match, status, reason] of cases) {
+      github.state.failures.push({ match, status });
+      await attach({ key: "risk", status: "passed" });
+      await drain(t, 3_000);
+      const result = await t.run((run) => run.db.query("checkResults").order("desc").first());
+      expect([status, result?.githubPublishError]).toEqual([status, reason]);
+    }
+    expect(github.state.createdCheckRuns).toEqual([]);
+  });
+
+  test("a publish GitHub refuses keeps the result and shows why on the card; the next run publishes again (OS-2401)", async () => {
+    const { t, project, asUser, github, attach } = await setupChecksRun();
+    github.state.failures.push({ match: /^POST \/repositories\/1\/check-runs$/, status: 403 });
+    await attach({ key: "risk", status: "failed", note: "Touches auth" });
+    await drain(t, 5_000);
+    const refused = await asUser.query(api.checks.checklists.getForPullRequest, { projectId: project._id, ...PR_1 });
+    expect(refused?.checks[0]?.results.map((result) => [result.status, result.githubPublishError])).toEqual([
+      ["failed", githubErrors.CHECK_RUN_REFUSED],
+    ]);
+    expect(github.state.createdCheckRuns).toEqual([]);
+
+    await attach({ key: "risk", status: "passed" });
+    await drain(t, 5_000);
+    const rerun = await asUser.query(api.checks.checklists.getForPullRequest, { projectId: project._id, ...PR_1 });
+    expect(rerun?.checks[0]?.results.map((result) => [result.status, result.githubPublishError])).toEqual([
+      ["passed", undefined],
+      ["failed", githubErrors.CHECK_RUN_REFUSED],
+    ]);
+    expect(github.state.createdCheckRuns.map((run) => run.conclusion)).toEqual(["success"]);
+  });
+
+  test("a body GitHub rejects is logged with its status, since nothing else sees it (OS-2401)", async () => {
+    const { t, github, attach } = await setupChecksRun();
+    const logged = vi.spyOn(console, "error").mockImplementation(() => {});
+    github.state.failures.push({ match: /^POST \/repositories\/1\/check-runs$/, status: 422 });
+    await attach({ key: "risk", status: "passed" });
+    await drain(t, 3_000);
+    expect(logged).toHaveBeenCalledWith("Publishing a check run failed", expect.objectContaining({ status: 422 }));
+    logged.mockRestore();
+  });
+
+  test("a repository disconnected before the publish runs records why instead of calling GitHub (OS-2401)", async () => {
+    const { t, github, repositoryLinkId, attach } = await setupChecksRun();
+    await attach({ key: "risk", status: "passed" });
+    await t.run((run) => run.db.patch("integrationRepositoryLinks", repositoryLinkId, { status: "disconnected" }));
+    await drain(t, 5_000);
+    const result = await t.run((run) => run.db.query("checkResults").first());
+    expect(result?.githubPublishError).toBe(githubErrors.NOT_CONNECTED);
+    expect(github.state.createdCheckRuns).toEqual([]);
   });
 
   test("the list takes at most 100 refs a call", async () => {

@@ -3,8 +3,8 @@ import type { MutationCtx, QueryCtx } from "../../../_generated/server";
 import type { PaginationOptions, PaginationResult } from "convex/server";
 import { mergedStream, stream } from "convex-helpers/server/stream";
 import schema from "../../../schema";
-import { isSameRepository, type NormalizedPullRequest, type PullRequestState } from "../../../lib/contracts/github";
-import { getRepositoryById } from "./integrationRepositoriesRepo";
+import { type NormalizedPullRequest, type PullRequestState } from "../../../lib/contracts/github";
+import { findLinkedRepository } from "./integrationRepositoriesRepo";
 
 type Ctx = QueryCtx | MutationCtx;
 
@@ -25,13 +25,8 @@ export async function findLinkedPullRequest(
   links: Doc<"integrationRepositoryLinks">[],
   pr: { owner: string; name: string; number: number }
 ): Promise<Doc<"integrationPullRequests"> | null> {
-  for (const link of links) {
-    const repository = await getRepositoryById(ctx, link.repositoryId);
-    if (repository && isSameRepository(repository, pr)) {
-      return getPullRequestByNumber(ctx, repository._id, pr.number);
-    }
-  }
-  return null;
+  const linked = await findLinkedRepository(ctx, links, pr);
+  return linked ? getPullRequestByNumber(ctx, linked.repository._id, pr.number) : null;
 }
 
 export type PullRequestListOptions = {

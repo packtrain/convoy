@@ -51,7 +51,7 @@ export type FakePullRequest = {
     created_at: string;
     diff_hunk?: string;
   }[];
-  checkRuns?: { id: number; name: string; status: string; conclusion: string | null; title?: string }[];
+  checkRuns?: { id: number; name: string; status: string; conclusion: string | null; title?: string; app?: { id: number } }[];
   statuses?: { id: number; context: string; state: string; description: string }[];
   behindBy?: number;
 };
@@ -132,6 +132,19 @@ export function createFakeGithub() {
     searches: [] as string[],
     extraSearchItems: [] as unknown[],
     searchIncomplete: false,
+    /** Check runs Convoy created, by repository; the commit's check-runs list returns them too. */
+    createdCheckRuns: [] as {
+      id: number;
+      repositoryId: number;
+      head_sha: string;
+      name: string;
+      conclusion: string;
+      completed_at: string;
+      external_id: string;
+      details_url: string;
+      output: { title: string; summary: string };
+      app: { id: number };
+    }[],
   };
 
   function addRepository(repo: Partial<FakeRepository> & { id: number }, pulls: FakePullRequest[] = []) {
@@ -303,11 +316,24 @@ export function createFakeGithub() {
         ? json(200, (pr.comments ?? []).map((comment) => ({ ...comment, user: githubUser(comment.login), html_url: `https://github.com/c/${comment.id}` })))
         : json(404, {});
     }
+    match = /^\/repositories\/(\d+)\/check-runs$/.exec(path);
+    if (match && method === "POST") {
+      if (granted?.checks !== "write") return json(403, { message: "Resource not accessible by integration" });
+      const body = JSON.parse(String(init?.body)) as Omit<(typeof state.createdCheckRuns)[number], "id" | "repositoryId" | "app">;
+      const run = { ...body, id: 9000 + state.createdCheckRuns.length, repositoryId: Number(match[1]), app: { id: 123 } };
+      state.createdCheckRuns.push(run);
+      return json(201, { id: run.id });
+    }
     match = /^\/repositories\/(\d+)\/commits\/([^/]+)\/(check-runs|status)$/.exec(path);
     if (match) {
       const pr = pullForSha(Number(match[1]), match[2]);
       if (match[3] === "status") return json(200, { statuses: pr?.statuses ?? [] });
-      return json(200, { check_runs: (pr?.checkRuns ?? []).map((run) => ({ ...run, output: { title: run.title ?? null }, html_url: `https://github.com/runs/${run.id}` })) });
+      const created = state.createdCheckRuns
+        .filter((run) => run.repositoryId === Number(match![1]) && run.head_sha === match![2])
+        .map((run) => ({ id: run.id, name: run.name, status: "completed", conclusion: run.conclusion, title: run.output.title, app: run.app }));
+      return json(200, {
+        check_runs: [...(pr?.checkRuns ?? []), ...created].map((run) => ({ ...run, output: { title: run.title ?? null }, html_url: `https://github.com/runs/${run.id}` })),
+      });
     }
     match = /^\/repositories\/(\d+)\/compare\/([^.]+)\.\.\.(.+)$/.exec(path);
     if (match) {

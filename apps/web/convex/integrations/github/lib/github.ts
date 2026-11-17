@@ -99,17 +99,22 @@ export async function createAppJwt(config: GithubAppConfig, now = Date.now()): P
 /** Every read Convoy makes: PRs and their comments, check runs, commit statuses, and compare/file contents. */
 const READ_PERMISSIONS = { pull_requests: "read", checks: "read", statuses: "read", contents: "read", metadata: "read" };
 
-/** Read-only installation token scoped to one repository. Fails when the installation lost it. */
-/** An installation token limited to the given repositories. */
+/** An installation token limited to the given repositories, read-only. */
 export async function mintRepositoryToken(config: GithubAppConfig, installationId: number, ...providerRepositoryIds: number[]) {
+  return mintToken(config, installationId, providerRepositoryIds, READ_PERMISSIONS);
+}
+
+/** A token that can only publish check runs on one repository (Pull request checks, OS-2401). */
+export async function mintCheckRunToken(config: GithubAppConfig, installationId: number, providerRepositoryId: number) {
+  return mintToken(config, installationId, [providerRepositoryId], { checks: "write", metadata: "read" });
+}
+
+async function mintToken(config: GithubAppConfig, installationId: number, repositoryIds: number[], permissions: Record<string, string>) {
   const response = record(
     await githubFetch(
       `/app/installations/${installationId}/access_tokens`,
       { appJwt: await createAppJwt(config) },
-      {
-        method: "POST",
-        body: { repository_ids: providerRepositoryIds, permissions: READ_PERMISSIONS },
-      }
+      { method: "POST", body: { repository_ids: repositoryIds, permissions } }
     )
   );
   return str(response.token);

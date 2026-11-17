@@ -44,6 +44,8 @@ export function ChecksCard({
   const shown = showSettled ? rows : rows.filter((row) => !SETTLED.has(row.status));
   const checklist = data.checklists.find((candidate) => candidate._id === data.checklistId)?.name;
   const outdated = data.checks.some((check) => isOutdated(data, check.results[0]));
+  // Shown in the header too, since a passed row stays folded (OS-2401).
+  const unpublished = data.checks.some((check) => check.results[0]?.githubPublishError);
   const failed = rows.filter((row) => row.status === "failed").map(({ check }) => ({ label: check.label, note: check.results[0]?.note }));
   return (
     <div className="overflow-hidden rounded-lg border">
@@ -54,7 +56,7 @@ export function ChecksCard({
         <div className="flex min-w-0 flex-col">
           <span className="text-sm font-medium tabular-nums">{typeof title === "function" ? title(count) : title}</span>
           <span className="truncate text-xs text-muted-foreground tabular-nums">
-            {[typeof title === "function" ? null : `${count} passed`, checklist, rest, outdated ? "Outdated" : null].filter(Boolean).join(" · ")}
+            {[typeof title === "function" ? null : `${count} passed`, checklist, rest, outdated ? "Outdated" : null, unpublished ? "Not on GitHub" : null].filter(Boolean).join(" · ")}
           </span>
         </div>
         <div className="relative z-10 ml-auto flex shrink-0 items-center gap-1">

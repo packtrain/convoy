@@ -154,16 +154,17 @@ function CommitsCard({ overview }: { overview: PullRequestOverview }) {
   );
 }
 
-/** Only failing and pending rows until the header unfolds the passed ones. */
+/** Only failing and pending rows until the header unfolds the passed ones. Convoy's own runs show in the Pull request checks card. */
 function GithubChecksCard({ overview, onFix }: { overview: PullRequestOverview; onFix?: (text: string) => void }) {
   const [open, setOpen] = useState(false);
-  const rollup = checksRollup(overview.checks);
-  const failed = overview.checks.filter((check) => check.state === "failure");
-  const rows = open ? overview.checks : overview.checks.filter((check) => check.state !== "success");
+  const checks = overview.checks.filter((check) => !check.fromConvoy);
+  const rollup = checksRollup(checks);
+  const failed = checks.filter((check) => check.state === "failure");
+  const rows = open ? checks : checks.filter((check) => check.state !== "success");
   return (
     <FoldCard
       icon={ROLLUP_ICONS[rollup.state]}
-      title={`GitHub checks: ${rollup.passed}/${overview.checks.length}`}
+      title={`GitHub checks: ${rollup.passed}/${checks.length}`}
       subtitle={rollup.body}
       label={rollup.passed ? `${rollup.passed} passed checks` : undefined}
       open={open}

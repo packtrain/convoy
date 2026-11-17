@@ -1,6 +1,7 @@
 import { ConvexError, v } from "convex/values";
 import type { Doc, Id } from "../_generated/dataModel";
 import { internalMutation, query, type MutationCtx, type QueryCtx } from "../_generated/server";
+import { internal } from "../_generated/api";
 import { getOptionalAuthenticatedAccess } from "../lib/access/auth";
 import { authorizeProjectAccess, hasProjectAccess, type ProjectAccessPrincipal } from "../lib/access/permissions";
 import { ProjectPermission } from "../../lib/authz/permissions";
@@ -12,7 +13,7 @@ import { getArtifactById, normalizeTaskArtifactId } from "../tasks/lib/taskArtif
 import { errors } from "./errors";
 import { MAX_CHECK_NOTE_LENGTH, MAX_CHECK_VALUE_LENGTH, MAX_PULL_REQUEST_LIST_CHECKS, MAX_PULL_REQUEST_LIST_REFS } from "./lib/constants";
 import { findCheckDefinitionByKey, listCheckDefinitionsByProject } from "./lib/checkDefinitionsRepo";
-import { findLatestPullRequestResult, getCheckResultById, insertCheckResult } from "./lib/checkResultsRepo";
+import { findLatestPullRequestResult, getCheckResultById, insertCheckResult, patchCheckResult } from "./lib/checkResultsRepo";
 import { listChecklistsByProject } from "./lib/checklistsRepo";
 import { validateCheckKey, validateCheckLabel } from "./lib/naming";
 import { parseAttachedPullRequest } from "../lib/contracts/github";
@@ -53,7 +54,7 @@ export const report = internalMutation({
     }
     const label = definition?.label ?? validateCheckLabel(check.label ?? "");
 
-    return insertCheckResult(ctx, {
+    const resultId = await insertCheckResult(ctx, {
       ...args,
       checkKey,
       label,
@@ -63,6 +64,24 @@ export const report = internalMutation({
       artifactId: artifact?._id,
       artifactName: artifact?.name,
     });
+    // An action, so `report` stays a mutation and a GitHub failure never rolls the result back (OS-2401).
+    // Catalog Checks only: an off-catalog label is the agent's, and must not name a check run on GitHub.
+    if (args.pullRequest && definition) {
+      await ctx.scheduler.runAfter(0, internal.integrations.github.checkRuns.publish, { resultId });
+    }
+    return resultId;
+  },
+});
+
+/** Why a PR result is not on GitHub, for the card. */
+export const recordGithubPublishError = internalMutation({
+  args: { resultId: v.id("checkResults"), error: v.string() },
+  returns: v.null(),
+  handler: async (ctx, { resultId, error }) => {
+    if (await getCheckResultById(ctx, resultId)) {
+      await patchCheckResult(ctx, resultId, { githubPublishError: error });
+    }
+    return null;
   },
 });
 

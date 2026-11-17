@@ -163,7 +163,11 @@ PR also gets a Conflicts card above the check cards, with Fix (a drafted
 GitHub checks are the head commit's check runs and commit statuses in one
 list, as GitHub shows them: each with its state, name, summary, and a
 Details link to its own page, under GitHub's rollup ("1 failing and 3
-successful checks"). The Overview shows them in the main column under
+successful checks"). The Overview's GitHub checks card leaves out Convoy's own
+check runs (its App's, from Pull request checks), since the Pull request
+checks card already shows them. The Merge status button and popover keep
+them, as GitHub's merge box does, so a failed Pull request check there reads
+the same as on github.com (`fromConvoy` on each check). The Overview shows them in the main column under
 the description, and the Merge status popover shows them too. A failing or pending
 check warns in the merge confirmation but does not disable Merge; required
 checks block only through the merge state GitHub reports.
@@ -439,8 +443,8 @@ writes itself, label and instruction, and the agent answers each with
 passed, warning, failed, or not performed, a justification, and Evidence. Convoy adds
 no verdict, size label, or rollup of its own beyond the pass count.
 
-Status: the run, results, card, and list icons are built (OS-2400).
-Publishing to GitHub is next (OS-2401).
+Status: built. The run, results, card, and list icons (OS-2400), and
+publishing to GitHub (OS-2401).
 
 - They come from the project's check catalog. The Checks settings
   "Defaults" popup has a Pull requests row after the task types; at most one
@@ -494,9 +498,45 @@ Publishing to GitHub is next (OS-2401).
   thread later. The thread's Checks tab, `convoy threads checks`, and MCP
   `get_checks` read the PR's Checks (`getForThread`), so the CLI needs no
   change. Deleting the thread keeps them.
-- Each run publishes to GitHub as a check run (Checks: write), with
-  `warning` as the `neutral` conclusion ([task-checks.md](task-checks.md#statuses)), so results
-  also show on github.com and can feed branch protection.
+- Each result publishes to GitHub as its own check run on the result's head
+  commit, never one run for the whole checklist: one run would need an overall
+  conclusion, a verdict Convoy doesn't give, and a run per Check lets branch
+  protection require one Check. The run is named by the Check's label, its
+  conclusion maps the status ([task-checks.md](task-checks.md#statuses)), its
+  title is the value (or the status, "Failed", without one), and its summary
+  is the note (or the title). GitHub renders the summary as Markdown, so a
+  note's single line breaks merge there and bare `<tags>` drop out. Its
+  `external_id` is the Check's key, its `started_at` and `completed_at` the
+  report time, and its Details link the PR's page in Convoy.
+  - Only Checks in the project's catalog publish. An off-catalog result's
+    label comes from the agent, which reads PR text the author controls, so
+    publishing it would let a PR name a green check run on its own commit.
+    Off-catalog results stay in Convoy.
+  - Renaming a Check leaves the runs under its old name on commits already
+    checked, and a branch protection rule on the old name waits for it.
+  - A label CI also uses ("Tests") gives the commit two runs of that name from
+    two Apps. Pin a required check to the Convoy App, or pick labels CI does
+    not use.
+  - `checks.results.report` stays a mutation and schedules
+    `integrations.github.checkRuns.publish`, an internal action that mints a
+    token with only Checks: write on the result's repository and creates the
+    run. Every report creates a new run; GitHub shows the newest run of a name
+    on a commit by `completed_at`, so a rerun replaces the earlier one there
+    even when the two publishes land out of order.
+  - A failure never rolls back the result. The action stores why on the result
+    (`checkResults.githubPublishError`): the repository is no longer connected,
+    GitHub refused (a 403, or a token mint answering 422: "GitHub refused the
+    check run. The Convoy GitHub App needs Checks: write on this repository."),
+    GitHub access to the repository was removed (404), or GitHub is down or
+    limiting. The row
+    shows a Not on GitHub badge with the reason, and the card's subtitle says
+    Not on GitHub, since a passed row stays folded. There is no retry: the
+    next run publishes again.
+  - A push leaves the new commit without Convoy's runs until the checks run
+    on it.
+  - Known ceiling: the Overview reads the first 100 check runs of the head
+    and drops Convoy's afterwards, so on a commit with more than 100 runs
+    Convoy's can push CI runs off the GitHub checks card.
 - The PR page shows them as a card before GitHub checks: "Pull request
   checks: 2/3", the checklist and the "1 failed" tail, passed and warning rows
   folded until the header is clicked. It reuses the Evidence card and
@@ -569,12 +609,16 @@ branch deletion), Checks write (publishing Pull request checks), plus read
 access to commit statuses.
 Changing an App's permissions later makes every connected organization's
 owner re-approve, and an organization whose owner never approves quietly
-stops working. The install screen explains that writes always act as the
-member's own account. Installation credentials read and synchronize;
-user-to-server tokens from each member's Linked GitHub account write.
+stops working. The install screen explains that writes act as the member's
+own account, except check runs: only an App can create them, so Convoy
+publishes Pull request checks as itself for any member who can run the
+checks, with no Linked GitHub account. Otherwise installation credentials
+read and synchronize, and user-to-server tokens from each member's Linked
+GitHub account write.
 Each installation token is minted for one repository with read access to
 pull requests, checks, commit statuses, contents, and metadata only. A
-token without one of these gets a 403 from that endpoint. The
+token without one of these gets a 403 from that endpoint. Publishing a Pull
+request check mints its own token with Checks: write and metadata read only. The
 connecting admin's personal credentials only prove setup authority.
 
 ## Proposed module boundaries
@@ -593,6 +637,7 @@ separate Convex component or generic plugin framework is required.
 | `integrations/github/core.ts` | Connections: settings status, PR link targets, disconnect, Delete now, Sync again, project deletion, revocation, and the retention purge |
 | `integrations/github/setup.ts` | The connect flow: `beginSetup`, the OAuth callback (`completeSetup` action, `claimSetup` and `authorizeSetup` mutations), repository selection (`listSetupRepositories`, `saveRepositories` action, `applyRepositories` mutation), cancel, and expiry |
 | `integrations/github/sync.ts` | Background sync: the repository lease, job claim, recovery, and commit, the sync worker, webhook fan-out, and the reconciliation cron |
+| `integrations/github/checkRuns.ts` | Publishing a Pull request check result as a GitHub check run (`publish` internal action) and recording why it failed |
 | `integrations/github/pullRequests.ts` | Stored PR reads (`list`, `get`, `stack`, `referencedTasks`) and the live `readDiff`, `readOverview`, and `readFile` actions |
 | `integrations/github/lib/github.ts` | GitHub REST client and credentials: App JWT, installation tokens, setup token encryption, and the OAuth exchange |
 | `integrations/github/lib/parsers.ts` | Narrowing GitHub JSON into normalized PR and diff metadata |

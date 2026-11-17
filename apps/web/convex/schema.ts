@@ -549,6 +549,7 @@ export default defineSchema({
     threadTitle: v.string(), // snapshot at report time
     threadOwnerId: v.id("users"),
     reportedAt: v.number(),
+    githubPublishError: v.optional(v.string()), // a PR result GitHub has no check run for, and why (OS-2401)
   })
     .index("by_taskId_and_reportedAt", ["taskId", "reportedAt"])
     .index("by_threadId_and_taskId_and_pullRequestRef_and_reportedAt", ["threadId", "taskId", "pullRequest.ref", "reportedAt"])

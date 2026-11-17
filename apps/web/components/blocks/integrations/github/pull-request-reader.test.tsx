@@ -493,6 +493,22 @@ describe("PullRequestReader overview", () => {
     expect(screen.queryByRole("region", { name: "Conflicts" })).toBeNull();
   });
 
+  test("Convoy's own check runs stay out of the GitHub checks card but count in Merge status, as on GitHub (OS-2401)", async () => {
+    readOverview.mockResolvedValue({
+      ...overview,
+      checks: [
+        { id: "run:1", name: "test", state: "success", summary: "Passed", url: null, fromConvoy: false },
+        { id: "run:3", name: "Merge risk", state: "failure", summary: "High", url: null, fromConvoy: true },
+      ],
+    });
+    render(reader());
+    const card = await screen.findByRole("region", { name: "GitHub checks" });
+    expect(within(card).getByText("GitHub checks: 1/1")).toBeTruthy();
+    expect(within(card).queryByLabelText("Merge risk failed")).toBeNull();
+    fireEvent.click(screen.getByRole("button", { name: "Merge status" }));
+    expect(screen.getByLabelText("Merge risk failed")).toBeTruthy();
+  });
+
   test("a conflicting PR gets the Conflicts card with Resolve on GitHub", async () => {
     readOverview.mockResolvedValue({ ...overview, mergeable: "conflicting" });
     render(reader());

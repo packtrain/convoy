@@ -146,6 +146,7 @@ import type * as events_core from "../events/core.js";
 import type * as events_lib_constants from "../events/lib/constants.js";
 import type * as events_lib_eventsRepo from "../events/lib/eventsRepo.js";
 import type * as http from "../http.js";
+import type * as integrations_github_checkRuns from "../integrations/github/checkRuns.js";
 import type * as integrations_github_core from "../integrations/github/core.js";
 import type * as integrations_github_errors from "../integrations/github/errors.js";
 import type * as integrations_github_httpHandlers from "../integrations/github/httpHandlers.js";
@@ -506,6 +507,7 @@ declare const fullApi: ApiFromModules<{
   "events/lib/constants": typeof events_lib_constants;
   "events/lib/eventsRepo": typeof events_lib_eventsRepo;
   http: typeof http;
+  "integrations/github/checkRuns": typeof integrations_github_checkRuns;
   "integrations/github/core": typeof integrations_github_core;
   "integrations/github/errors": typeof integrations_github_errors;
   "integrations/github/httpHandlers": typeof integrations_github_httpHandlers;

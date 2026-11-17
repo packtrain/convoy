@@ -254,7 +254,15 @@ export const pullRequestOverviewValidator = v.object({
   commitCount: v.number(),
   commits: v.array(v.object({ sha: v.string(), message: v.string(), author: v.string(), committedAt: v.number(), url: v.string() })),
   checks: v.array(
-    v.object({ id: v.string(), name: v.string(), state: githubCheckStateValidator, summary: v.string(), url: v.union(v.string(), v.null()) })
+    v.object({
+      id: v.string(),
+      name: v.string(),
+      state: githubCheckStateValidator,
+      summary: v.string(),
+      url: v.union(v.string(), v.null()),
+      /** Convoy's own run (a Pull request check): the GitHub checks card hides it, Merge status counts it (OS-2401). */
+      fromConvoy: v.boolean(),
+    })
   ),
   reviews: v.array(
     v.object({

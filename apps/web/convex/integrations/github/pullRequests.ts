@@ -362,7 +362,7 @@ export const readOverview = action({
     const { result: overview, live } = await readLive(
       ctx,
       args,
-      (token, context) => readOverviewFrom(token, context, args.number, { baseSha, headSha }),
+      (token, context) => readOverviewFrom(token, context, args.number, { baseSha, headSha }, requireConfig().appId),
       errors.PULL_REQUEST_NOT_FOUND
     );
     // The list's Conflicts mark comes from the stored row; GitHub sends no event when mergeability settles.
@@ -388,7 +388,8 @@ async function readOverviewFrom(
   token: string,
   context: SyncContext,
   number: number,
-  { baseSha, headSha }: { baseSha: string; headSha: string }
+  { baseSha, headSha }: { baseSha: string; headSha: string },
+  appId: string
 ): Promise<PullRequestOverview> {
   const auth = { token };
   const base = repoPath(context);
@@ -408,7 +409,7 @@ async function readOverviewFrom(
     compareOrNull(`${base}/compare/${baseSha}...${headSha}?per_page=1`, auth),
   ]);
   await readPr();
-  return normalizeOverview({ pr, commits, reviews, comments, reviewComments, checkRuns, status, compare });
+  return normalizeOverview(appId, { pr, commits, reviews, comments, reviewComments, checkRuns, status, compare });
 }
 
 /** Contents API limit for base64 bodies; larger files come back without content. */

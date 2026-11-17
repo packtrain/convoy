@@ -58,6 +58,8 @@ const checkResultItemValidator = v.object({
   artifactName: v.optional(v.string()),
   /** A PR's result: the head revision it was reported on. */
   headSha: v.optional(v.string()),
+  /** Why GitHub has no check run for this PR result (OS-2401). */
+  githubPublishError: v.optional(v.string()),
   reportedAt: v.number(),
 });
 
@@ -318,6 +320,7 @@ async function loadChecks(
       artifactId: result.artifactId,
       artifactName: result.artifactName,
       headSha: result.pullRequest?.headSha,
+      githubPublishError: result.githubPublishError,
       reportedAt: result.reportedAt,
     })),
   }));

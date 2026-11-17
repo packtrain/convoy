@@ -6,7 +6,7 @@ type Ctx = QueryCtx | MutationCtx;
 // ponytail: a task's results past the newest 500 drop off; paginate if a task gets there.
 const TASK_RESULT_LIMIT = 500;
 
-export type CheckResultProps = Omit<Doc<"checkResults">, "_id" | "_creationTime" | "reportedAt">;
+export type CheckResultProps = Omit<Doc<"checkResults">, "_id" | "_creationTime" | "reportedAt" | "githubPublishError">;
 
 export async function getCheckResultById(ctx: Ctx, id: Id<"checkResults">): Promise<Doc<"checkResults"> | null> {
   return ctx.db.get("checkResults", id);
@@ -94,6 +94,14 @@ export async function insertCheckResult(ctx: MutationCtx, props: CheckResultProp
     await ctx.db.insert("checkResultFiles", { resultId, storageId: file.storageId });
   }
   return resultId;
+}
+
+export async function patchCheckResult(
+  ctx: MutationCtx,
+  id: Id<"checkResults">,
+  patch: Partial<Pick<Doc<"checkResults">, "githubPublishError">>
+): Promise<void> {
+  await ctx.db.patch("checkResults", id, patch);
 }
 
 /** Deletes every result on the task with its file rows; returns the blobs they pointed at. */

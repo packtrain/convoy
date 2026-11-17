@@ -206,7 +206,7 @@ export function CheckRow({
   }, [latest?.value]);
   const hasAttachments = Boolean(latest && (latest.files.length > 0 || latest.artifactId));
   // The transcript card is one reply's own results, so it has no Reported or history.
-  const hasCard = Boolean(latest && (!table || valueClipped || latest.note || hasAttachments));
+  const hasCard = Boolean(latest && (!table || valueClipped || latest.note || latest.githubPublishError || hasAttachments));
 
   return (
     <Collapsible open={open && Boolean(latest)} onOpenChange={setToggled} disabled={!latest} className="text-sm">
@@ -236,6 +236,11 @@ export function CheckRow({
             Outdated
           </Badge>
         ) : null}
+        {latest?.githubPublishError ? (
+          <Badge variant="outline" shape="rounded" className="text-warning" title={latest.githubPublishError}>
+            Not on GitHub
+          </Badge>
+        ) : null}
         {surface === "tab" ? (
           <span className="shrink-0 text-xs text-muted-foreground">{latest ? <ResultTime at={latest.reportedAt} /> : "Pending"}</span>
         ) : null}
@@ -262,6 +267,11 @@ export function CheckRow({
             {latest.note ? (
               <Section title="Description">
                 <p className="whitespace-pre-wrap">{latest.note}</p>
+              </Section>
+            ) : null}
+            {latest.githubPublishError ? (
+              <Section title="Not on GitHub">
+                <p>{latest.githubPublishError}</p>
               </Section>
             ) : null}
             {hasAttachments ? (

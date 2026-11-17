@@ -21,5 +21,6 @@ export const errors = {
   PULL_REQUEST_CHANGED: "The pull request changed while loading. Refresh to load the new revision.",
   FILE_NOT_FOUND: "GitHub has no file at this path in this revision",
   ACCESS_REMOVED: "GitHub access to this repository was removed",
+  CHECK_RUN_REFUSED: "GitHub refused the check run. The Convoy GitHub App needs Checks: write on this repository.",
   CURSOR_INVALID: "Invalid repository list cursor",
 } as const;

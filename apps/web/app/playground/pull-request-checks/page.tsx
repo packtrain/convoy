@@ -113,6 +113,15 @@ const SCENARIOS = {
       tests: [result("warning", { note: "Flaky retry on one test", reporterName: "Dana", reportedByViewer: false })],
     }),
   },
+  notOnGithub: {
+    label: "Not on GitHub",
+    data: checksOf({
+      risk: [result("passed", { value: "low", githubPublishError: "GitHub refused the check run. The Convoy GitHub App needs Checks: write on this repository." })],
+      tests: [result("failed", { note: "2 failures", githubPublishError: "GitHub could not be reached. Try again in a moment." })],
+      db: [result("passed", { value: "0" })],
+      scope: [result("passed")],
+    }),
+  },
   emptyChecklist: { label: "Empty checklist", data: checksOf({}, { keys: [] }) },
   notSynced: { label: "Not synced", data: checksOf({}, { headSha: null }) },
 } satisfies Record<string, { label: string; data: TaskChecks | null }>;
