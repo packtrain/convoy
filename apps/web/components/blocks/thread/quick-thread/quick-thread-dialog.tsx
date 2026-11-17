@@ -226,7 +226,7 @@ export function QuickThreadDialog({ organizationId, organizationSlug, projectAli
         // Radix would focus the profile pill, which opens its card; the composer focuses itself.
         onOpenAutoFocus={(event) => event.preventDefault()}
       >
-        <div className="px-4 pt-4">
+        <div className="px-4 pt-3">
           <DialogTitle className="text-sm">New thread in {project.alias}</DialogTitle>
           <DialogDescription className="sr-only">Start a thread without leaving this page.</DialogDescription>
         </div>
