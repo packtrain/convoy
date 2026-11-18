@@ -9,7 +9,7 @@ describe("userProjectPreferences", () => {
 
     const prefs = await asUser.query(api.users.projectPreferences.get, { projectId: project._id });
 
-    expect(prefs).toEqual({ agentAutoStart: false });
+    expect(prefs).toEqual({ agentAutoStart: false, guideAutoStart: false });
   });
 
   test("upsert round-trips agentAutoStart", async () => {
@@ -19,12 +19,34 @@ describe("userProjectPreferences", () => {
     await asUser.mutation(api.users.projectPreferences.upsert, { projectId: project._id, agentAutoStart: true });
     expect(await asUser.query(api.users.projectPreferences.get, { projectId: project._id })).toEqual({
       agentAutoStart: true,
+      guideAutoStart: false,
     });
 
     await asUser.mutation(api.users.projectPreferences.upsert, { projectId: project._id, agentAutoStart: false });
     expect(await asUser.query(api.users.projectPreferences.get, { projectId: project._id })).toEqual({
       agentAutoStart: false,
+      guideAutoStart: false,
     });
+  });
+
+  test("each choice is set on its own and keeps the other (OS-2414)", async () => {
+    const ctx = createTestContext();
+    const { project, asUser } = await ctx.setupProject();
+
+    await asUser.mutation(api.users.projectPreferences.upsert, { projectId: project._id, guideAutoStart: true });
+    expect(await asUser.query(api.users.projectPreferences.get, { projectId: project._id })).toEqual({
+      agentAutoStart: false,
+      guideAutoStart: true,
+    });
+
+    await asUser.mutation(api.users.projectPreferences.upsert, { projectId: project._id, agentAutoStart: true });
+    expect(await asUser.query(api.users.projectPreferences.get, { projectId: project._id })).toEqual({
+      agentAutoStart: true,
+      guideAutoStart: true,
+    });
+    expect(await asUser.query(api.users.projectPreferences.listForUser, {})).toEqual([
+      { projectId: project._id, agentAutoStart: true, guideAutoStart: true },
+    ]);
   });
 
   test("preference is scoped per project", async () => {
@@ -36,9 +58,11 @@ describe("userProjectPreferences", () => {
 
     expect(await asUser.query(api.users.projectPreferences.get, { projectId: project._id })).toEqual({
       agentAutoStart: true,
+      guideAutoStart: false,
     });
     expect(await asUser.query(api.users.projectPreferences.get, { projectId: otherProject._id })).toEqual({
       agentAutoStart: false,
+      guideAutoStart: false,
     });
   });
 
@@ -54,6 +78,7 @@ describe("userProjectPreferences", () => {
 
     expect(await asUser2.query(api.users.projectPreferences.get, { projectId: project._id })).toEqual({
       agentAutoStart: false,
+      guideAutoStart: false,
     });
   });
 
@@ -71,8 +96,8 @@ describe("userProjectPreferences", () => {
     expect(rows).toHaveLength(2);
     expect(rows).toEqual(
       expect.arrayContaining([
-        { projectId: project._id, agentAutoStart: true },
-        { projectId: otherProject._id, agentAutoStart: false },
+        { projectId: project._id, agentAutoStart: true, guideAutoStart: false },
+        { projectId: otherProject._id, agentAutoStart: false, guideAutoStart: false },
       ])
     );
 
@@ -91,6 +116,7 @@ describe("userProjectPreferences", () => {
 
     expect(await asViewer.query(api.users.projectPreferences.get, { projectId: project._id })).toEqual({
       agentAutoStart: false,
+      guideAutoStart: false,
     });
     await expect(
       asViewer.mutation(api.users.projectPreferences.upsert, { projectId: project._id, agentAutoStart: true })
@@ -106,6 +132,7 @@ describe("userProjectPreferences", () => {
     // A subscription outliving its access reads defaults, not the error boundary.
     expect(await asOutsider.query(api.users.projectPreferences.get, { projectId: project._id })).toEqual({
       agentAutoStart: false,
+      guideAutoStart: false,
     });
     await expect(
       asOutsider.mutation(api.users.projectPreferences.upsert, { projectId: project._id, agentAutoStart: true })

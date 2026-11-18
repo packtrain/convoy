@@ -1,5 +1,6 @@
 import { query, mutation } from "../_generated/server";
 import { v } from "convex/values";
+import type { Doc } from "../_generated/dataModel";
 import { getAuthenticatedUser, getOptionalAuthenticatedUser } from "../lib/access/auth";
 import { authorizeProjectAccess, requireAuthorizedProject } from "../lib/access/permissions";
 import { ProjectPermission } from "../../lib/authz/permissions";
@@ -10,13 +11,15 @@ import {
   updateProjectPreferences,
 } from "./lib/userProjectPreferencesRepo";
 
-const DEFAULTS = {
-  agentAutoStart: false,
-};
-
 const projectPreferencesReturnValidator = v.object({
   agentAutoStart: v.boolean(),
+  guideAutoStart: v.boolean(),
 });
+
+/** A stored row, or none, with every choice defaulting to Ask each time. */
+function toProjectPreferences(row: Doc<"userProjectPreferences"> | null) {
+  return { agentAutoStart: row?.agentAutoStart ?? false, guideAutoStart: row?.guideAutoStart ?? false };
+}
 
 export const get = query({
   args: { projectId: v.id("projects") },
@@ -25,10 +28,7 @@ export const get = query({
     const user = await getAuthenticatedUser(ctx);
     // Out of reach reads defaults, so a stale subscription is not an error.
     const access = await authorizeProjectAccess(ctx, user._id, args.projectId, ProjectPermission.PROJECT_VIEW);
-    const prefs = access ? await getProjectPreferencesByUser(ctx, user._id, args.projectId) : null;
-    return {
-      agentAutoStart: prefs?.agentAutoStart ?? DEFAULTS.agentAutoStart,
-    };
+    return toProjectPreferences(access ? await getProjectPreferencesByUser(ctx, user._id, args.projectId) : null);
   },
 });
 
@@ -43,6 +43,7 @@ export const listForUser = query({
     v.object({
       projectId: v.id("projects"),
       agentAutoStart: v.boolean(),
+      guideAutoStart: v.boolean(),
     })
   ),
   handler: async (ctx) => {
@@ -53,28 +54,27 @@ export const listForUser = query({
 
     const rows = await listProjectPreferencesByUser(ctx, user._id);
 
-    return rows.map((row) => ({
-      projectId: row.projectId,
-      agentAutoStart: row.agentAutoStart ?? DEFAULTS.agentAutoStart,
-    }));
+    return rows.map((row) => ({ projectId: row.projectId, ...toProjectPreferences(row) }));
   },
 });
 
+/** Sets the choices passed; the others keep their stored value. */
 export const upsert = mutation({
   args: {
     projectId: v.id("projects"),
-    agentAutoStart: v.boolean(),
+    agentAutoStart: v.optional(v.boolean()),
+    guideAutoStart: v.optional(v.boolean()),
   },
   returns: v.null(),
-  handler: async (ctx, args) => {
+  handler: async (ctx, { projectId, ...patch }) => {
     const user = await getAuthenticatedUser(ctx);
-    await requireAuthorizedProject(ctx, user._id, args.projectId, ProjectPermission.CLI_THREAD);
+    await requireAuthorizedProject(ctx, user._id, projectId, ProjectPermission.CLI_THREAD);
 
-    const existing = await getProjectPreferencesByUser(ctx, user._id, args.projectId);
+    const existing = await getProjectPreferencesByUser(ctx, user._id, projectId);
     if (existing) {
-      await updateProjectPreferences(ctx, existing._id, { agentAutoStart: args.agentAutoStart });
+      await updateProjectPreferences(ctx, existing._id, patch);
     } else {
-      await insertProjectPreferences(ctx, user._id, args.projectId, { agentAutoStart: args.agentAutoStart });
+      await insertProjectPreferences(ctx, user._id, projectId, patch);
     }
 
     return null;

@@ -5,6 +5,7 @@ type Ctx = QueryCtx | MutationCtx;
 
 export type UserProjectPreferencesPatch = {
   agentAutoStart?: boolean;
+  guideAutoStart?: boolean;
 };
 
 export async function getProjectPreferencesByUser(
@@ -43,7 +44,7 @@ export async function insertProjectPreferences(
   ctx: MutationCtx,
   userId: Id<"users">,
   projectId: Id<"projects">,
-  preferences: Required<UserProjectPreferencesPatch>
+  preferences: UserProjectPreferencesPatch
 ): Promise<Id<"userProjectPreferences">> {
   return ctx.db.insert("userProjectPreferences", {
     userId,

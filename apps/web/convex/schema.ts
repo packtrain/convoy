@@ -1463,6 +1463,8 @@ export default defineSchema({
     // OS-1131: assignment automation starts the thread without the composer
     // dialog. Personal consent — the thread runs as the assigning user.
     agentAutoStart: v.optional(v.boolean()),
+    // OS-2414: Generate guide starts the run without the composer.
+    guideAutoStart: v.optional(v.boolean()),
     updatedAt: v.number(),
   }).index("by_user_and_project", ["userId", "projectId"]),
   // GitHub integration (docs/specs/github-integration.md). A project's

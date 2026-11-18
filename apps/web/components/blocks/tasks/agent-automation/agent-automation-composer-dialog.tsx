@@ -2,15 +2,13 @@
 
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useMutation, useQuery } from "convex/react";
-import { Check, ChevronDown, Zap } from "lucide-react";
 import { toast } from "sonner";
 
 import type { ProjectAgentListItem } from "@/components/blocks/agents/agent-list-utils";
+import { AutoStartPreferenceSelector } from "@/components/blocks/thread/auto-start-preference-selector";
 import { ThreadComposer, type ThreadComposerAttachedTask } from "@/components/blocks/thread/thread-composer";
 import { ThreadDraftProvider, getNewThreadDraftKey, useThreadDraft } from "@/components/blocks/thread/thread-draft-provider";
-import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog";
-import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 import { api } from "@/convex/_generated/api";
 import type { Id } from "@/convex/_generated/dataModel";
 import { buildAutomationDraftSeed } from "@/lib/threads/draft-flow";
@@ -227,7 +225,7 @@ function AgentAutomationComposerDialogContent({
           textareaDisabled={composerDisabled}
           submitDisabled={composerDisabled}
           extraSelectorTools={
-            <AutoStartPreferenceSelector value={effectiveAutoStart} disabled={composerDisabled} onChange={setAutoStartChoice} />
+            <AutoStartPreferenceSelector label="Assignment automation" value={effectiveAutoStart} disabled={composerDisabled} onChange={setAutoStartChoice} />
           }
           selectorsProps={{
             profiles,
@@ -255,55 +253,5 @@ function AgentAutomationComposerDialogContent({
         />
       </DialogContent>
     </Dialog>
-  );
-}
-
-const AUTO_START_LABELS = {
-  ask: "Ask each time",
-  auto: "Auto-start next time",
-} as const;
-
-/**
- * "Next time" preference dropdown (OS-1131): whether assignment automation
- * should keep opening this dialog or auto-submit the thread. The choice is
- * persisted only when the user actually sends.
- */
-function AutoStartPreferenceSelector({
-  value,
-  disabled,
-  onChange,
-}: {
-  value: boolean;
-  disabled: boolean;
-  onChange: (value: boolean) => void;
-}) {
-  const label = value ? AUTO_START_LABELS.auto : AUTO_START_LABELS.ask;
-
-  return (
-    <DropdownMenu modal={false}>
-      <DropdownMenuTrigger asChild>
-        <Button
-          variant="ghost"
-          size="sm"
-          disabled={disabled}
-          className="min-w-0 max-w-44 cursor-pointer gap-1.5 px-2"
-          aria-label={`Assignment automation: ${label}`}
-          title={`Assignment automation: ${label}`}
-        >
-          <Zap className={value ? "size-3.5 shrink-0 text-info" : "size-3.5 shrink-0 opacity-70"} />
-          <span className="min-w-0 truncate">{label}</span>
-          <ChevronDown className="size-3 opacity-50" />
-        </Button>
-      </DropdownMenuTrigger>
-      {/* The content default locks width to the trigger; let it fit the longer option. */}
-      <DropdownMenuContent align="start" className="w-auto">
-        {([false, true] as const).map((auto) => (
-          <DropdownMenuItem key={String(auto)} className="cursor-pointer gap-2" onSelect={() => onChange(auto)}>
-            <span className="min-w-0 flex-1 truncate">{auto ? AUTO_START_LABELS.auto : AUTO_START_LABELS.ask}</span>
-            {auto === value ? <Check className="size-3.5 shrink-0" /> : null}
-          </DropdownMenuItem>
-        ))}
-      </DropdownMenuContent>
-    </DropdownMenu>
   );
 }

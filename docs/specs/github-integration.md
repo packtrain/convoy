@@ -332,8 +332,8 @@ permission can request one, so viewers cannot today. Closed and merged PRs
 can have Guides.
 
 Status: requesting, reading, switching between, and deleting Guides are
-built (OS-2412), and so are Failed guides and Retry (OS-2413). Don't ask again
-(OS-2414), the duplicate-run warning (OS-2415), the project's Guide prompt
+built (OS-2412), and so are Failed guides and Retry (OS-2413) and Don't ask
+again (OS-2414). The duplicate-run warning (OS-2415), the project's Guide prompt
 (OS-2416), Outdated guides and Follow-up guides (OS-2417), and the MCP tools
 (OS-2418) are planned.
 
@@ -353,6 +353,21 @@ guide in the corner menu.
   text with a fresh prompt, since the prompt names the current head. The
   model picked stays in that draft and never becomes the member's new-thread
   default.
+- **Don't ask again**, as for assignment automation
+  ([agent-automation.md → Auto-Submit](agent-automation.md#auto-submit-os-1131)):
+  the popup has the same "next time" pill among its selectors, Ask each time
+  (default) or Auto-start next time, saved only when the member sends
+  (`userProjectPreferences.guideAutoStart`, per member and project). With it
+  on, Generate guide and New guide start the run at once with the popup's
+  draft (profile, Working path, worktree, runtime, model, effort, Project
+  agent) and a fresh prompt, without showing the popup. The popup opens
+  instead when that draft's profile is offline, gone, or no longer has the
+  path or the existing worktree picked, or when the draft is gone (drafts
+  expire after 30 days). A choice that fails to save says so in a toast. Retry always
+  opens the popup, since the failed run's choices are often what failed.
+  User settings → Agents shows a "Generate PR guide" dropdown per project
+  (Ask each time / Start automatically) while the GitHub integration
+  developer toggle is on.
 - The run is a normal CLI thread with the PR as its Attached pull request,
   private to the requester unless they share it, so only the requester sees
   Open thread. `cli.threads.core.create` takes `pullRequestGuide: { headSha }`,

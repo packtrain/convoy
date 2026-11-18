@@ -176,7 +176,11 @@ immediately with no interaction.
   shared config). It lists all accessible projects (across organizations,
   sorted by organization then project), each with an explicit dropdown —
   "Ask each time" / "Start automatically" — so untouched projects visibly
-  show the default rather than an ambiguous off-toggle.
+  show the default rather than an ambiguous off-toggle. The same row holds
+  the Generate guide choice (`guideAutoStart`,
+  [github-integration.md → Guides](github-integration.md#requesting-and-running))
+  while the GitHub integration developer toggle is on. `upsert` sets only the
+  choices it is passed.
 
 ### Behavior
 

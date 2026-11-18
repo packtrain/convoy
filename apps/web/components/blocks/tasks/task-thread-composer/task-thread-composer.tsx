@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState, type ReactNode } from "react";
 import { useQuery } from "convex/react";
 import { toast } from "sonner";
 import { api } from "@/convex/_generated/api";
@@ -56,6 +56,8 @@ type TaskThreadComposerProps = TaskThreadComposerSubject &
   pullRequestChecks?: { headSha: string };
   /** Starts a Guide run on this head (OS-2412), or reruns a failed one (OS-2413). Its model does not become the new-thread default. */
   pullRequestGuide?: { headSha: string; retryGuideId?: Id<"integrationPullRequestGuides"> };
+  /** Extra pills after the composer's selectors (the Guide's "next time" dropdown). */
+  extraSelectorTools?: ReactNode;
   focusRequestKey?: number;
   /** Focus the composer as soon as it is enabled (e.g. when opened in a popover). */
   autoFocus?: boolean;
@@ -88,6 +90,7 @@ function TaskThreadComposerContent({
   seedReplacesDraft,
   pullRequestChecks,
   pullRequestGuide,
+  extraSelectorTools,
   threadKey,
   focusRequestKey,
   autoFocus = false,
@@ -243,6 +246,7 @@ function TaskThreadComposerContent({
         focusRequestKey={(focusRequestKey ?? 0) + autoFocusBump + seedCount}
         textareaDisabled={composerDisabled}
         submitDisabled={composerDisabled || isWorkflowLoading}
+        extraSelectorTools={extraSelectorTools}
         containerClassName={composerContainerClassName ?? "p-5"}
         contentClassName="max-w-none"
         textareaClassName={composerTextareaClassName ?? "min-h-[88px] p-3"}
