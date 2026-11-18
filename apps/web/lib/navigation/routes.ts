@@ -63,6 +63,16 @@ export const ORGANIZATION_SETTINGS_SECTION_LABELS = {
   skills: "Skills",
 } satisfies Record<OrganizationSettingsSection, string>;
 
+/** Shown under the page title by the settings shell. */
+export const ORGANIZATION_SETTINGS_SECTION_DESCRIPTIONS = {
+  general: "Basic organization information and settings.",
+  members: "Manage who has access to this organization.",
+  projects: "Create and manage the projects in this organization.",
+  prompts: "Reusable slash-command prompts available in every project.",
+  agents: "Agent templates you can copy into any project in this organization.",
+  skills: "Skill templates to install into projects. Agents only see installed skills.",
+} satisfies Record<OrganizationSettingsSection, string>;
+
 const ORGANIZATION_SETTINGS_SECTION_SET = new Set<string>(
   ORGANIZATION_SETTINGS_SECTIONS
 );

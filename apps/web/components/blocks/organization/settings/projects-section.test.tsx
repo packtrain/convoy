@@ -159,6 +159,31 @@ describe("ProjectsSection", () => {
     expect(screen.getByRole("button", { name: /new project/i })).toBeDefined();
   });
 
+  test("puts search and New project in one toolbar row, button on the right", () => {
+    mockQueries({ role: "owner", projects: PROJECTS });
+
+    renderSection();
+
+    const search = screen.getByRole("searchbox", { name: "Search projects" });
+    const toolbar = screen.getByRole("button", { name: /new project/i }).parentElement;
+    expect(toolbar?.contains(search)).toBe(true);
+    expect(toolbar?.className).toContain("sm:justify-between");
+  });
+
+  test("filters projects by name or alias", () => {
+    mockQueries({ role: "owner", projects: PROJECTS });
+    renderSection();
+    const [first, second] = PROJECTS;
+    const search = screen.getByRole("searchbox", { name: "Search projects" });
+
+    fireEvent.change(search, { target: { value: second.alias.toLowerCase() } });
+    expect(screen.queryByText(first.name)).toBeNull();
+    expect(screen.getByText(second.name)).toBeDefined();
+
+    fireEvent.change(search, { target: { value: "zzz" } });
+    expect(screen.getByText("No projects match this search.")).toBeDefined();
+  });
+
   test("shows an empty state with a create action", () => {
     mockQueries({ role: "owner", projects: [] });
 

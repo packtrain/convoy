@@ -65,8 +65,18 @@ const PROJECT_SETTINGS_PRIMARY_SECTION_CONFIG: readonly SettingsSectionConfig[] 
     label: "Agents",
     description: "Manage project-local agents that can later be assigned to tasks.",
   },
-  { id: "prompts", icon: FileText, label: "Prompts" },
-  { id: "skills", icon: Sparkles, label: "Skills" },
+  {
+    id: "prompts",
+    icon: FileText,
+    label: "Prompts",
+    description: "Reusable prompts you insert in chat with a slash command.",
+  },
+  {
+    id: "skills",
+    icon: Sparkles,
+    label: "Skills",
+    description: "Instruction bundles that agents in this project load on demand.",
+  },
   {
     id: "workflows",
     icon: Workflow,

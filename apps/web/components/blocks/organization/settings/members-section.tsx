@@ -6,6 +6,8 @@ import { api } from "@/convex/_generated/api";
 import { Id, Doc } from "@/convex/_generated/dataModel";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
+import { Empty } from "@/components/custom/empty-state";
+import { SearchInput } from "@/components/custom/search-input";
 import { Separator } from "@/components/ui/separator";
 import { Skeleton } from "@/components/ui/skeleton";
 import { UserPlus, RotateCw, X, Clock } from "lucide-react";
@@ -23,7 +25,10 @@ interface MembersSectionProps {
 function MembersSectionSkeleton() {
   return (
     <div className="space-y-4">
-      <Skeleton className="h-7 w-28 rounded-md" />
+      <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+        <Skeleton className="h-8 w-full max-w-sm rounded-md" />
+        <Skeleton className="h-8 w-32 rounded-md" />
+      </div>
       <div className="rounded-lg border divide-y">
         {Array.from({ length: 3 }).map((_, index) => (
           <div key={index} className="flex items-center gap-3 p-4">
@@ -45,6 +50,7 @@ export function MembersSection({
   organization,
 }: MembersSectionProps) {
   const [inviteDialogOpen, setInviteDialogOpen] = useState(false);
+  const [search, setSearch] = useState("");
 
   const members = useQuery(api.organizations.members.list, { organizationId });
   const myRole = useQuery(api.organizations.members.getMyRole, { organizationId });
@@ -63,6 +69,11 @@ export function MembersSection({
     myRole === undefined ||
     currentUser === undefined ||
     (canInvite && pendingInvitations === undefined);
+
+  const query = search.trim().toLowerCase();
+  const visibleMembers = (members ?? []).filter((member) =>
+    `${member.name ?? ""} ${member.email ?? ""}`.toLowerCase().includes(query)
+  );
 
   const handleResend = async (
     organizationInvitationId: Id<"organizationInvitations">
@@ -97,25 +108,37 @@ export function MembersSection({
       ) : (
         <>
           <div className="space-y-4">
-            {canInvite && (
-              <Button variant="outline" size="sm" onClick={() => setInviteDialogOpen(true)} className="">
-                <UserPlus className="size-4" />
-                Add member
-              </Button>
-            )}
-
-            {/* Member List */}
-            <div className="rounded-lg border divide-y">
-              {(members ?? []).map((member) => (
-                <MemberRow
-                  key={member._id}
-                  member={member}
-                  organizationId={organizationId}
-                  currentUserRole={myRole}
-                  isCurrentUser={currentUser?._id === member._id}
-                />
-              ))}
+            <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+              <SearchInput
+                value={search}
+                onChange={(event) => setSearch(event.target.value)}
+                placeholder="Search members"
+                aria-label="Search members"
+                className="sm:max-w-sm"
+              />
+              {canInvite && (
+                <Button variant="outline" size="settings" onClick={() => setInviteDialogOpen(true)}>
+                  <UserPlus className="size-4" />
+                  Add member
+                </Button>
+              )}
             </div>
+
+            {visibleMembers.length === 0 ? (
+              <Empty variant="dashed">No members match this search.</Empty>
+            ) : (
+              <div className="rounded-lg border divide-y">
+                {visibleMembers.map((member) => (
+                  <MemberRow
+                    key={member._id}
+                    member={member}
+                    organizationId={organizationId}
+                    currentUserRole={myRole}
+                    isCurrentUser={currentUser?._id === member._id}
+                  />
+                ))}
+              </div>
+            )}
           </div>
 
           {/* Pending Invitations */}

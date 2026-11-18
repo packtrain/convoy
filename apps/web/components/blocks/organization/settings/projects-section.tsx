@@ -8,6 +8,7 @@ import { ProjectDialog, type ProjectDialogData } from "@/components/blocks/proje
 import { SettingsCatalogListFrame } from "@/components/blocks/settings-catalog/settings-catalog-list-frame";
 import { ConfirmDialog } from "@/components/ui/dialog";
 import { Empty, EmptyState } from "@/components/custom/empty-state";
+import { SearchInput } from "@/components/custom/search-input";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import {
@@ -46,6 +47,7 @@ export function ProjectsSection({
   const projectDialog = useDialogWithData<ProjectDialogData>();
   const [projectToDelete, setProjectToDelete] = useState<OrgManagedProject | null>(null);
   const [isDeleting, setIsDeleting] = useState(false);
+  const [search, setSearch] = useState("");
 
   const projects = useQuery(api.projects.core.listAllForOrganization, {
     organizationId,
@@ -74,6 +76,11 @@ export function ProjectsSection({
       setIsDeleting(false);
     }
   }
+
+  const query = search.trim().toLowerCase();
+  const visibleProjects = (projects ?? []).filter((project) =>
+    `${project.name} ${project.alias}`.toLowerCase().includes(query)
+  );
 
   if (projects === undefined || myRole === undefined) {
     return <ProjectsSectionSkeleton />;
@@ -104,31 +111,40 @@ export function ProjectsSection({
         />
       ) : (
         <>
-          {canCreate ? (
-            <Button
-              variant="outline"
-              size="settings"
-              onClick={() => projectDialog.open({})}
-            >
-              <Plus className="size-4" />
-              New project
-            </Button>
-          ) : null}
+          <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+            <SearchInput
+              value={search}
+              onChange={(event) => setSearch(event.target.value)}
+              placeholder="Search projects"
+              aria-label="Search projects"
+              className="sm:max-w-sm"
+            />
+            {canCreate ? (
+              <Button variant="outline" size="settings" onClick={() => projectDialog.open({})}>
+                <Plus className="size-4" />
+                New project
+              </Button>
+            ) : null}
+          </div>
 
-          <SettingsCatalogListFrame>
-            {projects.map((project) => (
-              <ProjectRow
-                key={project._id}
-                project={project}
-                onOpen={() =>
-                  navigation.push(
-                    appRoute.organizationProjectDetail(organizationSlug, project._id)
-                  )
-                }
-                onDelete={canDelete ? () => setProjectToDelete(project) : undefined}
-              />
-            ))}
-          </SettingsCatalogListFrame>
+          {visibleProjects.length === 0 ? (
+            <Empty variant="dashed">No projects match this search.</Empty>
+          ) : (
+            <SettingsCatalogListFrame>
+              {visibleProjects.map((project) => (
+                <ProjectRow
+                  key={project._id}
+                  project={project}
+                  onOpen={() =>
+                    navigation.push(
+                      appRoute.organizationProjectDetail(organizationSlug, project._id)
+                    )
+                  }
+                  onDelete={canDelete ? () => setProjectToDelete(project) : undefined}
+                />
+              ))}
+            </SettingsCatalogListFrame>
+          )}
         </>
       )}
 
@@ -240,7 +256,10 @@ function ProjectRowMenu({
 function ProjectsSectionSkeleton() {
   return (
     <div className="space-y-5">
-      <Skeleton className="h-8 w-32 rounded-md" />
+      <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+        <Skeleton className="h-8 w-full max-w-sm rounded-md" />
+        <Skeleton className="h-8 w-32 rounded-md" />
+      </div>
       <SettingsCatalogListFrame>
         {Array.from({ length: 3 }).map((_, index) => (
           <div key={index} className="flex items-center gap-3 p-4">

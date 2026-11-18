@@ -1,5 +1,6 @@
 import {
   isOrganizationSettingsSection,
+  ORGANIZATION_SETTINGS_SECTION_DESCRIPTIONS,
   ORGANIZATION_SETTINGS_SECTION_LABELS,
 } from "@/lib/navigation";
 import { notFound } from "@/lib/navigation/server";
@@ -30,6 +31,7 @@ export default async function OrganizationSettingsPage({
         />
         <SettingsPageHeader
           title={ORGANIZATION_SETTINGS_SECTION_LABELS[section]}
+          description={ORGANIZATION_SETTINGS_SECTION_DESCRIPTIONS[section]}
           className="mb-8 hidden md:block"
         />
         <SettingsPageContent section={section} />

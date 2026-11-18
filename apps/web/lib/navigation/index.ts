@@ -19,6 +19,7 @@ export {
   externalRoutes,
   isOrganizationSettingsSection,
   isProjectSettingsSection,
+  ORGANIZATION_SETTINGS_SECTION_DESCRIPTIONS,
   ORGANIZATION_SETTINGS_SECTION_LABELS,
   ORGANIZATION_SETTINGS_SECTIONS,
   isNewThreadComposerTarget,

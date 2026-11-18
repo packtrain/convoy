@@ -210,7 +210,17 @@ Owner wants to leave:
 
 ## Organization Settings
 
+The route shell renders each section's title and its description
+(`ORGANIZATION_SETTINGS_SECTION_DESCRIPTIONS`) through `SettingsPageHeader`.
+
+Members and Projects share the catalog toolbar used by Prompts and Agents: a
+search input on the left and the create button (`size="settings"`) on the
+right, stacked on mobile. A search that matches nothing shows a dashed
+"No … match this search." placeholder.
+
 ### Members UI
+
+- Search matches member name or email. Pending invitations are not filtered.
 
 - Pending invitation rows use the same `p-4` vertical density as organization
   member rows while preserving their existing horizontal alignment and actions.
@@ -228,7 +238,8 @@ case rather than an edge one.
 | **Nav visibility** | Shown to every org member; non-owners/admins see "Only organization owners and admins can manage projects." |
 | **Layout** | Divided rows (`SettingsCatalogListFrame`), no section heading — the settings shell renders the title |
 | **Row content** | Line 1: name, alias badge, archived badge. Line 2: `created by {name}, {n} days ago`. **No member count** — it would cost one membership read per row |
-| **Create** | "New project" button above the list; in the empty state, "Create project" inside it. Opens the shared `ProjectDialog`, gated on `project:create` |
+| **Search** | Matches project name or alias |
+| **Create** | "New project" button in the toolbar; in the empty state, "Create project" inside it. Opens the shared `ProjectDialog`, gated on `project:create` |
 | **Open** | A row navigates to `/o/{slug}/settings/projects/{projectId}`. Rows do not expand |
 | **Row actions** | Trailing `⋯` menu: Manage (same as clicking the row) and Delete, the latter gated on `project:delete` with a confirm dialog |
 | **Payload** | Metadata only; no task, list, or thread data (see [permissions-system.md](permissions-system.md)) |
