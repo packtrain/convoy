@@ -118,10 +118,10 @@ function GuideAge({ guide, className }: { guide: GuideSummary; className?: strin
 }
 
 /** The requester's avatar; hovering it names them. */
-function RequesterAvatar({ guide }: { guide: GuideSummary }) {
+function RequesterAvatar({ guide, className }: { guide: GuideSummary; className?: string }) {
   const name = guide.requester.name ?? "A former member";
   return (
-    <Avatar className="size-4 shrink-0" title={name}>
+    <Avatar className={cn("size-4 shrink-0", className)} title={name}>
       {guide.requester.avatarUrl ? <AvatarImage src={guide.requester.avatarUrl} alt="" /> : null}
       <AvatarFallback className="text-[9px]">{name.slice(0, 1).toUpperCase()}</AvatarFallback>
     </Avatar>
@@ -130,8 +130,8 @@ function RequesterAvatar({ guide }: { guide: GuideSummary }) {
 
 /** One line per Guide, like a thread row: runtime icon, model, commit, and age. */
 function GuideLine({ guide }: { guide: GuideSummary }) {
-  // Delete takes the age's place on hover or focus.
-  const swap = guide.canDelete && "group-hover:invisible group-has-[[data-variant=destructive]:focus]:invisible";
+  // Delete takes the avatar's place on hover or focus.
+  const swap = guide.canDelete ? "group-hover:invisible group-has-[[data-variant=destructive]:focus]:invisible" : undefined;
   return (
     <>
       <GuideIcon guide={guide} className="size-3.5 shrink-0 text-muted-foreground" />
@@ -143,8 +143,8 @@ function GuideLine({ guide }: { guide: GuideSummary }) {
         </span>
       ) : null}
       {/* A fixed column, so every row's avatar lines up at the edge. */}
-      <GuideAge guide={guide} className={cn("ml-auto w-10 text-right", swap)} />
-      <RequesterAvatar guide={guide} />
+      <GuideAge guide={guide} className="ml-auto w-10 text-right" />
+      <RequesterAvatar guide={guide} className={swap} />
     </>
   );
 }
@@ -195,12 +195,12 @@ export function GuideMenu({ state, launch }: { state: PullRequestGuides; launch:
                 <GuideLine guide={guide} />
               </DropdownMenuItem>
               {guide.canDelete ? (
-                // Over the age column, left of the avatar, shown on hover or focus like a thread row's actions.
+                // Over the avatar, shown on hover or focus like a thread row's actions.
                 <DropdownMenuItem
                   variant="destructive"
                   aria-label={`Delete guide for ${shortSha(guide)}`}
                   onSelect={() => setConfirming(guide._id)}
-                  className="absolute top-1/2 right-9.5 size-6 -translate-y-1/2 cursor-pointer justify-center p-0 opacity-0 group-hover:opacity-100 focus:opacity-100"
+                  className="absolute top-1/2 right-0.5 size-6 -translate-y-1/2 cursor-pointer justify-center p-0 opacity-0 group-hover:opacity-100 focus:opacity-100"
                 >
                   <Trash2 />
                 </DropdownMenuItem>
@@ -504,7 +504,12 @@ function GuideSteps({
   const visible = guide.steps.map((step, index) => ({ step, index })).filter(({ step }) => !(onlyChanged && step.change === "unchanged"));
 
   return (
-    <div ref={container} className="relative min-h-full" style={{ "--guide-left": `${width}px` } as React.CSSProperties}>
+    // Two columns only when the pane, not the viewport, is wide; the steps never take more than half.
+    <div
+      ref={container}
+      className="@container/guide relative min-h-full"
+      style={{ "--guide-left": `min(${width}px, 50%)` } as React.CSSProperties}
+    >
       <SidebarResizeHandle
         ariaLabel="Resize guide columns"
         currentWidth={width}
@@ -512,7 +517,7 @@ function GuideSteps({
         expandDirection="right"
         onResizeMouseDown={handleMouseDown}
         onResizeByStep={adjustWidthBy}
-        className="absolute inset-y-0 left-(--guide-left) z-20 hidden -translate-x-1/2 before:absolute before:inset-y-0 before:left-1/2 before:w-px before:bg-border lg:block"
+        className="absolute inset-y-0 left-(--guide-left) z-20 hidden -translate-x-1/2 before:absolute before:inset-y-0 before:left-1/2 before:w-px before:bg-border @5xl/guide:block"
       />
       {diffState.kind === "error" ? (
         <div className="relative z-30 flex items-center gap-3 border-b bg-background px-5 py-2 text-sm text-destructive md:px-8">
@@ -563,12 +568,12 @@ function GuideSteps({
           <section
             key={index}
             aria-labelledby={`guide-step-${index}`}
-            className="bg-(--guide-row) lg:grid lg:grid-cols-[var(--guide-left)_minmax(0,1fr)]"
+            className="bg-(--guide-row) @5xl/guide:grid @5xl/guide:grid-cols-[var(--guide-left)_minmax(0,1fr)]"
             style={row}
           >
             {/* The rule lines up with the files' top border. */}
             <div className={rule}>
-              <div className="px-5 pt-6 pb-8 md:px-8 lg:sticky lg:top-0">
+              <div className="px-5 pt-6 pb-8 md:px-8 @5xl/guide:sticky @5xl/guide:top-0">
                 {number}
                 <h2 id={`guide-step-${index}`} className="mt-1 text-lg font-semibold">
                   {step.title}
@@ -692,18 +697,20 @@ function GuideSteps({
 /** Two columns, as the steps lay out once they load. */
 export function GuideSkeleton() {
   return (
-    <div aria-label="Loading guide" className="lg:grid lg:grid-cols-[440px_minmax(0,1fr)]">
-      <div className="space-y-3 px-5 pt-6 md:px-8">
-        <Skeleton className="h-3 w-12" />
-        <Skeleton className="h-5 w-2/3" />
-        <Skeleton className="h-4 w-full" />
-        <Skeleton className="h-4 w-5/6" />
-        <Skeleton className="h-8 w-full" />
-        <Skeleton className="h-8 w-full" />
-      </div>
-      <div className="space-y-3 p-4">
-        <Skeleton className="h-8 w-full" />
-        <Skeleton className="h-48 w-full rounded-lg" />
+    <div aria-label="Loading guide" className="@container/guide">
+      <div className="@5xl/guide:grid @5xl/guide:grid-cols-[min(440px,50%)_minmax(0,1fr)]">
+        <div className="space-y-3 px-5 pt-6 md:px-8">
+          <Skeleton className="h-3 w-12" />
+          <Skeleton className="h-5 w-2/3" />
+          <Skeleton className="h-4 w-full" />
+          <Skeleton className="h-4 w-5/6" />
+          <Skeleton className="h-8 w-full" />
+          <Skeleton className="h-8 w-full" />
+        </div>
+        <div className="space-y-3 p-4">
+          <Skeleton className="h-8 w-full" />
+          <Skeleton className="h-48 w-full rounded-lg" />
+        </div>
       </div>
     </div>
   );

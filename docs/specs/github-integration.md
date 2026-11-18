@@ -557,7 +557,9 @@ note, its files (name, folder, +/-, a check once Reviewed; a click scrolls to
 the file's diff), and questions; on the right, the full diffs of its files in
 the Diff tab's file sections, with the same Reviewed marks. Reviewed files
 start collapsed. A file outside the reader's loaded diff (the first 100
-files) shows a line with Open on GitHub. The column split is resizable. There
+files) shows a line with Open on GitHub. The column split is resizable, and the steps take
+at most half the pane. A pane narrower than 1024px (the thread's side panel,
+say) stacks each step above its diffs instead. There
 are no code excerpts and no line-anchored notes.
 
 ### Reading and switching
@@ -572,7 +574,7 @@ may delete it. A ready Guide never changes, so its steps are read once
 model, commit ("8a3e7d1"), short age ("30m"), and the requester's avatar
 (hover names them), last so it lines up on every row. Opening it lists the Guides one line each, newest first,
 with the one on screen highlighted; picking a row shows that Guide. Hovering a row
-the viewer may delete swaps its age for Delete, which asks to confirm. New
+the viewer may delete swaps its avatar for Delete, which asks to confirm. New
 guide sits under the list and returns the tab to the newest Guide. A
 Follow-up guide's row says so. A Guide still being written shows
 "Writing the guide", "Requested by Maya Singh" when someone else asked, and
