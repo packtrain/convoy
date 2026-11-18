@@ -78,7 +78,9 @@ export type ToolName =
   | "send_thread_message"
   | "mark_thread_done"
   | "attach_task_to_thread"
-  | "attach_pull_request_to_thread";
+  | "attach_pull_request_to_thread"
+  | "submit_pull_request_guide"
+  | "read_pull_request_guide";
 
 interface ToolDefinition {
   name: ToolName;
@@ -2010,6 +2012,40 @@ export function getToolDefinitions(
           pullRequest: { type: "string", description: "github.com PR URL, or owner/repo#number." },
         },
         required: ["threadId", "pullRequest"],
+      },
+    },
+    {
+      name: "submit_pull_request_guide",
+      description:
+        "Submit the pull request Guide your thread was started to write, as `convoy threads submit-guide` does. " +
+        "Send headSha and steps, shaped as the Guide prompt shows, or failure with why the guide could not be written. " +
+        "Convoy checks the steps against the pull request's changed files and returns { status: \"rejected\", errors } " +
+        "with every problem at once: fix them and submit again. Accepted returns { status: \"accepted\", guideId }.",
+      inputSchema: {
+        type: "object",
+        properties: {
+          threadId: { type: "string", description: "Thread ID of the Guide run (CONVOY_THREAD_ID on most runtimes)." },
+          headSha: { type: "string", description: "The commit the guide describes, from the Guide prompt." },
+          steps: { type: "array", items: { type: "object" }, description: "The guide's steps, in reading order." },
+          failure: { type: "string", description: "Instead of headSha and steps: why the guide could not be written. Fails the Guide." },
+        },
+        required: ["threadId"],
+      },
+    },
+    {
+      name: "read_pull_request_guide",
+      description:
+        "Read the Guides of a pull request in a repository connected to the project: the newest 20 with their status " +
+        "(writing, ready, failed), and outdated: true once the pull request has commits the guide does not cover. " +
+        "Also returns one Guide with its steps: guideId's, else the newest ready one (null when there is none).",
+      inputSchema: {
+        type: "object",
+        properties: {
+          pullRequest: { type: "string", description: "github.com PR URL, or owner/repo#number." },
+          guideId: { type: "string", description: "Guide whose steps to return, from guides[]._id. Default: the newest ready Guide." },
+          projectId: projectIdProperty,
+        },
+        required: ["pullRequest"],
       },
     },
   ];

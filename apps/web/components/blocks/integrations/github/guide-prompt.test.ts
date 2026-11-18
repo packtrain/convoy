@@ -11,6 +11,8 @@ describe("guidePrompt", () => {
     expect(prompt).toContain('"headSha": "h2"');
     expect(prompt).toContain("convoy threads submit-guide <threadId> /tmp/guide.json");
     expect(prompt).toContain('convoy threads submit-guide <threadId> --failed --note "<why>"');
+    expect(prompt).toContain("`submit_pull_request_guide` MCP tool with the same `headSha` and `steps`");
+    expect(prompt).toContain("`submit_pull_request_guide` with `failure`");
   });
 
   test("the rules Convoy enforces stay when a project replaces the instructions", () => {

@@ -15,9 +15,10 @@ type Ctx = QueryCtx | MutationCtx;
 export async function authorizeIntegrationProject(
   ctx: Ctx,
   projectId: Id<"projects">,
-  permission: ProjectPermission
+  permission: ProjectPermission,
+  apiKey?: string
 ): Promise<(AuthorizedProjectAccess & { userId: Id<"users"> }) | null> {
-  const auth = await getOptionalAuthenticatedAccess(ctx);
+  const auth = await getOptionalAuthenticatedAccess(ctx, apiKey);
   if (!auth) {
     return null;
   }

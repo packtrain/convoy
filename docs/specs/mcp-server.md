@@ -257,6 +257,12 @@ approval_mode = "approve"
 
 [mcp_servers.convoy.tools.attach_pull_request_to_thread]
 approval_mode = "approve"
+
+[mcp_servers.convoy.tools.submit_pull_request_guide]
+approval_mode = "approve"
+
+[mcp_servers.convoy.tools.read_pull_request_guide]
+approval_mode = "approve"
 ```
 
 The full popup/dialog/docs approval list must stay aligned with
@@ -391,6 +397,8 @@ prefix. See [cli-thread-message-links.md](cli-thread-message-links.md).
 | `mark_thread_done` | Mark an owned thread or container done and read, or not done | No |
 | `attach_task_to_thread` | Attach a task to an owned thread started without one | No |
 | `attach_pull_request_to_thread` | Attach a GitHub PR to an owned thread that has none | No |
+| `submit_pull_request_guide` | Submit the pull request Guide a thread was started to write, or why it could not be written | No |
+| `read_pull_request_guide` | Read a PR's Guides with run state and `outdated`, and one Guide's steps | Yes* |
 
 **\*** Required unless configured via `?project=` URL parameter.
 
@@ -1969,6 +1977,33 @@ Attach-once: the same PR again is a no-op; a thread attached to another PR, a
 group or workflow run container, or a value that isn't a PR is rejected.
 Ownership and `CLI_THREAD` permission apply, including API-key scope. Rules:
 `docs/specs/github-integration.md` → Pull requests in threads.
+
+#### submit_pull_request_guide
+
+`convoy threads submit-guide` over MCP, on `integrations.github.guides.submit`
+(OS-2418). Requires `threadId`, the Guide run's own thread. Send `headSha` and
+`steps`, or `failure` with why the guide could not be written. Returns
+`{ status: "accepted", guideId }`, or `{ status: "rejected", errors }` with
+every problem at once, so the agent fixes them and submits again. Sending
+neither steps nor a note is rejected the same way; an empty `failure` is
+refused. `steps` that is not an array is an invalid-params error; the shape
+inside each step is checked by Convoy and comes back in `errors`. Thread
+ownership and `CLI_THREAD` apply, including API-key scope. Rules:
+`docs/specs/github-integration.md` → Guides.
+
+#### read_pull_request_guide
+
+A PR's Guides for other agents, on `integrations.github.guides.read`
+(OS-2418). Requires `pullRequest` (a github.com PR URL or `owner/repo#number`)
+in a repository connected to the project; optional `guideId`. Returns
+`pullRequest` (the stored PR's `state` and `headSha`, null before the first
+sync), `guides` (the newest 20, as the Guide menu lists them, each with
+`status`, `failureReason`, and `outdated`: the stored PR's head is no longer
+the Guide's), and `guide`: `guideId`'s Guide with its `steps` and
+`removedStepTitles`, else the newest ready one, else null. A `guideId` of
+another PR is refused ("The guide was deleted."), and a PR outside the
+project's connected repositories is an invalid-params error. Any project
+member reads; the requester's private `threadId` stays out for everyone else.
 
 ## Partial Updates
 

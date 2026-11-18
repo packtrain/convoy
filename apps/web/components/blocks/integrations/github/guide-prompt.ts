@@ -109,8 +109,8 @@ export function guidePrompt({
     ),
     "```",
     "",
-    "Then run `convoy threads submit-guide <threadId> /tmp/guide.json` with this thread's ID: the one in this prompt's `convoy threads attach` footer, or `CONVOY_THREAD_ID` on most runtimes. If Convoy lists errors, fix them and submit again.",
+    "Then run `convoy threads submit-guide <threadId> /tmp/guide.json` with this thread's ID: the one in this prompt's `convoy threads attach` footer, or `CONVOY_THREAD_ID` on most runtimes. With the Convoy MCP server, you can call the `submit_pull_request_guide` MCP tool with the same `headSha` and `steps` instead. If Convoy lists errors, fix them and submit again.",
     "",
-    'If you cannot write the guide, run `convoy threads submit-guide <threadId> --failed --note "<why>"` and stop. The reason shows on the pull request\'s Guide tab.',
+    'If you cannot write the guide, run `convoy threads submit-guide <threadId> --failed --note "<why>"` (or call `submit_pull_request_guide` with `failure`) and stop. The reason shows on the pull request\'s Guide tab.',
   ].join("\n");
 }

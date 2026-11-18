@@ -64,6 +64,8 @@ export const CODEX_APPROVAL_TOOLS = [
   "mark_thread_done",
   "attach_task_to_thread",
   "attach_pull_request_to_thread",
+  "submit_pull_request_guide",
+  "read_pull_request_guide",
 ] as const;
 
 interface BuildProjectScopedMcpUrlOptions {

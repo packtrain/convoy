@@ -357,7 +357,7 @@ Status: requesting, reading, switching between, and deleting Guides are
 built (OS-2412), and so are Failed guides and Retry (OS-2413), Don't ask
 again (OS-2414), the duplicate-run warning (OS-2415), and the project's Guide
 prompt with the Stack in the prompt (OS-2416), and Outdated guides and
-Follow-up guides (OS-2417). The MCP tools (OS-2418) are planned.
+Follow-up guides (OS-2417), and the MCP tools (OS-2418).
 
 ### Requesting and running
 
@@ -410,8 +410,9 @@ guide in the corner menu.
   when a PR lands.
 
 The agent hands the Guide back with `convoy threads submit-guide <threadId>
-<file|->`, a JSON file of `{ headSha, steps }` (an MCP tool
-`submit_pull_request_guide` follows in OS-2418). The action
+<file|->`, a JSON file of `{ headSha, steps }`, or with the MCP tool
+`submit_pull_request_guide` (`threadId`, `headSha`, `steps`, or `failure`),
+which the prompt names as a second way. The action
 `integrations.github.guides.submit` checks the caller owns the thread and
 its Guide is not yet ready, reads the revision's changed files from GitHub,
 and returns every error at once so the agent can fix and resubmit:
@@ -449,8 +450,8 @@ A Guide fails three ways, and stays as a Failed Guide with the reason
 (`failureReason`, cut to 1,000 characters):
 
 - The agent reports it: `convoy threads submit-guide <threadId> --failed
-  --note <why>` sends `failure` to `guides.submit`, and the note is the
-  reason. The prompt asks for this when the Working path is no clone of the
+  --note <why>`, or `submit_pull_request_guide` with `failure`, sends
+  `failure` to `guides.submit`, and the note is the reason. The prompt asks for this when the Working path is no clone of the
   repository or `gh` is not signed in. An empty note is refused ("Say why the
   guide could not be written."); a later note replaces the earlier one.
 - The run's turn ends with the Guide still writing: `markThreadStreamEnded`
@@ -488,8 +489,11 @@ connecting the same repository never sees them, and they follow the PR
 metadata's 30-day retention after a disconnect: the purge deletes the
 link's project's Guides, 10 per batch.
 
-An MCP tool `read_pull_request_guide` returns a PR's Guides, their run state,
-and an `outdated` flag so other agents can use them. Starting runs from MCP
+The MCP tool `read_pull_request_guide` (query `guides.read`) gives Guides to
+other agents: the PR's newest 20 with their run state, failure reason, and
+`outdated` (the stored PR's head is no longer the Guide's), and one Guide's
+steps, `guideId`'s or else the newest ready one's. It reads the steps of that
+one Guide only, as the Guide tab does. Any project member reads. Starting runs from MCP
 waits for the automations, so no agent can start a run on someone else's
 machine.
 
@@ -1572,6 +1576,8 @@ Defined in `apps/web/convex/integrations/github/errors.ts`; tests assert on them
 | Guide run on a PR outside the connected repositories (`cli/errors.ts`) | Guides need a pull request in a connected repository |
 | Guide run after a push (`cli/errors.ts`) | The pull request has new commits. Generate the guide again. |
 | `--failed` with an empty note | Say why the guide could not be written. |
+| `read_pull_request_guide` with something that is no PR URL or `owner/repo#number` | Not a GitHub pull request URL |
+| `read_pull_request_guide` with a `guideId` of another PR, or deleted | The guide was deleted. |
 | Submit with neither steps nor a failure note | A guide needs "headSha" and "steps"; to report a failure, send a note instead. |
 | Retry of someone else's Guide (`cli/errors.ts`) | Only the requester can retry a guide |
 | Retry of a Guide that is not failed (`cli/errors.ts`) | Only a failed guide can be retried |

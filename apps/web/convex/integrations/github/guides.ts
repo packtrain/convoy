@@ -1,11 +1,11 @@
-import { ConvexError, v, type Infer } from "convex/values";
+import { ConvexError, v, type Infer, type ObjectType } from "convex/values";
 import type { Doc, Id } from "../../_generated/dataModel";
-import { action, internalMutation, internalQuery, mutation, query, type MutationCtx, type QueryCtx } from "../../_generated/server";
+import { action, internalMutation, internalQuery, mutation, query, type ActionCtx, type MutationCtx, type QueryCtx } from "../../_generated/server";
 import { internal } from "../../_generated/api";
 import { ProjectPermission } from "../../../lib/authz/permissions";
 import { getAuthenticatedAccess } from "../../lib/access/auth";
 import { hasAuthorizedProjectPermission, requireAuthorizedProject } from "../../lib/access/permissions";
-import { GUIDE_PROMPT_MAX, guideChangesValidator, guideStepValidator } from "../../lib/contracts/github";
+import { GUIDE_PROMPT_MAX, guideChangesValidator, guideStepValidator, parseAttachedPullRequest, pullRequestStateValidator } from "../../lib/contracts/github";
 import { ensure } from "../../lib/shared/ensure";
 import { getUsersByIds } from "../../users/lib/usersRepo";
 import { getThreadById } from "../../cli/threads/lib/cliThreadsRepo";
@@ -14,8 +14,9 @@ import { githubFetch, mintRepositoryToken, repoPath, requireConfig, toUserError 
 import { list as asList, num, record, str } from "./lib/parsers";
 import { validateGuide, type GuideRevision } from "./lib/invariants";
 import { completeGuide, deleteGuide, failGuide, getGuideById, getGuideByThreadId, getGuideSteps, listGuidesForPullRequest } from "./lib/integrationPullRequestGuidesRepo";
-import { findRepositoryLinkForProjectAndRepository, getRepositoryLinkById } from "./lib/integrationRepositoryLinksRepo";
-import { getRepositoryById } from "./lib/integrationRepositoriesRepo";
+import { findRepositoryLinkForProjectAndRepository, getRepositoryLinkById, listActiveRepositoryLinksForProject } from "./lib/integrationRepositoryLinksRepo";
+import { findLinkedRepository, getRepositoryById } from "./lib/integrationRepositoriesRepo";
+import { getPullRequestByNumber } from "./lib/integrationPullRequestsRepo";
 import { getGuidePrompt, setGuidePrompt } from "./lib/integrationGuidePromptsRepo";
 import { authorizeIntegrationProject, getReadableRepositoryAccess } from "./lib/permissions";
 import { guideDetailValidator, guideSummaryValidator, syncContextValidator, toGuideSummary, toSyncContext, type SyncContext } from "./lib/validators";
@@ -61,6 +62,47 @@ export const get = query({
     }
     const viewer = { userId: readable.access.userId, canManage: hasAuthorizedProjectPermission(readable.access, ProjectPermission.PROJECT_UPDATE) };
     return { ...toGuideSummary(row, await readUsers(ctx, [row]), viewer), ...(await getGuideSteps(ctx, row._id)) };
+  },
+});
+
+const readResultValidator = v.object({
+  /** Null until Convoy has synced the PR. */
+  pullRequest: v.union(v.null(), v.object({ state: pullRequestStateValidator, headSha: v.string() })),
+  guides: v.array(guideSummaryValidator.extend({ outdated: v.boolean() })),
+  guide: v.union(v.null(), guideDetailValidator.extend({ outdated: v.boolean() })),
+});
+
+/**
+ * `read_pull_request_guide`: the PR's newest Guides, each `outdated` once the
+ * PR's head moved past it, and one Guide's steps: `guideId`'s, else the newest
+ * ready one's. Null without access to the PR's connected repository.
+ */
+export const read = query({
+  /** `pullRequest` is a github.com PR URL or `owner/name#number`. */
+  args: { projectId: v.id("projects"), pullRequest: v.string(), guideId: v.optional(v.id("integrationPullRequestGuides")), apiKey: v.optional(v.string()) },
+  returns: v.union(v.null(), readResultValidator),
+  handler: async (ctx, args) => {
+    const name = await ensure(parseAttachedPullRequest(args.pullRequest)).notNull(errors.PULL_REQUEST_URL_INVALID);
+    const access = await authorizeIntegrationProject(ctx, args.projectId, ProjectPermission.PROJECT_VIEW, args.apiKey);
+    const linked = access ? await findLinkedRepository(ctx, await listActiveRepositoryLinksForProject(ctx, args.projectId), name) : null;
+    if (!access || !linked) {
+      return null;
+    }
+    const pullRequest = { projectId: args.projectId, repositoryId: linked.repository._id, number: name.number };
+    const stored = await getPullRequestByNumber(ctx, pullRequest.repositoryId, pullRequest.number);
+    const rows = await listGuidesForPullRequest(ctx, pullRequest, GUIDES_SHOWN);
+    const picked = args.guideId ? await getGuideById(ctx, args.guideId) : (rows.find((row) => row.status === "ready") ?? null);
+    const pickedElsewhere = picked?.projectId !== pullRequest.projectId || picked.repositoryId !== pullRequest.repositoryId || picked.number !== pullRequest.number;
+    await ensure(args.guideId !== undefined && pickedElsewhere).isFalse(errors.GUIDE_NOT_FOUND);
+    // readUsers reads each requester once, so a picked Guide also in `rows` costs nothing.
+    const users = await readUsers(ctx, picked ? [...rows, picked] : rows);
+    const viewer = { userId: access.userId, canManage: hasAuthorizedProjectPermission(access, ProjectPermission.PROJECT_UPDATE) };
+    const toRead = (row: Doc<"integrationPullRequestGuides">) => ({ ...toGuideSummary(row, users, viewer), outdated: !!stored && stored.headSha !== row.headSha });
+    return {
+      pullRequest: stored && { state: stored.state, headSha: stored.headSha },
+      guides: rows.map(toRead),
+      guide: picked ? { ...toRead(picked), ...(await getGuideSteps(ctx, picked._id)) } : null,
+    };
   },
 });
 
@@ -230,6 +272,15 @@ const submitResultValidator = v.union(
   v.object({ status: v.literal("rejected"), errors: v.array(v.string()) })
 );
 
+const submitArgs = {
+  threadId: v.id("cliThreads"),
+  headSha: v.optional(v.string()),
+  // Checked by `validateGuide`, so a wrong shape comes back in the error list.
+  steps: v.optional(v.array(v.any())),
+  failure: v.optional(v.string()),
+  apiKey: v.optional(v.string()),
+};
+
 /**
  * The agent hands its Guide back (`convoy threads submit-guide`). Convoy checks
  * it against the revision's changed files and returns every error, so the
@@ -237,47 +288,43 @@ const submitResultValidator = v.union(
  * write one, and the Guide fails.
  */
 export const submit = action({
-  args: {
-    threadId: v.id("cliThreads"),
-    headSha: v.optional(v.string()),
-    // Checked by `validateGuide`, so a wrong shape comes back in the error list.
-    steps: v.optional(v.array(v.any())),
-    failure: v.optional(v.string()),
-    apiKey: v.optional(v.string()),
-  },
+  args: submitArgs,
   returns: submitResultValidator,
-  handler: async (ctx, args): Promise<Infer<typeof submitResultValidator>> => {
-    const reason = args.failure?.trim();
-    if (reason === "") {
-      throw new ConvexError(errors.GUIDE_FAILURE_NOTE_REQUIRED);
-    }
-    const run: Infer<typeof submitContextValidator> = await ctx.runQuery(internal.integrations.github.guides.getSubmitContext, { threadId: args.threadId, apiKey: args.apiKey });
-    if (reason !== undefined) {
-      await ctx.runMutation(internal.integrations.github.guides.fail, { guideId: run.guideId, threadId: run.threadId, reason });
-      return { status: "accepted" as const, guideId: run.guideId };
-    }
-    if (args.headSha === undefined || args.steps === undefined) {
-      return { status: "rejected" as const, errors: [errors.GUIDE_SUBMIT_INCOMPLETE] };
-    }
-    let revision: GuideRevision;
-    try {
-      const token = await mintRepositoryToken(requireConfig(), run.context.installationId, run.context.providerRepositoryId);
-      revision = await readGuideRevision(token, run.context, run);
-    } catch (error) {
-      throw toUserError(error, errors.PULL_REQUEST_NOT_FOUND);
-    }
-    const result = validateGuide({ headSha: args.headSha, steps: args.steps }, revision, run.baseSteps);
-    if (!result.ok) {
-      return { status: "rejected" as const, errors: result.errors };
-    }
-    await ctx.runMutation(internal.integrations.github.guides.complete, {
-      guideId: run.guideId,
-      threadId: run.threadId,
-      repositoryLinkId: run.repositoryLinkId,
-      generation: run.generation,
-      steps: result.steps,
-      followUp: result.followUp,
-    });
-    return { status: "accepted" as const, guideId: run.guideId };
-  },
+  handler: (ctx, args) => submitGuide(ctx, args),
 });
+
+/** `submit`'s body, called directly by the `submit_pull_request_guide` MCP tool. */
+export async function submitGuide(ctx: ActionCtx, args: ObjectType<typeof submitArgs>): Promise<Infer<typeof submitResultValidator>> {
+  const reason = args.failure?.trim();
+  if (reason === "") {
+    throw new ConvexError(errors.GUIDE_FAILURE_NOTE_REQUIRED);
+  }
+  const run: Infer<typeof submitContextValidator> = await ctx.runQuery(internal.integrations.github.guides.getSubmitContext, { threadId: args.threadId, apiKey: args.apiKey });
+  if (reason !== undefined) {
+    await ctx.runMutation(internal.integrations.github.guides.fail, { guideId: run.guideId, threadId: run.threadId, reason });
+    return { status: "accepted" as const, guideId: run.guideId };
+  }
+  if (args.headSha === undefined || args.steps === undefined) {
+    return { status: "rejected" as const, errors: [errors.GUIDE_SUBMIT_INCOMPLETE] };
+  }
+  let revision: GuideRevision;
+  try {
+    const token = await mintRepositoryToken(requireConfig(), run.context.installationId, run.context.providerRepositoryId);
+    revision = await readGuideRevision(token, run.context, run);
+  } catch (error) {
+    throw toUserError(error, errors.PULL_REQUEST_NOT_FOUND);
+  }
+  const result = validateGuide({ headSha: args.headSha, steps: args.steps }, revision, run.baseSteps);
+  if (!result.ok) {
+    return { status: "rejected" as const, errors: result.errors };
+  }
+  await ctx.runMutation(internal.integrations.github.guides.complete, {
+    guideId: run.guideId,
+    threadId: run.threadId,
+    repositoryLinkId: run.repositoryLinkId,
+    generation: run.generation,
+    steps: result.steps,
+    followUp: result.followUp,
+  });
+  return { status: "accepted" as const, guideId: run.guideId };
+}

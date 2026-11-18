@@ -17,6 +17,7 @@ export const errors = {
   STILL_CONNECTED: "Disconnect this repository before deleting its pull requests",
   GITHUB_UNAVAILABLE: "GitHub could not be reached. Try again in a moment.",
   GITHUB_RATE_LIMITED: "GitHub is limiting requests from Convoy. Try again in a few minutes.",
+  PULL_REQUEST_URL_INVALID: "Not a GitHub pull request URL",
   PULL_REQUEST_NOT_FOUND: "GitHub has no pull request with this number in the connected repository",
   PULL_REQUEST_CHANGED: "The pull request changed while loading. Refresh to load the new revision.",
   FILE_NOT_FOUND: "GitHub has no file at this path in this revision",

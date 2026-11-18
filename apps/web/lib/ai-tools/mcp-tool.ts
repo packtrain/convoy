@@ -92,6 +92,8 @@ const CONVOY_TOOL_NAMES = {
   mark_thread_done: true,
   attach_task_to_thread: true,
   attach_pull_request_to_thread: true,
+  submit_pull_request_guide: true,
+  read_pull_request_guide: true,
 } satisfies Record<ConvoyToolName, true>;
 
 export const CONVOY_MCP_TOOL_NAMES: ReadonlySet<string> = new Set(

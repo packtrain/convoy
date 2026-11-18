@@ -69,6 +69,7 @@ import {
   handleUpdateChecklist,
 } from "./checks";
 import { handleCreateTaskComment } from "./tasks/comments";
+import { handleReadPullRequestGuide, handleSubmitPullRequestGuide } from "./integrations/github";
 import {
   handleListTaskArtifacts,
   handleGetTaskArtifact,
@@ -149,6 +150,8 @@ const HANDLERS: Record<ToolName, ToolHandler> = {
   mark_thread_done: handleMarkThreadDone,
   attach_task_to_thread: handleAttachTaskToThread,
   attach_pull_request_to_thread: handleAttachPullRequestToThread,
+  submit_pull_request_guide: handleSubmitPullRequestGuide,
+  read_pull_request_guide: handleReadPullRequestGuide,
 };
 
 function isToolResult(result: unknown): result is ToolResult {

@@ -3,6 +3,8 @@ import { afterEach, beforeEach, describe, expect, test, vi } from "vitest";
 import { api, internal } from "../../_generated/api";
 import { connectedProject, fakePullRequest, stubGithubAppEnv } from "../../../convex-testing/github";
 import type { Id } from "../../_generated/dataModel";
+import type { ActionCtx } from "../../_generated/server";
+import { handleMcpRequest } from "../../mcp/handler";
 import { RETENTION_MS } from "./lib/integrationRepositoryLinksRepo";
 
 beforeEach(async () => {
@@ -467,5 +469,84 @@ describe("guides", () => {
     await t.mutation(internal.integrations.github.core.purge, { repositoryLinkId, generation: 2 });
     expect(await t.run((run) => run.db.query("integrationPullRequestGuides").take(1))).toEqual([]);
     expect(await t.run((run) => run.db.query("integrationPullRequestGuideSteps").take(1))).toEqual([]);
+  });
+
+  test("read lists the PR's guides with outdated, and the newest ready guide's steps", async () => {
+    const { submit, push, request, asUser, project, member } = await setupGuideRun();
+    const read = (args: { guideId?: Id<"integrationPullRequestGuides">; pullRequest?: string } = {}, as = asUser) =>
+      as.query(api.integrations.github.guides.read, { projectId: project._id, pullRequest: "acme/repo-1#1", ...args });
+    await submit([step("Schema", ["convex/schema.ts"]), step("Reader", ["src/reader.tsx"])]);
+    const first = (await read())!;
+    expect(first.pullRequest).toEqual({ state: "open", headSha: "head-1" });
+    expect(first.guides).toMatchObject([{ status: "ready", outdated: false }]);
+    expect(first.guide?.steps.map((item) => item.title)).toEqual(["Schema", "Reader"]);
+
+    // A push outdates it; a writing guide on the new head is newest but has no steps yet.
+    await push("head-2");
+    await request("head-2");
+    const after = (await read({ pullRequest: "https://github.com/acme/repo-1/pull/1" }))!;
+    expect(after.guides.map(({ status, outdated }) => ({ status, outdated }))).toEqual([
+      { status: "writing", outdated: false },
+      { status: "ready", outdated: true },
+    ]);
+    expect(after.guide).toMatchObject({ _id: first.guides[0]._id, outdated: true });
+    expect((await read({ guideId: after.guides[0]._id }))?.guide).toMatchObject({ status: "writing", steps: [] });
+
+    // Every member reads it.
+    expect((await read({}, await member()))?.guide?.steps).toHaveLength(2);
+  });
+
+  test("read refuses a guide of another PR and returns null outside the project or a connected repository", async () => {
+    const { list, asUser, project, ctx } = await setupGuideRun();
+    const [guide] = (await list())!;
+    const read = (pullRequest: string, as = asUser, guideId?: Id<"integrationPullRequestGuides">) =>
+      as.query(api.integrations.github.guides.read, { projectId: project._id, pullRequest, guideId });
+    await expect(read("acme/repo-1#2", asUser, guide._id)).rejects.toThrow("The guide was deleted.");
+    await expect(read("not a pr")).rejects.toThrow("Not a GitHub pull request URL");
+    expect(await read("acme/other#1")).toBeNull();
+    expect(await read("acme/repo-1#1", ctx.asUser(await ctx.user()))).toBeNull();
+    expect(await read("acme/repo-1#2")).toEqual({ pullRequest: { state: "open", headSha: "head-2" }, guides: [], guide: null });
+  });
+
+  test("MCP: an agent submits a guide with submit_pull_request_guide and another reads it with read_pull_request_guide", async () => {
+    const { t, threadId, apiKey, project, list } = await setupGuideRun();
+    const ctx = {
+      runQuery: (ref: Parameters<typeof t.query>[0], args: Parameters<typeof t.query>[1]) => t.query(ref, args),
+      runMutation: (ref: Parameters<typeof t.mutation>[0], args: Parameters<typeof t.mutation>[1]) => t.mutation(ref, args),
+    } as unknown as ActionCtx;
+    const call = async (name: string, args: Record<string, unknown>) => {
+      const response = await handleMcpRequest(ctx, apiKey, { jsonrpc: "2.0", id: name, method: "tools/call", params: { name, arguments: args } }, `https://x.convex.site/api/mcp?project=${project._id}`);
+      const content = (response?.result as { content?: { text: string }[] } | undefined)?.content;
+      return content ? JSON.parse(content[0].text) : response?.error;
+    };
+    const [writing] = (await list())!;
+
+    expect(await call("submit_pull_request_guide", { threadId, headSha: "head-1", steps: [step("Schema", ["convex/schema.ts"])] })).toEqual({
+      status: "rejected",
+      errors: ["src/reader.tsx is not in any step. Every changed file belongs to exactly one step."],
+    });
+    expect(await call("submit_pull_request_guide", { threadId, steps: "nope" })).toMatchObject({ code: -32602 });
+    expect(await call("submit_pull_request_guide", { threadId, headSha: "head-1", steps: [step("All", ["convex/schema.ts", "src/reader.tsx"])] })).toEqual({
+      status: "accepted",
+      guideId: writing._id,
+    });
+
+    const read = await call("read_pull_request_guide", { pullRequest: "acme/repo-1#1" });
+    expect(read.guides).toMatchObject([{ _id: writing._id, status: "ready", outdated: false }]);
+    expect(read.guide.steps.map((item: { title: string }) => item.title)).toEqual(["All"]);
+  });
+
+  test("MCP: submit_pull_request_guide with failure fails the guide", async () => {
+    const { t, threadId, apiKey, list } = await setupGuideRun();
+    const ctx = {
+      runQuery: (ref: Parameters<typeof t.query>[0], args: Parameters<typeof t.query>[1]) => t.query(ref, args),
+      runMutation: (ref: Parameters<typeof t.mutation>[0], args: Parameters<typeof t.mutation>[1]) => t.mutation(ref, args),
+    } as unknown as ActionCtx;
+    const response = await handleMcpRequest(ctx, apiKey, {
+      jsonrpc: "2.0", id: "fail", method: "tools/call",
+      params: { name: "submit_pull_request_guide", arguments: { threadId, failure: "Not a clone" } },
+    });
+    expect(response?.error).toBeUndefined();
+    expect((await list())![0]).toMatchObject({ status: "failed", failureReason: "Not a clone" });
   });
 });

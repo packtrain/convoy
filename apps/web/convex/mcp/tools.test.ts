@@ -64,6 +64,8 @@ describe("MCP tools", () => {
     expect(toolNames).toContain("mark_thread_done");
     expect(toolNames).toContain("attach_task_to_thread");
     expect(toolNames).toContain("attach_pull_request_to_thread");
+    expect(toolNames).toContain("submit_pull_request_guide");
+    expect(toolNames).toContain("read_pull_request_guide");
     expect(toolNames).not.toContain("get_tasks_by_ref");
   });
 

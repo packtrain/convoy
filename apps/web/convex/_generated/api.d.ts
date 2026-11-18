@@ -214,6 +214,7 @@ import type * as mcp_handlers_checks from "../mcp/handlers/checks.js";
 import type * as mcp_handlers_cliProfiles from "../mcp/handlers/cliProfiles.js";
 import type * as mcp_handlers_context from "../mcp/handlers/context.js";
 import type * as mcp_handlers_index from "../mcp/handlers/index.js";
+import type * as mcp_handlers_integrations_github from "../mcp/handlers/integrations/github.js";
 import type * as mcp_handlers_projectAgents from "../mcp/handlers/projectAgents.js";
 import type * as mcp_handlers_projects from "../mcp/handlers/projects.js";
 import type * as mcp_handlers_prompts from "../mcp/handlers/prompts.js";
@@ -579,6 +580,7 @@ declare const fullApi: ApiFromModules<{
   "mcp/handlers/cliProfiles": typeof mcp_handlers_cliProfiles;
   "mcp/handlers/context": typeof mcp_handlers_context;
   "mcp/handlers/index": typeof mcp_handlers_index;
+  "mcp/handlers/integrations/github": typeof mcp_handlers_integrations_github;
   "mcp/handlers/projectAgents": typeof mcp_handlers_projectAgents;
   "mcp/handlers/projects": typeof mcp_handlers_projects;
   "mcp/handlers/prompts": typeof mcp_handlers_prompts;

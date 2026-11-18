@@ -1219,6 +1219,34 @@ Attach-once: the same PR again is a no-op; a thread attached to another PR,
 or a group or workflow run container, is rejected. Ownership and
 `CLI_THREAD` permission apply, including API-key scope.
 
+---
+
+### `submit_pull_request_guide`
+
+Submit the pull request Guide a thread was started to write, the same as
+`convoy threads submit-guide`. Requires `threadId`, the Guide run's own
+thread. Send `headSha` and `steps` as the Guide prompt shows them, or
+`failure` with why the guide could not be written; the reason then shows on
+the PR's Guide tab.
+
+Returns `{ status: "accepted", guideId }`, or `{ status: "rejected", errors }`
+with every problem at once, such as a changed file that is in no step. Fix
+them and submit again. Only the thread's owner can submit.
+
+---
+
+### `read_pull_request_guide`
+
+Read the Guides of a pull request in a repository connected to the project.
+Requires `pullRequest`: a github.com PR URL or `owner/repo#number`.
+Optional: `guideId`, `projectId`.
+
+Returns `pullRequest` (its state and head commit), `guides` (the newest 20,
+each with `status`: writing, ready, or failed, and `outdated: true` once the
+PR has commits the Guide does not cover), and `guide`: the Guide named by
+`guideId` with its `steps`, else the newest ready Guide, else null. Every
+project member can read Guides.
+
 ## Authentication and errors
 
 - **Auth.** Every request must carry `Authorization: Bearer <api-key>`.
