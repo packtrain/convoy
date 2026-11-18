@@ -28,6 +28,10 @@ export type TaskUpdateFields = {
   sectionId?: Id<"taskSections">;
 };
 
+/** Assignee arg: a user ID, `"me"` for the caller (OS-846), or null to clear. */
+export const assigneeIdInputValidator = v.union(v.id("users"), v.literal("me"), v.null());
+export type AssigneeIdInput = Infer<typeof assigneeIdInputValidator>;
+
 export type TaskSearchFilters = {
   status?: Status;
   assigneeId?: Id<"users"> | null;

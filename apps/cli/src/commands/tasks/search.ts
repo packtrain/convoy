@@ -102,7 +102,7 @@ export const searchTasksCommand = addGlobalOptions(
         .option("--org <org>", "Organization ID or slug (used with --project alias)")
         .option("--archive-mode <mode>", "Archive mode: active|archived (default: active)")
         .option("--status <status>", "Filter by task status")
-        .option("--assignee-id <userId>", "Filter by assignee (human owner) user ID")
+        .option("--assignee-id <userId>", "Filter by assignee (human owner) user ID, or \"me\"")
         .option("--unassigned", "Filter to tasks with no assignee")
         .option("--delegated-to-agent <projectAgentId>", "Filter by delegated project agent ID")
         .option("--list <list>", LIST_OPTION_DESCRIPTION)

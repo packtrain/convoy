@@ -80,7 +80,7 @@ export const updateTaskCommand = addGlobalOptions(
       .option("--status <status>", "Task status")
       .option("--due-date <value>", "Due date (unix seconds/ms or ISO-8601)")
       .option("--clear-due-date", "Clear due date")
-      .option("--assignee-id <userId>", "Assign task to this user ID (human owner)")
+      .option("--assignee-id <userId>", "Assign task to this user ID (human owner), or \"me\"")
       .option("--unassign", "Clear assignee")
       .option("--delegate-to-agent <projectAgentId>", "Delegate execution to this project agent")
       .option("--clear-delegation", "Clear the delegated agent (assignee is kept)")

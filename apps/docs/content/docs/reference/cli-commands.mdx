@@ -348,7 +348,7 @@ as an alias.
 |---|---|
 | `--archive-mode <mode>` | `active` or `archived` (default: `active`) |
 | `--status <status>` | Filter by task status |
-| `--assignee-id <userId>` | Filter by owner (human assignee) |
+| `--assignee-id <userId>` | Filter by owner (human assignee); `me` for your own tasks |
 | `--unassigned` | Filter to tasks with no owner |
 | `--delegated-to-agent <projectAgentId>` | Filter by delegated project agent |
 | `--list <list>` | List ID or bare List ref |
@@ -382,7 +382,7 @@ Get tasks by refs (e.g. `convoy tasks refs ABC-1 ABC-2`). Supports
 | `--priority <priority>` | `None`, `Low`, `Medium`, `High`, `Critical` |
 | `--status <status>` | Task status |
 | `--due-date <value>` | Unix seconds/ms or ISO-8601 |
-| `--assignee-id <userId>` | Owner (human assignee) |
+| `--assignee-id <userId>` | Owner (human assignee); `me` assigns yourself |
 | `--delegate-to-agent <projectAgentId>` | Delegate execution to this project agent |
 | `--tags <tag...>` | Tags (repeat and/or comma-separate) |
 | `--list <list>` | List ID or bare List ref |

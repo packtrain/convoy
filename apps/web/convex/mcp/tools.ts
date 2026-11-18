@@ -145,7 +145,7 @@ export function getToolDefinitions(
   // `assignee` object param is rejected by the parsers.
   const assigneeIdSchema = {
     type: ["string", "null"],
-    description: "User ID of the human owner, or null to unassign.",
+    description: 'User ID of the human owner, "me" for yourself, or null to unassign.',
   };
   const delegatedToAgentIdSchema = {
     type: ["string", "null"],
@@ -1047,7 +1047,7 @@ export function getToolDefinitions(
               },
               assigneeId: {
                 ...assigneeIdSchema,
-                description: "Filter by human owner user ID. Use null for tasks with no owner.",
+                description: 'Filter by human owner user ID. Use "me" for your own tasks, null for tasks with no owner.',
               },
               delegatedToAgentId: {
                 ...delegatedToAgentIdSchema,

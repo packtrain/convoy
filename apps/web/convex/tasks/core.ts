@@ -40,6 +40,7 @@ import {
   getByRefsResultValidator,
   type GetByRefLookupResult,
   type TaskUpdateFields,
+  assigneeIdInputValidator,
 } from "./lib/validators";
 import { buildTaskSearchText } from "./lib/searchText";
 import { assertProjectAllowsStatus } from "./lib/invariants";
@@ -47,6 +48,7 @@ import { getAppendRankForList } from "./lib/ranking";
 import { enrichTasksWithUserDetails } from "./lib/hydrate";
 import {
   applyAutoSetOwner,
+  resolveMeAssignee,
   assertAssignableProjectAgent,
   getTaskAssigneeSplit,
   hasAssigneeSplitUpdate,
@@ -422,7 +424,7 @@ export const create = mutation({
     status: statusValidator,
     listId: v.optional(v.string()),
     listRef: v.optional(v.string()),
-    assigneeId: v.optional(v.union(v.id("users"), v.null())),
+    assigneeId: v.optional(assigneeIdInputValidator),
     delegatedToAgentId: v.optional(v.union(v.id("projectAgents"), v.null())),
     tags: v.array(v.string()),
     labelId: v.optional(v.id("projectLabels")),
@@ -435,7 +437,7 @@ export const create = mutation({
     const { user, principal } = await getAuthenticatedAccess(ctx, args.apiKey);
     const { project } = await requireAuthorizedProject(ctx, principal, args.projectId, ProjectPermission.TASK_CREATE);
     const splitArgs = applyAutoSetOwner({
-      splitArgs: { assigneeId: args.assigneeId, delegatedToAgentId: args.delegatedToAgentId },
+      splitArgs: { assigneeId: resolveMeAssignee(args.assigneeId, user._id), delegatedToAgentId: args.delegatedToAgentId },
       currentAssigneeId: undefined,
       actingUserId: user._id,
     });
@@ -761,7 +763,7 @@ export const update = mutation({
     priority: v.optional(priorityValidator),
     dueDate: v.optional(v.union(v.number(), v.null())),
     status: v.optional(statusValidator),
-    assigneeId: v.optional(v.union(v.id("users"), v.null())),
+    assigneeId: v.optional(assigneeIdInputValidator),
     delegatedToAgentId: v.optional(v.union(v.id("projectAgents"), v.null())),
     tags: v.optional(v.array(v.string())),
     labelId: v.optional(v.union(v.id("projectLabels"), v.null())),
@@ -777,9 +779,10 @@ export const update = mutation({
 
     const { project } = await requireAuthorizedProject(ctx, principal, task.projectId, ProjectPermission.TASK_UPDATE);
 
+    const updateArgs = { ...args, assigneeId: resolveMeAssignee(args.assigneeId, user._id) };
     const currentSplit = getTaskAssigneeSplit(task);
     const splitArgs = applyAutoSetOwner({
-      splitArgs: { assigneeId: args.assigneeId, delegatedToAgentId: args.delegatedToAgentId },
+      splitArgs: { assigneeId: updateArgs.assigneeId, delegatedToAgentId: args.delegatedToAgentId },
       currentAssigneeId: currentSplit.assigneeId,
       actingUserId: user._id,
     });
@@ -794,14 +797,14 @@ export const update = mutation({
       await assertSectionInList(ctx, { projectId: task.projectId, listKey: task.listKey, sectionId: args.sectionId });
     }
 
-    const patch = buildTaskUpdatePatch(args, task, project, resolvedSplit);
+    const patch = buildTaskUpdatePatch(updateArgs, task, project, resolvedSplit);
 
     if (Object.keys(patch).length > 0) {
       await patchTask(ctx, args.id, patch);
 
       await logTaskUpdateChanges(ctx, {
         task,
-        updateArgs: args,
+        updateArgs,
         resolvedSplit,
         userId: user._id,
       });

@@ -9,10 +9,10 @@ import { getOptionalAuthenticatedAccess, getOptionalAuthenticatedUser } from "..
 import { authorizeProjectAccess } from "../../lib/access/permissions";
 import { ProjectPermission } from "@/lib/authz/permissions";
 import { resolveOptionalProjectTaskList } from "../lib/lists/resolution";
-import { paginatedTaskResultValidator, taskSearchResponseValidator } from "../lib/validators";
+import { assigneeIdInputValidator, paginatedTaskResultValidator, taskSearchResponseValidator } from "../lib/validators";
 import type { TaskSearchFilters } from "../lib/validators";
 import type { PaginationOptions } from "convex/server";
-import { getTaskAssigneeSplit } from "../lib/assignees";
+import { getTaskAssigneeSplit, resolveMeAssignee } from "../lib/assignees";
 import { enrichTasksWithUserDetails } from "../lib/hydrate";
 import { normalizeWhitespace } from "../lib/searchText";
 import { MAX_SEARCH_TERMS, REF_QUERY_REGEX } from "../lib/constants";
@@ -226,7 +226,7 @@ export const byProject = query({
     filters: v.optional(
       v.object({
         status: v.optional(statusValidator),
-        assigneeId: v.optional(v.union(v.id("users"), v.null())),
+        assigneeId: v.optional(assigneeIdInputValidator),
         delegatedToAgentId: v.optional(v.union(v.id("projectAgents"), v.null())),
       })
     ),
@@ -238,7 +238,7 @@ export const byProject = query({
     if (!auth) {
       return EMPTY_PAGE;
     }
-    const { principal } = auth;
+    const { principal, user } = auth;
 
     const access = await authorizeProjectAccess(
       ctx,
@@ -250,7 +250,11 @@ export const byProject = query({
       return EMPTY_PAGE;
     }
 
-    const matches = await findSearchMatches(ctx, access.project, args);
+    const filters = args.filters && {
+      ...args.filters,
+      assigneeId: resolveMeAssignee(args.filters.assigneeId, user._id),
+    };
+    const matches = await findSearchMatches(ctx, access.project, { ...args, filters });
     return {
       ...matches,
       page: await toTaskSelectorResultsPage(ctx, matches.page, access.project),

@@ -10,6 +10,7 @@ import { AGENT_COLOR_PALETTE } from "@/lib/colors/palette";
 import { getProjectAgentById, getProjectAgentsByIds } from "../../agents/lib/projectAgentsRepo";
 import { getUserById, getUsersByIds } from "../../users/lib/usersRepo";
 import { errors } from "../errors";
+import type { AssigneeIdInput } from "./validators";
 
 type Ctx = QueryCtx | MutationCtx;
 
@@ -30,6 +31,14 @@ export type TaskAssigneeSplitArgs = {
   assigneeId?: Id<"users"> | null;
   delegatedToAgentId?: Id<"projectAgents"> | null;
 };
+
+/** Swap the `"me"` assignee arg for the caller's user ID. */
+export function resolveMeAssignee(
+  assigneeId: AssigneeIdInput | undefined,
+  callerId: Id<"users">
+): Id<"users"> | null | undefined {
+  return assigneeId === "me" ? callerId : assigneeId;
+}
 
 export function hasAssigneeSplitUpdate(args: TaskAssigneeSplitArgs): boolean {
   return args.assigneeId !== undefined || args.delegatedToAgentId !== undefined;

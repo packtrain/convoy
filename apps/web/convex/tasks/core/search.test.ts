@@ -145,8 +145,9 @@ describe("searchByProject", () => {
 
   test("should support archive mode tabs and API-level status/assignee filters", async () => {
     const ctx = createTestContext();
-    const { project, user, asUser } = await ctx.setupProject();
+    const { org, project, user, asUser } = await ctx.setupProject();
     const otherUser = await ctx.user();
+    await ctx.orgMember(org._id, otherUser._id, "member");
     await ctx.projectMember(project._id, otherUser._id, "member");
 
     const { taskId: activeTodo } = await asUser.mutation(api.tasks.core.create, {
@@ -208,6 +209,23 @@ describe("searchByProject", () => {
     expect(
       assigneeFiltered.page.every((task) => task.assignee?.userId === user._id)
     ).toBe(true);
+
+    const meFiltered = await asUser.query(api.tasks.core.search.byProject, {
+      projectId: project._id,
+      query: "active",
+      archiveMode: "archived",
+      paginationOpts: { numItems: 8, cursor: null },
+      filters: { assigneeId: "me" },
+    });
+    expect(meFiltered.page.map((task) => task._id)).toEqual([]);
+    const otherMeFiltered = await ctx.asUser(otherUser).query(api.tasks.core.search.byProject, {
+      projectId: project._id,
+      query: "active",
+      archiveMode: "archived",
+      paginationOpts: { numItems: 8, cursor: null },
+      filters: { assigneeId: "me" },
+    });
+    expect(otherMeFiltered.page.map((task) => task._id)).toEqual([activeDone]);
   });
 
   test("should support delegation and owner filters for Project agents and unassigned tasks", async () => {

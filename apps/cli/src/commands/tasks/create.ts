@@ -45,7 +45,7 @@ export const createTaskCommand = addGlobalOptions(
       .option("--priority <priority>", "Priority: None|Low|Medium|High|Critical")
       .option("--status <status>", "Task status")
       .option("--due-date <value>", "Due date (unix seconds/ms or ISO-8601)")
-      .option("--assignee-id <userId>", "Assignee (human owner) user ID")
+      .option("--assignee-id <userId>", "Assignee (human owner) user ID, or \"me\"")
       .option("--delegate-to-agent <projectAgentId>", "Delegate execution to this project agent")
       .option("--tags <tag...>", "Tags (repeat and/or comma-separate values)")
       .option("--list <list>", LIST_OPTION_DESCRIPTION)

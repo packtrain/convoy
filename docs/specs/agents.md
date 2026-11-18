@@ -190,6 +190,9 @@ delegatedToAgent:
 - MCP task tools use the same split shape (`assigneeId` /
   `delegatedToAgentId` params, `assignee` / `delegatedToAgent` output) — see
   `mcp-server.md`.
+- API callers (MCP, CLI) may pass `assigneeId: "me"` to `tasks.core.create`,
+  `tasks.core.update`, and the `byProject` search filter; the server resolves
+  it to the authenticated user (OS-846).
 - Delegating a task to a Project agent does not start an Agent execution.
   Delegation automation (OS-1094) can open a prefilled thread composer on
   interactive web-UI delegation, but nothing runs until the user sends — see

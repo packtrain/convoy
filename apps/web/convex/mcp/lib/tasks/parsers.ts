@@ -1,5 +1,6 @@
 import type { Id, TableNames } from "../../../_generated/dataModel";
 import { is } from "@/lib/type-guards";
+import type { AssigneeIdInput } from "../../../tasks/lib/validators";
 import { should, throwInvalidParams } from "../should";
 import { ALL_TASK_STATUSES, isTaskStatus } from "@/lib/tasks/status-policy";
 import type { Status as TaskStatus } from "@/lib/tasks/status";
@@ -11,12 +12,12 @@ import {
 
 export type SearchTaskFilters = {
   status?: TaskStatus;
-  assigneeId?: Id<"users"> | null;
+  assigneeId?: AssigneeIdInput;
   delegatedToAgentId?: Id<"projectAgents"> | null;
 };
 
 export type TaskAssigneeSplitParams = {
-  assigneeId?: Id<"users"> | null;
+  assigneeId?: AssigneeIdInput;
   delegatedToAgentId?: Id<"projectAgents"> | null;
 };
 

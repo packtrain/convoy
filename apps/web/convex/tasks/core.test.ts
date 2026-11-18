@@ -4312,6 +4312,30 @@ describe("split assignment (OS-1335)", () => {
     });
   });
 
+  test("assigneeId 'me' resolves to the caller on create and update", async () => {
+    const { ctx, org, project, user, asUser, t } = await setupWithAgent();
+    const other = await ctx.user({ name: "Other" });
+    await ctx.orgMember(org._id, other._id, "member");
+    await ctx.projectMember(project._id, other._id, "member");
+
+    const { taskId } = await asUser.mutation(api.tasks.core.create, {
+      projectId: project._id,
+      clientId: gen.clientId(),
+      name: "Mine on create",
+      priority: "Medium",
+      status: "To Do",
+      tags: [],
+      assigneeId: "me",
+    });
+    const task = await ctx.task(project._id, user._id);
+    await ctx.asUser(other).mutation(api.tasks.core.update, { id: task._id, assigneeId: "me" });
+
+    await t.run(async (runCtx) => {
+      expect((await runCtx.db.get("tasks", taskId))?.assigneeId).toBe(user._id);
+      expect((await runCtx.db.get("tasks", task._id))?.assigneeId).toBe(other._id);
+    });
+  });
+
   test("create with only delegatedToAgentId auto-sets the creator as owner", async () => {
     const { project, user, asUser, t, projectAgentId } = await setupWithAgent();
 

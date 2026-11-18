@@ -129,7 +129,7 @@ Search tasks in a project with pagination and optional filters.
 | `query` | `string` | Yes | Search query text. |
 | `archiveMode` | `"active"` \| `"archived"` | No | Default `"active"`. |
 | `filters.status` | `string` | No | Status filter. |
-| `filters.assigneeId` | `string` \| `null` | No | Filter by human owner user ID. Use `null` for tasks with no owner. |
+| `filters.assigneeId` | `string` \| `null` | No | Filter by human owner user ID. Use `"me"` for your own tasks, `null` for tasks with no owner. |
 | `filters.delegatedToAgentId` | `string` \| `null` | No | Filter by delegated project agent ID. Use `null` for non-delegated tasks. |
 | `limit` | `integer` 1–50 | No | Default `20`. |
 | `cursor` | `string` \| `null` | No | Pagination cursor. Default `null`. |
@@ -483,7 +483,7 @@ Create a task (or subtask) in a project.
 | `priority` | enum | No | `None` \| `Low` \| `Medium` \| `High` \| `Critical`. Default `None`. |
 | `status` | enum | No | Status values enabled for the project (see Roadmap). Default `To Do`. |
 | `dueDate` | `number` | No | Unix timestamp. |
-| `assigneeId` | `string` \| `null` | No | User ID of the human owner. `null` leaves the task unassigned. |
+| `assigneeId` | `string` \| `null` | No | User ID of the human owner, or `"me"` for yourself. `null` leaves the task unassigned. |
 | `delegatedToAgentId` | `string` \| `null` | No | Project agent ID executing the task. `null` clears delegation. |
 | `tags` | `string[]` | No | Default `[]`. |
 | `label` | `string` | No | Label ID or exact label name. |
@@ -523,7 +523,7 @@ Patch an existing task. Pass `null` to clear optional fields.
 | `priority` | enum | No | Same enum as `create_task`. |
 | `status` | enum | No | |
 | `dueDate` | `number` \| `null` | No | `null` clears. |
-| `assigneeId` | `string` \| `null` | No | User ID of the human owner. `null` unassigns. |
+| `assigneeId` | `string` \| `null` | No | User ID of the human owner, or `"me"` for yourself. `null` unassigns. |
 | `delegatedToAgentId` | `string` \| `null` | No | Project agent ID executing the task. `null` clears delegation. |
 | `tags` | `string[]` | No | Replaces the tag list. |
 | `label` | `string` \| `null` | No | Label ID or exact label name. `null` clears. |

@@ -1,4 +1,5 @@
 import type { Id } from "@/convex/_generated/dataModel";
+import type { AssigneeIdInput } from "@/convex/tasks/lib/validators";
 import type { TaskDelegatedAgentDetails, TaskUserAssigneeDetails } from "@/lib/tasks/types";
 
 /** Optimistic display details for a split assignment change; absent fields are untouched. */
@@ -47,7 +48,7 @@ export function applyOptimisticAutoSetOwner({
   currentUser,
 }: {
   split: PendingAssigneeSplitDetails;
-  assigneeId?: Id<"users"> | null;
+  assigneeId?: AssigneeIdInput;
   delegatedToAgentId?: Id<"projectAgents"> | null;
   /** The task's current owner details; null when creating. */
   currentAssignee: TaskUserAssigneeDetails;
@@ -89,11 +90,12 @@ export function resolveOptimisticAssigneeSplit({
   delegatedToAgentId,
 }: {
   pendingDetails?: PendingAssigneeSplitDetails;
-  assigneeId?: Id<"users"> | null;
+  assigneeId?: AssigneeIdInput;
   delegatedToAgentId?: Id<"projectAgents"> | null;
 }): PendingAssigneeSplitDetails {
   const result: PendingAssigneeSplitDetails = { ...pendingDetails };
-  if (result.assignee === undefined && assigneeId !== undefined) {
+  // "me" (API callers only) has no client-side user to show; the server fills it in.
+  if (result.assignee === undefined && assigneeId !== undefined && assigneeId !== "me") {
     result.assignee =
       assigneeId === null ? null : { type: "user", userId: assigneeId, name: null, avatarUrl: null };
   }

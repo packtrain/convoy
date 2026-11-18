@@ -853,7 +853,7 @@ with a better `oldString`. Failures come back as an MCP error result carrying:
 | `projectId` | string | No* | — | Project ID |
 | `query` | string | Yes | — | Search text (name, description, tags, ref) |
 | `archiveMode` | string | No | `"active"` | `"active"` or `"archived"` |
-| `filters` | object | No | — | `{ status?, assigneeId?, delegatedToAgentId? }`; `assigneeId` is a user ID (owner filter) or `null` for tasks with no owner; `delegatedToAgentId` is a project agent ID (delegation filter) or `null` for non-delegated tasks. `filters.assignee` is removed and rejected (see `create_task`). |
+| `filters` | object | No | — | `{ status?, assigneeId?, delegatedToAgentId? }`; `assigneeId` is a user ID (owner filter), `"me"` for the caller's own tasks, or `null` for tasks with no owner; `delegatedToAgentId` is a project agent ID (delegation filter) or `null` for non-delegated tasks. `filters.assignee` is removed and rejected (see `create_task`). |
 | `limit` | integer | No | `20` | Page size (1–50) |
 | `cursor` | string | No | `null` | Pagination cursor |
 | `listId` | string | No | — | Raw List ID or bare project-scoped List ref |
@@ -927,7 +927,7 @@ The task detail shape matches `get_task`, except `isArchived` is retained so cal
 | `priority` | string | No | `"None"` | Priority level |
 | `status` | string | No | `"To Do"` | Initial status |
 | `dueDate` | number | No | — | Unix timestamp |
-| `assigneeId` | string \| null | No | — | User ID of the human owner; `null` leaves the task unassigned |
+| `assigneeId` | string \| null | No | — | User ID of the human owner, `"me"` for the caller; `null` leaves the task unassigned |
 | `delegatedToAgentId` | string \| null | No | — | Project agent ID executing the task; `null` clears delegation |
 | `tags` | string[] | No | `[]` | Tag strings |
 | `label` | string | No | — | Label ID or exact label name |
@@ -993,7 +993,7 @@ Creates a task comment and returns the new comment ID.
 | `priority` | string | No | New priority |
 | `status` | string | No | New status |
 | `dueDate` | number \| null | No | Unix timestamp or null to clear |
-| `assigneeId` | string \| null | No | User ID of the human owner; `null` unassigns |
+| `assigneeId` | string \| null | No | User ID of the human owner, `"me"` for the caller; `null` unassigns |
 | `delegatedToAgentId` | string \| null | No | Project agent ID executing the task; `null` clears delegation |
 | `tags` | string[] | No | Replaces all tags |
 | `label` | string \| null | No | Label ID or exact label name; `null` clears |
