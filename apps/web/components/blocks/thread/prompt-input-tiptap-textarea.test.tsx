@@ -1,7 +1,7 @@
 /**
  * @vitest-environment jsdom
  */
-import { act, cleanup, fireEvent, render, screen } from "@testing-library/react";
+import { act, cleanup, fireEvent, render, screen, within } from "@testing-library/react";
 import type { Editor } from "@tiptap/core";
 import { afterEach, describe, expect, test, vi } from "vitest";
 import type { Id } from "@/convex/_generated/dataModel";
@@ -356,6 +356,52 @@ describe("PromptInputTiptapTextarea", () => {
     rerender(<PromptInputTiptapTextarea placeholder="Ask" slashCommands={[planCommand, pdfSkill]} />);
 
     expect(await screen.findByRole("button", { name: /\/pdf-tools/ })).toBeDefined();
+  });
+
+  // OS-2429: one card follows the hovered prompt row; the delay only gates the first open.
+  test("previews a hovered prompt after 1s and swaps instantly between prompts", async () => {
+    const reviewCommand: SlashCommandCatalogItem = {
+      ...planCommand,
+      id: "cmd_review" as Id<"slashCommands">,
+      key: "review",
+      canonicalKey: "org:review",
+      displayLabel: "/review",
+      description: "Review the diff",
+      content: "Review **every** hunk.",
+    };
+    const [pdfSkill] = buildSkillComposerItems([{ _id: "skill_pdf" as Id<"skills">, name: "pdf-tools" }]);
+    const { editor } = await renderComposer({ slashCommands: [planCommand, reviewCommand, pdfSkill] });
+    editor.commands.insertContent("/");
+    const planRow = await screen.findByRole("button", { name: /\/plan/ });
+    const reviewRow = screen.getByRole("button", { name: /\/review/ });
+    const skillRow = screen.getByRole("button", { name: /\/pdf-tools/ });
+
+    vi.useFakeTimers();
+    try {
+      fireEvent.pointerEnter(skillRow);
+      act(() => vi.advanceTimersByTime(1000));
+      expect(screen.queryByRole("dialog")).toBeNull();
+
+      fireEvent.pointerEnter(planRow);
+      act(() => vi.advanceTimersByTime(999));
+      expect(screen.queryByRole("dialog")).toBeNull();
+      act(() => vi.advanceTimersByTime(1));
+      expect(screen.getByRole("dialog").textContent).toContain("Draft a plan for the work.");
+
+      fireEvent.pointerEnter(reviewRow);
+      const card = screen.getByRole("dialog");
+      expect(card.textContent).not.toContain("Draft a plan for the work.");
+      expect(card.querySelector("[data-streamdown=strong]")?.textContent).toBe("every");
+      // The description spans the card instead of stopping at the badge's column.
+      const badgeRow = within(card).getByText("Organization").parentElement!;
+      expect(badgeRow.contains(within(card).getByText("Review the diff"))).toBe(false);
+
+      fireEvent.pointerLeave(reviewRow.closest("[data-slash-command-menu]")!);
+      act(() => vi.advanceTimersByTime(150));
+      expect(screen.queryByRole("dialog")).toBeNull();
+    } finally {
+      vi.useRealTimers();
+    }
   });
 
   test("keeps newlines when syncing multiline text from the provider", async () => {

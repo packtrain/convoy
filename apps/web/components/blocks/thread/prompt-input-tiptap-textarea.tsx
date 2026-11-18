@@ -44,6 +44,7 @@ import { useFileMentionSearch, type FileMentionContext } from "@/lib/threads/hoo
 import { isRecord } from "@/lib/type-guards";
 import { PromptInputSlashCommand } from "./prompt-input-slash-command-extension";
 import { AttachmentFileMention, AttachmentReferenceProvider, AttachmentReferencePreview } from "./attachment-references";
+import { SlashCommandPreview, useSlashCommandPreview } from "./slash-command-preview";
 
 interface SuggestionState {
   /** Which trigger is active: `/` commands or `@` file mentions (OS-1144). */
@@ -768,6 +769,7 @@ export function PromptInputTiptapTextarea({
   // An empty catalog shows nothing rather than an empty menu: a composer with no
   // Prompts, Skills, or agent commands has nothing to suggest behind `/`.
   const isMenuOpen = suggestion !== null && (suggestion.kind === "attachment" ? attachmentItems.length > 0 : suggestion.kind === "file" || slashCommands.length > 0);
+  const slashPreview = useSlashCommandPreview(isMenuOpen && suggestion?.kind === "slash" ? slashItems : null);
   const suggestionMenu =
     suggestion && suggestionPosition && isMenuOpen ? (
       // pointer-events-auto: the menu is portalled to document.body, which a
@@ -829,15 +831,16 @@ export function PromptInputTiptapTextarea({
             </div>
           )
         ) : slashItems.length > 0 ? (
-          <div className="flex flex-col gap-px">
+          <div className="flex flex-col gap-px" data-slash-command-menu onPointerLeave={slashPreview.leave}>
             {slashItems.map((item, index) => (
               <button
                 key={item.canonicalKey}
                 ref={index === activeIndex ? activeItemRef : undefined}
                 type="button"
-                // Native title, not a Tooltip: rows truncate and there can be
-                // dozens of them, so a portalled tooltip per row is overkill.
-                title={getSlashCommandMenuTitle(item)}
+                // Prompts get the preview card instead; agent commands and Skills
+                // keep the native title (docs/specs/slash-commands.md#composer-behavior).
+                title={item.scope === "runtime" || item.scope === "skill" ? getSlashCommandMenuTitle(item) : undefined}
+                onPointerEnter={(event) => slashPreview.hover(item, event.currentTarget)}
                 className={cn(
                   "flex h-8 cursor-pointer items-center gap-2 rounded-lg px-3 text-left text-sm transition-colors",
                   index === activeIndex ? "bg-muted/80 text-foreground" : "text-muted-foreground hover:bg-muted/60 hover:text-foreground"
@@ -899,6 +902,12 @@ export function PromptInputTiptapTextarea({
       </div>
 
       {suggestionMenu && typeof document !== "undefined" ? createPortal(suggestionMenu, document.body) : null}
+      <SlashCommandPreview
+        preview={slashPreview.preview}
+        onPointerEnter={slashPreview.stay}
+        onPointerLeave={slashPreview.leave}
+        onClose={slashPreview.close}
+      />
     </AttachmentReferenceProvider>
   );
 }

@@ -275,10 +275,21 @@ Slash commands without a category render under `Uncategorized`.
   surface detached from its own composer (OS-1679). Selecting an item does not
   count as losing focus.
 - The secondary dropdown text uses the command description when present, otherwise a plain-text preview from the prompt content.
-- A row's full line — label, argument hint, description — is its native hover
-  `title`, because the row truncates and an argument hint is the first thing cut
-  (OS-1806). A native title rather than the design-system tooltip: the menu can
-  hold dozens of rows, and a long content preview is capped in the title.
+- An agent command or Skill row's full line (label, argument hint, description)
+  is its native hover `title`, because the row truncates and an argument hint is
+  the first thing cut (OS-1806). A native title rather than the design-system
+  tooltip: the menu can hold dozens of rows.
+- Hovering a Prompt row (Organization or Project) for 1 second opens a preview
+  card to the right of the row, styled like the CLI profile hover card: the
+  label, the description, the scope badge, and the prompt content rendered as
+  markdown in a scrollable area (OS-2429). The menu has one card that follows
+  the pointer: once it is open, hovering another Prompt row swaps its content
+  and anchor with no delay, and hovering an agent command or Skill row closes
+  it. Prompt rows have no native `title`. The card closes 150 ms after the
+  pointer leaves both the menu and the card, so the pointer can move into the
+  card and scroll it. It also closes when the menu closes or the query filters
+  its row out. The card never takes focus from the composer. Keyboard
+  highlighting does not open it.
 - The command suggestion menu shows a scope badge for stored Convoy prompts, such as `Project` or `Organization`. Colliding project and organization commands appear as separate results with the same command label and different scope badges.
 - Suggestion matches are ranked by how well the typed query matches the command
   key, best first (`matchComposerSlashCommands`, OS-1645):
