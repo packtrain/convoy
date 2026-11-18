@@ -75,6 +75,7 @@ import { appEventValidator, eventSubjectValidator } from "./lib/contracts/appEve
 import { integrationProviderValidator, integrationSetupStatusValidator } from "./lib/contracts/integrations";
 import {
   attachedPullRequestValidator,
+  guideChangesValidator,
   guideStatusValidator,
   guideStepValidator,
   normalizedPullRequestValidator,
@@ -1554,6 +1555,10 @@ export default defineSchema({
     completedAt: v.optional(v.number()),
     // Why a failed Guide failed: the agent's note, the run's error, or that the run ended without a submit.
     failureReason: v.optional(v.string()),
+    // A Follow-up guide's base (OS-2417), copied at the request so the bar still names it once the base is deleted.
+    base: v.optional(v.object({ guideId: v.id("integrationPullRequestGuides"), requesterId: v.id("users"), headSha: v.string() })),
+    // A ready follow-up's step counts, for its bar.
+    changes: v.optional(guideChangesValidator),
   })
     // `createdAt` orders the menu: a Retry restamps it, so the retried Guide lists as the newest.
     .index("by_projectId_and_repositoryId_and_number_and_createdAt", ["projectId", "repositoryId", "number", "createdAt"])
@@ -1563,6 +1568,8 @@ export default defineSchema({
   integrationPullRequestGuideSteps: defineTable({
     guideId: v.id("integrationPullRequestGuides"),
     steps: v.array(guideStepValidator),
+    // A follow-up's base steps it left out (OS-2417).
+    removedStepTitles: v.optional(v.array(v.string())),
   }).index("by_guideId", ["guideId"]),
 
   // The Guide prompt a Guide was written with (OS-2416), stored at its request; no row = the built-in default.

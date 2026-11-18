@@ -2,6 +2,7 @@ import { v, type Infer } from "convex/values";
 import type { Doc, Id } from "../../../_generated/dataModel";
 import { cliModelValidator, cliTypeValidator } from "../../../lib/contracts/validators";
 import {
+  guideChangesValidator,
   guideStatusValidator,
   guideStepValidator,
   type NormalizedPullRequest,
@@ -316,18 +317,25 @@ export const guideSummaryValidator = v.object({
   completedAt: v.optional(v.number()),
   failureReason: v.optional(v.string()),
   requester: v.object({ name: v.union(v.string(), v.null()), avatarUrl: v.union(v.string(), v.null()), isViewer: v.boolean() }),
+  /** A Follow-up guide's base, named as the menu row and the bar name it. */
+  base: v.optional(
+    v.object({ guideId: v.id("integrationPullRequestGuides"), headSha: v.string(), requester: v.object({ name: v.union(v.string(), v.null()), isViewer: v.boolean() }) })
+  ),
+  changes: v.optional(guideChangesValidator),
   /** Only for the requester: the run is a private thread. */
   threadId: v.optional(v.id("cliThreads")),
   canDelete: v.boolean(),
 });
 export type GuideSummary = Infer<typeof guideSummaryValidator>;
 
+/** `users` holds the requester and the base's requester, when they still exist. */
 export function toGuideSummary(
   row: Doc<"integrationPullRequestGuides">,
-  requester: Doc<"users"> | null,
+  users: ReadonlyMap<Id<"users">, Doc<"users"> | null>,
   viewer: { userId: Id<"users">; canManage: boolean }
 ): GuideSummary {
   const isViewer = row.requesterId === viewer.userId;
+  const requester = users.get(row.requesterId) ?? null;
   return {
     _id: row._id,
     status: row.status,
@@ -341,8 +349,14 @@ export function toGuideSummary(
     requester: { name: requester?.name ?? null, avatarUrl: requester?.avatarUrl ?? null, isViewer },
     threadId: isViewer ? row.threadId : undefined,
     canDelete: isViewer || viewer.canManage,
+    base: row.base && {
+      guideId: row.base.guideId,
+      headSha: row.base.headSha,
+      requester: { name: users.get(row.base.requesterId)?.name ?? null, isViewer: row.base.requesterId === viewer.userId },
+    },
+    changes: row.changes,
   };
 }
 
-export const guideDetailValidator = guideSummaryValidator.extend({ steps: v.array(guideStepValidator) });
+export const guideDetailValidator = guideSummaryValidator.extend({ steps: v.array(guideStepValidator), removedStepTitles: v.array(v.string()) });
 export type GuideDetail = Infer<typeof guideDetailValidator>;

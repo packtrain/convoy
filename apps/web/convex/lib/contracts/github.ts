@@ -111,6 +111,9 @@ export const GUIDE_MAX_QUESTIONS = 2;
 /** A project's Guide prompt, in characters. */
 export const GUIDE_PROMPT_MAX = 8000;
 
+/** How a Follow-up guide's step relates to its base; a Removed step is kept by title only (OS-2417). */
+export const guideStepChangeValidator = v.union(v.literal("unchanged"), v.literal("updated"), v.literal("new"));
+
 /** A stored step: each file carries its blob at the Guide's head, filled in by Convoy on submit. */
 export const guideStepValidator = v.object({
   title: v.string(),
@@ -118,8 +121,15 @@ export const guideStepValidator = v.object({
   attention: v.optional(v.object({ kind: guideAttentionKindValidator, note: v.string() })),
   files: v.array(v.object({ path: v.string(), note: v.optional(v.string()), sha: v.optional(v.string()) })),
   questions: v.array(v.string()),
+  /** Set on a Follow-up guide's steps only; `whatChanged` on Updated ones. */
+  change: v.optional(guideStepChangeValidator),
+  whatChanged: v.optional(v.string()),
 });
 export type GuideStep = Infer<typeof guideStepValidator>;
+
+/** A Follow-up guide's step counts, for its bar. */
+export const guideChangesValidator = v.object({ unchanged: v.number(), updated: v.number(), added: v.number(), removed: v.number() });
+export type GuideChanges = Infer<typeof guideChangesValidator>;
 
 export const guideStatusValidator = v.union(v.literal("writing"), v.literal("ready"), v.literal("failed"));
 export type GuideStatus = Infer<typeof guideStatusValidator>;

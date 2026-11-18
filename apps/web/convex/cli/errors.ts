@@ -31,6 +31,7 @@ export const errors = {
   GUIDE_RETRY_NOT_ALLOWED: "Only the requester can retry a guide",
   GUIDE_RETRY_OTHER_PULL_REQUEST: "This guide is for another pull request",
   GUIDE_RETRY_NOT_FAILED: "Only a failed guide can be retried",
+  GUIDE_BASE_NOT_READY: "A follow-up builds on a ready guide of this pull request. Open the guide tab again and pick Update guide.",
   GUIDE_PROMPT_TOO_LONG: "The Guide prompt is too long: at most 8,000 characters.",
   SELECTED_RUN_REQUIRED: "Select a run ID before cancelling from the service",
   SELECTED_RUN_CHANGED: "Selected run is no longer active",

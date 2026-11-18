@@ -16,6 +16,7 @@ const state = vi.hoisted(() => ({
   worktrees: [] as Array<{ id: string; path: string; label: string; kind: "worktree"; parentPathId: string }>,
   create: null as unknown as ReturnType<typeof import("vitest").vi.fn>,
   upsert: null as unknown as ReturnType<typeof import("vitest").vi.fn>,
+  query: null as unknown as ReturnType<typeof import("vitest").vi.fn>,
 }));
 const composer = { get props() { return state.composer; } };
 const name = (fn: Parameters<typeof getFunctionName>[0]) => getFunctionName(fn);
@@ -28,6 +29,7 @@ vi.mock("convex/react", () => ({
     if (name(fn) === name(api.agents.projectAgents.listByProject)) return [];
     return undefined;
   },
+  useConvex: () => ({ query: state.query }),
   useMutation: (fn: Parameters<typeof getFunctionName>[0]) => (name(fn) === name(api.cli.threads.core.create) ? state.create : state.upsert),
 }));
 const toast = vi.hoisted(() => ({ success: vi.fn(), error: vi.fn() }));
@@ -80,6 +82,7 @@ beforeEach(() => {
   toast.error.mockClear();
   state.create = vi.fn().mockResolvedValue("thread_1");
   state.upsert = vi.fn().mockResolvedValue(null);
+  state.query = vi.fn();
 });
 
 describe("useGenerateGuide (OS-2412)", () => {
@@ -113,6 +116,31 @@ describe("useGenerateGuide (OS-2412)", () => {
     act(() => result.current.start("guide_1" as never));
     render(<>{result.current.dialog}</>);
     expect(composer.props).toMatchObject({ pullRequestGuide: { headSha: "h2", retryGuideId: "guide_1" } });
+  });
+
+  test("Update guide follows up the newest ready guide, with its steps in the prompt (OS-2417)", async () => {
+    const guide = (id: string, status: GuideSummary["status"], headSha: string) =>
+      ({ _id: id, status, headSha, requester: { name: "Maya", avatarUrl: null, isViewer: false } }) as GuideSummary;
+    const guides = [guide("writing_1", "writing", "h-other"), guide("ready_2", "ready", "h0"), guide("ready_1", "ready", "h-old")];
+    state.query.mockResolvedValue({ ...guides[1], steps: [{ title: "Add the schema", explanation: "Adds a table.", files: [{ path: "convex/schema.ts" }], questions: [] }] });
+    const { result } = renderHook(() => useGenerateGuide(target, { baseSha: "b1", headSha: "h1" }, guides));
+    await act(async () => result.current.update());
+    expect(state.query).toHaveBeenCalledWith(api.integrations.github.guides.get, { guideId: "ready_2" });
+    render(<>{result.current.dialog}</>);
+    expect(composer.props).toMatchObject({ pullRequestGuide: { headSha: "h1", baseGuideId: "ready_2" } });
+    expect(composer.props?.seed).toContain("This guide follows up the guide written for h0.");
+    expect(composer.props?.seed).toContain("Base step 1: Add the schema");
+    expect(screen.getByText("Update the guide")).toBeTruthy();
+  });
+
+  test("Retry of a follow-up follows up the newest ready guide again (OS-2417)", async () => {
+    const failed = { _id: "failed_1", status: "failed", headSha: "h0", base: { guideId: "gone" }, requester: { isViewer: true } } as unknown as GuideSummary;
+    const ready = { _id: "ready_1", status: "ready", headSha: "h-old", requester: { isViewer: true } } as unknown as GuideSummary;
+    state.query.mockResolvedValue({ ...ready, steps: [] });
+    const { result } = renderHook(() => useGenerateGuide(target, { baseSha: "b1", headSha: "h1" }, [failed, ready]));
+    await act(async () => result.current.start("failed_1" as never));
+    render(<>{result.current.dialog}</>);
+    expect(composer.props).toMatchObject({ pullRequestGuide: { headSha: "h1", retryGuideId: "failed_1", baseGuideId: "ready_1" } });
   });
 
   test("the prompt carries the project's Guide prompt and the PR's Stack (OS-2416)", () => {

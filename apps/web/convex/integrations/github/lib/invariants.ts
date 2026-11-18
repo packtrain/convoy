@@ -1,4 +1,4 @@
-import { GUIDE_ATTENTION_KINDS, GUIDE_MAX_QUESTIONS, GUIDE_MAX_STEPS, type GuideAttentionKind, type GuideStep } from "../../../lib/contracts/github";
+import { GUIDE_ATTENTION_KINDS, GUIDE_MAX_QUESTIONS, GUIDE_MAX_STEPS, type GuideAttentionKind, type GuideChanges, type GuideStep } from "../../../lib/contracts/github";
 
 // Guide submit rules (docs/specs/github-integration.md → Guides → Requesting and running).
 
@@ -18,7 +18,10 @@ export type GuideRevision = {
   complete: boolean;
 };
 
-export type GuideValidation = { ok: true; steps: GuideStep[] } | { ok: false; errors: string[] };
+/** `followUp` is set when the Guide has a base: the base steps it left out, and the counts for its bar. */
+export type GuideValidation =
+  | { ok: true; steps: GuideStep[]; followUp?: { removedStepTitles: string[]; changes: GuideChanges } }
+  | { ok: false; errors: string[] };
 
 const isRecord = (value: unknown): value is Record<string, unknown> => typeof value === "object" && value !== null && !Array.isArray(value);
 const KINDS = new Set<unknown>(GUIDE_ATTENTION_KINDS);
@@ -30,8 +33,10 @@ const KIND_LIST = `${GUIDE_ATTENTION_KINDS.slice(0, -1).join(", ")}, or ${GUIDE_
  * every changed file in exactly one step. The steps come from the agent as
  * JSON, so nothing about them is trusted. Returns every error at once, each
  * naming its step and path, so the agent can fix them in one pass.
+ * With `base`, the Guide is a follow-up: `unchangedFrom` copies a base step,
+ * `updatedFrom` rewrites one (docs/specs/github-integration.md → Follow-up guides).
  */
-export function validateGuide(input: { headSha: string; steps: unknown[] }, revision: GuideRevision): GuideValidation {
+export function validateGuide(input: { headSha: string; steps: unknown[] }, revision: GuideRevision, base: GuideStep[] | null = null): GuideValidation {
   const errors: string[] = [];
   if (input.headSha !== revision.headSha) {
     errors.push(`This guide is for commit ${revision.headSha}, but the submit names ${input.headSha}. Check out ${revision.headSha} and write the guide for it.`);
@@ -52,11 +57,59 @@ export function validateGuide(input: { headSha: string; steps: unknown[] }, revi
     return trimmed;
   };
   const steps: GuideStep[] = [];
+  const usedBase = new Map<number, number>();
+  /** The base step `value` names (1-based), once per Guide; null after naming the error. */
+  const baseStep = (label: string, index: number, value: unknown, verb: "copies" | "updates"): number | null => {
+    if (!base) {
+      errors.push(`${label} ${verb} a base guide step, but this guide has no base guide. Write the step out in full.`);
+      return null;
+    }
+    if (typeof value !== "number" || !Number.isInteger(value) || value < 1 || value > base.length) {
+      errors.push(`${label} names base step ${String(value)}; the base guide has ${base.length} steps.`);
+      return null;
+    }
+    const earlier = usedBase.get(value);
+    if (earlier !== undefined) {
+      errors.push(`${label} ${verb} base step ${value}, which step ${earlier + 1} already uses. Use each base step once.`);
+      return null;
+    }
+    usedBase.set(value, index);
+    return value - 1;
+  };
+  const own = (label: string, index: number, path: string) => {
+    const earlier = owner.get(path);
+    if (earlier === index) errors.push(`${label} lists ${path} twice.`);
+    else if (earlier !== undefined) errors.push(`${path} is in step ${earlier + 1} and step ${index + 1}. Put it in one step.`);
+    else owner.set(path, index);
+  };
   input.steps.forEach((step, index) => {
     const label = `Step ${index + 1}`;
     if (!isRecord(step)) {
       errors.push(`${label} must be an object with a title, an explanation, and files.`);
       return;
+    }
+    if (step.unchangedFrom !== undefined) {
+      const from = baseStep(label, index, step.unchangedFrom, "copies");
+      if (from === null || !base) return;
+      // Copied word for word, so only its files need checking: none may have changed since the base.
+      // A base that was itself a follow-up says what changed since its own base; the copy drops that.
+      const { title, explanation, attention, questions } = base[from];
+      const files = base[from].files.map((file) => {
+        own(label, index, file.path);
+        const blob = changed.get(file.path);
+        // ponytail: a file GitHub did not list counts as unchanged.
+        const moved = blob === undefined ? revision.complete : blob !== file.sha;
+        if (moved) errors.push(`${label} copies base step ${from + 1}, but ${file.path} changed since the base guide. Write the step out with updatedFrom and whatChanged.`);
+        return { ...file, ...(blob ? { sha: blob } : {}) };
+      });
+      steps.push({ title, explanation, ...(attention ? { attention } : {}), files, questions, change: "unchanged" });
+      return;
+    }
+    const updatedFrom = step.updatedFrom === undefined ? null : baseStep(label, index, step.updatedFrom, "updates");
+    let whatChanged: string | undefined;
+    if (updatedFrom !== null) {
+      if (step.whatChanged === undefined || step.whatChanged === null) errors.push(`${label} updates base step ${updatedFrom + 1} but has no whatChanged.`);
+      else whatChanged = text(`${label}'s whatChanged`, step.whatChanged, MAX_NOTE);
     }
     const title = text(`${label}'s title`, step.title, MAX_TITLE);
     const explanation = text(`${label}'s explanation`, step.explanation, MAX_EXPLANATION);
@@ -81,17 +134,15 @@ export function validateGuide(input: { headSha: string; steps: unknown[] }, revi
         return;
       }
       const path = file.path.trim();
-      const earlier = owner.get(path);
-      if (earlier === index) errors.push(`${label} lists ${path} twice.`);
-      else if (earlier !== undefined) errors.push(`${path} is in step ${earlier + 1} and step ${index + 1}. Put it in one step.`);
-      else owner.set(path, index);
+      own(label, index, path);
       // A path GitHub did not list may be one of the files it left out.
       if (!changed.has(path) && revision.complete) errors.push(`${label} lists ${path}, which this pull request does not change.`);
       const note = file.note === undefined || file.note === null ? undefined : text(`The note on ${path} in ${label.toLowerCase()}`, file.note, MAX_NOTE);
       const sha = changed.get(path);
       files.push({ path, ...(note ? { note } : {}), ...(sha ? { sha } : {}) });
     });
-    steps.push({ title, explanation, ...(attention ? { attention } : {}), files, questions });
+    const change = !base ? {} : updatedFrom !== null ? { change: "updated" as const, ...(whatChanged ? { whatChanged } : {}) } : { change: "new" as const };
+    steps.push({ title, explanation, ...(attention ? { attention } : {}), files, questions, ...change });
   });
   for (const path of changed.keys()) {
     if (!owner.has(path)) errors.push(`${path} is not in any step. Every changed file belongs to exactly one step.`);
@@ -102,5 +153,13 @@ export function validateGuide(input: { headSha: string; steps: unknown[] }, revi
   if (errors.length > MAX_ERRORS) {
     return { ok: false, errors: [...errors.slice(0, MAX_ERRORS), `…and ${errors.length - MAX_ERRORS} more.`] };
   }
-  return errors.length ? { ok: false, errors } : { ok: true, steps };
+  if (errors.length) return { ok: false, errors };
+  if (!base) return { ok: true, steps };
+  const count = (change: GuideStep["change"]) => steps.filter((step) => step.change === change).length;
+  const removedStepTitles = base.filter((_, at) => !usedBase.has(at + 1)).map((step) => step.title);
+  return {
+    ok: true,
+    steps,
+    followUp: { removedStepTitles, changes: { unchanged: count("unchanged"), updated: count("updated"), added: count("new"), removed: removedStepTitles.length } },
+  };
 }

@@ -356,8 +356,8 @@ can have Guides.
 Status: requesting, reading, switching between, and deleting Guides are
 built (OS-2412), and so are Failed guides and Retry (OS-2413), Don't ask
 again (OS-2414), the duplicate-run warning (OS-2415), and the project's Guide
-prompt with the Stack in the prompt (OS-2416). Outdated guides and Follow-up
-guides (OS-2417) and the MCP tools (OS-2418) are planned.
+prompt with the Stack in the prompt (OS-2416), and Outdated guides and
+Follow-up guides (OS-2417). The MCP tools (OS-2418) are planned.
 
 ### Requesting and running
 
@@ -565,8 +565,8 @@ name and avatar, `threadId` only for the requester, and whether the viewer
 may delete it. A ready Guide never changes, so its steps are read once
 (`integrations.github.guides.get`) and kept for the session. A menu in the corner of the tab row
 (not tabs) names the Guide on screen the way its row does: runtime icon,
-model, commit ("8a3e7d1"), the requester's avatar (hover names them), and
-short age ("30m"). Opening it lists the Guides one line each, newest first,
+model, commit ("8a3e7d1"), short age ("30m"), and the requester's avatar
+(hover names them), last so it lines up on every row. Opening it lists the Guides one line each, newest first,
 with the one on screen highlighted; picking a row shows that Guide. Hovering a row
 the viewer may delete swaps its age for Delete, which asks to confirm. New
 guide sits under the list and returns the tab to the newest Guide. A
@@ -579,13 +579,16 @@ trigger say "Failed" in red in place of the age.
 
 An Outdated guide on an open PR gets an amber banner under the tab row:
 "This guide was written for 8a3e7d1. The commits since then aren't covered."
-with Update guide (primary) and New guide. When a newer Guide already covers
-the head, it reads "A newer guide covers c91f02a." with Open it. Closed and
-merged PRs show no banner.
+with Update guide (primary) and New guide. When a newer ready Guide already
+covers the head, it reads "A newer guide covers c91f02a." with Open it.
+Closed and merged PRs show no banner, and neither does a Guide still writing
+or a Failed one, which shows its Failed state. The banner compares the Guide's
+head with the stored PR's, which the reader already subscribes to, so a push
+shows it without a reload.
 
 ### Follow-up guides
 
-Update guide writes a Follow-up guide based on the newest Guide on the PR,
+Update guide writes a Follow-up guide based on the newest ready Guide on the PR,
 whoever requested it. The agent receives the base Guide's steps and diffs
 for the whole PR and for base revision to head; after a force-push it
 compares the two trees. Each step is Unchanged, Updated, New, or Removed:
@@ -594,13 +597,47 @@ compares the two trees. Each step is Unchanged, Updated, New, or Removed:
   the base. Convoy enforces this on submit.
 - Updated steps add "What changed since 8a3e7d1: …".
 - New files go to a New step or join an existing step marked Updated.
-- A step left without files is Removed.
+- A base step left out of the follow-up is Removed.
 
-A bar names the base ("Follow-up of your guide for 8a3e7d1 · 1 updated,
-2 unchanged") with an Only what changed switch that hides Unchanged steps.
-Reviewed marks say what a member already read: Unchanged steps whose files
-are all still Reviewed start collapsed. There is no separate read state. The
-follow-up instructions are built in; the Guide prompt cannot change them.
+The tab row names the base left of the Guide menu ("Since 8a3e7d1:
+1 updated, 2 unchanged", with "Follow-up of your guide for 8a3e7d1" on
+hover) beside an Only what changed switch that hides Unchanged steps; there
+is no separate bar under the tab row.
+Each step has an Unchanged, Updated, or New badge, and the base steps left
+out are listed by title under "Removed since 8a3e7d1". Reviewed marks say
+what a member already read: Unchanged steps whose files are all still
+Reviewed start collapsed to one line with Show. There is no separate read
+state. The follow-up instructions are built in; the Guide prompt cannot
+change them. A Follow-up guide's menu row has a small icon whose tooltip
+says "Follow-up of Maya Singh's guide". A Guide still being written shows a
+spinner in place of its runtime icon, in its menu row and in the trigger.
+
+As built (OS-2417):
+
+- The base is the newest ready Guide in the list. The browser reads its
+  steps once (`guides.get`) and puts them in the prompt as run facts, each
+  whole as JSON (notes, attention, questions, and a base follow-up's
+  `whatChanged`, without blob SHAs), with `git diff --stat <base head>
+  <head>` and the rules below. `cli.threads.core.create` takes
+  `pullRequestGuide.baseGuideId`, which must be a ready Guide of the same PR
+  in the project ("A follow-up builds on a ready guide of this pull request.
+  Open the guide tab again and pick Update guide."). The Guide row copies
+  `base: { guideId, requesterId, headSha }`, so the bar still names the base
+  after it is deleted.
+- In the submitted JSON, `{ "unchangedFrom": n }` copies base step n: Convoy
+  copies the title, explanation, attention, files, and questions, and
+  rejects the step if any of its files has a different blob at the head, or
+  is no longer changed. A file GitHub did not list counts as unchanged. A
+  step with `updatedFrom: n` is written out and needs `whatChanged`. A step
+  with neither is New. Each base step is used at most once. A Guide without
+  a base rejects both fields.
+- `complete` stores each step's `change` (and `whatChanged`), the
+  `removedStepTitles` beside the steps, and `changes: { unchanged, updated,
+  added, removed }` on the Guide row for the bar. If the base was deleted
+  during the run, the submit is checked as a plain Guide, and the stored
+  Guide has no `base`.
+- Retry of a failed follow-up is a follow-up again, of the newest ready
+  Guide at that moment; `restartGuide` takes the base it is sent, or none.
 
 ## Pull request checks
 
@@ -965,8 +1002,8 @@ provider turns each table into a union of complete discriminated objects.
 | `integrationRepositories` | Repository metadata and sync state (lease token, import page, last success, error, the running and last finished reconciliation pass, closed-history coverage and the page on its way), plus open and closed PR counts, shared by the links of one organization |
 | `integrationPullRequests` | Normalized PR metadata, one row per repository and number, with the REST `stack`, `archived`, and the last known `conflicts` |
 | `integrationSetups` | A 10-minute connect flow bound to one user and project |
-| `integrationPullRequestGuides` | A project's Guide of one PR revision: requester, run thread, status (writing, ready, failed), base and head, runtime and model, and a failed Guide's `failureReason`. Indexed by project, repository, number, and `createdAt` (the menu order, which a Retry restamps), and by thread |
-| `integrationPullRequestGuideSteps` | A ready Guide's steps, up to 800 KB, one row per Guide, indexed by Guide. Kept apart so the Guide menu reads 20 small rows, not 20 sets of steps; deleted with the Guide |
+| `integrationPullRequestGuides` | A project's Guide of one PR revision: requester, run thread, status (writing, ready, failed), base and head, runtime and model, a failed Guide's `failureReason`, and a follow-up's `base` and `changes` counts. Indexed by project, repository, number, and `createdAt` (the menu order, which a Retry restamps), and by thread |
+| `integrationPullRequestGuideSteps` | A ready Guide's steps (a follow-up's with their `change` and `whatChanged`) and a follow-up's `removedStepTitles`, up to 800 KB, one row per Guide, indexed by Guide. Kept apart so the Guide menu reads 20 small rows, not 20 sets of steps; deleted with the Guide |
 
 `cliThreads.pullRequestGuide.headSha` marks a Guide run's thread, set at creation.
 
@@ -1540,6 +1577,7 @@ Defined in `apps/web/convex/integrations/github/errors.ts`; tests assert on them
 | Retry of a Guide that is not failed (`cli/errors.ts`) | Only a failed guide can be retried |
 | Retry naming another PR's Guide (`cli/errors.ts`) | This guide is for another pull request |
 | Retry of a deleted Guide (`cli/errors.ts`) | The guide was deleted. |
+| Update guide naming a Guide that is not ready, deleted, or on another PR (`cli/errors.ts`) | A follow-up builds on a ready guide of this pull request. Open the guide tab again and pick Update guide. |
 
 ## Delivery as vertical slices
 

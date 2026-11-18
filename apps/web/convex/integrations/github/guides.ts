@@ -1,13 +1,13 @@
 import { ConvexError, v, type Infer } from "convex/values";
-import type { Id } from "../../_generated/dataModel";
-import { action, internalMutation, internalQuery, mutation, query, type MutationCtx } from "../../_generated/server";
+import type { Doc, Id } from "../../_generated/dataModel";
+import { action, internalMutation, internalQuery, mutation, query, type MutationCtx, type QueryCtx } from "../../_generated/server";
 import { internal } from "../../_generated/api";
 import { ProjectPermission } from "../../../lib/authz/permissions";
 import { getAuthenticatedAccess } from "../../lib/access/auth";
 import { hasAuthorizedProjectPermission, requireAuthorizedProject } from "../../lib/access/permissions";
-import { GUIDE_PROMPT_MAX, guideStepValidator } from "../../lib/contracts/github";
+import { GUIDE_PROMPT_MAX, guideChangesValidator, guideStepValidator } from "../../lib/contracts/github";
 import { ensure } from "../../lib/shared/ensure";
-import { getUserById, getUsersByIds } from "../../users/lib/usersRepo";
+import { getUsersByIds } from "../../users/lib/usersRepo";
 import { getThreadById } from "../../cli/threads/lib/cliThreadsRepo";
 import { errors } from "./errors";
 import { githubFetch, mintRepositoryToken, repoPath, requireConfig, toUserError } from "./lib/github";
@@ -37,12 +37,17 @@ export const listForPullRequest = query({
     const rows = await listGuidesForPullRequest(ctx, { projectId: args.projectId, repositoryId: readable.link.repositoryId, number: args.number }, GUIDES_SHOWN);
     const viewer = { userId: readable.access.userId, canManage: hasAuthorizedProjectPermission(readable.access, ProjectPermission.PROJECT_UPDATE) };
     // One read per requester, not per Guide.
-    const requesterIds = [...new Set(rows.map((row) => row.requesterId))];
-    const users = await getUsersByIds(ctx, requesterIds);
-    const requesters = new Map(requesterIds.map((id, at) => [id, users[at]]));
-    return rows.map((row) => toGuideSummary(row, requesters.get(row.requesterId) ?? null, viewer));
+    const users = await readUsers(ctx, rows);
+    return rows.map((row) => toGuideSummary(row, users, viewer));
   },
 });
+
+/** The requesters of `rows` and of their bases, each read once. */
+async function readUsers(ctx: QueryCtx, rows: Doc<"integrationPullRequestGuides">[]) {
+  const ids = [...new Set(rows.flatMap((row) => (row.base ? [row.requesterId, row.base.requesterId] : [row.requesterId])))];
+  const users = await getUsersByIds(ctx, ids);
+  return new Map(ids.map((id, at) => [id, users[at]]));
+}
 
 /** One Guide with its steps. A ready Guide never changes, so the reader reads it once. */
 export const get = query({
@@ -55,7 +60,7 @@ export const get = query({
       return null;
     }
     const viewer = { userId: readable.access.userId, canManage: hasAuthorizedProjectPermission(readable.access, ProjectPermission.PROJECT_UPDATE) };
-    return { ...toGuideSummary(row, await getUserById(ctx, row.requesterId), viewer), steps: await getGuideSteps(ctx, row._id) };
+    return { ...toGuideSummary(row, await readUsers(ctx, [row]), viewer), ...(await getGuideSteps(ctx, row._id)) };
   },
 });
 
@@ -106,6 +111,8 @@ const submitContextValidator = v.object({
   repositoryLinkId: v.id("integrationRepositoryLinks"),
   generation: v.number(),
   context: syncContextValidator,
+  /** A follow-up's base steps; null for a plain Guide, or once its base was deleted. */
+  baseSteps: v.union(v.null(), v.array(guideStepValidator)),
 });
 
 /** The caller's Guide run on `threadId`, not yet ready, in a repository the project still connects. A failed one still takes a late submit. */
@@ -135,6 +142,7 @@ export const getSubmitContext = internalQuery({
       repositoryLinkId: link._id,
       generation: link.generation,
       context: toSyncContext(link, repository),
+      baseSteps: guide.base && (await getGuideById(ctx, guide.base.guideId)) ? (await getGuideSteps(ctx, guide.base.guideId)).steps : null,
     };
   },
 });
@@ -155,6 +163,7 @@ export const complete = internalMutation({
     repositoryLinkId: v.id("integrationRepositoryLinks"),
     generation: v.number(),
     steps: v.array(guideStepValidator),
+    followUp: v.optional(v.object({ removedStepTitles: v.array(v.string()), changes: guideChangesValidator })),
   },
   returns: v.null(),
   handler: async (ctx, args) => {
@@ -163,7 +172,7 @@ export const complete = internalMutation({
     if (link?.status !== "active" || link.generation !== args.generation) {
       throw new ConvexError(errors.NOT_CONNECTED);
     }
-    await completeGuide(ctx, guide._id, args.steps, Date.now());
+    await completeGuide(ctx, guide._id, args.steps, args.followUp, Date.now());
     return null;
   },
 });
@@ -257,7 +266,7 @@ export const submit = action({
     } catch (error) {
       throw toUserError(error, errors.PULL_REQUEST_NOT_FOUND);
     }
-    const result = validateGuide({ headSha: args.headSha, steps: args.steps }, revision);
+    const result = validateGuide({ headSha: args.headSha, steps: args.steps }, revision, run.baseSteps);
     if (!result.ok) {
       return { status: "rejected" as const, errors: result.errors };
     }
@@ -267,6 +276,7 @@ export const submit = action({
       repositoryLinkId: run.repositoryLinkId,
       generation: run.generation,
       steps: result.steps,
+      followUp: result.followUp,
     });
     return { status: "accepted" as const, guideId: run.guideId };
   },

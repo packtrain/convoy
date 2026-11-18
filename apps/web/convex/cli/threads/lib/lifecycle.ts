@@ -167,6 +167,22 @@ async function requireRetryableGuide(
     .satisfies((guide) => guide.status === "failed", errors.GUIDE_RETRY_NOT_FAILED);
 }
 
+/** Update guide's base (OS-2417): a ready Guide of this PR in this project. */
+async function requireBaseGuide(
+  ctx: MutationCtx,
+  guideId: Id<"integrationPullRequestGuides">,
+  projectId: Id<"projects">,
+  pullRequest: Doc<"integrationPullRequests">
+): Promise<NonNullable<Doc<"integrationPullRequestGuides">["base"]>> {
+  const guide = await ensure(getGuideById(ctx, guideId))
+    .notNull(errors.GUIDE_BASE_NOT_READY)
+    .satisfies(
+      (row) => row.projectId === projectId && row.repositoryId === pullRequest.repositoryId && row.number === pullRequest.number && row.status === "ready",
+      errors.GUIDE_BASE_NOT_READY
+    );
+  return { guideId: guide._id, requesterId: guide.requesterId, headSha: guide.headSha };
+}
+
 /** The stored PR in a connected repository, still at the head the caller's prompt names, so the run and its output agree on the revision. */
 async function requireStoredPullRequestAtHead(
   ctx: MutationCtx,
@@ -238,6 +254,8 @@ export async function createThreadCore(
     : null;
   const retryGuideId = args.pullRequestGuide?.retryGuideId;
   const retried = guidePullRequest && retryGuideId ? await requireRetryableGuide(ctx, retryGuideId, user._id, profile.projectId, guidePullRequest) : null;
+  const baseGuideId = args.pullRequestGuide?.baseGuideId;
+  const base = guidePullRequest && baseGuideId ? await requireBaseGuide(ctx, baseGuideId, profile.projectId, guidePullRequest) : undefined;
 
   const now = Date.now();
   const attachments = assertValidMessageAttachments(args.attachments);
@@ -290,7 +308,8 @@ export async function createThreadCore(
   );
   if (guidePullRequest) {
     // The Guide row is born with its run; `guides.submit` finds it by thread (docs/specs/github-integration.md → Guides).
-    const run = { threadId, baseSha: guidePullRequest.baseSha, headSha: guidePullRequest.headSha, cliType: args.cliType, cliModel: args.cliModel, createdAt: now };
+    // A Retry takes the base it is sent, or none.
+    const run = { threadId, baseSha: guidePullRequest.baseSha, headSha: guidePullRequest.headSha, cliType: args.cliType, cliModel: args.cliModel, createdAt: now, base };
     // What the agent was given, not the setting now: an admin may change it while the composer is open.
     const guidePrompt = args.pullRequestGuide?.guidePrompt?.trim() || null;
     ensure((guidePrompt?.length ?? 0) <= GUIDE_PROMPT_MAX).isTrue(errors.GUIDE_PROMPT_TOO_LONG);

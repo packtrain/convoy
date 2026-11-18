@@ -1,4 +1,4 @@
-import { GUIDE_ATTENTION_KINDS, GUIDE_MAX_QUESTIONS, GUIDE_MAX_STEPS, type AttachedPullRequest } from "@/convex/lib/contracts/github";
+import { GUIDE_ATTENTION_KINDS, GUIDE_MAX_QUESTIONS, GUIDE_MAX_STEPS, type AttachedPullRequest, type GuideStep } from "@/convex/lib/contracts/github";
 
 /** How to split and write a Guide; a project's Guide prompt replaces it (docs/specs/github-integration.md → Prompt). */
 export const DEFAULT_GUIDE_INSTRUCTIONS = [
@@ -11,9 +11,36 @@ export const DEFAULT_GUIDE_INSTRUCTIONS = [
   "- Be plain and specific: name the functions and files, and don't praise the change.",
 ].join("\n");
 
+/** A Follow-up guide's base: the Guide it updates (docs/specs/github-integration.md → Follow-up guides). */
+export type GuidePromptBase = { headSha: string; steps: GuideStep[] };
+
+/** The base's steps and the rules Convoy checks on a follow-up's submit; built in, whatever a project's instructions say. */
+function followUpFacts(base: GuidePromptBase, headSha: string): string[] {
+  return [
+    `This guide follows up the guide written for ${base.headSha}. Its steps:`,
+    "",
+    // Whole, so an Updated step can carry its notes and questions forward; blob SHAs are Convoy's.
+    ...base.steps.flatMap((step, at) => [
+      `Base step ${at + 1}: ${step.title}`,
+      "```json",
+      JSON.stringify({ ...step, files: step.files.map(({ path, note }) => ({ path, ...(note ? { note } : {}) })) }, null, 2),
+      "```",
+      "",
+    ]),
+    `See what changed since then with \`git fetch origin ${base.headSha}\` and \`git diff --stat ${base.headSha} ${headSha}\`. After a force-push this compares the two trees.`,
+    "Write each step of the new guide as one of:",
+    `- Unchanged: a base step none of whose files changed since ${base.headSha}. Write only \`{ "unchangedFrom": <its number> }\`. Convoy copies the step word for word and checks that its files did not change.`,
+    '- Updated: a base step whose part changed. Write it out in full with `"updatedFrom": <its number>` and `"whatChanged": "<one or two sentences>"`.',
+    "- New: a step without unchangedFrom or updatedFrom, for files the base guide did not cover. Such files may also join an Updated step.",
+    "A base step you leave out shows as Removed. Use each base step at most once.",
+    "",
+  ];
+}
+
 /**
  * The Guide run's prompt: the run facts Convoy always adds (PR, revision,
  * checkout, JSON shape, submit command) around the guide instructions.
+ * With `base`, the run writes a Follow-up guide.
  */
 export function guidePrompt({
   pullRequest,
@@ -21,6 +48,7 @@ export function guidePrompt({
   headSha,
   instructions = DEFAULT_GUIDE_INSTRUCTIONS,
   layers = [],
+  base,
 }: {
   pullRequest: AttachedPullRequest;
   baseSha: string;
@@ -28,6 +56,7 @@ export function guidePrompt({
   instructions?: string;
   /** The PR's Stack, bottom first; empty when it is in none. */
   layers?: { number: number; title: string }[];
+  base?: GuidePromptBase;
 }): string {
   const { owner, name, number } = pullRequest;
   const below = layers.find((layer) => layer.number !== number);
@@ -56,6 +85,7 @@ export function guidePrompt({
     // Enforced on submit, so they stay whatever a project's instructions say.
     `Rules Convoy checks on submit: 1 to ${GUIDE_MAX_STEPS} steps; every changed file in exactly one step, and no file the pull request does not change; at most ${GUIDE_MAX_QUESTIONS} questions per step.`,
     "",
+    ...(base ? followUpFacts(base, headSha) : []),
     "When the guide is ready, write it as JSON to a file outside the repository, such as /tmp/guide.json:",
     "",
     "```json",
@@ -63,7 +93,9 @@ export function guidePrompt({
       {
         headSha,
         steps: [
+          ...(base ? [{ unchangedFrom: 1 }] : []),
           {
+            ...(base ? { updatedFrom: 2, whatChanged: "With updatedFrom: what changed since the base guide." } : {}),
             title: "What this step accomplishes",
             explanation: "Two to four sentences.",
             attention: { kind: "risk", note: `Optional. kind is one of ${GUIDE_ATTENTION_KINDS.join(", ")}.` },

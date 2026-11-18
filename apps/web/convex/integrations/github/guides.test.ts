@@ -41,7 +41,17 @@ async function setupGuideRun() {
       pullRequestGuide: { headSha, retryGuideId, guidePrompt },
     });
   const threadId = await request();
-  const submit = (steps: ReturnType<typeof step>[], headSha = "head-1", thread = threadId) =>
+  /** Update guide: a run at `headSha` that follows up `baseGuideId`; with `retryGuideId`, a Retry of a failed one. */
+  const requestFollowUp = (baseGuideId: Id<"integrationPullRequestGuides">, headSha = "head-2", retryGuideId?: Id<"integrationPullRequestGuides">) =>
+    asUser.mutation(api.cli.threads.core.create, {
+      profileId: profile._id,
+      pathId: "repo",
+      cliType: "codex",
+      content: "Update the guide",
+      pullRequestUrl: "https://github.com/acme/repo-1/pull/1",
+      pullRequestGuide: { headSha, baseGuideId, retryGuideId },
+    });
+  const submit = (steps: unknown[], headSha = "head-1", thread = threadId) =>
     t.action(api.integrations.github.guides.submit, { threadId: thread, headSha, steps, apiKey });
   const reportFailure = (failure: string, thread = threadId) => t.action(api.integrations.github.guides.submit, { threadId: thread, failure, apiKey });
   /** One CLI run of the thread's queued messages, ended by `complete` (optionally parked) or `fail`. */
@@ -71,7 +81,7 @@ async function setupGuideRun() {
     await ctx.projectMember(project._id, other._id, "member");
     return Object.assign(ctx.asUser(other), { user: other });
   };
-  return { ...setup, apiKey, profile, threadId, request, submit, reportFailure, runOnce, list, push, member };
+  return { ...setup, apiKey, profile, threadId, request, requestFollowUp, submit, reportFailure, runOnce, list, push, member };
 }
 
 describe("guides", () => {
@@ -374,6 +384,79 @@ describe("guides", () => {
     await request("head-1", 1, first._id);
     await asUser.mutation(api.integrations.github.guides.remove, { guideId: secondGuide!._id });
     expect(await snapshots()).toEqual([]);
+  });
+
+  test("a follow-up copies Unchanged steps from its base, and lists the base steps it left out as Removed", async () => {
+    const { github, submit, push, list, asUser, requestFollowUp } = await setupGuideRun();
+    const [base] = (await list())!;
+    await submit([step("Schema", ["convex/schema.ts"]), step("Reader", ["src/reader.tsx"])]);
+    // A push changes the reader and adds a file.
+    Object.assign(github.state.pulls.get(1)![0], {
+      headSha: "head-2",
+      files: [FILES[0], { ...FILES[1], sha: "blob-reader-2" }, { filename: "src/flag.ts", status: "added", additions: 1, deletions: 0, sha: "blob-flag" }],
+    });
+    await push("head-2");
+    const followUpThread = await requestFollowUp(base._id);
+    const [followUp] = (await list())!;
+    expect(followUp).toMatchObject({ status: "writing", headSha: "head-2", base: { guideId: base._id, headSha: "head-1", requester: { isViewer: true } } });
+
+    expect(await submit([{ unchangedFrom: 2 }, step("Schema", ["convex/schema.ts"]), step("Flag", ["src/flag.ts"])], "head-2", followUpThread)).toEqual({
+      status: "rejected",
+      errors: ["Step 1 copies base step 2, but src/reader.tsx changed since the base guide. Write the step out with updatedFrom and whatChanged."],
+    });
+    expect(await submit([{ unchangedFrom: 1 }, step("Flag", ["src/reader.tsx", "src/flag.ts"])], "head-2", followUpThread)).toMatchObject({ status: "accepted" });
+
+    const [ready] = (await list())!;
+    expect(ready.changes).toEqual({ unchanged: 1, updated: 0, added: 1, removed: 1 });
+    const guide = await asUser.query(api.integrations.github.guides.get, { guideId: followUp._id });
+    expect(guide?.removedStepTitles).toEqual(["Reader"]);
+    expect(guide?.steps.map(({ title, change }) => [title, change])).toEqual([
+      ["Schema", "unchanged"],
+      ["Flag", "new"],
+    ]);
+  });
+
+  test("a follow-up's base is a ready guide of the same pull request", async () => {
+    const { list, requestFollowUp } = await setupGuideRun();
+    const [writing] = (await list())!;
+    await expect(requestFollowUp(writing._id, "head-1")).rejects.toThrow("A follow-up builds on a ready guide of this pull request");
+  });
+
+  test("a follow-up whose base was deleted during its run is submitted as a plain guide", async () => {
+    const { github, submit, push, list, asUser, requestFollowUp } = await setupGuideRun();
+    const [base] = (await list())!;
+    await submit([step("All", ["convex/schema.ts", "src/reader.tsx"])]);
+    Object.assign(github.state.pulls.get(1)![0], { headSha: "head-2" });
+    await push("head-2");
+    const followUpThread = await requestFollowUp(base._id);
+    await asUser.mutation(api.integrations.github.guides.remove, { guideId: base._id });
+    expect(await submit([{ unchangedFrom: 1 }], "head-2", followUpThread)).toEqual({
+      status: "rejected",
+      errors: [
+        "Step 1 copies a base guide step, but this guide has no base guide. Write the step out in full.",
+        "convex/schema.ts is not in any step. Every changed file belongs to exactly one step.",
+        "src/reader.tsx is not in any step. Every changed file belongs to exactly one step.",
+      ],
+    });
+    expect(await submit([step("All", ["convex/schema.ts", "src/reader.tsx"])], "head-2", followUpThread)).toMatchObject({ status: "accepted" });
+    const [ready] = (await list())!;
+    expect(ready.base).toBeUndefined();
+    expect(ready.changes).toBeUndefined();
+  });
+
+  test("Retry of a follow-up takes the base it is given, or none", async () => {
+    const { submit, push, list, requestFollowUp, request, reportFailure } = await setupGuideRun();
+    const [base] = (await list())!;
+    await submit([step("All", ["convex/schema.ts", "src/reader.tsx"])]);
+    await push("head-2");
+    const followUpThread = await requestFollowUp(base._id);
+    const [followUp] = (await list())!;
+    await reportFailure("Not a clone", followUpThread);
+    await requestFollowUp(base._id, "head-2", followUp._id);
+    expect((await list())![0]).toMatchObject({ _id: followUp._id, status: "writing", base: { guideId: base._id } });
+    await reportFailure("Not a clone", (await list())![0].threadId);
+    await request("head-2", 1, followUp._id);
+    expect((await list())![0].base).toBeUndefined();
   });
 
   test("the retention purge deletes the project's guides", async () => {

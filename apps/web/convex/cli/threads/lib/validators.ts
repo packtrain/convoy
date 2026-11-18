@@ -278,7 +278,13 @@ export const createThreadArgs = {
   attachments: v.optional(v.array(cliMessageAttachmentInputValidator)),
   /** Write a Guide of the attached PR at this head, which must still be its stored one (OS-2412). `retryGuideId` rewrites a failed one (OS-2413). */
   // `guidePrompt`: the project's Guide prompt the composer was seeded with; unset is the built-in default.
+  // `baseGuideId`: Update guide's base, a ready Guide of the PR (OS-2417).
   pullRequestGuide: v.optional(
-    v.object({ headSha: v.string(), retryGuideId: v.optional(v.id("integrationPullRequestGuides")), guidePrompt: v.optional(v.string()) })
+    v.object({
+      headSha: v.string(),
+      retryGuideId: v.optional(v.id("integrationPullRequestGuides")),
+      guidePrompt: v.optional(v.string()),
+      baseGuideId: v.optional(v.id("integrationPullRequestGuides")),
+    })
   ),
 };

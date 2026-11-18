@@ -260,6 +260,7 @@ export function PullRequestReader({
           <PullRequestGuideTab
             state={guides}
             launch={launch}
+            pullRequest={stored}
             diffState={diffState}
             onRetryDiff={load}
             marks={marks}

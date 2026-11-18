@@ -115,3 +115,60 @@ describe("validateGuide", () => {
     }
   });
 });
+
+describe("validateGuide for a follow-up", () => {
+  // The base Guide, written when src/a.ts and src/b.ts were at blob-a and blob-b-old.
+  const base = [
+    { title: "Parser", explanation: "Parses.", change: "updated" as const, whatChanged: "Older note.", files: [{ path: "src/a.ts", sha: "blob-a" }], questions: [] },
+    { title: "Wiring", explanation: "Wires.", files: [{ path: "src/b.ts", sha: "blob-b-old" }], questions: [] },
+    { title: "Docs", explanation: "Docs.", files: [{ path: "docs/old.md", sha: "blob-doc" }], questions: [] },
+  ];
+  const head: GuideRevision = { ...revision, files: [...revision.files, { path: "src/c.ts", sha: "blob-c" }] };
+
+  test("an Unchanged step is copied from the base, Updated and New steps are written out, and base steps left out are Removed", () => {
+    const steps = [
+      { unchangedFrom: 1 },
+      { ...step(["src/b.ts"], { title: "Wiring, again" }), updatedFrom: 2, whatChanged: " Reads the new flag. " },
+      { ...step(["src/c.ts"], { title: "Flag" }) },
+    ];
+    expect(validateGuide({ headSha: "head-1", steps }, head, base)).toEqual({
+      ok: true,
+      steps: [
+        { title: "Parser", explanation: "Parses.", change: "unchanged", files: [{ path: "src/a.ts", sha: "blob-a" }], questions: [] },
+        {
+          title: "Wiring, again",
+          explanation: "Parses the payload.",
+          change: "updated",
+          whatChanged: "Reads the new flag.",
+          files: [{ path: "src/b.ts", sha: "blob-b" }],
+          questions: [],
+        },
+        { title: "Flag", explanation: "Parses the payload.", change: "new", files: [{ path: "src/c.ts", sha: "blob-c" }], questions: [] },
+      ],
+      followUp: { removedStepTitles: ["Docs"], changes: { unchanged: 1, updated: 1, added: 1, removed: 1 } },
+    });
+  });
+
+  test("an Unchanged step owns no file changed since the base, and an Updated step says what changed", () => {
+    const steps = [{ unchangedFrom: 2 }, { ...step(["src/a.ts"]), updatedFrom: 1 }, { unchangedFrom: 2 }, { unchangedFrom: 9 }, step(["src/c.ts"])];
+    expect(validateGuide({ headSha: "head-1", steps }, head, base)).toEqual({
+      ok: false,
+      errors: [
+        "Step 1 copies base step 2, but src/b.ts changed since the base guide. Write the step out with updatedFrom and whatChanged.",
+        "Step 2 updates base step 1 but has no whatChanged.",
+        "Step 3 copies base step 2, which step 1 already uses. Use each base step once.",
+        "Step 4 names base step 9; the base guide has 3 steps.",
+      ],
+    });
+  });
+
+  test("a guide without a base takes no unchangedFrom or updatedFrom", () => {
+    expect(validateGuide({ headSha: "head-1", steps: [{ unchangedFrom: 1 }, { ...step(["src/a.ts", "src/b.ts"]), updatedFrom: 1, whatChanged: "x" }] }, revision)).toEqual({
+      ok: false,
+      errors: [
+        "Step 1 copies a base guide step, but this guide has no base guide. Write the step out in full.",
+        "Step 2 updates a base guide step, but this guide has no base guide. Write the step out in full.",
+      ],
+    });
+  });
+});

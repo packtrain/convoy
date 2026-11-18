@@ -1,6 +1,6 @@
 import type { Doc, Id } from "../../../_generated/dataModel";
 import type { MutationCtx, QueryCtx } from "../../../_generated/server";
-import type { GuideStep } from "../../../lib/contracts/github";
+import type { GuideChanges, GuideStep } from "../../../lib/contracts/github";
 
 type Ctx = QueryCtx | MutationCtx;
 
@@ -48,9 +48,22 @@ async function findGuidePromptRow(ctx: Ctx, guideId: Id<"integrationPullRequestG
     .unique();
 }
 
-export async function completeGuide(ctx: MutationCtx, guideId: Id<"integrationPullRequestGuides">, steps: GuideStep[], now: number) {
-  await ctx.db.insert("integrationPullRequestGuideSteps", { guideId, steps });
-  await ctx.db.patch("integrationPullRequestGuides", guideId, { status: "ready", completedAt: now, failureReason: undefined });
+/** Without `followUp`, the Guide is stored as a plain one: a base deleted during the run leaves none to follow up. */
+export async function completeGuide(
+  ctx: MutationCtx,
+  guideId: Id<"integrationPullRequestGuides">,
+  steps: GuideStep[],
+  followUp: { removedStepTitles: string[]; changes: GuideChanges } | undefined,
+  now: number
+) {
+  await ctx.db.insert("integrationPullRequestGuideSteps", { guideId, steps, removedStepTitles: followUp?.removedStepTitles });
+  await ctx.db.patch("integrationPullRequestGuides", guideId, {
+    status: "ready",
+    completedAt: now,
+    failureReason: undefined,
+    changes: followUp?.changes,
+    ...(followUp ? {} : { base: undefined }),
+  });
 }
 
 /** A run error can be long; the menu row and the Failed state show a line or two. */
@@ -75,7 +88,7 @@ export async function settleGuideRun(ctx: MutationCtx, thread: Doc<"cliThreads">
 export async function restartGuide(
   ctx: MutationCtx,
   guideId: Id<"integrationPullRequestGuides">,
-  run: Pick<Doc<"integrationPullRequestGuides">, "threadId" | "baseSha" | "headSha" | "cliType" | "cliModel" | "createdAt">,
+  run: Pick<Doc<"integrationPullRequestGuides">, "threadId" | "baseSha" | "headSha" | "cliType" | "cliModel" | "createdAt" | "base">,
   guidePrompt: string | null
 ) {
   await ctx.db.patch("integrationPullRequestGuides", guideId, { ...run, status: "writing", failureReason: undefined });
@@ -85,13 +98,13 @@ export async function restartGuide(
   if (guidePrompt !== null) await ctx.db.insert("integrationPullRequestGuidePrompts", { guideId, prompt: guidePrompt });
 }
 
-/** A ready Guide's steps; a writing one has none. */
-export async function getGuideSteps(ctx: Ctx, guideId: Id<"integrationPullRequestGuides">): Promise<GuideStep[]> {
+/** A ready Guide's steps and, for a follow-up, the base steps it left out; a writing one has none. */
+export async function getGuideSteps(ctx: Ctx, guideId: Id<"integrationPullRequestGuides">): Promise<{ steps: GuideStep[]; removedStepTitles: string[] }> {
   const row = await ctx.db
     .query("integrationPullRequestGuideSteps")
     .withIndex("by_guideId", (q) => q.eq("guideId", guideId))
     .unique();
-  return row?.steps ?? [];
+  return { steps: row?.steps ?? [], removedStepTitles: row?.removedStepTitles ?? [] };
 }
 
 /** Deletes a Guide, its steps, and its Guide prompt. */

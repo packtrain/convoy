@@ -2,20 +2,41 @@
 
 import { useCallback, useEffect, useRef, useState } from "react";
 import { useConvex, useMutation, useQuery } from "convex/react";
-import { BookOpen, Check, ChevronDown, CircleAlert, FileText, Plus, RotateCcw, Sparkles, Trash2 } from "lucide-react";
+import {
+  BookOpen,
+  Check,
+  ChevronDown,
+  CircleAlert,
+  CornerDownRight,
+  FileText,
+  Plus,
+  RotateCcw,
+  Sparkles,
+  Trash2,
+  TriangleAlert,
+} from "lucide-react";
 import { toast } from "sonner";
 import { api } from "@/convex/_generated/api";
 import type { Id } from "@/convex/_generated/dataModel";
 import type { GuideDetail, GuideSummary } from "@/convex/integrations/github/lib/validators";
+import type { GuideStep } from "@/convex/lib/contracts/github";
 import { usePatchDiffOptions } from "@/components/custom/diff/patch-file-sections";
 import { EmptyState } from "@/components/custom/empty-state";
 import { SidebarResizeHandle } from "@/components/custom/sidebar-resize-handle";
 import { Spinner } from "@/components/custom/spinner";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
+import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { ConfirmDialog } from "@/components/ui/dialog";
-import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
 import { Skeleton } from "@/components/ui/skeleton";
+import { Switch } from "@/components/ui/switch";
 import { useResizePanel } from "@/hooks/ui/use-resize-panel";
 import { getCliModelOption, isCliType, renderCliIcon } from "@/lib/cli-runtime-ui/registry";
 import { formatModelLabel } from "@/lib/costs/cost-summary";
@@ -41,6 +62,8 @@ export function usePullRequestGuides(args: { projectId: Id<"projects">; reposito
   const [steps, setSteps] = useState<ReadonlyMap<string, Steps>>(new Map());
   // The member's pick, else the newest; a deleted pick falls back to the newest.
   const [selected, select] = useState<Id<"integrationPullRequestGuides"> | null>(null);
+  // The follow-up switch sits in the tab row and filters the steps below it.
+  const [onlyChanged, setOnlyChanged] = useState(false);
   const shown = guides?.find((guide) => guide._id === selected) ?? guides?.[0] ?? null;
   const readyId = shown?.status === "ready" ? shown._id : null;
   const loaded = readyId ? steps.get(readyId) : undefined;
@@ -62,7 +85,7 @@ export function usePullRequestGuides(args: { projectId: Id<"projects">; reposito
       if (readyId) next.delete(readyId);
       return next;
     });
-  return { guides, shown, steps: loaded, retry, select };
+  return { guides, shown, steps: loaded, retry, select, onlyChanged, setOnlyChanged };
 }
 
 /** The composer's label ("Sonnet 5.5"); an unknown slug shows as stored. */
@@ -71,7 +94,22 @@ const modelOf = ({ cliType, cliModel }: GuideSummary) =>
 /** "you" or the requester's name, mid-sentence; `capitalize` starts one. */
 const requesterName = (guide: GuideSummary) => (guide.requester.isViewer ? "you" : (guide.requester.name ?? "a former member"));
 const capitalize = (text: string) => text.charAt(0).toUpperCase() + text.slice(1);
-const shortSha = (guide: GuideSummary) => guide.headSha.slice(0, 7);
+const shortSha = (guide: Pick<GuideSummary, "headSha">) => guide.headSha.slice(0, 7);
+/** "Follow-up of your guide", or of the base requester's. */
+const followUpOf = (base: NonNullable<GuideSummary["base"]>) =>
+  `Follow-up of ${base.requester.isViewer ? "your" : `${base.requester.name ?? "a former member"}'s`} guide`;
+
+/** The runtime's icon, or a spinner while the Guide is being written. */
+function GuideIcon({ guide, className }: { guide: GuideSummary; className: string }) {
+  if (guide.status === "writing") {
+    return (
+      <span title="Writing the guide" className="flex size-3.5 shrink-0 items-center justify-center">
+        <Spinner />
+      </span>
+    );
+  }
+  return isCliType(guide.cliType) ? renderCliIcon(guide.cliType, className) : null;
+}
 
 /** The short age, or "Failed" in its place: the row has no room for a status column. */
 function GuideAge({ guide, className }: { guide: GuideSummary; className?: string }) {
@@ -96,18 +134,25 @@ function GuideLine({ guide }: { guide: GuideSummary }) {
   const swap = guide.canDelete && "group-hover:invisible group-has-[[data-variant=destructive]:focus]:invisible";
   return (
     <>
-      {isCliType(guide.cliType) ? renderCliIcon(guide.cliType, "size-3.5 shrink-0 text-muted-foreground") : null}
+      <GuideIcon guide={guide} className="size-3.5 shrink-0 text-muted-foreground" />
       <span className="min-w-0 truncate">{modelOf(guide)}</span>
       <span className="shrink-0 font-mono text-xs text-muted-foreground">{shortSha(guide)}</span>
-      <span className="ml-auto shrink-0 pl-2">
-        <RequesterAvatar guide={guide} />
-      </span>
-      <GuideAge guide={guide} className={swap || undefined} />
+      {guide.base ? (
+        <span title={followUpOf(guide.base)} className="shrink-0">
+          <CornerDownRight className="size-3.5 text-muted-foreground" />
+        </span>
+      ) : null}
+      {/* A fixed column, so every row's avatar lines up at the edge. */}
+      <GuideAge guide={guide} className={cn("ml-auto w-10 text-right", swap)} />
+      <RequesterAvatar guide={guide} />
     </>
   );
 }
 
-/** The corner menu in the tab row: the Guide on screen, every Guide to switch to, Delete on each row, and New guide. */
+/**
+ * The corner of the tab row: a follow-up's base, counts, and Only what changed, then the menu of the
+ * Guide on screen, every Guide to switch to, Delete on each row, and New guide.
+ */
 export function GuideMenu({ state, launch }: { state: PullRequestGuides; launch: Launch }) {
   const { guides, shown, select } = state;
   // The Guide the member chose: the list is live, so the row may hold another one by the time they confirm.
@@ -115,16 +160,28 @@ export function GuideMenu({ state, launch }: { state: PullRequestGuides; launch:
   const [deleting, setDeleting] = useState(false);
   const remove = useMutation(api.integrations.github.guides.remove);
   if (!guides || !shown) return null;
+  const since = shown.base?.headSha.slice(0, 7);
   return (
-    <>
+    <div className="flex min-w-0 items-center gap-3">
+      {shown.status === "ready" && shown.base && shown.changes ? (
+        <>
+          <span title={`${followUpOf(shown.base)} for ${since}`} className="min-w-0 truncate text-xs text-muted-foreground">
+            {`Since ${since}: ${changeCounts(shown.changes)}`}
+          </span>
+          <label className="flex shrink-0 items-center gap-2 text-xs text-muted-foreground">
+            <Switch size="sm" checked={state.onlyChanged} onCheckedChange={state.setOnlyChanged} aria-label="Only what changed" />
+            Only what changed
+          </label>
+        </>
+      ) : null}
       <DropdownMenu>
         <DropdownMenuTrigger asChild>
           <Button variant="ghost" className="min-w-0 text-muted-foreground">
-            {isCliType(shown.cliType) ? renderCliIcon(shown.cliType, "size-3.5 shrink-0") : null}
+            <GuideIcon guide={shown} className="size-3.5 shrink-0" />
             <span className="truncate">{modelOf(shown)}</span>
             <span className="shrink-0 font-mono text-xs">{shortSha(shown)}</span>
-            <RequesterAvatar guide={shown} />
             <GuideAge guide={shown} />
+            <RequesterAvatar guide={shown} />
             <ChevronDown />
           </Button>
         </DropdownMenuTrigger>
@@ -138,12 +195,12 @@ export function GuideMenu({ state, launch }: { state: PullRequestGuides; launch:
                 <GuideLine guide={guide} />
               </DropdownMenuItem>
               {guide.canDelete ? (
-                // Over the age, shown on hover or focus, like a thread row's actions.
+                // Over the age column, left of the avatar, shown on hover or focus like a thread row's actions.
                 <DropdownMenuItem
                   variant="destructive"
                   aria-label={`Delete guide for ${shortSha(guide)}`}
                   onSelect={() => setConfirming(guide._id)}
-                  className="absolute top-1/2 right-1 size-6 -translate-y-1/2 cursor-pointer justify-center p-0 opacity-0 group-hover:opacity-100 focus:opacity-100"
+                  className="absolute top-1/2 right-9.5 size-6 -translate-y-1/2 cursor-pointer justify-center p-0 opacity-0 group-hover:opacity-100 focus:opacity-100"
                 >
                   <Trash2 />
                 </DropdownMenuItem>
@@ -192,7 +249,7 @@ export function GuideMenu({ state, launch }: { state: PullRequestGuides; launch:
           },
         }}
       />
-    </>
+    </div>
   );
 }
 
@@ -200,6 +257,7 @@ export function GuideMenu({ state, launch }: { state: PullRequestGuides; launch:
 export function PullRequestGuideTab({
   state,
   launch,
+  pullRequest,
   diffState,
   onRetryDiff,
   marks,
@@ -208,6 +266,8 @@ export function PullRequestGuideTab({
 }: {
   state: PullRequestGuides;
   launch: Launch;
+  /** The stored PR, live; an open one past the Guide's head gets the Outdated banner. */
+  pullRequest: { state: string; headSha: string } | null;
   /** The reader's diff read, for the steps' file diffs. */
   diffState: DiffState;
   onRetryDiff: () => void;
@@ -303,21 +363,107 @@ export function PullRequestGuideTab({
       </div>
     );
   }
-  return <GuideSteps guide={steps.guide} diffState={diffState} onRetryDiff={onRetryDiff} marks={marks} />;
+  return (
+    <>
+      {pullRequest?.state === "open" && shown.headSha !== pullRequest.headSha ? (
+        <OutdatedBanner state={state} launch={launch} shown={shown} headSha={pullRequest.headSha} />
+      ) : null}
+      {/* Keyed so opened steps and flipped files stay with their Guide. */}
+      <GuideSteps
+        key={steps.guide._id}
+        guide={steps.guide}
+        onlyChanged={state.onlyChanged}
+        diffState={diffState}
+        onRetryDiff={onRetryDiff}
+        marks={marks}
+      />
+    </>
+  );
+}
+
+/** Amber, not red: the Guide still reads, but misses the commits since its head. */
+function OutdatedBanner({
+  state,
+  launch,
+  shown,
+  headSha,
+}: {
+  state: PullRequestGuides;
+  launch: Launch;
+  shown: GuideSummary;
+  headSha: string;
+}) {
+  const newer = state.guides?.find((guide) => guide.status === "ready" && guide.headSha === headSha);
+  // Both land the new Guide first in the list, so show the newest.
+  const run = (start: () => void) => () => {
+    state.select(null);
+    start();
+  };
+  return (
+    <div
+      role="status"
+      aria-label="Outdated guide"
+      className="flex flex-wrap items-center justify-between gap-3 border-b border-warning/40 bg-warning-soft px-5 py-3 text-sm text-warning-foreground md:px-8"
+    >
+      <span className="flex items-center gap-2">
+        <TriangleAlert className="size-4 shrink-0 text-warning" />
+        {newer
+          ? `A newer guide covers ${shortSha(newer)}.`
+          : `This guide was written for ${shortSha(shown)}. The commits since then aren't covered.`}
+      </span>
+      {newer ? (
+        <Button variant="outline" size="sm" onClick={() => state.select(newer._id)}>
+          Open it
+        </Button>
+      ) : launch.allowed ? (
+        <span className="flex gap-2" title={launch.reason ?? undefined}>
+          <Button variant="outline" size="sm" disabled={launch.disabled} onClick={run(() => launch.start())}>
+            New guide
+          </Button>
+          <Button size="sm" disabled={launch.disabled} onClick={run(launch.update)}>
+            Update guide
+          </Button>
+        </span>
+      ) : null}
+    </div>
+  );
+}
+
+const CHANGE_LABELS = { unchanged: "Unchanged", updated: "Updated", new: "New" } satisfies Record<NonNullable<GuideStep["change"]>, string>;
+
+/** "1 updated, 2 unchanged", leaving out the kinds a follow-up has none of. */
+function changeCounts({ updated, unchanged, added, removed }: NonNullable<GuideSummary["changes"]>) {
+  return (
+    [
+      [updated, "updated"],
+      [unchanged, "unchanged"],
+      [added, "new"],
+      [removed, "removed"],
+    ] as const
+  )
+    .filter(([count]) => count > 0)
+    .map(([count, label]) => `${count} ${label}`)
+    .join(", ");
 }
 
 const pad = (value: number) => String(value).padStart(2, "0");
 const bounds = { min: 280, max: 720, default: 440, storageKey: "convoy:github:guide-width" };
 const fromLeft = ({ clientX, containerRect }: { clientX: number; containerRect: DOMRect }) => clientX - containerRect.left;
 
-/** Each step on the left, sticky, beside its files' diffs on the right. Reviewed files start collapsed. */
+/**
+ * Each step on the left, sticky, beside its files' diffs on the right. Reviewed files start collapsed;
+ * so does a follow-up's Unchanged step whose files are all Reviewed.
+ */
 function GuideSteps({
   guide,
+  onlyChanged,
   diffState,
   onRetryDiff,
   marks,
 }: {
   guide: GuideDetail;
+  /** The tab row's Only what changed: hides Unchanged steps. */
+  onlyChanged: boolean;
   diffState: DiffState;
   onRetryDiff: () => void;
   marks: ReturnType<typeof useReviewedMarks>;
@@ -326,6 +472,8 @@ function GuideSteps({
   const options = usePatchDiffOptions("unified", true);
   // A header click flips a file until its Reviewed mark changes.
   const [toggled, setToggled] = useState<ReadonlySet<string>>(new Set());
+  // Collapsed Unchanged steps the member opened.
+  const [opened, setOpened] = useState<ReadonlySet<number>>(new Set());
   const sections = useRef(new Map<string, HTMLElement>());
   const container = useRef<HTMLDivElement>(null);
   const { width, handleMouseDown, adjustWidthBy } = useResizePanel(container, { bounds, getWidthFromPointer: fromLeft });
@@ -346,6 +494,14 @@ function GuideSteps({
     if (isCollapsed(file)) flip(file.path, !toggled.has(file.path));
     requestAnimationFrame(() => sections.current.get(file.path)?.scrollIntoView({ block: "start", behavior: "smooth" }));
   };
+  const allReviewed = (step: GuideStep) =>
+    step.files.length > 0 &&
+    step.files.every(({ path }) => {
+      const file = files.get(path);
+      return file !== undefined && marks.isReviewed(file);
+    });
+  const since = guide.base ? guide.base.headSha.slice(0, 7) : "";
+  const visible = guide.steps.map((step, index) => ({ step, index })).filter(({ step }) => !(onlyChanged && step.change === "unchanged"));
 
   return (
     <div ref={container} className="relative min-h-full" style={{ "--guide-left": `${width}px` } as React.CSSProperties}>
@@ -367,120 +523,168 @@ function GuideSteps({
           </Button>
         </div>
       ) : null}
-      {guide.steps.map((step, index) => (
-        <section
-          key={index}
-          aria-labelledby={`guide-step-${index}`}
-          className="bg-(--guide-row) lg:grid lg:grid-cols-[var(--guide-left)_minmax(0,1fr)]"
-          style={{ "--guide-row": index % 2 ? "color-mix(in oklab, var(--muted) 40%, var(--background))" : "var(--background)" } as React.CSSProperties}
-        >
-          {/* The rule lines up with the files' top border; the tab bar already draws the first. */}
-          <div className={index ? "border-t" : undefined}>
-            <div className="px-5 pt-6 pb-8 md:px-8 lg:sticky lg:top-0">
-              <p className="text-xs tabular-nums text-muted-foreground">
-                {pad(index + 1)} / {pad(guide.steps.length)}
-              </p>
-              <h2 id={`guide-step-${index}`} className="mt-1 text-lg font-semibold">
-                {step.title}
-              </h2>
-              <p className="mt-4 text-sm leading-6 whitespace-pre-line">{step.explanation}</p>
-              {step.attention ? (
-                <div className="mt-4 flex gap-2 rounded-md bg-muted px-3 py-2 text-sm leading-6">
-                  {/* A box one line tall centres the icon on the first line, however the note wraps. */}
-                  <span className="flex h-6 shrink-0 items-center">
-                    <CircleAlert className="size-4" />
-                  </span>
-                  <p>
-                    <span className="font-medium">{capitalize(step.attention.kind)}:</span>{" "}
-                    <span className="text-muted-foreground">{step.attention.note}</span>
+
+      {visible.map(({ step, index }, position) => {
+        const number = (
+          <p className="flex items-center gap-2 text-xs tabular-nums text-muted-foreground">
+            {pad(index + 1)} / {pad(guide.steps.length)}
+            {step.change ? (
+              <Badge variant={step.change === "unchanged" ? "secondary" : "default"}>{CHANGE_LABELS[step.change]}</Badge>
+            ) : null}
+          </p>
+        );
+        const row = {
+          "--guide-row": index % 2 ? "color-mix(in oklab, var(--muted) 40%, var(--background))" : "var(--background)",
+        } as React.CSSProperties;
+        // The tab bar, banner, or follow-up bar already draws the first rule.
+        const rule = position ? "border-t" : undefined;
+        if (step.change === "unchanged" && !opened.has(index) && allReviewed(step)) {
+          return (
+            <section key={index} aria-labelledby={`guide-step-${index}`} className={cn("relative z-30 bg-(--guide-row)", rule)} style={row}>
+              <div className="flex items-center gap-3 px-5 py-3 md:px-8">
+                {number}
+                <h2 id={`guide-step-${index}`} className="min-w-0 flex-1 truncate text-sm font-medium">
+                  {step.title}
+                </h2>
+                <span className="shrink-0 text-xs text-muted-foreground">All files reviewed</span>
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  aria-label={`Show step ${index + 1}`}
+                  onClick={() => setOpened((current) => new Set(current).add(index))}
+                >
+                  Show
+                </Button>
+              </div>
+            </section>
+          );
+        }
+        return (
+          <section
+            key={index}
+            aria-labelledby={`guide-step-${index}`}
+            className="bg-(--guide-row) lg:grid lg:grid-cols-[var(--guide-left)_minmax(0,1fr)]"
+            style={row}
+          >
+            {/* The rule lines up with the files' top border. */}
+            <div className={rule}>
+              <div className="px-5 pt-6 pb-8 md:px-8 lg:sticky lg:top-0">
+                {number}
+                <h2 id={`guide-step-${index}`} className="mt-1 text-lg font-semibold">
+                  {step.title}
+                </h2>
+                {step.whatChanged ? (
+                  <p className="mt-3 rounded-md border px-3 py-2 text-xs">{`What changed since ${since}: ${step.whatChanged}`}</p>
+                ) : null}
+                <p className="mt-4 text-sm leading-6 whitespace-pre-line">{step.explanation}</p>
+                {step.attention ? (
+                  <div className="mt-4 flex gap-2 rounded-md bg-muted px-3 py-2 text-sm leading-6">
+                    {/* A box one line tall centres the icon on the first line, however the note wraps. */}
+                    <span className="flex h-6 shrink-0 items-center">
+                      <CircleAlert className="size-4" />
+                    </span>
+                    <p>
+                      <span className="font-medium">{capitalize(step.attention.kind)}:</span>{" "}
+                      <span className="text-muted-foreground">{step.attention.note}</span>
+                    </p>
+                  </div>
+                ) : null}
+                <ul className="mt-5 space-y-1">
+                  {step.files.map(({ path, note }) => {
+                    const file = files.get(path);
+                    const slash = path.lastIndexOf("/");
+                    return (
+                      <li key={path}>
+                        <button
+                          type="button"
+                          disabled={!file}
+                          onClick={() => file && show(file)}
+                          title={path}
+                          className="flex w-full min-w-0 cursor-pointer items-center gap-2 rounded-md bg-muted/40 px-2.5 py-2 text-left text-xs hover:bg-muted disabled:cursor-default disabled:hover:bg-muted/40"
+                        >
+                          <FileText className="size-3.5 shrink-0 text-muted-foreground" />
+                          <span className={file?.status === "removed" ? "line-through" : undefined}>{path.slice(slash + 1)}</span>
+                          <span className="min-w-0 flex-1 truncate text-muted-foreground">{path.slice(0, Math.max(slash, 0))}</span>
+                          {file ? (
+                            <span className="tabular-nums">
+                              {file.additions ? <span className="text-success">+{file.additions}</span> : null}{" "}
+                              {file.deletions ? <span className="text-destructive">-{file.deletions}</span> : null}
+                            </span>
+                          ) : null}
+                          {file && marks.isReviewed(file) ? (
+                            <Check aria-label={`${path} reviewed`} className="size-3.5 shrink-0 text-primary" />
+                          ) : (
+                            <span className="size-3.5 shrink-0" />
+                          )}
+                        </button>
+                        {note ? <p className="px-2.5 pt-1 text-xs text-muted-foreground">{note}</p> : null}
+                      </li>
+                    );
+                  })}
+                </ul>
+                {step.questions.map((question, at) => (
+                  <p key={at} className="mt-4 text-xs text-muted-foreground">
+                    Question: {question}
                   </p>
-                </div>
-              ) : null}
-              <ul className="mt-5 space-y-1">
-                {step.files.map(({ path, note }) => {
+                ))}
+              </div>
+            </div>
+            {/* Files stack edge to edge like Diff; an expanded body closes with its own rule. */}
+            <div className="min-w-0 pb-16">
+              <div className={cn("[&>section:has(>:nth-child(2))]:border-b [&>section>div:first-child]:bg-(--guide-row)", rule)}>
+                {step.files.map(({ path }) => {
                   const file = files.get(path);
-                  const slash = path.lastIndexOf("/");
+                  if (file && diff) {
+                    return (
+                      <PullRequestFileSection
+                        key={path}
+                        file={file}
+                        htmlUrl={diff.htmlUrl}
+                        options={options}
+                        collapsed={isCollapsed(file)}
+                        onToggle={() => flip(path, !toggled.has(path))}
+                        registerSection={registerSection}
+                        reviewed={marks.isReviewed(file)}
+                        onReviewedChange={(reviewed) => {
+                          marks.setReviewed(file, reviewed);
+                          flip(path, false);
+                        }}
+                      />
+                    );
+                  }
+                  if (diffState.kind === "loading") {
+                    return <Skeleton key={path} className="m-4 h-24 rounded-lg" aria-label={`Loading ${path}`} />;
+                  }
                   return (
-                    <li key={path}>
-                      <button
-                        type="button"
-                        disabled={!file}
-                        onClick={() => file && show(file)}
-                        title={path}
-                        className="flex w-full min-w-0 cursor-pointer items-center gap-2 rounded-md bg-muted/40 px-2.5 py-2 text-left text-xs hover:bg-muted disabled:cursor-default disabled:hover:bg-muted/40"
-                      >
-                        <FileText className="size-3.5 shrink-0 text-muted-foreground" />
-                        <span className={file?.status === "removed" ? "line-through" : undefined}>{path.slice(slash + 1)}</span>
-                        <span className="min-w-0 flex-1 truncate text-muted-foreground">{path.slice(0, Math.max(slash, 0))}</span>
-                        {file ? (
-                          <span className="tabular-nums">
-                            {file.additions ? <span className="text-success">+{file.additions}</span> : null}{" "}
-                            {file.deletions ? <span className="text-destructive">-{file.deletions}</span> : null}
-                          </span>
-                        ) : null}
-                        {file && marks.isReviewed(file) ? (
-                          <Check aria-label={`${path} reviewed`} className="size-3.5 shrink-0 text-primary" />
-                        ) : (
-                          <span className="size-3.5 shrink-0" />
-                        )}
-                      </button>
-                      {note ? <p className="px-2.5 pt-1 text-xs text-muted-foreground">{note}</p> : null}
-                    </li>
+                    <p key={path} className="border-b px-4 py-2 text-xs text-muted-foreground">
+                      <code>{path}</code>
+                      {diff ? (
+                        <>
+                          {" "}
+                          isn&apos;t in the loaded diff.{" "}
+                          <a href={`${diff.htmlUrl}/files`} target="_blank" rel="noreferrer" className="underline">
+                            Open on GitHub
+                          </a>
+                        </>
+                      ) : null}
+                    </p>
                   );
                 })}
-              </ul>
-              {step.questions.map((question, at) => (
-                <p key={at} className="mt-4 text-xs text-muted-foreground">
-                  Question: {question}
-                </p>
-              ))}
+              </div>
             </div>
-          </div>
-          {/* Files stack edge to edge like Diff; an expanded body closes with its own rule. */}
-          <div className="min-w-0 pb-16">
-            <div className={`[&>section:has(>:nth-child(2))]:border-b [&>section>div:first-child]:bg-(--guide-row) ${index ? "border-t" : ""}`}>
-              {step.files.map(({ path }) => {
-                const file = files.get(path);
-                if (file && diff) {
-                  return (
-                    <PullRequestFileSection
-                      key={path}
-                      file={file}
-                      htmlUrl={diff.htmlUrl}
-                      options={options}
-                      collapsed={isCollapsed(file)}
-                      onToggle={() => flip(path, !toggled.has(path))}
-                      registerSection={registerSection}
-                      reviewed={marks.isReviewed(file)}
-                      onReviewedChange={(reviewed) => {
-                        marks.setReviewed(file, reviewed);
-                        flip(path, false);
-                      }}
-                    />
-                  );
-                }
-                if (diffState.kind === "loading") {
-                  return <Skeleton key={path} className="m-4 h-24 rounded-lg" aria-label={`Loading ${path}`} />;
-                }
-                return (
-                  <p key={path} className="border-b px-4 py-2 text-xs text-muted-foreground">
-                    <code>{path}</code>
-                    {diff ? (
-                      <>
-                        {" "}
-                        isn&apos;t in the loaded diff.{" "}
-                        <a href={`${diff.htmlUrl}/files`} target="_blank" rel="noreferrer" className="underline">
-                          Open on GitHub
-                        </a>
-                      </>
-                    ) : null}
-                  </p>
-                );
-              })}
-            </div>
-          </div>
-        </section>
-      ))}
+          </section>
+        );
+      })}
+      {guide.removedStepTitles.length ? (
+        <div className="relative z-30 border-t bg-background px-5 py-6 md:px-8">
+          <p className="text-xs text-muted-foreground">{`Removed since ${since}`}</p>
+          <ul className="mt-2 space-y-1 text-sm text-muted-foreground line-through">
+            {guide.removedStepTitles.map((title, at) => (
+              <li key={at}>{title}</li>
+            ))}
+          </ul>
+        </div>
+      ) : null}
     </div>
   );
 }
