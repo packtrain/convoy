@@ -291,6 +291,10 @@ Slash commands without a category render under `Uncategorized`.
   its row out. The card never takes focus from the composer. Keyboard
   highlighting does not open it.
 - The command suggestion menu shows a scope badge for stored Convoy prompts, such as `Project` or `Organization`. Colliding project and organization commands appear as separate results with the same command label and different scope badges.
+- Hovering a Prompt row the viewer can manage (`slash_commands:manage` in the
+  Prompt's scope) swaps its scope badge for an edit button. It links to the
+  Prompt's settings page, and clicking it closes the menu (OS-2428). Rows the
+  viewer cannot manage keep the badge.
 - Suggestion matches are ranked by how well the typed query matches the command
   key, best first (`matchComposerSlashCommands`, OS-1645):
   1. exact key

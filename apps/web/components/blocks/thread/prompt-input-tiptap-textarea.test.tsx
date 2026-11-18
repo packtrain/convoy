@@ -10,7 +10,14 @@ import { buildSkillComposerItems } from "@/lib/slash-commands/composer";
 import { Drawer, DrawerContent, DrawerDescription, DrawerTitle } from "@/components/ui/drawer";
 import { mockScrollable } from "@/test-utils/scroll";
 import { POPOVER_SURFACE_CLASS } from "@/components/ui/popover";
+import { routeTarget } from "@/lib/navigation";
 import { PromptInputTiptapTextarea } from "./prompt-input-tiptap-textarea";
+
+const routerPush = vi.fn();
+vi.mock("next/navigation", () => ({
+  usePathname: () => "/o/acme/OS/threads",
+  useRouter: () => ({ push: routerPush, replace: vi.fn() }),
+}));
 
 const setInput = vi.fn();
 let providerText = "";
@@ -402,6 +409,25 @@ describe("PromptInputTiptapTextarea", () => {
     } finally {
       vi.useRealTimers();
     }
+  });
+
+  // OS-2428: a manageable Prompt row trades its scope badge for an edit link on hover.
+  test("links a manageable prompt row to its settings page and closes the menu on click", async () => {
+    const [pdfSkill] = buildSkillComposerItems([{ _id: "skill_pdf" as Id<"skills">, name: "pdf-tools" }]);
+    const { editor } = await renderComposer({
+      slashCommands: [planCommand, pdfSkill],
+      getPromptEditHref: (item) => routeTarget(`/o/acme/settings/prompts/${item.id}`),
+    });
+    editor.commands.insertContent("/");
+
+    const edit = await screen.findByRole("link", { name: "Edit /plan" });
+    expect(edit.getAttribute("href")).toBe("/o/acme/settings/prompts/cmd_plan");
+    expect(screen.queryByRole("link", { name: "Edit /pdf-tools" })).toBeNull();
+
+    expect(fireEvent.mouseDown(edit)).toBe(false);
+    fireEvent.click(edit);
+    expect(routerPush).toHaveBeenCalledWith("/o/acme/settings/prompts/cmd_plan", expect.anything());
+    expect(screen.queryByRole("button", { name: /\/plan/ })).toBeNull();
   });
 
   test("keeps newlines when syncing multiline text from the provider", async () => {

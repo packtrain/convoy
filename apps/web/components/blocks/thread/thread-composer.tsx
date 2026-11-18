@@ -51,6 +51,9 @@ import { DropdownMenu, DropdownMenuContent, DropdownMenuTrigger } from "@/compon
 import { Pill, PillAction, PillContent, PillIcon, PillText } from "@/components/ui/pill";
 import type { Id } from "@/convex/_generated/dataModel";
 import { api } from "@/convex/_generated/api";
+import { OrgPermission, ProjectPermission, hasOrgPermission, hasProjectPermission } from "@/lib/authz/permissions";
+import { useOptionalCurrentOrgProject } from "@/lib/routing/current-org-project-context";
+import type { SlashCommandCatalogItem } from "@/lib/slash-commands/composer";
 import type { RuntimeSlashCommand } from "@/convex/cli/lib/runtimes/validators";
 import { PLAN_MODE_TOGGLE_SHORTCUT, THREAD_ATTACH_FILES_SHORTCUT } from "@/lib/browser/hotkeys";
 import { useAttachmentPreview } from "@/hooks/uploads/use-attachment-preview";
@@ -360,8 +363,24 @@ function ThreadComposerTiptapInputWithCatalog({
     () => [...(slashCommands ?? []), ...buildSkillComposerItems(skills ?? [])],
     [skills, slashCommands]
   );
+  // Both queries are already subscribed by the sidebar, so these add no reads.
+  const orgRoute = useOptionalCurrentOrgProject();
+  const orgRole = useQuery(api.organizations.members.getMyRole, { organizationId });
+  const projects = useQuery(api.projects.core.listByOrganization, projectId ? { organizationId } : "skip");
+  const project = projects?.find((row) => row._id === projectId);
+  const organizationSlug = orgRoute?.organizationId === organizationId ? orgRoute.organizationSlug : null;
+  // Edit link on a manageable Prompt row (docs/specs/slash-commands.md#composer-behavior).
+  const getPromptEditHref = (item: SlashCommandCatalogItem) => {
+    if (!organizationSlug) return null;
+    if (item.scope === "organization") {
+      return hasOrgPermission(orgRole, OrgPermission.SLASH_COMMANDS_MANAGE) ? appRoute.organizationPromptDetail(organizationSlug, item.id) : null;
+    }
+    return project && hasProjectPermission(project.myRole, ProjectPermission.SLASH_COMMANDS_MANAGE)
+      ? appRoute.projectPromptDetail(organizationSlug, project.alias, item.id)
+      : null;
+  };
 
-  return <ThreadComposerTiptapInputBase {...props} slashCommands={catalog} />;
+  return <ThreadComposerTiptapInputBase {...props} slashCommands={catalog} getPromptEditHref={getPromptEditHref} />;
 }
 
 function ThreadComposerTiptapInputBase({
@@ -381,8 +400,10 @@ function ThreadComposerTiptapInputBase({
   fileMention,
   mentionApiRef,
   slashCommands,
+  getPromptEditHref,
 }: Omit<ThreadComposerTiptapInputProps, "organizationId" | "projectId"> & {
   slashCommands: ComponentProps<typeof PromptInputTiptapTextarea>["slashCommands"];
+  getPromptEditHref?: ComponentProps<typeof PromptInputTiptapTextarea>["getPromptEditHref"];
 }) {
   const initialEditorContent = isTiptapDocJsonContent(initialComposerContent) ? initialComposerContent : initialInput;
   const mergedSlashCommands = useMemo(
@@ -399,6 +420,7 @@ function ThreadComposerTiptapInputBase({
       autoFocus={autoFocus}
       initialContent={initialEditorContent}
       slashCommands={mergedSlashCommands}
+      getPromptEditHref={getPromptEditHref}
       fileMention={fileMention}
       mentionApiRef={mentionApiRef}
       onChange={onInputChange}

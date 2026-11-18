@@ -19,10 +19,11 @@ import { closeHistory } from "@tiptap/pm/history";
 import type { Node as ProseMirrorNode } from "@tiptap/pm/model";
 import { Placeholder } from "@tiptap/extension-placeholder";
 import { StarterKit } from "@tiptap/starter-kit";
-import { File as FileIcon, Sparkles, TerminalSquare } from "lucide-react";
+import { File as FileIcon, Pencil, Sparkles, TerminalSquare } from "lucide-react";
 import { POPOVER_SURFACE_CLASS } from "@/components/ui/popover";
 import { usePromptInputAttachments, usePromptInputController } from "@/components/ai-elements/prompt-input";
 import { cn } from "@/lib/utils";
+import { AppLink, type RouteTarget } from "@/lib/navigation";
 import { serializeAttachmentReference, splitAttachmentReferences } from "@/lib/threads/message-attachments";
 import { getFileIcon } from "@/lib/tasks/files";
 import type {
@@ -77,6 +78,8 @@ export interface PromptInputTiptapTextareaProps {
   autoFocus?: boolean;
   className?: string;
   slashCommands?: ComposerSlashCommandItem[];
+  /** Settings page of a Prompt the viewer can edit, or null (OS-2428). */
+  getPromptEditHref?: (item: SlashCommandCatalogItem) => RouteTarget | null;
   /** Enables @-file-mention autocomplete against this profile/path (OS-1144). */
   fileMention?: FileMentionContext | null;
   /** Receives the imperative mention API while mounted (OS-1159). */
@@ -313,6 +316,7 @@ export function PromptInputTiptapTextarea({
   autoFocus = false,
   className,
   slashCommands = [],
+  getPromptEditHref,
   fileMention = null,
   mentionApiRef,
   onChange,
@@ -832,51 +836,72 @@ export function PromptInputTiptapTextarea({
           )
         ) : slashItems.length > 0 ? (
           <div className="flex flex-col gap-px" data-slash-command-menu onPointerLeave={slashPreview.leave}>
-            {slashItems.map((item, index) => (
-              <button
-                key={item.canonicalKey}
-                ref={index === activeIndex ? activeItemRef : undefined}
-                type="button"
-                // Prompts get the preview card instead; agent commands and Skills
-                // keep the native title (docs/specs/slash-commands.md#composer-behavior).
-                title={item.scope === "runtime" || item.scope === "skill" ? getSlashCommandMenuTitle(item) : undefined}
-                onPointerEnter={(event) => slashPreview.hover(item, event.currentTarget)}
-                className={cn(
-                  "flex h-8 cursor-pointer items-center gap-2 rounded-lg px-3 text-left text-sm transition-colors",
-                  index === activeIndex ? "bg-muted/80 text-foreground" : "text-muted-foreground hover:bg-muted/60 hover:text-foreground"
-                )}
-                onMouseDown={(event) => event.preventDefault()}
-                onClick={() => selectCommand(item)}
-              >
-                {/* Skill rows carry the same accent as the sent mention (docs/specs/skills.md#trigger-and-appearance). */}
-                {item.scope === "skill" ? (
-                  <Sparkles className="size-4 shrink-0 text-violet-600 dark:text-violet-400" />
-                ) : (
-                  <TerminalSquare className="size-4 shrink-0" />
-                )}
-                <span className="min-w-0 flex-1 truncate">
-                  <span className={cn("font-medium", item.scope === "skill" ? "text-violet-600 dark:text-violet-400" : "text-foreground")}>
-                    {item.displayLabel}
-                  </span>
-                  {/* The runtime's own argument hint, dimmed after the name the
-                      way the agent's own input renders it (OS-1806). */}
-                  {item.scope === "runtime" && item.argumentHint ? (
-                    <span className="ml-1.5 text-muted-foreground/70">{item.argumentHint}</span>
-                  ) : null}
-                  <span className="ml-2 text-muted-foreground">{getSlashCommandMenuDescription(item)}</span>
-                </span>
-                {item.scope === "skill" || item.scope === "project" || item.scope === "organization" ? (
-                  <span
+            {slashItems.map((item, index) => {
+              const editHref = item.scope === "runtime" || item.scope === "skill" ? null : getPromptEditHref?.(item) ?? null;
+              return (
+                <div key={item.canonicalKey} className="group relative">
+                  <button
+                    ref={index === activeIndex ? activeItemRef : undefined}
+                    type="button"
+                    // Prompts get the preview card instead; agent commands and Skills
+                    // keep the native title (docs/specs/slash-commands.md#composer-behavior).
+                    title={item.scope === "runtime" || item.scope === "skill" ? getSlashCommandMenuTitle(item) : undefined}
+                    onPointerEnter={(event) => slashPreview.hover(item, event.currentTarget)}
                     className={cn(
-                      "shrink-0 rounded-full border px-1.5 py-0.5 text-[10px] font-medium",
-                      item.scope === "skill" ? "border-violet-600/40 text-violet-600 dark:border-violet-400/40 dark:text-violet-400" : "border-border text-muted-foreground"
+                      "flex h-8 w-full cursor-pointer items-center gap-2 rounded-lg px-3 text-left text-sm transition-colors",
+                      index === activeIndex ? "bg-muted/80 text-foreground" : "text-muted-foreground hover:bg-muted/60 hover:text-foreground"
                     )}
+                    onMouseDown={(event) => event.preventDefault()}
+                    onClick={() => selectCommand(item)}
                   >
-                    {item.scope === "skill" ? "Skill" : item.scope === "project" ? "Project" : "Organization"}
-                  </span>
-                ) : null}
-              </button>
-            ))}
+                    {/* Skill rows carry the same accent as the sent mention (docs/specs/skills.md#trigger-and-appearance). */}
+                    {item.scope === "skill" ? (
+                      <Sparkles className="size-4 shrink-0 text-violet-600 dark:text-violet-400" />
+                    ) : (
+                      <TerminalSquare className="size-4 shrink-0" />
+                    )}
+                    <span className="min-w-0 flex-1 truncate">
+                      <span className={cn("font-medium", item.scope === "skill" ? "text-violet-600 dark:text-violet-400" : "text-foreground")}>
+                        {item.displayLabel}
+                      </span>
+                      {/* The runtime's own argument hint, dimmed after the name the
+                          way the agent's own input renders it (OS-1806). */}
+                      {item.scope === "runtime" && item.argumentHint ? (
+                        <span className="ml-1.5 text-muted-foreground/70">{item.argumentHint}</span>
+                      ) : null}
+                      <span className="ml-2 text-muted-foreground">{getSlashCommandMenuDescription(item)}</span>
+                    </span>
+                    {item.scope === "skill" || item.scope === "project" || item.scope === "organization" ? (
+                      <span
+                        className={cn(
+                          "shrink-0 rounded-full border px-1.5 py-0.5 text-[10px] font-medium",
+                          editHref && "group-hover:invisible",
+                          item.scope === "skill" ? "border-violet-600/40 text-violet-600 dark:border-violet-400/40 dark:text-violet-400" : "border-border text-muted-foreground"
+                        )}
+                      >
+                        {item.scope === "skill" ? "Skill" : item.scope === "project" ? "Project" : "Organization"}
+                      </span>
+                    ) : null}
+                  </button>
+                  {/* A sibling, not a child: a link can't nest in the row's button. */}
+                  {editHref ? (
+                    <AppLink
+                      href={editHref}
+                      aria-label={`Edit ${item.displayLabel}`}
+                      title="Edit prompt"
+                      className="absolute right-2 top-1/2 hidden size-6 -translate-y-1/2 items-center justify-center rounded-md text-muted-foreground hover:bg-muted hover:text-foreground group-hover:flex"
+                      onMouseDown={(event) => event.preventDefault()}
+                      onClick={() => {
+                        suggestionRef.current = null;
+                        setSuggestion(null);
+                      }}
+                    >
+                      <Pencil className="size-3.5" />
+                    </AppLink>
+                  ) : null}
+                </div>
+              );
+            })}
           </div>
         ) : (
           // Prompts, agent commands and Skills all live behind `/`.
