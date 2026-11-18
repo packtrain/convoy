@@ -19,7 +19,7 @@ import {
   RecurringTasksSection,
   TemplatesSection,
 } from "@/components/blocks/project/settings/project-settings-sections";
-import { ProjectIntegrationsPage } from "@/components/blocks/integrations";
+import { ProjectIntegrationsPage, PullRequestSettingsSection } from "@/components/blocks/integrations";
 import { DangerZoneSection } from "@/components/blocks/project/settings/danger-section";
 import { ProjectUsageDashboard } from "@/components/blocks/project/usage/project-usage-dashboard";
 import { Skeleton } from "@/components/ui/skeleton";
@@ -151,6 +151,11 @@ export function ProjectSettingsPageContent({
   }
   if (section === "automations") {
     return <AutomationsSection />;
+  }
+  if (section === "pull-requests") {
+    return (
+      <PullRequestSettingsSection projectId={projectId} canEdit={canEditProject} publishPullRequestChecks={project?.publishPullRequestChecks ?? true} />
+    );
   }
   if (section === "integrations") {
     return <ProjectIntegrationsPage organizationSlug={organizationSlug} projectAlias={projectAlias} />;

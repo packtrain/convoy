@@ -356,7 +356,10 @@ or a Checklist). One picker per row makes it visible that a type has one
 default; moving a type off a Checklist happens in plain sight, not as a side
 effect of ticking it elsewhere. Clicking a default's pill on a Checklist row
 opens the same popup. Save sends every row in one `checklists.setDefaults`
-mutation, so the defaults change together or not at all.
+mutation, so the defaults change together or not at all. Settings → Pull
+requests repeats the Pull requests picker on its own; it saves on change and
+sends no task types, which leaves theirs as they are
+([github-integration.md → Pull request settings](github-integration.md#pull-request-settings)).
 The Checklists group stays hidden until the project has a Check or a
 Checklist, since a Checklist needs Checks to group. Until then the Checks group
 drops its heading too, leaving only the "No checks yet" empty state.

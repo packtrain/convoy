@@ -101,6 +101,7 @@ export const PROJECT_SETTINGS_SECTIONS = [
   "templates",
   "recurring",
   "automations",
+  "pull-requests",
   "integrations",
   "import-export",
   "usage",

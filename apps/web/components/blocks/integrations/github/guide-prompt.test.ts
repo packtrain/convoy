@@ -20,4 +20,17 @@ describe("guidePrompt", () => {
     expect(prompt).toContain("1 to 8 steps");
     expect(prompt).toContain("at most 2 questions per step");
   });
+
+  test("on a Stack, the guide covers only its own Layer and names the others", () => {
+    const pullRequest = { owner: "acme", name: "web", number: 11, ref: "acme/web#11" } as never;
+    const layers = [
+      { number: 10, title: "Add the schema" },
+      { number: 11, title: "Add the API" },
+      { number: 12, title: "Add the UI" },
+    ];
+    const prompt = guidePrompt({ pullRequest, baseSha: "b", headSha: "h", layers });
+    expect(prompt).toContain("This pull request is one Layer of a Stack, from the base up: #10 Add the schema; #11 Add the API (this pull request); #12 Add the UI.");
+    expect(prompt).toContain('Cover only this Layer\'s changes. Mention another Layer in a phrase at most, such as "added in #10".');
+    expect(guidePrompt({ pullRequest, baseSha: "b", headSha: "h", layers: [layers[1]] })).not.toContain("Stack");
+  });
 });

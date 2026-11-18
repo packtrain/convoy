@@ -4,6 +4,7 @@ import {
   Coins,
   Download,
   FileText,
+  GitPullRequest,
   List,
   ListChecks,
   Plug,
@@ -129,6 +130,13 @@ const PROJECT_SETTINGS_PRIMARY_SECTION_CONFIG: readonly SettingsSectionConfig[] 
     label: "Automations",
     description: "Automate task status changes and archiving.",
     devSettingId: "extraProjectSettings",
+  },
+  {
+    id: "pull-requests",
+    icon: GitPullRequest,
+    label: "Pull requests",
+    description: "How Convoy checks pull requests and writes their Guides.",
+    devSettingId: "githubIntegration",
   },
   {
     id: "integrations",

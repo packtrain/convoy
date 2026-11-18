@@ -1,4 +1,5 @@
 export { ChecksSettingsSection } from "./checks-settings-section";
+export { PullRequestChecksSettings } from "./pull-request-checks-settings";
 export { TaskChecksSection } from "./task-checks-section";
 export { ReplyChecks } from "./reply-checks";
 export { useThreadChecks } from "./use-thread-checks";

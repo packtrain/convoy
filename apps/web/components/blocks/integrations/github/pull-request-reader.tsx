@@ -91,7 +91,8 @@ export function PullRequestReader({
   // The held diff's PR stays put until Refresh, like the diff itself.
   const heldPr = held?.diff.kind === "loaded" ? held.diff.diff.pullRequest : null;
   const pr: PullRequestView | null = stored ?? (readable ? heldPr : null);
-  const layers = useStackLayers(pr?.stack ? { projectId, repositoryId, stackId: pr.stack.id } : null) ?? [];
+  const stackLayers = useStackLayers(pr?.stack ? { projectId, repositoryId, stackId: pr.stack.id } : null);
+  const layers = stackLayers ?? [];
   const load = () => setRequest((value) => value + 1);
   const repository = status?.connections.find((connection) => connection.repositoryId === repositoryId)?.repository;
   const attached = repository ? toAttachedPullRequest({ owner: repository.owner, name: repository.name, number }) : null;
@@ -100,7 +101,9 @@ export function PullRequestReader({
   const launch = useGenerateGuide(
     attached ? { projectId, organizationSlug, projectAlias, pullRequest: attached } : null,
     stored ? { baseSha: stored.baseSha, headSha: stored.headSha } : null,
-    guides.guides
+    guides.guides,
+    // Null while a stacked PR's Layers load, so Generate guide waits for them.
+    pr?.stack && !stackLayers ? null : layers
   );
 
   useEffect(() => {

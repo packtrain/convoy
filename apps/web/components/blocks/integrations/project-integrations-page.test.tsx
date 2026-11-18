@@ -36,6 +36,8 @@ vi.mock("@/lib/navigation", async (importActual) => ({
   ...(await importActual<typeof import("@/lib/navigation")>()),
   useNavigation: () => ({ location: { pathname: "/", search, hash: "" }, replace: replaceMock, push: vi.fn() }),
 }));
+// The Guide prompt section has its own tests.
+vi.mock("./github/guide-prompt-section", () => ({ GuidePromptSection: () => <p>Guide prompt section</p> }));
 vi.mock("@/lib/auth/hooks", () => ({ useAppConvexAuth: () => ({ isAuthenticated: true }) }));
 vi.mock("@/lib/routing/current-org-project-context", () => ({ useCurrentOrgProject: () => ({ organizationId: "org_1" }) }));
 vi.mock("sonner", () => ({ toast: { error: (message: string) => toastErrorMock(message) } }));
@@ -139,6 +141,11 @@ describe("ProjectIntegrationsPage", () => {
     const back = screen.getByRole("link", { name: "Back to integrations" });
     expect(back.getAttribute("href")).toBe("/o/org/WEB/settings/integrations");
     expect(back.querySelector(".lucide-chevron-left")).not.toBeNull();
+  });
+
+  test("the Guide prompt lives in Settings → Pull requests, not on the GitHub page", () => {
+    renderPage(status());
+    expect(screen.queryByText("Guide prompt section")).toBeNull();
   });
 
   test("explains that the deployment has no GitHub App", () => {

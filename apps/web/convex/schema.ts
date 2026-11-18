@@ -1565,6 +1565,20 @@ export default defineSchema({
     steps: v.array(guideStepValidator),
   }).index("by_guideId", ["guideId"]),
 
+  // The Guide prompt a Guide was written with (OS-2416), stored at its request; no row = the built-in default.
+  integrationPullRequestGuidePrompts: defineTable({
+    guideId: v.id("integrationPullRequestGuides"),
+    prompt: v.string(),
+  }).index("by_guideId", ["guideId"]),
+
+  // A project's Guide prompt, its own guide instructions (OS-2416); no row = the built-in default.
+  integrationGuidePrompts: defineTable({
+    projectId: v.id("projects"),
+    prompt: v.string(),
+    updatedBy: v.id("users"),
+    updatedAt: v.number(),
+  }).index("by_projectId", ["projectId"]),
+
   // A 10-minute connect flow bound to one user and project. The encrypted
   // user token lets repository selection recheck GitHub admin permission.
   integrationSetups: defineTable({

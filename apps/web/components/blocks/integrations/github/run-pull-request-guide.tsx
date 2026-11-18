@@ -26,7 +26,10 @@ import { guidePrompt } from "./guide-prompt";
 type Target = { projectId: Id<"projects">; organizationSlug: string; projectAlias: string; pullRequest: AttachedPullRequest };
 /** The stored PR's revision; unset until Convoy has synced the PR. */
 type Revision = { baseSha: string; headSha: string } | null;
-type LaunchProps = Target & { viewerId: Id<"users">; revision: NonNullable<Revision>; onClose: () => void };
+/** The run's prompt for a revision. */
+type BuildPrompt = (revision: NonNullable<Revision>) => string;
+/** `guidePrompt` is the project's instructions the prompt is built with; unset is the default. */
+type LaunchProps = Target & { viewerId: Id<"users">; revision: NonNullable<Revision>; buildPrompt: BuildPrompt; guidePrompt?: string; onClose: () => void };
 
 const draftKey = (viewerId: Id<"users">) => `pull-request-guide:${viewerId}`;
 const noop = () => {};
@@ -36,15 +39,25 @@ const noAttachments = async () => [];
  * Generate guide: a thread composer prefilled with the guide prompt, on the member's own profile,
  * like Run checks. Spec: docs/specs/github-integration.md → Guides → Requesting and running.
  */
-export function useGenerateGuide(target: Target | null, revision: Revision, guides?: GuideSummary[] | null) {
+export function useGenerateGuide(
+  target: Target | null,
+  revision: Revision,
+  guides?: GuideSummary[] | null,
+  /** The PR's Stack, bottom first; null while a stacked PR's Layers load. */
+  layers: { number: number; title: string }[] | null = []
+) {
   // Open, for Retry the failed Guide the run writes again, whether to skip the composer, and another member's run to warn about first.
   const [open, setOpen] = useState<{ retryGuideId?: Id<"integrationPullRequestGuides">; auto?: boolean; duplicate?: GuideSummary } | null>(null);
   const projectId = target?.projectId;
   const autoStart = useQuery(api.users.projectPreferences.get, projectId ? { projectId } : "skip")?.guideAutoStart ?? false;
+  // The project's Guide prompt; null is the built-in instructions.
+  const instructions = useQuery(api.integrations.github.guides.getPrompt, projectId ? { projectId } : "skip");
   const permissions = useProjectPermissions(projectId ?? null);
   const { profiles, isLoading } = useCliProfiles(projectId);
   // The popup's draft is per member, so its key waits for the viewer.
   const viewer = useQuery(api.users.core.current);
+  const buildPrompt: BuildPrompt | null =
+    target && instructions !== undefined && layers ? (at) => guidePrompt({ pullRequest: target.pullRequest, ...at, instructions: instructions ?? undefined, layers }) : null;
   const reason = !target || !revision
     ? "Convoy has not synced this pull request yet"
     : !isLoading && !profiles.some((profile) => profile.isOnline)
@@ -53,7 +66,7 @@ export function useGenerateGuide(target: Target | null, revision: Revision, guid
   return {
     /** Hidden without the CLI thread permission. */
     allowed: permissions.canUseThreads,
-    disabled: isLoading || !viewer || reason !== null,
+    disabled: isLoading || !viewer || !buildPrompt || reason !== null,
     reason,
     // Retry always asks: the failed run's choices are often what failed.
     start: (retryGuideId?: Id<"integrationPullRequestGuides">) =>
@@ -63,7 +76,7 @@ export function useGenerateGuide(target: Target | null, revision: Revision, guid
         duplicate: guides?.find((guide) => guide.status === "writing" && !guide.requester.isViewer && guide.headSha === revision?.headSha),
       }),
     dialog:
-      open && viewer && target && revision ? (
+      open && viewer && target && revision && buildPrompt ? (
         open.duplicate ? (
           <ConfirmDialog
             open
@@ -74,12 +87,14 @@ export function useGenerateGuide(target: Target | null, revision: Revision, guid
             confirm={{ label: "Start my own anyway", autoCloseOnClick: false, onClick: () => setOpen({ ...open, duplicate: undefined }) }}
           />
         ) : open.auto ? (
-          <AutoStart {...target} viewerId={viewer._id} revision={revision} onFallback={() => setOpen({})} onClose={() => setOpen(null)} />
+          <AutoStart {...target} viewerId={viewer._id} revision={revision} buildPrompt={buildPrompt} guidePrompt={instructions ?? undefined} onFallback={() => setOpen({})} onClose={() => setOpen(null)} />
         ) : (
           <LaunchDialog
             {...target}
             viewerId={viewer._id}
             revision={revision}
+            buildPrompt={buildPrompt}
+            guidePrompt={instructions ?? undefined}
             retryGuideId={open.retryGuideId}
             autoStart={autoStart}
             onClose={() => setOpen(null)}
@@ -92,6 +107,8 @@ export function useGenerateGuide(target: Target | null, revision: Revision, guid
 function LaunchDialog({
   viewerId,
   revision,
+  buildPrompt,
+  guidePrompt,
   retryGuideId,
   autoStart,
   onClose,
@@ -101,10 +118,10 @@ function LaunchDialog({
   const upsertPreferences = useMutation(api.users.projectPreferences.upsert);
   // The "next time" choice, saved only on send.
   const [choice, setChoice] = useState<boolean | null>(null);
-  // Frozen at open: a push meanwhile must not send a new head with a prompt naming the old one, so the server rejects it.
-  const [opened] = useState(revision);
+  // Frozen at open, as the seed names them: a push meanwhile makes the server reject the run, and the Guide stores these instructions.
+  const [opened] = useState({ revision, guidePrompt });
   // Seeded on each open: the prompt names the current head, so last time's text would be stale.
-  const [seed, setSeed] = useState<string | undefined>(() => guidePrompt({ pullRequest: target.pullRequest, ...opened }));
+  const [seed, setSeed] = useState<string | undefined>(() => buildPrompt(opened.revision));
   return (
     <Dialog open onOpenChange={(next) => !next && onClose()}>
       <DialogContent
@@ -119,7 +136,7 @@ function LaunchDialog({
         <TaskThreadComposer
           {...target}
           draftKey={draftKey(viewerId)}
-          pullRequestGuide={{ headSha: opened.headSha, retryGuideId }}
+          pullRequestGuide={{ headSha: opened.revision.headSha, retryGuideId, guidePrompt: opened.guidePrompt }}
           seed={seed}
           seedReplacesDraft
           onSeeded={() => setSeed(undefined)}
@@ -164,7 +181,7 @@ function AutoStart(props: LaunchProps & { onFallback: () => void }) {
   );
 }
 
-function AutoStartRunner({ viewerId, revision, onFallback, onClose, ...target }: LaunchProps & { onFallback: () => void }) {
+function AutoStartRunner({ viewerId, revision, buildPrompt, guidePrompt, onFallback, onClose, ...target }: LaunchProps & { onFallback: () => void }) {
   const openThreadToast = useOpenThreadToast(target);
   const { profiles, isLoading } = useCliProfiles(target.projectId, { withModelCatalogs: true });
   const projectAgents = useQuery(api.agents.projectAgents.listByProject, { projectId: target.projectId });
@@ -202,7 +219,7 @@ function AutoStartRunner({ viewerId, revision, onFallback, onClose, ...target }:
     clearAfterSubmit: noop,
     setDraft,
     rememberCliModel: noop,
-    pullRequestGuide: { headSha: revision.headSha },
+    pullRequestGuide: { headSha: revision.headSha, guidePrompt },
     onCreated: (threadId) => {
       openThreadToast(threadId);
       onClose();
@@ -219,11 +236,11 @@ function AutoStartRunner({ viewerId, revision, onFallback, onClose, ...target }:
     }
     // useCreateThreadSubmit toasts the failure; the composer lets the member try again.
     void handleSubmit({
-      text: guidePrompt({ pullRequest: target.pullRequest, ...revision }),
+      text: buildPrompt(revision),
       files: [],
       pullRequestUrl: attachedPullRequestUrl(target.pullRequest),
     }).catch(onFallback);
-  }, [handleSubmit, isLoading, onFallback, projectAgents, remembered, revision, target.pullRequest]);
+  }, [buildPrompt, handleSubmit, isLoading, onFallback, projectAgents, remembered, revision, target.pullRequest]);
 
   return null;
 }

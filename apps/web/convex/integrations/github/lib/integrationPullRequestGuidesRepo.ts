@@ -30,11 +30,22 @@ export async function listGuidesForPullRequest(
     .take(limit);
 }
 
+/** `guidePrompt` is the project's Guide prompt at the request; null is the built-in default. */
 export async function insertGuide(
   ctx: MutationCtx,
-  guide: Omit<Doc<"integrationPullRequestGuides">, "_id" | "_creationTime">
+  guide: Omit<Doc<"integrationPullRequestGuides">, "_id" | "_creationTime">,
+  guidePrompt: string | null
 ): Promise<Id<"integrationPullRequestGuides">> {
-  return ctx.db.insert("integrationPullRequestGuides", guide);
+  const guideId = await ctx.db.insert("integrationPullRequestGuides", guide);
+  if (guidePrompt !== null) await ctx.db.insert("integrationPullRequestGuidePrompts", { guideId, prompt: guidePrompt });
+  return guideId;
+}
+
+async function findGuidePromptRow(ctx: Ctx, guideId: Id<"integrationPullRequestGuides">) {
+  return ctx.db
+    .query("integrationPullRequestGuidePrompts")
+    .withIndex("by_guideId", (q) => q.eq("guideId", guideId))
+    .unique();
 }
 
 export async function completeGuide(ctx: MutationCtx, guideId: Id<"integrationPullRequestGuides">, steps: GuideStep[], now: number) {
@@ -64,9 +75,14 @@ export async function settleGuideRun(ctx: MutationCtx, thread: Doc<"cliThreads">
 export async function restartGuide(
   ctx: MutationCtx,
   guideId: Id<"integrationPullRequestGuides">,
-  run: Pick<Doc<"integrationPullRequestGuides">, "threadId" | "baseSha" | "headSha" | "cliType" | "cliModel" | "createdAt">
+  run: Pick<Doc<"integrationPullRequestGuides">, "threadId" | "baseSha" | "headSha" | "cliType" | "cliModel" | "createdAt">,
+  guidePrompt: string | null
 ) {
   await ctx.db.patch("integrationPullRequestGuides", guideId, { ...run, status: "writing", failureReason: undefined });
+  // The retry is written with today's Guide prompt, not the failed run's.
+  const stored = await findGuidePromptRow(ctx, guideId);
+  if (stored) await ctx.db.delete("integrationPullRequestGuidePrompts", stored._id);
+  if (guidePrompt !== null) await ctx.db.insert("integrationPullRequestGuidePrompts", { guideId, prompt: guidePrompt });
 }
 
 /** A ready Guide's steps; a writing one has none. */
@@ -78,13 +94,15 @@ export async function getGuideSteps(ctx: Ctx, guideId: Id<"integrationPullReques
   return row?.steps ?? [];
 }
 
-/** Deletes a Guide and its steps. */
+/** Deletes a Guide, its steps, and its Guide prompt. */
 export async function deleteGuide(ctx: MutationCtx, guideId: Id<"integrationPullRequestGuides">) {
   const steps = await ctx.db
     .query("integrationPullRequestGuideSteps")
     .withIndex("by_guideId", (q) => q.eq("guideId", guideId))
     .unique();
   if (steps) await ctx.db.delete("integrationPullRequestGuideSteps", steps._id);
+  const prompt = await findGuidePromptRow(ctx, guideId);
+  if (prompt) await ctx.db.delete("integrationPullRequestGuidePrompts", prompt._id);
   await ctx.db.delete("integrationPullRequestGuides", guideId);
 }
 

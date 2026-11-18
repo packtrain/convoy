@@ -48,6 +48,24 @@ Use existing settings layout, empty-state, and skeleton components. Never
 ask project members to enter an App private key in this page. Deployment
 operators supply backend configuration separately.
 
+## Pull request settings
+
+Project settings has a Pull requests section, next to Integrations, for what
+Convoy does with a project's pull requests whatever Git host they come from.
+It holds:
+
+- Checks: the default Checklist for pull requests (a picker that sends
+  `checklists.setDefaults` with no task types, so their defaults stay) and
+  "Publish results to the Git host". Both also stay in Settings → Checks,
+  so people who set up checks there still find them.
+- The Guide prompt ([Prompt](#prompt)), which lives only here.
+
+The checks rows sit at the top with no heading of their own, a divider
+separates them from the Guide prompt, and Save prompt sits inside the Guide
+prompt's group. Members without `PROJECT_UPDATE` see one note at the top
+("Only project admins can change pull request settings.") and every control
+read-only.
+
 ## Authorization and connection ownership
 
 Connecting requires Convoy project-admin permission and GitHub repository
@@ -337,9 +355,9 @@ can have Guides.
 
 Status: requesting, reading, switching between, and deleting Guides are
 built (OS-2412), and so are Failed guides and Retry (OS-2413), Don't ask
-again (OS-2414), and the duplicate-run warning (OS-2415). The project's Guide
-prompt (OS-2416), Outdated guides and Follow-up guides (OS-2417), and the MCP
-tools (OS-2418) are planned.
+again (OS-2414), the duplicate-run warning (OS-2415), and the project's Guide
+prompt with the Stack in the prompt (OS-2416). Outdated guides and Follow-up
+guides (OS-2417) and the MCP tools (OS-2418) are planned.
 
 ### Requesting and running
 
@@ -487,17 +505,36 @@ check, `gh pr checkout <n> --detach` and `git diff <base>...<head>`, the
 JSON shape, and the submit command with the thread ID from the attach
 footer or `CONVOY_THREAD_ID`) around the guide instructions (how to split,
 reading order, tone). Once Reviews ship, it also receives the already-resolved and
-outdated review threads so the Guide doesn't raise them again. On a Stack,
-the Guide covers only its own Layer and may mention others in a phrase
-("added in #12").
+outdated review threads so the Guide doesn't raise them again. On a Stack of
+two or more Layers, the run facts list the Layers from the base up, mark this
+PR, and say the Guide covers only its own Layer and may mention others in a
+phrase ("added in #12").
 
-A project's **Guide prompt** adds its own preferences (tone, emphasis, what
-to skip, which Project Skills to follow). It is set on the project's
-Integrations settings page, once per project rather than per connection, by
-project admins. An empty setting means the built-in default only, so
-projects that never customised it get improvements automatically; Reset to
-default clears it. The Guide prompt cannot change the format or the rules.
-Each Guide stores the Guide prompt it was written with.
+A project's **Guide prompt** replaces the guide instructions with its own
+(tone, emphasis, what to skip, which Project Skills to follow); the run facts
+stay. It is set in Settings → Pull requests, once per project rather than
+per connection. The field shows the built-in instructions until the
+project has its own text. Project admins (`PROJECT_UPDATE`) edit it with
+Save prompt and Restore default prompt, named for the prompt because the
+page's other settings save on change; other members see it read-only. It is at most 8,000 characters ("The Guide
+prompt is too long: at most 8,000 characters.").
+
+No `integrationGuidePrompts` row means the built-in default, so projects that
+never customised it get improvements automatically. Reset to default deletes
+the row, and so does saving empty text or the built-in text unchanged.
+`guides.getPrompt` returns the project's text or null (the default, or no
+access); `guides.setPrompt` takes `string | null`. Generate guide reads the
+prompt live and stays disabled until it loads, and on a Stack until its
+Layers load. The Guide prompt cannot change the format or the rules, since
+the run facts carry them.
+
+Each Guide stores the Guide prompt it was written with. The composer freezes
+the instructions it seeded and sends them as `pullRequestGuide.guidePrompt`
+(unset for the default, 8,000 characters at most), so an admin's change while
+the composer is open does not reach the stored copy. Creating the run stores
+them in `integrationPullRequestGuidePrompts` (one row per Guide, none for the
+default), kept off the Guide row so the menu's reads stay small. Retry
+replaces the row with its own run's, and deleting a Guide deletes it.
 
 ### Shape
 
@@ -579,8 +616,9 @@ publishing to GitHub (OS-2401), and the project setting to keep results in
 Convoy (OS-2406).
 
 - They come from the project's check catalog. The Checks settings
-  "Defaults" popup has a Pull requests row after the task types; at most one
-  Checklist per project has it (`checklists.pullRequests`). The settings row
+  "Defaults" popup has a Pull requests row after the task types, and
+  Settings → Pull requests has the same picker; at most one Checklist per
+  project has it (`checklists.pullRequests`). The settings row
   shows it as a Pull requests pill.
 - An instruction may tell the agent to run shell commands in the PR's
   worktree (`git diff --stat -- apps/web/convex`). The agent runs them like
@@ -669,7 +707,7 @@ Convoy (OS-2406).
   - The project setting "Publish results to the Git host"
     (`projects.publishPullRequestChecks`, unset means on, OS-2406) sits under
     Pull requests in the Checks settings once a Checklist is the Pull requests
-    default. Off keeps every result in Convoy: `getPublishTarget` returns
+    default, and always in Settings → Pull requests. Off keeps every result in Convoy: `getPublishTarget` returns
     nothing, so no run and no Not on GitHub badge. It covers every Git host
     the project connects, so a GitLab connection would publish under the
     same switch. Turning it off removes nothing already on the host; turning
@@ -836,14 +874,15 @@ Name the external wiring before implementation:
 
 Until the integration ships, the `GitHub integration` developer toggle
 (off by default, [user-settings-developer-section.md](user-settings-developer-section.md))
-gates its frontend. Off: the Integrations settings section and its project
-`...` menu action are hidden, the sidebar has no Pull Requests item, and the
+gates its frontend. Off: the Integrations and Pull requests settings
+sections and the project `...` menu's Integrations action are hidden, the sidebar has no Pull Requests item, and the
 PR and GitHub settings routes say the integration is off without reading any
 data. The backend, webhooks, and the OAuth callback route are not gated.
 Remove the toggle once the integration ships.
 
-The Guide prompt is a section of `ProjectIntegrationsPage`, so it needs no
-fourth export. Attaching PRs to threads adds `AttachedPullRequestPill`,
+The Pull requests settings section is `PullRequestSettingsSection`, mounted by
+the project settings content; it takes `PullRequestChecksSettings` from the
+checks module. Attaching PRs to threads adds `AttachedPullRequestPill`,
 `PullRequestSelectorDialog` (the composer), and `AttachedPullRequestReader`
 (the thread sidebar tab): the thread module mounts each one directly. Guide runs start CLI threads through the threads domain's
 existing creation path; the integration domain never creates threads on its

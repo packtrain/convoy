@@ -55,7 +55,7 @@ type TaskThreadComposerProps = TaskThreadComposerSubject &
   /** Starts a Pull request checks thread on this head (OS-2400). */
   pullRequestChecks?: { headSha: string };
   /** Starts a Guide run on this head (OS-2412), or reruns a failed one (OS-2413). Its model does not become the new-thread default. */
-  pullRequestGuide?: { headSha: string; retryGuideId?: Id<"integrationPullRequestGuides"> };
+  pullRequestGuide?: { headSha: string; retryGuideId?: Id<"integrationPullRequestGuides">; guidePrompt?: string };
   /** Extra pills after the composer's selectors (the Guide's "next time" dropdown). */
   extraSelectorTools?: ReactNode;
   focusRequestKey?: number;

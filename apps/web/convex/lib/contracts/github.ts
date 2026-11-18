@@ -108,6 +108,8 @@ export const GUIDE_ATTENTION_KINDS = Object.keys({
 /** Limits Convoy enforces on submit; the prompt states them. */
 export const GUIDE_MAX_STEPS = 8;
 export const GUIDE_MAX_QUESTIONS = 2;
+/** A project's Guide prompt, in characters. */
+export const GUIDE_PROMPT_MAX = 8000;
 
 /** A stored step: each file carries its blob at the Guide's head, filled in by Convoy on submit. */
 export const guideStepValidator = v.object({

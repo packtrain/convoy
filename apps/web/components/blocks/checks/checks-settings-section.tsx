@@ -20,14 +20,13 @@ import {
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
-import { Label } from "@/components/ui/label";
 import { Skeleton } from "@/components/ui/skeleton";
-import { Switch } from "@/components/ui/switch";
 import { showConvexErrorToast } from "@/lib/errors";
 import { resolveTaskTypeSummary } from "@/lib/tasks/task-types";
 import { TaskType } from "@/components/blocks/tasks/task-ref-with-type";
 import { CheckDialog } from "./check-dialog";
 import { ChecklistDialog, DefaultsDialog, PullRequestsPill } from "./checklist-dialog";
+import { PublishSwitch } from "./pull-request-checks-settings";
 import type { CheckDefinition, Checklist } from "./types";
 
 type Editing = { kind: "check"; check?: CheckDefinition } | { kind: "checklist"; checklist?: Checklist } | { kind: "defaults" };
@@ -171,7 +170,10 @@ export function ChecksSettingsSection({
 
       {checklists.some((checklist) => checklist.pullRequests) ? (
         <CatalogGroup title="Pull requests" createLabel="">
-          <PublishSwitch projectId={projectId} checked={publishPullRequestChecks} canEdit={canEdit} />
+          {/* Framed like the catalog lists above it. */}
+          <div className="rounded-lg border p-4">
+            <PublishSwitch projectId={projectId} checked={publishPullRequestChecks} canEdit={canEdit} />
+          </div>
         </CatalogGroup>
       ) : null}
 
@@ -282,37 +284,6 @@ function CatalogRow({
           </DropdownMenuContent>
         </DropdownMenu>
       ) : null}
-    </div>
-  );
-}
-
-/** Whether Pull request check results leave Convoy, on every Git host (docs/specs/github-integration.md → Pull request checks). */
-function PublishSwitch({ projectId, checked, canEdit }: { projectId: Id<"projects">; checked: boolean; canEdit: boolean }) {
-  const update = useMutation(api.projects.core.update);
-  const [isSaving, setIsSaving] = useState(false);
-  const handleChange = async (publishPullRequestChecks: boolean) => {
-    setIsSaving(true);
-    try {
-      await update({ id: projectId, publishPullRequestChecks });
-    } catch (error) {
-      showConvexErrorToast(error, "Failed to save");
-    } finally {
-      setIsSaving(false);
-    }
-  };
-  return (
-    <div className="flex items-start justify-between gap-4 rounded-lg border p-4">
-      <div className="space-y-1">
-        <Label>Publish results to the Git host</Label>
-        <p className="text-sm text-muted-foreground">On GitHub, each Pull request check result becomes a check run on the PR&apos;s commit.</p>
-      </div>
-      <Switch
-        aria-label="Publish results to the Git host"
-        checked={checked}
-        onCheckedChange={(value) => void handleChange(value)}
-        disabled={!canEdit || isSaving}
-        className="shrink-0 cursor-pointer"
-      />
     </div>
   );
 }

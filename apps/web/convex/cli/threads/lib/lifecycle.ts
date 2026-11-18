@@ -1,5 +1,5 @@
 import { requireAttachedPullRequest, requireRuntimeCommandRunner } from "../../lib/messages/invariants";
-import { attachedPullRequestName, attachedPullRequestUrl, type AttachedPullRequest } from "../../../lib/contracts/github";
+import { attachedPullRequestName, attachedPullRequestUrl, GUIDE_PROMPT_MAX, type AttachedPullRequest } from "../../../lib/contracts/github";
 import type { MutationCtx } from "../../../_generated/server";
 import { ConvexError, type ObjectType } from "convex/values";
 import type { Doc, Id } from "../../../_generated/dataModel";
@@ -291,19 +291,26 @@ export async function createThreadCore(
   if (guidePullRequest) {
     // The Guide row is born with its run; `guides.submit` finds it by thread (docs/specs/github-integration.md → Guides).
     const run = { threadId, baseSha: guidePullRequest.baseSha, headSha: guidePullRequest.headSha, cliType: args.cliType, cliModel: args.cliModel, createdAt: now };
+    // What the agent was given, not the setting now: an admin may change it while the composer is open.
+    const guidePrompt = args.pullRequestGuide?.guidePrompt?.trim() || null;
+    ensure((guidePrompt?.length ?? 0) <= GUIDE_PROMPT_MAX).isTrue(errors.GUIDE_PROMPT_TOO_LONG);
     if (retried) {
       // The old thread stops writing it, so its late submit can't land on the retry.
       await clearThreadPullRequestGuide(ctx, retried.threadId);
-      await restartGuide(ctx, retried._id, run);
+      await restartGuide(ctx, retried._id, run, guidePrompt);
     } else {
-      await insertGuide(ctx, {
-        ...run,
-        projectId: profile.projectId,
-        repositoryId: guidePullRequest.repositoryId,
-        number: guidePullRequest.number,
-        requesterId: user._id,
-        status: "writing",
-      });
+      await insertGuide(
+        ctx,
+        {
+          ...run,
+          projectId: profile.projectId,
+          repositoryId: guidePullRequest.repositoryId,
+          number: guidePullRequest.number,
+          requesterId: user._id,
+          status: "writing",
+        },
+        guidePrompt
+      );
     }
   }
 

@@ -5,7 +5,7 @@ import { internal } from "../../_generated/api";
 import { ProjectPermission } from "../../../lib/authz/permissions";
 import { getAuthenticatedAccess } from "../../lib/access/auth";
 import { hasAuthorizedProjectPermission, requireAuthorizedProject } from "../../lib/access/permissions";
-import { guideStepValidator } from "../../lib/contracts/github";
+import { GUIDE_PROMPT_MAX, guideStepValidator } from "../../lib/contracts/github";
 import { ensure } from "../../lib/shared/ensure";
 import { getUserById, getUsersByIds } from "../../users/lib/usersRepo";
 import { getThreadById } from "../../cli/threads/lib/cliThreadsRepo";
@@ -16,7 +16,8 @@ import { validateGuide, type GuideRevision } from "./lib/invariants";
 import { completeGuide, deleteGuide, failGuide, getGuideById, getGuideByThreadId, getGuideSteps, listGuidesForPullRequest } from "./lib/integrationPullRequestGuidesRepo";
 import { findRepositoryLinkForProjectAndRepository, getRepositoryLinkById } from "./lib/integrationRepositoryLinksRepo";
 import { getRepositoryById } from "./lib/integrationRepositoriesRepo";
-import { getReadableRepositoryAccess } from "./lib/permissions";
+import { getGuidePrompt, setGuidePrompt } from "./lib/integrationGuidePromptsRepo";
+import { authorizeIntegrationProject, getReadableRepositoryAccess } from "./lib/permissions";
 import { guideDetailValidator, guideSummaryValidator, syncContextValidator, toGuideSummary, toSyncContext, type SyncContext } from "./lib/validators";
 
 // Guides: agent-written walkthroughs of one PR revision (docs/specs/github-integration.md → Guides).
@@ -68,6 +69,30 @@ export const remove = mutation({
     const allowed = row.requesterId === readable.access.userId || hasAuthorizedProjectPermission(readable.access, ProjectPermission.PROJECT_UPDATE);
     ensure(allowed).isTrue(errors.GUIDE_DELETE_NOT_ALLOWED);
     await deleteGuide(ctx, row._id);
+    return null;
+  },
+});
+
+/** The project's Guide prompt for every member; null is the built-in default, or no access. */
+export const getPrompt = query({
+  args: { projectId: v.id("projects") },
+  returns: v.union(v.null(), v.string()),
+  handler: async (ctx, args) => {
+    const access = await authorizeIntegrationProject(ctx, args.projectId, ProjectPermission.PROJECT_VIEW);
+    return access ? getGuidePrompt(ctx, args.projectId) : null;
+  },
+});
+
+/** Project admins set the Guide prompt; empty or null is Reset to default. */
+export const setPrompt = mutation({
+  args: { projectId: v.id("projects"), prompt: v.union(v.null(), v.string()) },
+  returns: v.null(),
+  handler: async (ctx, args) => {
+    const { user, principal } = await getAuthenticatedAccess(ctx);
+    await requireAuthorizedProject(ctx, principal, args.projectId, ProjectPermission.PROJECT_UPDATE);
+    const prompt = args.prompt?.trim() || null;
+    ensure((prompt?.length ?? 0) <= GUIDE_PROMPT_MAX).isTrue(errors.GUIDE_PROMPT_TOO_LONG);
+    await setGuidePrompt(ctx, args.projectId, prompt, user._id);
     return null;
   },
 });

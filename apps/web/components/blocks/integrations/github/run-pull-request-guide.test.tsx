@@ -11,6 +11,7 @@ import { useGenerateGuide } from "./run-pull-request-guide";
 const state = vi.hoisted(() => ({
   composer: null as null | Record<string, unknown>,
   preferences: { agentAutoStart: false, guideAutoStart: false },
+  guidePrompt: null as string | null,
   online: true,
   worktrees: [] as Array<{ id: string; path: string; label: string; kind: "worktree"; parentPathId: string }>,
   create: null as unknown as ReturnType<typeof import("vitest").vi.fn>,
@@ -23,6 +24,7 @@ vi.mock("convex/react", () => ({
     if (args === "skip") return undefined;
     if (name(fn) === name(api.users.core.current)) return { _id: "user_1" };
     if (name(fn) === name(api.users.projectPreferences.get)) return state.preferences;
+    if (name(fn) === name(api.integrations.github.guides.getPrompt)) return state.guidePrompt;
     if (name(fn) === name(api.agents.projectAgents.listByProject)) return [];
     return undefined;
   },
@@ -72,6 +74,7 @@ const target = { projectId: "project_1" as never, organizationSlug: "org", proje
 beforeEach(() => {
   window.localStorage.clear();
   state.preferences = { agentAutoStart: false, guideAutoStart: false };
+  state.guidePrompt = null;
   state.online = true;
   state.worktrees = [];
   toast.error.mockClear();
@@ -110,6 +113,39 @@ describe("useGenerateGuide (OS-2412)", () => {
     act(() => result.current.start("guide_1" as never));
     render(<>{result.current.dialog}</>);
     expect(composer.props).toMatchObject({ pullRequestGuide: { headSha: "h2", retryGuideId: "guide_1" } });
+  });
+
+  test("the prompt carries the project's Guide prompt and the PR's Stack (OS-2416)", () => {
+    state.guidePrompt = "Write every explanation as one short sentence.";
+    const layers = [{ number: 11, title: "Schema" }, { number: 12, title: "API" }];
+    const { result } = renderHook(() => useGenerateGuide(target, { baseSha: "b1", headSha: "h1" }, [], layers));
+    act(() => result.current.start());
+    render(<>{result.current.dialog}</>);
+    expect(composer.props?.seed).toContain("Write every explanation as one short sentence.");
+    expect(composer.props?.seed).not.toContain("How to write the guide:");
+    expect(composer.props?.seed).toContain("#12 API (this pull request)");
+    // The Guide stores the instructions the seed was built with, not the setting at send time.
+    expect(composer.props?.pullRequestGuide).toEqual({ headSha: "h1", guidePrompt: "Write every explanation as one short sentence." });
+  });
+
+  test("waits for a stacked PR's Layers, so the prompt never leaves them out (OS-2416)", () => {
+    const { result } = renderHook(() => useGenerateGuide(target, { baseSha: "b1", headSha: "h1" }, [], null));
+    expect(result.current.disabled).toBe(true);
+    act(() => result.current.start());
+    expect(result.current.dialog).toBeNull();
+  });
+
+  test("an automatic start sends the instructions it used (OS-2416)", async () => {
+    state.guidePrompt = "Be brief.";
+    state.preferences = { agentAutoStart: false, guideAutoStart: true };
+    saveProjectDrafts(buildProjectDraftStorageKey("org", "WEB"), {
+      "pull-request-guide:user_1": { text: "", profileId: "profile_1", pathId: "path_1", cliType: "codex", updatedAt: Date.now() },
+    });
+    const { result } = renderHook(() => useGenerateGuide(target, { baseSha: "b1", headSha: "h1" }));
+    act(() => result.current.start());
+    render(<>{result.current.dialog}</>);
+    await waitFor(() => expect(state.create).toHaveBeenCalledTimes(1));
+    expect(state.create.mock.calls[0][0].pullRequestGuide).toEqual({ headSha: "h1", guidePrompt: "Be brief." });
   });
 
   test("disabled with the reason until Convoy has synced the PR", () => {

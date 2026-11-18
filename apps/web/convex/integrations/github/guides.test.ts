@@ -30,7 +30,7 @@ async function setupGuideRun() {
   const { key: apiKey, id: apiKeyId } = await asUser.mutation(api.apiKeys.core.create, { name: "CLI Key", expiresAt: Date.now() + 30 * 24 * 60 * 60 * 1000 });
   const profile = await ctx.cliProfile(user._id, project._id, { paths: [{ id: "repo", path: "/repo", label: "repo" }] });
   const session = await ctx.cliSession(profile._id, apiKeyId);
-  const request = (headSha = "head-1", number = 1, retryGuideId?: Id<"integrationPullRequestGuides">) =>
+  const request = (headSha = "head-1", number = 1, retryGuideId?: Id<"integrationPullRequestGuides">, guidePrompt?: string) =>
     asUser.mutation(api.cli.threads.core.create, {
       profileId: profile._id,
       pathId: "repo",
@@ -38,7 +38,7 @@ async function setupGuideRun() {
       cliModel: "gpt-5",
       content: "Write a guide",
       pullRequestUrl: `https://github.com/acme/repo-1/pull/${number}`,
-      pullRequestGuide: { headSha, retryGuideId },
+      pullRequestGuide: { headSha, retryGuideId, guidePrompt },
     });
   const threadId = await request();
   const submit = (steps: ReturnType<typeof step>[], headSha = "head-1", thread = threadId) =>
@@ -318,6 +318,62 @@ describe("guides", () => {
         pullRequestGuide: { headSha: "head-1", retryGuideId: guide._id },
       })
     ).rejects.toThrow("Only the requester can retry a guide");
+  });
+
+  test("an admin sets the Guide prompt and Reset to default clears it; a member only reads it", async () => {
+    const { asUser, project, member } = await setupGuideRun();
+    const args = { projectId: project._id };
+    expect(await asUser.query(api.integrations.github.guides.getPrompt, args)).toBeNull();
+    await asUser.mutation(api.integrations.github.guides.setPrompt, { ...args, prompt: "  Be brief.  " });
+    const other = await member();
+    expect(await other.query(api.integrations.github.guides.getPrompt, args)).toBe("Be brief.");
+    await expect(other.mutation(api.integrations.github.guides.setPrompt, { ...args, prompt: "Mine" })).rejects.toThrow();
+    await expect(asUser.mutation(api.integrations.github.guides.setPrompt, { ...args, prompt: "x".repeat(8001) })).rejects.toThrow(
+      "The Guide prompt is too long: at most 8,000 characters."
+    );
+    await asUser.mutation(api.integrations.github.guides.setPrompt, { ...args, prompt: " " });
+    expect(await asUser.query(api.integrations.github.guides.getPrompt, args)).toBeNull();
+    await asUser.mutation(api.integrations.github.guides.setPrompt, { ...args, prompt: "Again" });
+    await asUser.mutation(api.integrations.github.guides.setPrompt, { ...args, prompt: null });
+    expect(await asUser.query(api.integrations.github.guides.getPrompt, args)).toBeNull();
+  });
+
+  test("someone outside the project neither reads nor sets the Guide prompt", async () => {
+    const { ctx, asUser, project } = await setupGuideRun();
+    await asUser.mutation(api.integrations.github.guides.setPrompt, { projectId: project._id, prompt: "Secret" });
+    const outsider = ctx.asUser(await ctx.user());
+    expect(await outsider.query(api.integrations.github.guides.getPrompt, { projectId: project._id })).toBeNull();
+    await expect(outsider.mutation(api.integrations.github.guides.setPrompt, { projectId: project._id, prompt: "Mine" })).rejects.toThrow();
+  });
+
+  test("each guide stores the Guide prompt its composer was seeded with, a retry its own", async () => {
+    const { asUser, project, list, request, reportFailure, t } = await setupGuideRun();
+    const snapshots = async () =>
+      (await t.run((run) => run.db.query("integrationPullRequestGuidePrompts").collect())).map(({ guideId, prompt }) => ({ guideId, prompt }));
+    // Written with the built-in default: nothing stored.
+    const [first] = (await list())!;
+    expect(await snapshots()).toEqual([]);
+
+    // An admin changes the setting while the composer is open: the Guide keeps what the agent got.
+    await asUser.mutation(api.integrations.github.guides.setPrompt, { projectId: project._id, prompt: "Changed meanwhile." });
+    await reportFailure("Not a clone");
+    await request("head-1", 1, first._id, "Be brief.");
+    expect(await snapshots()).toEqual([{ guideId: first._id, prompt: "Be brief." }]);
+
+    const second = await request("head-2", 2, undefined, "Be briefer.");
+    const secondGuide = await t.run((run) => run.db.query("integrationPullRequestGuides").withIndex("by_threadId", (q) => q.eq("threadId", second)).unique());
+    expect(await snapshots()).toEqual([
+      { guideId: first._id, prompt: "Be brief." },
+      { guideId: secondGuide!._id, prompt: "Be briefer." },
+    ]);
+    await expect(request("head-2", 2, undefined, "x".repeat(8001))).rejects.toThrow("The Guide prompt is too long: at most 8,000 characters.");
+
+    // A retry under the default drops the old snapshot; a delete drops the guide's own.
+    const [retried] = (await list())!;
+    await reportFailure("Again", retried.threadId!);
+    await request("head-1", 1, first._id);
+    await asUser.mutation(api.integrations.github.guides.remove, { guideId: secondGuide!._id });
+    expect(await snapshots()).toEqual([]);
   });
 
   test("the retention purge deletes the project's guides", async () => {

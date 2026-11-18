@@ -98,8 +98,10 @@ describe("getProjectSettingsNavItems", () => {
     expect(items.some((item) => item.id === "notifications")).toBe(false);
   });
 
-  test("hides Integrations until the GitHub integration toggle is on", () => {
+  test("hides Pull requests and Integrations until the GitHub integration toggle is on", () => {
     expect(ids(build(DEV_SETTINGS_ALL_DISABLED))).not.toContain("integrations");
+    expect(ids(build(DEV_SETTINGS_ALL_DISABLED))).not.toContain("pull-requests");
+    expect(ids(build({ ...DEV_SETTINGS_ALL_DISABLED, githubIntegration: true } as DevSettingsSnapshot))).toContain("pull-requests");
     expect(ids(build({ ...DEV_SETTINGS_ALL_DISABLED, githubIntegration: true } as DevSettingsSnapshot))).toContain(
       "integrations"
     );
@@ -110,7 +112,7 @@ describe("getProjectSettingsNavItems", () => {
       isSectionPermitted(section, "viewer", "member")
     );
 
-    expect(ids(items)).toEqual(["general", "members", "labels", "checks", "customization", "integrations", "usage"]);
+    expect(ids(items)).toEqual(["general", "members", "labels", "checks", "customization", "pull-requests", "integrations", "usage"]);
   });
 
   test("a project member sees every section but Danger Zone", () => {
@@ -129,6 +131,7 @@ describe("getProjectSettingsNavItems", () => {
       "labels",
       "checks",
       "customization",
+      "pull-requests",
       "integrations",
       "usage",
     ]);

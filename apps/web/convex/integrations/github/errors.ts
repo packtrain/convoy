@@ -28,5 +28,6 @@ export const errors = {
   GUIDE_ALREADY_SUBMITTED: "This guide was already submitted. Use New guide to write another one.",
   GUIDE_DELETE_NOT_ALLOWED: "Only the requester and project admins can delete a guide",
   GUIDE_FAILURE_NOTE_REQUIRED: "Say why the guide could not be written.",
+  GUIDE_PROMPT_TOO_LONG: "The Guide prompt is too long: at most 8,000 characters.",
   GUIDE_SUBMIT_INCOMPLETE: 'A guide needs "headSha" and "steps"; to report a failure, send a note instead.',
 } as const;
