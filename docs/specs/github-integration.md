@@ -332,10 +332,10 @@ permission can request one, so viewers cannot today. Closed and merged PRs
 can have Guides.
 
 Status: requesting, reading, switching between, and deleting Guides are
-built (OS-2412), and so are Failed guides and Retry (OS-2413) and Don't ask
-again (OS-2414). The duplicate-run warning (OS-2415), the project's Guide prompt
-(OS-2416), Outdated guides and Follow-up guides (OS-2417), and the MCP tools
-(OS-2418) are planned.
+built (OS-2412), and so are Failed guides and Retry (OS-2413), Don't ask
+again (OS-2414), and the duplicate-run warning (OS-2415). The project's Guide
+prompt (OS-2416), Outdated guides and Follow-up guides (OS-2417), and the MCP
+tools (OS-2418) are planned.
 
 ### Requesting and running
 
@@ -344,8 +344,10 @@ in a popup (profile, path, worktree, runtime, model, effort, attachments)
 with the PR pill locked and the text prefilled with the guide prompt, which
 the member may edit before sending. The composer's send button starts the
 run. Generate guide is hidden without the CLI thread permission, and
-disabled with the reason when no CLI profile is online or Convoy has not
-synced the PR. It sits on the Guide tab's No guide yet state, and as New
+disabled with the reason when none of the member's own CLI profiles is online
+or Convoy has not synced the PR; another member's online profile does not
+count, since the run is on the requester's machine. New guide prints the
+reason in its menu row, as a disabled menu item shows no tooltip. It sits on the Guide tab's No guide yet state, and as New
 guide in the corner menu.
 
 - The popup's choices are a draft of their own per member and project
@@ -413,9 +415,13 @@ already submitted."), a deleted one rejects with "The guide was deleted.",
 and a thread that is no Guide run with "This thread is not writing a
 guide."
 
-Requesting a Guide while another member's Guide for the same revision is
-still being written warns first ("Maya is already writing a guide for
-c91f02a") and offers Start my own anyway.
+Requesting a Guide (Generate guide, New guide, or Retry) while another
+member's Guide on the PR's current head is still writing warns first ("Maya is
+already writing a guide for c91f02a") and offers Start my own anyway, which
+goes on to the composer, or starts at once with Don't ask again. The check
+reads the Guide tab's live `listForPullRequest` list; the server does not
+enforce it, so two members clicking at once both start. A Failed or ready
+Guide, or the member's own, does not warn.
 
 A Guide fails three ways, and stays as a Failed Guide with the reason
 (`failureReason`, cut to 1,000 characters):

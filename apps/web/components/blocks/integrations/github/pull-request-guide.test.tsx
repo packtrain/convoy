@@ -198,6 +198,14 @@ describe("GuideMenu", () => {
     expect(convex.remove).toHaveBeenCalledWith({ guideId: "guide_1" });
   });
 
+  test("a disabled New guide says why, since a disabled item shows no tooltip (OS-2415)", () => {
+    const guide = summary({ headSha: "c91f02a9" });
+    const disabled = { ...launch(), disabled: true, reason: "No CLI profile is online" };
+    render(<GuideMenu state={{ guides: [guide], shown: guide, steps: undefined, retry: vi.fn(), select: vi.fn() }} launch={disabled} />);
+    open();
+    expect(screen.getByRole("menuitem", { name: /New guide/ }).textContent).toContain("No CLI profile is online");
+  });
+
   test("a failed guide's row says Failed in place of its age", () => {
     const failed = summary({ status: "failed", headSha: "c91f02a9" });
     render(<GuideMenu state={{ guides: [failed], shown: failed, steps: undefined, retry: vi.fn(), select: vi.fn() }} launch={launch()} />);

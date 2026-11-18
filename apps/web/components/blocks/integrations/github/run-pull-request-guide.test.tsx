@@ -5,6 +5,7 @@ import { act, cleanup, fireEvent, render, renderHook, screen, waitFor } from "@t
 import { getFunctionName } from "convex/server";
 import { api } from "@/convex/_generated/api";
 import { buildProjectDraftStorageKey, saveProjectDrafts } from "@/lib/threads/draft-storage";
+import type { GuideSummary } from "@/convex/integrations/github/lib/validators";
 import { useGenerateGuide } from "./run-pull-request-guide";
 
 const state = vi.hoisted(() => ({
@@ -212,5 +213,61 @@ describe("Generate guide without asking (OS-2414)", () => {
     render(<>{result.current.dialog}</>);
     expect(composer.props).toMatchObject({ pullRequestGuide: { headSha: "h1", retryGuideId: "guide_1" } });
     expect(state.create).not.toHaveBeenCalled();
+  });
+});
+
+describe("Duplicate-run warning (OS-2415)", () => {
+  afterEach(() => {
+    cleanup();
+    state.composer = null;
+  });
+
+  const guide = (overrides: Partial<GuideSummary>): GuideSummary => ({
+    _id: "guide_1" as GuideSummary["_id"],
+    status: "writing",
+    baseSha: "b1",
+    headSha: "c91f02a9e1",
+    cliType: "codex",
+    createdAt: 1,
+    requester: { name: "Maya", avatarUrl: null, isViewer: false },
+    canDelete: false,
+    ...overrides,
+  });
+  function Host({ guides }: { guides: GuideSummary[] }) {
+    const launch = useGenerateGuide(target, { baseSha: "b1", headSha: "c91f02a9e1" }, guides);
+    return (
+      <>
+        <button type="button" onClick={() => launch.start()}>Generate guide</button>
+        {launch.dialog}
+      </>
+    );
+  }
+
+  test("warns about another member's guide still writing on the same head, then starts on Start my own anyway", () => {
+    render(<Host guides={[guide({})]} />);
+    fireEvent.click(screen.getByRole("button", { name: "Generate guide" }));
+    expect(screen.getByText("Maya is already writing a guide for c91f02a")).toBeTruthy();
+    expect(screen.queryByTestId("composer")).toBeNull();
+    fireEvent.click(screen.getByRole("button", { name: "Start my own anyway" }));
+    expect(screen.getByTestId("composer")).toBeTruthy();
+  });
+
+  test("Cancel starts nothing", () => {
+    render(<Host guides={[guide({})]} />);
+    fireEvent.click(screen.getByRole("button", { name: "Generate guide" }));
+    fireEvent.click(screen.getByRole("button", { name: "Cancel" }));
+    expect(screen.queryByText("Maya is already writing a guide for c91f02a")).toBeNull();
+    expect(screen.queryByTestId("composer")).toBeNull();
+  });
+
+  test.each([
+    ["the viewer's own", { requester: { name: "Me", avatarUrl: null, isViewer: true } }],
+    ["a failed", { status: "failed" as const }],
+    ["a ready", { status: "ready" as const }],
+    ["another head's", { headSha: "0000000000" }],
+  ])("does not warn about %s guide", (_, overrides) => {
+    render(<Host guides={[guide(overrides)]} />);
+    fireEvent.click(screen.getByRole("button", { name: "Generate guide" }));
+    expect(screen.getByTestId("composer")).toBeTruthy();
   });
 });

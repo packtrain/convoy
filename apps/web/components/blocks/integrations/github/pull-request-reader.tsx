@@ -94,7 +94,8 @@ export function PullRequestReader({
   const guides = usePullRequestGuides(tab === "guide" ? args : "skip");
   const launch = useGenerateGuide(
     attached ? { projectId, organizationSlug, projectAlias, pullRequest: attached } : null,
-    stored ? { baseSha: stored.baseSha, headSha: stored.headSha } : null
+    stored ? { baseSha: stored.baseSha, headSha: stored.headSha } : null,
+    guides.guides
   );
 
   useEffect(() => {

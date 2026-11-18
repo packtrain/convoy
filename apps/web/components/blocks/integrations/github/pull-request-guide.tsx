@@ -155,7 +155,6 @@ export function GuideMenu({ state, launch }: { state: PullRequestGuides; launch:
               <DropdownMenuSeparator />
               <DropdownMenuItem
                 disabled={launch.disabled}
-                title={launch.reason ?? undefined}
                 className="cursor-pointer"
                 onSelect={() => {
                   // The new Guide lands first in the list, so show the newest.
@@ -165,6 +164,8 @@ export function GuideMenu({ state, launch }: { state: PullRequestGuides; launch:
               >
                 <Plus className="size-4" />
                 New guide
+                {/* A disabled item takes no pointer events, so a tooltip would never show. */}
+                {launch.disabled && launch.reason ? <span className="ml-auto truncate pl-2 text-xs">{launch.reason}</span> : null}
               </DropdownMenuItem>
             </>
           ) : null}

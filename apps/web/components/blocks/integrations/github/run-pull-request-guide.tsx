@@ -6,9 +6,10 @@ import { toast } from "sonner";
 import { TaskThreadComposer } from "@/components/blocks/tasks/task-thread-composer";
 import { AutoStartPreferenceSelector } from "@/components/blocks/thread/auto-start-preference-selector";
 import { ThreadDraftProvider, useThreadDraft } from "@/components/blocks/thread/thread-draft-provider";
-import { Dialog, DialogContent, DialogDescription, DialogTitle, DialogTitleBar } from "@/components/ui/dialog";
+import { ConfirmDialog, Dialog, DialogContent, DialogDescription, DialogTitle, DialogTitleBar } from "@/components/ui/dialog";
 import { api } from "@/convex/_generated/api";
 import type { Id } from "@/convex/_generated/dataModel";
+import type { GuideSummary } from "@/convex/integrations/github/lib/validators";
 import { attachedPullRequestUrl, type AttachedPullRequest } from "@/convex/lib/contracts/github";
 import { useProjectPermissions } from "@/lib/authz/use-project-permissions";
 import { getMutationErrorMessage } from "@/lib/errors";
@@ -35,9 +36,9 @@ const noAttachments = async () => [];
  * Generate guide: a thread composer prefilled with the guide prompt, on the member's own profile,
  * like Run checks. Spec: docs/specs/github-integration.md → Guides → Requesting and running.
  */
-export function useGenerateGuide(target: Target | null, revision: Revision) {
-  // Open, for Retry the failed Guide the run writes again, and whether to skip the composer.
-  const [open, setOpen] = useState<{ retryGuideId?: Id<"integrationPullRequestGuides">; auto?: boolean } | null>(null);
+export function useGenerateGuide(target: Target | null, revision: Revision, guides?: GuideSummary[] | null) {
+  // Open, for Retry the failed Guide the run writes again, whether to skip the composer, and another member's run to warn about first.
+  const [open, setOpen] = useState<{ retryGuideId?: Id<"integrationPullRequestGuides">; auto?: boolean; duplicate?: GuideSummary } | null>(null);
   const projectId = target?.projectId;
   const autoStart = useQuery(api.users.projectPreferences.get, projectId ? { projectId } : "skip")?.guideAutoStart ?? false;
   const permissions = useProjectPermissions(projectId ?? null);
@@ -55,10 +56,24 @@ export function useGenerateGuide(target: Target | null, revision: Revision) {
     disabled: isLoading || !viewer || reason !== null,
     reason,
     // Retry always asks: the failed run's choices are often what failed.
-    start: (retryGuideId?: Id<"integrationPullRequestGuides">) => setOpen({ retryGuideId, auto: !retryGuideId && autoStart }),
+    start: (retryGuideId?: Id<"integrationPullRequestGuides">) =>
+      setOpen({
+        retryGuideId,
+        auto: !retryGuideId && autoStart,
+        duplicate: guides?.find((guide) => guide.status === "writing" && !guide.requester.isViewer && guide.headSha === revision?.headSha),
+      }),
     dialog:
       open && viewer && target && revision ? (
-        open.auto ? (
+        open.duplicate ? (
+          <ConfirmDialog
+            open
+            onClose={() => setOpen(null)}
+            size="md"
+            title={`${open.duplicate.requester.name ?? "A former member"} is already writing a guide for ${open.duplicate.headSha.slice(0, 7)}`}
+            description="Their guide appears here when it finishes."
+            confirm={{ label: "Start my own anyway", autoCloseOnClick: false, onClick: () => setOpen({ ...open, duplicate: undefined }) }}
+          />
+        ) : open.auto ? (
           <AutoStart {...target} viewerId={viewer._id} revision={revision} onFallback={() => setOpen({})} onClose={() => setOpen(null)} />
         ) : (
           <LaunchDialog
