@@ -125,6 +125,7 @@ export async function failStreamingChat(
     hasPendingUserMessages: hasUnprocessed,
     queueHeldAt: chat.queueHeldAt,
     now,
+    runError: reason,
   });
 
   if (windDown.emitFailedEvent) {
@@ -574,6 +575,7 @@ async function cancelThreadProcessing(
     hasPendingUserMessages: holdsSurvivingQueue,
     queueHeldAt: holdsSurvivingQueue ? now : undefined,
     now,
+    runError: STREAM_CANCELLED_BY_USER_REASON,
   });
 
   // Neither a superseded nor a parked run is a failure, and each is already announced

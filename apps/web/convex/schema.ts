@@ -1550,8 +1550,11 @@ export default defineSchema({
     cliModel: v.optional(cliModelValidator),
     createdAt: v.number(),
     completedAt: v.optional(v.number()),
+    // Why a failed Guide failed: the agent's note, the run's error, or that the run ended without a submit.
+    failureReason: v.optional(v.string()),
   })
-    .index("by_projectId_and_repositoryId_and_number", ["projectId", "repositoryId", "number"])
+    // `createdAt` orders the menu: a Retry restamps it, so the retried Guide lists as the newest.
+    .index("by_projectId_and_repositoryId_and_number_and_createdAt", ["projectId", "repositoryId", "number", "createdAt"])
     .index("by_threadId", ["threadId"]),
 
   // A ready Guide's steps, up to 800 KB, apart from its row so the Guide menu never reads them.

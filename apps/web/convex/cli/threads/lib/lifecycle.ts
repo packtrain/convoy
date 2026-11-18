@@ -14,7 +14,7 @@ import { getProjectAgentById } from "../../../agents/lib/projectAgentsRepo";
 import { getActiveProjectById } from "../../../projects/lib/projectsRepo";
 import { findLinkedPullRequest } from "../../../integrations/github/lib/integrationPullRequestsRepo";
 import { listActiveRepositoryLinksForProject } from "../../../integrations/github/lib/integrationRepositoryLinksRepo";
-import { insertGuide } from "../../../integrations/github/lib/integrationPullRequestGuidesRepo";
+import { getGuideById, insertGuide, restartGuide } from "../../../integrations/github/lib/integrationPullRequestGuidesRepo";
 import { errors } from "../../errors";
 import { assertValidMessageAttachments, createAttachmentRefs } from "../../lib/messages/attachments";
 import { createUserMessage, normalizeMessageSelection } from "../../lib/messages/normalize";
@@ -37,6 +37,7 @@ import {
   addForkCopiesInFlight,
   countGroupRows,
   getThreadById,
+  clearThreadPullRequestGuide,
   insertCliThread,
   insertGroupContainer,
   setThreadParent,
@@ -150,6 +151,22 @@ async function requirePullRequestChecksHead(
   return { headSha };
 }
 
+/** Retry (OS-2413): the requester's own failed Guide of this PR in this project. */
+async function requireRetryableGuide(
+  ctx: MutationCtx,
+  guideId: Id<"integrationPullRequestGuides">,
+  userId: Id<"users">,
+  projectId: Id<"projects">,
+  pullRequest: Doc<"integrationPullRequests">
+): Promise<Doc<"integrationPullRequestGuides">> {
+  return ensure(getGuideById(ctx, guideId))
+    .notNull(errors.GUIDE_RETRY_NOT_FOUND)
+    .satisfies((guide) => guide.projectId === projectId, errors.GUIDE_RETRY_NOT_FOUND)
+    .satisfies((guide) => guide.requesterId === userId, errors.GUIDE_RETRY_NOT_ALLOWED)
+    .satisfies((guide) => guide.repositoryId === pullRequest.repositoryId && guide.number === pullRequest.number, errors.GUIDE_RETRY_OTHER_PULL_REQUEST)
+    .satisfies((guide) => guide.status === "failed", errors.GUIDE_RETRY_NOT_FAILED);
+}
+
 /** The stored PR in a connected repository, still at the head the caller's prompt names, so the run and its output agree on the revision. */
 async function requireStoredPullRequestAtHead(
   ctx: MutationCtx,
@@ -219,6 +236,8 @@ export async function createThreadCore(
         moved: errors.GUIDE_HEAD_MOVED,
       })
     : null;
+  const retryGuideId = args.pullRequestGuide?.retryGuideId;
+  const retried = guidePullRequest && retryGuideId ? await requireRetryableGuide(ctx, retryGuideId, user._id, profile.projectId, guidePullRequest) : null;
 
   const now = Date.now();
   const attachments = assertValidMessageAttachments(args.attachments);
@@ -271,19 +290,21 @@ export async function createThreadCore(
   );
   if (guidePullRequest) {
     // The Guide row is born with its run; `guides.submit` finds it by thread (docs/specs/github-integration.md → Guides).
-    await insertGuide(ctx, {
-      projectId: profile.projectId,
-      repositoryId: guidePullRequest.repositoryId,
-      number: guidePullRequest.number,
-      requesterId: user._id,
-      threadId,
-      status: "writing",
-      baseSha: guidePullRequest.baseSha,
-      headSha: guidePullRequest.headSha,
-      cliType: args.cliType,
-      cliModel: args.cliModel,
-      createdAt: now,
-    });
+    const run = { threadId, baseSha: guidePullRequest.baseSha, headSha: guidePullRequest.headSha, cliType: args.cliType, cliModel: args.cliModel, createdAt: now };
+    if (retried) {
+      // The old thread stops writing it, so its late submit can't land on the retry.
+      await clearThreadPullRequestGuide(ctx, retried.threadId);
+      await restartGuide(ctx, retried._id, run);
+    } else {
+      await insertGuide(ctx, {
+        ...run,
+        projectId: profile.projectId,
+        repositoryId: guidePullRequest.repositoryId,
+        number: guidePullRequest.number,
+        requesterId: user._id,
+        status: "writing",
+      });
+    }
   }
 
   // Create initial user message

@@ -888,11 +888,12 @@ shows on the PR. `<pullRequest>` is a github.com PR URL or `owner/repo#number`.
 Re-attaching the same PR does nothing; a thread already attached to another PR
 is rejected. JSON output is `{ "threadId": "...", "pullRequest": "..." }`.
 
-### `convoy threads submit-guide <threadId> <file>`
+### `convoy threads submit-guide <threadId> [file]`
 
 ```bash
 convoy threads submit-guide <threadId> guide.json
 cat guide.json | convoy threads submit-guide <threadId> -
+convoy threads submit-guide <threadId> --failed --note "Not a clone of acme/web"
 ```
 
 Submits the pull request Guide a Guide run was started to write. The file is
@@ -901,6 +902,9 @@ JSON: `{ "headSha": "...", "steps": [...] }`, where each step has a `title`, an
 (`{ "kind", "note" }`), and up to two `questions`. Convoy checks that every
 changed file is in exactly one step and prints what to fix; the command then
 exits nonzero. The Guide prompt spells out the format.
+
+When the agent cannot write the Guide, `--failed --note <why>` marks it Failed
+with that reason, and the requester can retry it from the Guide tab.
 
 ## See also
 

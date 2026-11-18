@@ -54,6 +54,13 @@ describe("useGenerateGuide (OS-2412)", () => {
     expect(composer.props).toMatchObject({ pullRequestGuide: { headSha: "h1" } });
   });
 
+  test("Retry hands the failed guide to the run, on the current head (OS-2413)", () => {
+    const { result } = renderHook(() => useGenerateGuide(target, { baseSha: "b1", headSha: "h2" }));
+    act(() => result.current.start("guide_1" as never));
+    render(<>{result.current.dialog}</>);
+    expect(composer.props).toMatchObject({ pullRequestGuide: { headSha: "h2", retryGuideId: "guide_1" } });
+  });
+
   test("disabled with the reason until Convoy has synced the PR", () => {
     const { result } = renderHook(() => useGenerateGuide(target, null));
     expect(result.current).toMatchObject({ disabled: true, reason: "Convoy has not synced this pull request yet" });

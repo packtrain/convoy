@@ -119,5 +119,5 @@ export const guideStepValidator = v.object({
 });
 export type GuideStep = Infer<typeof guideStepValidator>;
 
-export const guideStatusValidator = v.union(v.literal("writing"), v.literal("ready"));
+export const guideStatusValidator = v.union(v.literal("writing"), v.literal("ready"), v.literal("failed"));
 export type GuideStatus = Infer<typeof guideStatusValidator>;

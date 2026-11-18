@@ -55,7 +55,7 @@ Commands covered:
 - `convoy threads attach <threadId> [file...] --message-id <id> --session-id <id> [--inline] [--check <key> ...]`
 - `convoy threads attach-task <threadId> <task>`
 - `convoy threads attach-pr <threadId> <pullRequest>`
-- `convoy threads submit-guide <threadId> <file|->`
+- `convoy threads submit-guide <threadId> <file|->` or `--failed --note <why>`
 - `convoy threads checks <threadId>`
 - `convoy profiles list`
 
@@ -769,7 +769,10 @@ Guide back, via the action `api.integrations.github.guides.submit`. The file
 shape and sends it. Convoy validates the steps against the revision's changed
 files and returns every error, which the command prints as a list and exits
 nonzero, so the agent can fix and resubmit. JSON output is
-`{ status: "accepted", guideId }`. Rules: `github-integration.md` → Guides.
+`{ status: "accepted", guideId }`. `convoy threads submit-guide <threadId>
+--failed --note <why>` takes no file: it sends `failure` and the Guide shows
+as Failed with the note. `--failed` without a note, or neither a file nor
+`--failed`, fails before calling Convoy. Rules: `github-integration.md` → Guides.
 
 ## Project creation onboarding
 

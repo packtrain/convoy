@@ -2440,6 +2440,7 @@ export const fail = mutation({
       hasPendingUserMessages: hasRemainingUnprocessed,
       processingState: hasRemainingUnprocessed ? "claimed" : "idle",
       lastActivityAt: now,
+      runError: args.errorMessage,
     });
 
     // Thread lifecycle event (OS-1243); no actor — CLI acts as the owner.

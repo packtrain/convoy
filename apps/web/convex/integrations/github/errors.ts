@@ -27,4 +27,6 @@ export const errors = {
   GUIDE_NOT_FOR_THREAD: "This thread is not writing a guide. Start one with Generate guide on the pull request's Guide tab.",
   GUIDE_ALREADY_SUBMITTED: "This guide was already submitted. Use New guide to write another one.",
   GUIDE_DELETE_NOT_ALLOWED: "Only the requester and project admins can delete a guide",
+  GUIDE_FAILURE_NOTE_REQUIRED: "Say why the guide could not be written.",
+  GUIDE_SUBMIT_INCOMPLETE: 'A guide needs "headSha" and "steps"; to report a failure, send a note instead.',
 } as const;

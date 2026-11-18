@@ -332,7 +332,7 @@ permission can request one, so viewers cannot today. Closed and merged PRs
 can have Guides.
 
 Status: requesting, reading, switching between, and deleting Guides are
-built (OS-2412). Failed guides and Retry (OS-2413), Don't ask again
+built (OS-2412), and so are Failed guides and Retry (OS-2413). Don't ask again
 (OS-2414), the duplicate-run warning (OS-2415), the project's Guide prompt
 (OS-2416), Outdated guides and Follow-up guides (OS-2417), and the MCP tools
 (OS-2418) are planned.
@@ -364,7 +364,8 @@ guide in the corner menu.
   (`cliThreads.pullRequestGuide.headSha`).
 - The agent checks out the PR with `gh`; that needs `gh` signed in with
   access to the repository and a Working path that is a clone of it. The
-  prompt has the agent check the remote first and stop with the reason.
+  prompt has the agent check the remote first and, if it fails, report the
+  reason with `submit-guide --failed` and stop.
   Reading PR data through Convoy-proxied tools instead of `gh` is a later
   version, as is running Guides automatically in a shared remote environment
   when a PR lands.
@@ -373,7 +374,7 @@ The agent hands the Guide back with `convoy threads submit-guide <threadId>
 <file|->`, a JSON file of `{ headSha, steps }` (an MCP tool
 `submit_pull_request_guide` follows in OS-2418). The action
 `integrations.github.guides.submit` checks the caller owns the thread and
-its Guide is still writing, reads the revision's changed files from GitHub,
+its Guide is not yet ready, reads the revision's changed files from GitHub,
 and returns every error at once so the agent can fix and resubmit:
 
 - `headSha` is the Guide's head.
@@ -401,8 +402,42 @@ Requesting a Guide while another member's Guide for the same revision is
 still being written warns first ("Maya is already writing a guide for
 c91f02a") and offers Start my own anyway.
 
-A failed run stays as a Failed Guide with the agent's reason. Only the
-requester can retry it. The requester and project admins can delete any
+A Guide fails three ways, and stays as a Failed Guide with the reason
+(`failureReason`, cut to 1,000 characters):
+
+- The agent reports it: `convoy threads submit-guide <threadId> --failed
+  --note <why>` sends `failure` to `guides.submit`, and the note is the
+  reason. The prompt asks for this when the Working path is no clone of the
+  repository or `gh` is not signed in. An empty note is refused ("Say why the
+  guide could not be written."); a later note replaces the earlier one.
+- The run's turn ends with the Guide still writing: `markThreadStreamEnded`
+  (the `complete` and `fail` paths) calls `settleGuideRun` when the thread's
+  status becomes completed or failed. The reason is the run's error, or "The
+  run ended before a guide was submitted." Waiting for input or queued
+  messages are not an end.
+- Stop, or the CLI losing the run: `resetThreadClaim` calls `settleGuideRun`
+  when the status becomes failed, with the run's error ("Response stopped by
+  user", or the lost claim's reason). A superseded or parked run is not a
+  failure.
+
+`settleGuideRun` reads nothing on a thread without `pullRequestGuide`. A
+Failed Guide still takes a submit from its thread, so a guide that arrives
+after Stop lands and becomes ready.
+
+Only the requester can retry a Failed Guide. Retry opens the same composer
+with `pullRequestGuide: { headSha, retryGuideId }`. Creating the thread
+re-points the same Guide row to it (writing, the PR's current base and head,
+the new runtime and model, a fresh `createdAt` so it lists as the newest, no
+reason) instead of inserting a second one, and clears the old thread's
+`pullRequestGuide`, so that thread's late submit is refused ("This thread is
+not writing a guide."). A submit or failure note from the old thread that
+was already past its checks is refused the same way: `complete` and `fail`
+require the Guide's `threadId` to still be the submitting thread. Retry is refused for someone else's Guide ("Only the requester can
+retry a guide"), a Guide that is not failed ("Only a failed guide can be
+retried"), and a Guide of another PR ("This guide is for another pull
+request"). A failed Guide has no steps row, so Retry cleans up nothing.
+
+The requester and project admins can delete any
 Guide from the corner menu, after a confirm; members cannot delete each
 other's ("Only the requester and project admins can delete a guide").
 Deleting keeps the thread. Guides belong to the project, so another project
@@ -475,7 +510,10 @@ the viewer may delete swaps its age for Delete, which asks to confirm. New
 guide sits under the list and returns the tab to the newest Guide. A
 Follow-up guide's row says so. A Guide still being written shows
 "Writing the guide", "Requested by Maya Singh" when someone else asked, and
-Open thread for the requester.
+Open thread for the requester. A Failed Guide shows "The guide could not be
+written" with its reason, "Requested by Maya Singh" when someone else asked,
+and Retry and Open thread for the requester. Its menu row and the menu
+trigger say "Failed" in red in place of the age.
 
 An Outdated guide on an open PR gets an amber banner under the tab row:
 "This guide was written for 8a3e7d1. The commits since then aren't covered."
@@ -863,7 +901,7 @@ provider turns each table into a union of complete discriminated objects.
 | `integrationRepositories` | Repository metadata and sync state (lease token, import page, last success, error, the running and last finished reconciliation pass, closed-history coverage and the page on its way), plus open and closed PR counts, shared by the links of one organization |
 | `integrationPullRequests` | Normalized PR metadata, one row per repository and number, with the REST `stack`, `archived`, and the last known `conflicts` |
 | `integrationSetups` | A 10-minute connect flow bound to one user and project |
-| `integrationPullRequestGuides` | A project's Guide of one PR revision: requester, run thread, status, base and head, runtime and model. Indexed by project, repository, and number, and by thread |
+| `integrationPullRequestGuides` | A project's Guide of one PR revision: requester, run thread, status (writing, ready, failed), base and head, runtime and model, and a failed Guide's `failureReason`. Indexed by project, repository, number, and `createdAt` (the menu order, which a Retry restamps), and by thread |
 | `integrationPullRequestGuideSteps` | A ready Guide's steps, up to 800 KB, one row per Guide, indexed by Guide. Kept apart so the Guide menu reads 20 small rows, not 20 sets of steps; deleted with the Guide |
 
 `cliThreads.pullRequestGuide.headSha` marks a Guide run's thread, set at creation.
@@ -1432,6 +1470,12 @@ Defined in `apps/web/convex/integrations/github/errors.ts`; tests assert on them
 | Member deletes another member's Guide | Only the requester and project admins can delete a guide |
 | Guide run on a PR outside the connected repositories (`cli/errors.ts`) | Guides need a pull request in a connected repository |
 | Guide run after a push (`cli/errors.ts`) | The pull request has new commits. Generate the guide again. |
+| `--failed` with an empty note | Say why the guide could not be written. |
+| Submit with neither steps nor a failure note | A guide needs "headSha" and "steps"; to report a failure, send a note instead. |
+| Retry of someone else's Guide (`cli/errors.ts`) | Only the requester can retry a guide |
+| Retry of a Guide that is not failed (`cli/errors.ts`) | Only a failed guide can be retried |
+| Retry naming another PR's Guide (`cli/errors.ts`) | This guide is for another pull request |
+| Retry of a deleted Guide (`cli/errors.ts`) | The guide was deleted. |
 
 ## Delivery as vertical slices
 

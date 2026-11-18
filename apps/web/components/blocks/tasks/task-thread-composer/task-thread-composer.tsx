@@ -54,8 +54,8 @@ type TaskThreadComposerProps = TaskThreadComposerSubject &
   draftKey?: string;
   /** Starts a Pull request checks thread on this head (OS-2400). */
   pullRequestChecks?: { headSha: string };
-  /** Starts a Guide run on this head (OS-2412). Its model does not become the new-thread default. */
-  pullRequestGuide?: { headSha: string };
+  /** Starts a Guide run on this head (OS-2412), or reruns a failed one (OS-2413). Its model does not become the new-thread default. */
+  pullRequestGuide?: { headSha: string; retryGuideId?: Id<"integrationPullRequestGuides"> };
   focusRequestKey?: number;
   /** Focus the composer as soon as it is enabled (e.g. when opened in a popover). */
   autoFocus?: boolean;

@@ -83,6 +83,21 @@ describe("PullRequestGuideTab", () => {
     expect(screen.getByRole("link", { name: "Open thread" }).getAttribute("href")).toBe(appRoute.projectThreadDetail("acme", "OS", "thread_1").pathname);
   });
 
+  test("a failed guide shows its reason; only the requester gets Retry, for that guide", () => {
+    guides = [summary({ status: "failed", failureReason: "/repo is not a clone of acme/repo" })];
+    renderTab();
+    expect(screen.getByText("/repo is not a clone of acme/repo")).toBeTruthy();
+    expect(screen.getByText(/Requested by Maya Singh/)).toBeTruthy();
+    expect(screen.queryByRole("button", { name: /Retry/ })).toBeNull();
+    cleanup();
+
+    guides = [summary({ status: "failed", failureReason: "Stopped", requester: { name: "Me", avatarUrl: null, isViewer: true }, threadId: "thread_1" as Id<"cliThreads"> })];
+    const { start } = renderTab();
+    expect(screen.getByRole("link", { name: "Open thread" })).toBeTruthy();
+    fireEvent.click(screen.getByRole("button", { name: /Retry/ }));
+    expect(start).toHaveBeenCalledWith("guide_1");
+  });
+
   test("a ready guide reads its steps once and shows each step's files with Reviewed marks", async () => {
     guides = [summary()];
     convex.query.mockResolvedValue(detail);
@@ -181,6 +196,13 @@ describe("GuideMenu", () => {
     view.rerender(<GuideMenu state={state([summary({ _id: "guide_2" as Id<"integrationPullRequestGuides">, headSha: "c91f02a9", canDelete: true })])} {...props} />);
     fireEvent.click(screen.getByRole("button", { name: "Delete" }));
     expect(convex.remove).toHaveBeenCalledWith({ guideId: "guide_1" });
+  });
+
+  test("a failed guide's row says Failed in place of its age", () => {
+    const failed = summary({ status: "failed", headSha: "c91f02a9" });
+    render(<GuideMenu state={{ guides: [failed], shown: failed, steps: undefined, retry: vi.fn(), select: vi.fn() }} launch={launch()} />);
+    open();
+    expect(screen.getByRole("menuitem", { name: /^gpt-5/ }).textContent).toBe("gpt-5c91f02aMFailed");
   });
 
   test("names the model the way the composer does", () => {

@@ -73,6 +73,12 @@ const requesterName = (guide: GuideSummary) => (guide.requester.isViewer ? "you"
 const capitalize = (text: string) => text.charAt(0).toUpperCase() + text.slice(1);
 const shortSha = (guide: GuideSummary) => guide.headSha.slice(0, 7);
 
+/** The short age, or "Failed" in its place: the row has no room for a status column. */
+function GuideAge({ guide, className }: { guide: GuideSummary; className?: string }) {
+  if (guide.status === "failed") return <span className={cn("shrink-0 text-xs text-destructive", className)}>Failed</span>;
+  return <span className={cn("shrink-0 text-xs text-muted-foreground/70", className)}>{formatCompactRelativeTime(guide.createdAt)}</span>;
+}
+
 /** The requester's avatar; hovering it names them. */
 function RequesterAvatar({ guide }: { guide: GuideSummary }) {
   const name = guide.requester.name ?? "A former member";
@@ -96,7 +102,7 @@ function GuideLine({ guide }: { guide: GuideSummary }) {
       <span className="ml-auto shrink-0 pl-2">
         <RequesterAvatar guide={guide} />
       </span>
-      <span className={cn("shrink-0 text-xs text-muted-foreground/70", swap)}>{formatCompactRelativeTime(guide.createdAt)}</span>
+      <GuideAge guide={guide} className={swap || undefined} />
     </>
   );
 }
@@ -118,7 +124,7 @@ export function GuideMenu({ state, launch }: { state: PullRequestGuides; launch:
             <span className="truncate">{modelOf(shown)}</span>
             <span className="shrink-0 font-mono text-xs">{shortSha(shown)}</span>
             <RequesterAvatar guide={shown} />
-            <span className="shrink-0 text-xs text-muted-foreground/70">{formatCompactRelativeTime(shown.createdAt)}</span>
+            <GuideAge guide={shown} />
             <ChevronDown />
           </Button>
         </DropdownMenuTrigger>
@@ -189,7 +195,7 @@ export function GuideMenu({ state, launch }: { state: PullRequestGuides; launch:
   );
 }
 
-/** The Guide tab's body: No guide yet, Writing the guide, or the steps beside their files' diffs. */
+/** The Guide tab's body: No guide yet, Writing the guide, Failed, or the steps beside their files' diffs. */
 export function PullRequestGuideTab({
   state,
   launch,
@@ -221,11 +227,49 @@ export function PullRequestGuideTab({
           launch.allowed ? (
             // A disabled button gets no pointer events, so the reason sits on its wrapper.
             <span title={launch.reason ?? undefined}>
-              <Button variant="secondary" disabled={launch.disabled} onClick={launch.start}>
+              <Button variant="secondary" disabled={launch.disabled} onClick={() => launch.start()}>
                 <Sparkles />
                 Generate guide
               </Button>
             </span>
+          ) : null
+        }
+      />
+    );
+  }
+  const openThread = shown.threadId ? (
+    <Button variant="secondary" size="sm" asChild>
+      <AppLink href={appRoute.projectThreadDetail(organizationSlug, projectAlias, String(shown.threadId))}>Open thread</AppLink>
+    </Button>
+  ) : null;
+  if (shown.status === "failed") {
+    // Retry is the requester's: it reruns on their own CLI profile.
+    const canRetry = shown.requester.isViewer && launch.allowed;
+    return (
+      <EmptyState
+        className="h-full min-h-80"
+        icon={CircleAlert}
+        title="The guide could not be written"
+        description={
+          <>
+            <span className="block">{shown.failureReason}</span>
+            {shown.requester.isViewer ? null : <span className="block">Requested by {requesterName(shown)}.</span>}
+          </>
+        }
+        actionClassName="flex gap-2"
+        action={
+          canRetry || openThread ? (
+            <>
+              {canRetry ? (
+                <span title={launch.reason ?? undefined}>
+                  <Button variant="secondary" size="sm" disabled={launch.disabled} onClick={() => launch.start(shown._id)}>
+                    <RotateCcw />
+                    Retry
+                  </Button>
+                </span>
+              ) : null}
+              {openThread}
+            </>
           ) : null
         }
       />
@@ -243,13 +287,7 @@ export function PullRequestGuideTab({
           </span>
         }
         description={`${shown.requester.isViewer ? "" : `Requested by ${requesterName(shown)}. `}An agent is reading the diff in a CLI thread. The guide appears here when it finishes.`}
-        action={
-          shown.threadId ? (
-            <Button variant="outline" size="sm" asChild>
-              <AppLink href={appRoute.projectThreadDetail(organizationSlug, projectAlias, String(shown.threadId))}>Open thread</AppLink>
-            </Button>
-          ) : null
-        }
+        action={openThread}
       />
     );
   }

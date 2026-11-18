@@ -10,6 +10,7 @@ describe("guidePrompt", () => {
     expect(prompt).toContain(DEFAULT_GUIDE_INSTRUCTIONS);
     expect(prompt).toContain('"headSha": "h2"');
     expect(prompt).toContain("convoy threads submit-guide <threadId> /tmp/guide.json");
+    expect(prompt).toContain('convoy threads submit-guide <threadId> --failed --note "<why>"');
   });
 
   test("the rules Convoy enforces stay when a project replaces the instructions", () => {

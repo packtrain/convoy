@@ -22,7 +22,8 @@ type Revision = { baseSha: string; headSha: string } | null;
  * like Run checks. Spec: docs/specs/github-integration.md → Guides → Requesting and running.
  */
 export function useGenerateGuide(target: Target | null, revision: Revision) {
-  const [open, setOpen] = useState(false);
+  // Open, and for Retry the failed Guide the run writes again.
+  const [open, setOpen] = useState<{ retryGuideId?: Id<"integrationPullRequestGuides"> } | null>(null);
   const projectId = target?.projectId;
   const permissions = useProjectPermissions(projectId ?? null);
   const { profiles, isLoading } = useCliProfiles(projectId);
@@ -38,14 +39,15 @@ export function useGenerateGuide(target: Target | null, revision: Revision) {
     allowed: permissions.canUseThreads,
     disabled: isLoading || !viewer || reason !== null,
     reason,
-    start: () => setOpen(true),
+    start: (retryGuideId?: Id<"integrationPullRequestGuides">) => setOpen({ retryGuideId }),
     dialog:
       open && viewer && target && revision ? (
         <LaunchDialog
           {...target}
           viewerId={viewer._id}
           revision={revision}
-          onClose={() => setOpen(false)}
+          retryGuideId={open.retryGuideId}
+          onClose={() => setOpen(null)}
         />
       ) : null,
   };
@@ -54,9 +56,10 @@ export function useGenerateGuide(target: Target | null, revision: Revision) {
 function LaunchDialog({
   viewerId,
   revision,
+  retryGuideId,
   onClose,
   ...target
-}: Target & { viewerId: Id<"users">; revision: NonNullable<Revision>; onClose: () => void }) {
+}: Target & { viewerId: Id<"users">; revision: NonNullable<Revision>; retryGuideId?: Id<"integrationPullRequestGuides">; onClose: () => void }) {
   const navigation = useNavigation();
   // Frozen at open: a push meanwhile must not send a new head with a prompt naming the old one, so the server rejects it.
   const [opened] = useState(revision);
@@ -71,13 +74,13 @@ function LaunchDialog({
         onOpenAutoFocus={(event) => event.preventDefault()}
       >
         <DialogTitleBar>
-          <DialogTitle className="text-sm">Generate a guide</DialogTitle>
+          <DialogTitle className="text-sm">{retryGuideId ? "Retry the guide" : "Generate a guide"}</DialogTitle>
           <DialogDescription className="sr-only">Start a thread that writes a guide to this pull request.</DialogDescription>
         </DialogTitleBar>
         <TaskThreadComposer
           {...target}
           draftKey={`pull-request-guide:${viewerId}`}
-          pullRequestGuide={{ headSha: opened.headSha }}
+          pullRequestGuide={{ headSha: opened.headSha, retryGuideId }}
           seed={seed}
           seedReplacesDraft
           onSeeded={() => setSeed(undefined)}

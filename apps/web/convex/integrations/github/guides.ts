@@ -1,5 +1,6 @@
 import { ConvexError, v, type Infer } from "convex/values";
-import { action, internalMutation, internalQuery, mutation, query } from "../../_generated/server";
+import type { Id } from "../../_generated/dataModel";
+import { action, internalMutation, internalQuery, mutation, query, type MutationCtx } from "../../_generated/server";
 import { internal } from "../../_generated/api";
 import { ProjectPermission } from "../../../lib/authz/permissions";
 import { getAuthenticatedAccess } from "../../lib/access/auth";
@@ -12,7 +13,7 @@ import { errors } from "./errors";
 import { githubFetch, mintRepositoryToken, repoPath, requireConfig, toUserError } from "./lib/github";
 import { list as asList, num, record, str } from "./lib/parsers";
 import { validateGuide, type GuideRevision } from "./lib/invariants";
-import { completeGuide, deleteGuide, getGuideById, getGuideByThreadId, getGuideSteps, listGuidesForPullRequest } from "./lib/integrationPullRequestGuidesRepo";
+import { completeGuide, deleteGuide, failGuide, getGuideById, getGuideByThreadId, getGuideSteps, listGuidesForPullRequest } from "./lib/integrationPullRequestGuidesRepo";
 import { findRepositoryLinkForProjectAndRepository, getRepositoryLinkById } from "./lib/integrationRepositoryLinksRepo";
 import { getRepositoryById } from "./lib/integrationRepositoriesRepo";
 import { getReadableRepositoryAccess } from "./lib/permissions";
@@ -73,6 +74,7 @@ export const remove = mutation({
 
 const submitContextValidator = v.object({
   guideId: v.id("integrationPullRequestGuides"),
+  threadId: v.id("cliThreads"),
   number: v.number(),
   baseSha: v.string(),
   headSha: v.string(),
@@ -81,7 +83,7 @@ const submitContextValidator = v.object({
   context: syncContextValidator,
 });
 
-/** The caller's Guide run on `threadId`, still writing, in a repository the project still connects. */
+/** The caller's Guide run on `threadId`, not yet ready, in a repository the project still connects. A failed one still takes a late submit. */
 export const getSubmitContext = internalQuery({
   args: { threadId: v.id("cliThreads"), apiKey: v.optional(v.string()) },
   returns: submitContextValidator,
@@ -93,7 +95,7 @@ export const getSubmitContext = internalQuery({
     }
     const guide = await ensure(getGuideByThreadId(ctx, thread._id)).notNull(errors.GUIDE_NOT_FOUND);
     await requireAuthorizedProject(ctx, principal, guide.projectId, ProjectPermission.CLI_THREAD);
-    ensure(guide.status).eq("writing", errors.GUIDE_ALREADY_SUBMITTED);
+    ensure(guide.status !== "ready").isTrue(errors.GUIDE_ALREADY_SUBMITTED);
     const link = await findRepositoryLinkForProjectAndRepository(ctx, guide.projectId, guide.repositoryId);
     const repository = await getRepositoryById(ctx, guide.repositoryId);
     if (!link || link.status !== "active" || !repository) {
@@ -101,6 +103,7 @@ export const getSubmitContext = internalQuery({
     }
     return {
       guideId: guide._id,
+      threadId: thread._id,
       number: guide.number,
       baseSha: guide.baseSha,
       headSha: guide.headSha,
@@ -111,23 +114,42 @@ export const getSubmitContext = internalQuery({
   },
 });
 
-/** Stores a validated Guide, unless it was deleted, already submitted, or its repository disconnected meanwhile. */
+/** The Guide, still `threadId`'s run: a Retry meanwhile hands it to another thread, whose run this submit must not overwrite. */
+async function requireGuideOfRun(ctx: MutationCtx, guideId: Id<"integrationPullRequestGuides">, threadId: Id<"cliThreads">) {
+  const guide = await ensure(getGuideById(ctx, guideId)).notNull(errors.GUIDE_NOT_FOUND);
+  ensure(guide.threadId).eq(threadId, errors.GUIDE_NOT_FOR_THREAD);
+  ensure(guide.status !== "ready").isTrue(errors.GUIDE_ALREADY_SUBMITTED);
+  return guide;
+}
+
+/** Stores a validated Guide, unless it was deleted, already submitted, retried, or its repository disconnected meanwhile. */
 export const complete = internalMutation({
   args: {
     guideId: v.id("integrationPullRequestGuides"),
+    threadId: v.id("cliThreads"),
     repositoryLinkId: v.id("integrationRepositoryLinks"),
     generation: v.number(),
     steps: v.array(guideStepValidator),
   },
   returns: v.null(),
   handler: async (ctx, args) => {
-    const guide = await ensure(getGuideById(ctx, args.guideId)).notNull(errors.GUIDE_NOT_FOUND);
-    ensure(guide.status).eq("writing", errors.GUIDE_ALREADY_SUBMITTED);
+    const guide = await requireGuideOfRun(ctx, args.guideId, args.threadId);
     const link = await getRepositoryLinkById(ctx, args.repositoryLinkId);
     if (link?.status !== "active" || link.generation !== args.generation) {
       throw new ConvexError(errors.NOT_CONNECTED);
     }
     await completeGuide(ctx, guide._id, args.steps, Date.now());
+    return null;
+  },
+});
+
+/** The agent could not write the Guide; `reason` replaces any earlier one. */
+export const fail = internalMutation({
+  args: { guideId: v.id("integrationPullRequestGuides"), threadId: v.id("cliThreads"), reason: v.string() },
+  returns: v.null(),
+  handler: async (ctx, args) => {
+    const guide = await requireGuideOfRun(ctx, args.guideId, args.threadId);
+    await failGuide(ctx, guide._id, args.reason);
     return null;
   },
 });
@@ -177,19 +199,32 @@ const submitResultValidator = v.union(
 /**
  * The agent hands its Guide back (`convoy threads submit-guide`). Convoy checks
  * it against the revision's changed files and returns every error, so the
- * agent can fix and resubmit.
+ * agent can fix and resubmit. With `failure`, the agent says why it could not
+ * write one, and the Guide fails.
  */
 export const submit = action({
   args: {
     threadId: v.id("cliThreads"),
-    headSha: v.string(),
+    headSha: v.optional(v.string()),
     // Checked by `validateGuide`, so a wrong shape comes back in the error list.
-    steps: v.array(v.any()),
+    steps: v.optional(v.array(v.any())),
+    failure: v.optional(v.string()),
     apiKey: v.optional(v.string()),
   },
   returns: submitResultValidator,
   handler: async (ctx, args): Promise<Infer<typeof submitResultValidator>> => {
+    const reason = args.failure?.trim();
+    if (reason === "") {
+      throw new ConvexError(errors.GUIDE_FAILURE_NOTE_REQUIRED);
+    }
     const run: Infer<typeof submitContextValidator> = await ctx.runQuery(internal.integrations.github.guides.getSubmitContext, { threadId: args.threadId, apiKey: args.apiKey });
+    if (reason !== undefined) {
+      await ctx.runMutation(internal.integrations.github.guides.fail, { guideId: run.guideId, threadId: run.threadId, reason });
+      return { status: "accepted" as const, guideId: run.guideId };
+    }
+    if (args.headSha === undefined || args.steps === undefined) {
+      return { status: "rejected" as const, errors: [errors.GUIDE_SUBMIT_INCOMPLETE] };
+    }
     let revision: GuideRevision;
     try {
       const token = await mintRepositoryToken(requireConfig(), run.context.installationId, run.context.providerRepositoryId);
@@ -203,6 +238,7 @@ export const submit = action({
     }
     await ctx.runMutation(internal.integrations.github.guides.complete, {
       guideId: run.guideId,
+      threadId: run.threadId,
       repositoryLinkId: run.repositoryLinkId,
       generation: run.generation,
       steps: result.steps,

@@ -94,6 +94,7 @@ describe("threads write commands", () => {
     resetCommandOptions(attachToResponseCommand);
     resetCommandOptions(attachTaskToThreadCommand);
     resetCommandOptions(listThreadChecksCommand);
+    resetCommandOptions(submitGuideCommand);
 
     spinner.start.mockReturnValue(spinner);
     oraMock.mockReturnValue(spinner);
@@ -606,6 +607,24 @@ describe("threads write commands", () => {
       await expect(invoke(submitGuideCommand, ["thr_1", "guide.json"])).rejects.toThrow(
         "Convoy did not accept the guide. Fix these and submit again:\n- src/a.ts is not in any step.\n- Step 1 has no files."
       );
+    });
+
+    it("reports why the guide could not be written", async () => {
+      action.mockResolvedValueOnce({ status: "accepted", guideId: "guide_1" });
+      submitGuideCommand.setOptionValue("failed", true);
+      submitGuideCommand.setOptionValue("note", "Not a clone of acme/web");
+      await invoke(submitGuideCommand, ["thr_1", undefined]);
+      expect(readFileMock).not.toHaveBeenCalled();
+      expect(action).toHaveBeenCalledWith(api.integrations.github.guides.submit, { threadId: "thr_1", failure: "Not a clone of acme/web" });
+      expect(console.log).toHaveBeenCalledWith(chalk.green("✓") + " Guide marked failed");
+    });
+
+    it("asks for a note with --failed, and a file without it", async () => {
+      submitGuideCommand.setOptionValue("failed", true);
+      await expect(invoke(submitGuideCommand, ["thr_1", undefined])).rejects.toThrow("--failed needs --note <why>");
+      submitGuideCommand.setOptionValue("failed", undefined);
+      await expect(invoke(submitGuideCommand, ["thr_1", undefined])).rejects.toThrow("Pass the guide file, or --failed --note <why>");
+      expect(action).not.toHaveBeenCalled();
     });
 
     it("rejects a file that is not a guide before calling Convoy", async () => {

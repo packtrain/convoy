@@ -15,6 +15,7 @@ import { getProjectAgentById } from "../../../agents/lib/projectAgentsRepo";
 import { PINNED_THREADS_MAX, TASK_THREADS_MAX } from "../../../../lib/threads/constants";
 import { syncAgentThreadWorkById } from "./agentThreadWork";
 import { deleteCheckResultsOwnedByThread, moveThreadCheckResultsToTask } from "../../../checks/lib/checkResultsRepo";
+import { settleGuideRun } from "../../../integrations/github/lib/integrationPullRequestGuidesRepo";
 import { mergeLastUsedCli, type CliMessageSelection } from "../../lib/lastUsedCli";
 import { CLI_RUNTIME_LABELS } from "../../lib/runtimes/registry";
 import {
@@ -1024,6 +1025,8 @@ type ThreadStreamingEndPatch = {
   lastActivityAt: number;
   // Cumulative diff totals (OS-1252); the complete path passes them pre-summed.
   git?: Pick<ThreadGit, "linesAdded" | "linesRemoved">;
+  /** The fail path's error, kept on a Guide the run leaves unwritten. */
+  runError?: string;
 };
 
 /**
@@ -1032,12 +1035,14 @@ type ThreadStreamingEndPatch = {
  * stale streaming target survives (Chat Processing invariant #3).
  */
 export async function markThreadStreamEnded(ctx: MutationCtx, threadId: Id<"cliThreads">, patch: ThreadStreamingEndPatch): Promise<void> {
-  const { preserveProposedPlan, ...streamPatch } = patch;
-  if (!preserveProposedPlan || patch.status !== "waiting_input") {
-    const thread = await getThreadById(ctx, threadId);
-    if (thread?.metadata?.proposedPlan) {
-      await mergeThreadStreamMetadata(ctx, thread, { proposedPlan: undefined });
-    }
+  const { preserveProposedPlan, runError, ...streamPatch } = patch;
+  const thread = await getThreadById(ctx, threadId);
+  if ((!preserveProposedPlan || patch.status !== "waiting_input") && thread?.metadata?.proposedPlan) {
+    await mergeThreadStreamMetadata(ctx, thread, { proposedPlan: undefined });
+  }
+  // Waiting for input or queued work is not the end of a Guide run.
+  if (thread && (patch.status === "completed" || patch.status === "failed")) {
+    await settleGuideRun(ctx, thread, runError);
   }
   await patchThreadWithStatusProjection(ctx, threadId, {
     ...streamPatch,
@@ -1059,6 +1064,8 @@ type ThreadClaimResetPatch = {
    */
   queueHeldAt: number | undefined;
   now: number;
+  /** Why the run ended, for a `failed` status: kept on a Guide the run leaves unwritten. */
+  runError?: string;
 };
 
 /**
@@ -1071,6 +1078,10 @@ export async function resetThreadClaim(ctx: MutationCtx, threadId: Id<"cliThread
   if (thread?.metadata?.proposedPlan &&
       (thread.processingState === "streaming" || patch.status !== "waiting_input" || !thread.metadata.proposedPlan.ready)) {
     await mergeThreadStreamMetadata(ctx, thread, { proposedPlan: undefined });
+  }
+  // Stop and a lost CLI fail the run; a superseded or parked one is not failure.
+  if (thread && patch.status === "failed") {
+    await settleGuideRun(ctx, thread, patch.runError);
   }
   await patchThreadWithStatusProjection(ctx, threadId, {
     status: patch.status,
@@ -1162,6 +1173,11 @@ export async function setThreadAttachedPullRequest(ctx: MutationCtx, threadId: I
 }
 
 /** Set or clear a task-less thread's own Checklist (OS-2293). */
+/** A retried Guide moved to another thread; this one no longer writes it. */
+export async function clearThreadPullRequestGuide(ctx: MutationCtx, threadId: Id<"cliThreads">): Promise<void> {
+  await ctx.db.patch("cliThreads", threadId, { pullRequestGuide: undefined });
+}
+
 export async function setThreadChecklist(ctx: MutationCtx, threadId: Id<"cliThreads">, checklistId: Id<"checklists"> | undefined): Promise<void> {
   await ctx.db.patch("cliThreads", threadId, { checklistId });
 }

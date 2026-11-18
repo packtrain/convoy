@@ -314,6 +314,7 @@ export const guideSummaryValidator = v.object({
   cliModel: v.optional(cliModelValidator),
   createdAt: v.number(),
   completedAt: v.optional(v.number()),
+  failureReason: v.optional(v.string()),
   requester: v.object({ name: v.union(v.string(), v.null()), avatarUrl: v.union(v.string(), v.null()), isViewer: v.boolean() }),
   /** Only for the requester: the run is a private thread. */
   threadId: v.optional(v.id("cliThreads")),
@@ -336,6 +337,7 @@ export function toGuideSummary(
     cliModel: row.cliModel,
     createdAt: row.createdAt,
     completedAt: row.completedAt,
+    failureReason: row.failureReason,
     requester: { name: requester?.name ?? null, avatarUrl: requester?.avatarUrl ?? null, isViewer },
     threadId: isViewer ? row.threadId : undefined,
     canDelete: isViewer || viewer.canManage,

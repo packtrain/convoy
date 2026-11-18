@@ -2,6 +2,7 @@
 import { afterEach, beforeEach, describe, expect, test, vi } from "vitest";
 import { api, internal } from "../../_generated/api";
 import { connectedProject, fakePullRequest, stubGithubAppEnv } from "../../../convex-testing/github";
+import type { Id } from "../../_generated/dataModel";
 import { RETENTION_MS } from "./lib/integrationRepositoryLinksRepo";
 
 beforeEach(async () => {
@@ -26,9 +27,10 @@ const step = (title: string, paths: string[]) => ({ title, explanation: `${title
 async function setupGuideRun() {
   const setup = await connectedProject([fakePullRequest(1, { files: FILES }), fakePullRequest(2)]);
   const { ctx, user, project, asUser, t, repositoryId } = setup;
-  const { key: apiKey } = await asUser.mutation(api.apiKeys.core.create, { name: "CLI Key", expiresAt: Date.now() + 30 * 24 * 60 * 60 * 1000 });
+  const { key: apiKey, id: apiKeyId } = await asUser.mutation(api.apiKeys.core.create, { name: "CLI Key", expiresAt: Date.now() + 30 * 24 * 60 * 60 * 1000 });
   const profile = await ctx.cliProfile(user._id, project._id, { paths: [{ id: "repo", path: "/repo", label: "repo" }] });
-  const request = (headSha = "head-1", number = 1) =>
+  const session = await ctx.cliSession(profile._id, apiKeyId);
+  const request = (headSha = "head-1", number = 1, retryGuideId?: Id<"integrationPullRequestGuides">) =>
     asUser.mutation(api.cli.threads.core.create, {
       profileId: profile._id,
       pathId: "repo",
@@ -36,11 +38,27 @@ async function setupGuideRun() {
       cliModel: "gpt-5",
       content: "Write a guide",
       pullRequestUrl: `https://github.com/acme/repo-1/pull/${number}`,
-      pullRequestGuide: { headSha },
+      pullRequestGuide: { headSha, retryGuideId },
     });
   const threadId = await request();
   const submit = (steps: ReturnType<typeof step>[], headSha = "head-1", thread = threadId) =>
     t.action(api.integrations.github.guides.submit, { threadId: thread, headSha, steps, apiKey });
+  const reportFailure = (failure: string, thread = threadId) => t.action(api.integrations.github.guides.submit, { threadId: thread, failure, apiKey });
+  /** One CLI run of the thread's queued messages, ended by `complete` (optionally parked) or `fail`. */
+  const runOnce = async (end: { parked?: boolean; error?: string } = {}, thread = threadId) => {
+    await t.mutation(api.cli.threads.runControl.claimThread, { threadId: thread, sessionId: session._id, leaseMs: 60_000, apiKey });
+    const userMessageIds = await t.run(async (run) =>
+      (await run.db.query("cliMessages").withIndex("by_thread", (q) => q.eq("threadId", thread)).collect())
+        .filter((message) => message.role === "user" && !message.processedAt)
+        .map((message) => message._id)
+    );
+    const { assistantMessageId: messageId } = await t.mutation(api.cli.messages.startRunResponse, { threadId: thread, sessionId: session._id, userMessageIds, apiKey });
+    if (end.error) {
+      await t.mutation(api.cli.messages.fail, { messageId, sessionId: session._id, errorMessage: end.error, apiKey });
+    } else {
+      await t.mutation(api.cli.messages.complete, { messageId, sessionId: session._id, apiKey, ...(end.parked ? { chatStatus: "waiting_input" as const } : {}) });
+    }
+  };
   const list = (as = asUser) => as.query(api.integrations.github.guides.listForPullRequest, { projectId: project._id, repositoryId, number: 1 });
   const push = (headSha: string) =>
     t.run(async (run) => {
@@ -53,7 +71,7 @@ async function setupGuideRun() {
     await ctx.projectMember(project._id, other._id, "member");
     return Object.assign(ctx.asUser(other), { user: other });
   };
-  return { ...setup, apiKey, profile, threadId, request, submit, list, push, member };
+  return { ...setup, apiKey, profile, threadId, request, submit, reportFailure, runOnce, list, push, member };
 }
 
 describe("guides", () => {
@@ -203,6 +221,103 @@ describe("guides", () => {
       errors: ["f149.ts is not in any step. Every changed file belongs to exactly one step."],
     });
     expect(await submit([step("All", paths)])).toMatchObject({ status: "accepted" });
+  });
+
+  test("a run that ends without a submit fails the guide; waiting for input does not; a later submit still lands", async () => {
+    const { asUser, threadId, list, runOnce, submit } = await setupGuideRun();
+    await runOnce({ parked: true });
+    expect((await list())![0].status).toBe("writing");
+    await asUser.mutation(api.cli.messages.send, { threadId, content: "Go on" });
+    await runOnce();
+    const [failed] = (await list())!;
+    expect(failed).toMatchObject({ status: "failed", failureReason: "The run ended before a guide was submitted." });
+    expect(await submit([step("All", ["convex/schema.ts", "src/reader.tsx"])])).toEqual({ status: "accepted", guideId: failed._id });
+    const [ready] = (await list())!;
+    expect(ready.status).toBe("ready");
+    expect(ready.failureReason).toBeUndefined();
+  });
+
+  test("a run that fails takes its error to the guide", async () => {
+    const { list, runOnce } = await setupGuideRun();
+    await runOnce({ error: "Codex exited with code 1" });
+    expect((await list())![0]).toMatchObject({ status: "failed", failureReason: "Codex exited with code 1" });
+  });
+
+  test("Stop fails the guide", async () => {
+    const { asUser, threadId, list } = await setupGuideRun();
+    await asUser.mutation(api.cli.threads.runControl.cancelProcessing, { threadId });
+    expect((await list())![0]).toMatchObject({ status: "failed", failureReason: "Response stopped by user" });
+  });
+
+  test("the agent reports why it cannot write the guide, and the run's end keeps that reason", async () => {
+    const { list, reportFailure, runOnce, submit } = await setupGuideRun();
+    const [guide] = (await list())!;
+    expect(await reportFailure("  /repo is not a clone of acme/repo-1  ")).toEqual({ status: "accepted", guideId: guide._id });
+    await runOnce();
+    expect((await list())![0]).toMatchObject({ status: "failed", failureReason: "/repo is not a clone of acme/repo-1" });
+    await expect(reportFailure(" ")).rejects.toThrow("Say why the guide could not be written.");
+    await submit([step("All", ["convex/schema.ts", "src/reader.tsx"])]);
+    await expect(reportFailure("Too late")).rejects.toThrow("This guide was already submitted.");
+  });
+
+  test("Retry re-points the same failed guide to a new thread", async () => {
+    const { threadId, list, reportFailure, request, submit, push } = await setupGuideRun();
+    const [guide] = (await list())!;
+    await expect(request("head-1", 1, guide._id)).rejects.toThrow("Only a failed guide can be retried");
+    await reportFailure("Not a clone");
+    await push("head-2");
+    const retryThreadId = await request("head-2", 1, guide._id);
+    const guides = (await list())!;
+    expect(guides).toHaveLength(1);
+    expect(guides[0]).toMatchObject({ _id: guide._id, status: "writing", headSha: "head-2", threadId: retryThreadId });
+    expect(guides[0].failureReason).toBeUndefined();
+    // The first thread no longer writes it.
+    await expect(submit([step("All", ["convex/schema.ts", "src/reader.tsx"])], "head-1", threadId)).rejects.toThrow("This thread is not writing a guide.");
+  });
+
+  test("a submit already past its checks when Retry re-points the guide does not land on the retry", async () => {
+    const { t, threadId, apiKey, list, reportFailure, request } = await setupGuideRun();
+    const old = await t.query(internal.integrations.github.guides.getSubmitContext, { threadId, apiKey });
+    await reportFailure("Not a clone");
+    await request("head-1", 1, old.guideId);
+    const steps = [step("All", ["convex/schema.ts", "src/reader.tsx"])].map((item) => ({ ...item, questions: [] }));
+    await expect(
+      t.mutation(internal.integrations.github.guides.complete, { guideId: old.guideId, threadId: old.threadId, repositoryLinkId: old.repositoryLinkId, generation: old.generation, steps })
+    ).rejects.toThrow("This thread is not writing a guide.");
+    await expect(t.mutation(internal.integrations.github.guides.fail, { guideId: old.guideId, threadId: old.threadId, reason: "late" })).rejects.toThrow(
+      "This thread is not writing a guide."
+    );
+    expect((await list())![0].status).toBe("writing");
+  });
+
+  test("a retried guide lists as the newest", async () => {
+    const { list, reportFailure, request } = await setupGuideRun();
+    const [first] = (await list())!;
+    await reportFailure("Not a clone");
+    vi.advanceTimersByTime(1000);
+    await request();
+    vi.advanceTimersByTime(1000);
+    await request("head-1", 1, first._id);
+    expect((await list())![0]._id).toBe(first._id);
+  });
+
+  test("only the requester retries, and only on the guide's own pull request", async () => {
+    const { ctx, project, list, reportFailure, request, member } = await setupGuideRun();
+    const [guide] = (await list())!;
+    await reportFailure("Not a clone");
+    await expect(request("head-2", 2, guide._id)).rejects.toThrow("This guide is for another pull request");
+    const other = await member();
+    const profile = await ctx.cliProfile(other.user._id, project._id, { paths: [{ id: "repo", path: "/repo", label: "repo" }] });
+    await expect(
+      other.mutation(api.cli.threads.core.create, {
+        profileId: profile._id,
+        pathId: "repo",
+        cliType: "codex",
+        content: "Write a guide",
+        pullRequestUrl: "https://github.com/acme/repo-1/pull/1",
+        pullRequestGuide: { headSha: "head-1", retryGuideId: guide._id },
+      })
+    ).rejects.toThrow("Only the requester can retry a guide");
   });
 
   test("the retention purge deletes the project's guides", async () => {

@@ -28,22 +28,37 @@ async function readGuide(source: string): Promise<GuideFile> {
   return { headSha: guide.headSha, steps: guide.steps as GuideFile["steps"] };
 }
 
+type SubmitGuideOptions = OutputOptions & { failed?: boolean; note?: string };
+
+/** The Guide, or with `--failed` the reason the agent could not write one. */
+async function readSubmission(file: string | undefined, options: SubmitGuideOptions): Promise<GuideFile | { failure: string }> {
+  if (options.failed) {
+    const note = options.note?.trim();
+    if (!note) throw new Error("--failed needs --note <why>.");
+    return { failure: note };
+  }
+  if (file === undefined) throw new Error("Pass the guide file, or --failed --note <why>.");
+  return readGuide(file);
+}
+
 export const submitGuideCommand = addGlobalOptions(
   addOutputOptions(
     new Command("submit-guide")
-      .description("Submit the pull request Guide this thread was started to write")
+      .description("Submit the pull request Guide this thread was started to write, or report why it could not be written")
       .argument("<threadId>", "Thread ID of the Guide run")
-      .argument("<file>", 'Guide JSON: { "headSha", "steps" }, or - for stdin')
+      .argument("[file]", 'Guide JSON: { "headSha", "steps" }, or - for stdin')
+      .option("--failed", "The guide could not be written; give the reason with --note")
+      .option("--note <why>", "Why the guide could not be written")
   )
-).action(async (threadId: string, file: string, options: OutputOptions, cmd: Command) => {
+).action(async (threadId: string, file: string | undefined, options: SubmitGuideOptions, cmd: Command) => {
   await runOneShotCommand(cmd, async ({ client }) => {
-    const guide = await readGuide(file);
-    const result = await client.action(api.integrations.github.guides.submit, { threadId: parseId<"cliThreads">(threadId, "threadId"), ...guide });
+    const submission = await readSubmission(file, options);
+    const result = await client.action(api.integrations.github.guides.submit, { threadId: parseId<"cliThreads">(threadId, "threadId"), ...submission });
     if (result.status === "rejected") {
       throw new Error(`Convoy did not accept the guide. Fix these and submit again:\n${result.errors.map((error: string) => `- ${error}`).join("\n")}`);
     }
     printOutput(resolveOutputMode(options), result, () => {
-      console.log(chalk.green("✓") + " Guide submitted");
+      console.log(chalk.green("✓") + (options.failed ? " Guide marked failed" : " Guide submitted"));
       console.log();
     });
   });
