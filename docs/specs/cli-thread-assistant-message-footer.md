@@ -33,6 +33,9 @@ time at which the response becomes terminal in the product.
 ## Other run details
 
 - The footer continues to show the runtime icon and any available duration.
+- Duration reads `450ms` under a second, `4.2s` under a minute, then whole
+  units with zero units dropped: `5m 16s`, `1h`, `1h 2m 5s`. The popover's
+  Duration row uses the same format.
 - The run-details popover continues to expose available runtime metadata such
   as cost, reasoning effort, result, session, usage, and system initialization.
 - Omitting a run timestamp must not hide other available run details.

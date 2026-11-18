@@ -15,6 +15,7 @@ import {
   AccordionTrigger,
 } from "@/components/ui/accordion";
 import { formatUsd } from "@/lib/costs/cost-summary";
+import { formatDurationMs } from "@/lib/format-duration-ms";
 import {
   MessageFooterPopover,
   MessageFooterRow,
@@ -70,11 +71,6 @@ function stringifyJson(value: unknown): string {
   } catch {
     return String(value);
   }
-}
-
-function formatDuration(durationMs: number): string {
-  if (durationMs < 1000) return `${durationMs}ms`;
-  return `${(durationMs / 1000).toFixed(1)}s`;
 }
 
 function formatDate(timestamp: number): string {
@@ -173,7 +169,7 @@ export function RunStats({
   const trigger = (
     <MessageFooterTrigger aria-label="Run details">
       {cliType ? renderCliIcon(cliType as CliTypeSlug, "size-3.5") : null}
-      {durationMs !== undefined && <span>{formatDuration(durationMs)}</span>}
+      {durationMs !== undefined && <span>{formatDurationMs(durationMs)}</span>}
       {timestamp !== undefined && <span>{formatDate(timestamp)}</span>}
     </MessageFooterTrigger>
   );
@@ -194,7 +190,7 @@ export function RunStats({
       <MessageFooterRow label="Model" value={modelLabel} truncate />
       <MessageFooterRow label="Reasoning" value={effortLabel} truncate />
       {durationMs !== undefined && (
-        <MessageFooterRow label="Duration" value={formatDuration(durationMs)} />
+        <MessageFooterRow label="Duration" value={formatDurationMs(durationMs)} />
       )}
       {totalCostUsd !== undefined && (
         <MessageFooterRow label="Cost" value={formatUsd(totalCostUsd)} />
