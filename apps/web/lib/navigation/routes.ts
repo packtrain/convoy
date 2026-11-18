@@ -107,6 +107,11 @@ export function isProjectSettingsSection(
   return value !== undefined && PROJECT_SETTINGS_SECTION_SET.has(value);
 }
 
+/** The PR reader's tabs; the first is the default and stays out of the URL. */
+export const PULL_REQUEST_TABS = ["overview", "guide", "diff"] as const;
+
+export type PullRequestTab = (typeof PULL_REQUEST_TABS)[number];
+
 function withQuery(
   pathname: string,
   params: Record<string, string | null | undefined>
@@ -194,8 +199,19 @@ export const appRoute = {
     withQuery(`/o/${organizationSlug}/${projectAlias}/settings/integrations/github`, { setup: setupId }),
   projectPullRequests: (organizationSlug: string, projectAlias: string) =>
     routeTarget(`/o/${organizationSlug}/${projectAlias}/pull-requests`),
-  projectPullRequest: (organizationSlug: string, projectAlias: string, repositoryId: string, number: number) =>
-    withQuery(`/o/${organizationSlug}/${projectAlias}/pull-requests`, { repo: repositoryId, pr: String(number) }),
+  /** `tab` reopens a reader tab (docs/specs/github-integration.md). */
+  projectPullRequest: (
+    organizationSlug: string,
+    projectAlias: string,
+    repositoryId: string,
+    number: number,
+    tab?: PullRequestTab
+  ) =>
+    withQuery(`/o/${organizationSlug}/${projectAlias}/pull-requests`, {
+      repo: repositoryId,
+      pr: String(number),
+      tab: tab === "overview" ? undefined : tab,
+    }),
   projectUsage: (organizationSlug: string, projectAlias: string) =>
     routeTarget(`/o/${organizationSlug}/${projectAlias}/usage`),
   projectWatchTower: (organizationSlug: string, projectAlias: string) =>

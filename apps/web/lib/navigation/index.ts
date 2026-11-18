@@ -24,10 +24,12 @@ export {
   isNewThreadComposerTarget,
   parseWorktreeChangesTarget,
   PROJECT_SETTINGS_SECTIONS,
+  PULL_REQUEST_TABS,
 } from "./routes";
 export type {
   OrganizationSettingsSection,
   ProjectSettingsSection,
+  PullRequestTab,
   WorktreeChangesTarget,
 } from "./routes";
 export { useRouteParams } from "./use-route-params";

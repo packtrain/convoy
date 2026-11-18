@@ -20,6 +20,9 @@ describe("appRoute", () => {
     expect(href(appRoute.projectPullRequest("acme", "WEB", "repo_1", 42))).toBe(
       "/o/acme/WEB/pull-requests?repo=repo_1&pr=42"
     );
+    expect(href(appRoute.projectPullRequest("acme", "WEB", "repo_1", 42, "diff"))).toBe(
+      "/o/acme/WEB/pull-requests?repo=repo_1&pr=42&tab=diff"
+    );
     expect(href(appRoute.projectGithubIntegration("acme", "WEB"))).toBe("/o/acme/WEB/settings/integrations/github");
     expect(href(appRoute.projectGithubIntegration("acme", "WEB", "setup_1"))).toBe(
       "/o/acme/WEB/settings/integrations/github?setup=setup_1"

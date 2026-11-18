@@ -5,6 +5,7 @@ import { afterEach, beforeEach, describe, expect, test, vi } from "vitest";
 import { cleanup, fireEvent, render, screen } from "@testing-library/react";
 import { getFunctionName } from "convex/server";
 import { api } from "@/convex/_generated/api";
+import { appRoute } from "@/lib/navigation";
 import { PullRequestsPage } from "./pull-requests-page";
 import { DEV_SETTINGS, DEV_SETTING_ENABLED_VALUE } from "@/lib/dev-mode/constants";
 
@@ -37,6 +38,17 @@ vi.mock("convex/react", () => ({
 }));
 const loadHistory = vi.fn(async () => null);
 const search = vi.fn();
+const replace = vi.fn();
+// The reader has its own tests; this file checks only what the page hands it.
+vi.mock("./pull-request-reader", async (importActual) => ({
+  ...(await importActual<typeof import("./pull-request-reader")>()),
+  PullRequestReader: ({ defaultTab, onTabChange }: { defaultTab?: string; onTabChange?: (tab: string) => void }) => (
+    <div aria-label="Reader" data-tab={defaultTab}>
+      <button onClick={() => onTabChange?.("guide")}>Guide</button>
+      <button onClick={() => onTabChange?.("overview")}>Overview</button>
+    </div>
+  ),
+}));
 vi.mock("@/lib/preferences/use-user-preferences", () => ({ useUserPreferences: () => ({ pullRequestCompactLayout: false }) }));
 vi.mock("@/lib/auth/hooks", () => ({
   useAppConvexAuth: () => ({ isAuthenticated: true }),
@@ -47,7 +59,7 @@ vi.mock("@/lib/routing/current-org-project-context", () => ({ useCurrentOrgProje
 vi.mock("@/lib/navigation", async (importActual) => ({
   ...(await importActual<typeof import("@/lib/navigation")>()),
   useRouteParams: () => ({ organizationSlug: "org", projectAlias: "WEB" }),
-  useNavigation: () => ({ location: { pathname: "/o/org/WEB/pull-requests", search: locationSearch, hash: "" } }),
+  useNavigation: () => ({ location: { pathname: "/o/org/WEB/pull-requests", search: locationSearch, hash: "" }, replace }),
 }));
 
 afterEach(() => {
@@ -60,6 +72,7 @@ afterEach(() => {
   paginatedArgs.mockClear();
   listChecksArgs.mockClear();
   search.mockReset();
+  replace.mockReset();
 });
 
 function link(id: number, repository: Record<string, unknown>) {
@@ -256,6 +269,45 @@ describe("PullRequestsPage", () => {
     expect(screen.queryByTestId("pull-request-toolbar-skeleton")).toBeNull();
     expect(screen.getByLabelText("Pull request browser")).toBeTruthy();
     expect(screen.getByLabelText("Loading pull request")).toBeTruthy();
+  });
+
+  test("a PR link's tab loads with that tab's skeleton, not the Overview's", () => {
+    status = undefined;
+    locationSearch = "?repo=repo_1&pr=2&tab=guide";
+    render(<PullRequestsPage />);
+    expect(screen.getByLabelText("Loading guide")).toBeTruthy();
+    cleanup();
+    locationSearch = "?repo=repo_1&pr=2&tab=diff";
+    render(<PullRequestsPage />);
+    expect(screen.queryByLabelText("Loading guide")).toBeNull();
+    // The Diff tab's shape: summary toolbar, file sections of header plus lines, and the Files pane.
+    const changes = screen.getByLabelText("Loading changes");
+    expect(changes.querySelector('[data-slot="changes-toolbar"]')).toBeTruthy();
+    const sections = changes.querySelectorAll("section");
+    expect(sections.length).toBeGreaterThan(1);
+    for (const section of Array.from(sections)) {
+      expect(section.firstElementChild?.className).toContain("border-b");
+      expect(section.querySelectorAll('[data-slot="skeleton"]').length).toBeGreaterThan(4);
+    }
+    expect(screen.getByLabelText("Loading files").querySelectorAll("li").length).toBe(sections.length);
+  });
+
+  test("a PR link's tab opens that tab, and picking a tab puts it in the URL", () => {
+    locationSearch = "?repo=repo_1&pr=2&tab=diff";
+    status = connected({ syncStatus: "synced" });
+    render(<PullRequestsPage />);
+    expect(screen.getByLabelText("Reader").dataset.tab).toBe("diff");
+    fireEvent.click(screen.getByRole("button", { name: "Guide" }));
+    expect(replace).toHaveBeenCalledWith(appRoute.projectPullRequest("org", "WEB", "repo_1", 2, "guide"));
+    fireEvent.click(screen.getByRole("button", { name: "Overview" }));
+    expect(replace).toHaveBeenLastCalledWith(appRoute.projectPullRequest("org", "WEB", "repo_1", 2));
+  });
+
+  test("a PR link's unknown tab falls back to the reader's default", () => {
+    locationSearch = "?repo=repo_1&pr=2&tab=nope";
+    status = connected({ syncStatus: "synced" });
+    render(<PullRequestsPage />);
+    expect(screen.getByLabelText("Reader").dataset.tab).toBeUndefined();
   });
 
   test("once the toolbar is real, the first page's skeleton is the framed list alone", () => {

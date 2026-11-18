@@ -152,7 +152,11 @@ Label oversized, truncated, binary, or unavailable content accurately and
 provide a GitHub link. Do not render a missing patch as an empty change.
 
 The reader has Overview, Guide, and Diff tabs, laid out as in the
-playground prototype. Overview shows the description, the check cards, a folded Commits card, Activity, and properties: Status, referenced Tasks, Stack, Reviewers, Assignees, Labels, Milestone, and Branch. Changed
+playground prototype. On the PR page, the open tab is in the URL
+(`?tab=guide` or `?tab=diff`; Overview has none), so a refresh or a shared
+link opens it, and the page loads with that tab's skeleton. Picking a tab replaces the URL rather than adding a history
+entry. The thread sidebar's reader keeps its tab in memory, as its URL is the
+thread's. Overview shows the description, the check cards, a folded Commits card, Activity, and properties: Status, referenced Tasks, Stack, Reviewers, Assignees, Labels, Milestone, and Branch. Changed
 files live only in the Diff tab. The header's
 Merge status popover shows reviews, checks, behind-base, mergeability
 (including GitHub's `UNKNOWN` while it recomputes), and conflicts with a

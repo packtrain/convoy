@@ -109,9 +109,11 @@ These apply to every task, no exceptions.
     from `window.location.pathname`: the current page may be a thread, not the
     page you mean (OS-2325). A route `appRoute` lacks gets added there first.
 18. **A skeleton has the shape of what it replaces, in the current mode.**
-    Compact layout gets compact skeleton rows, cards get card rows, and a
-    page's header, tab row, and panes keep their places. One generic block
-    for a whole panel is wrong. See
+    Build it from the loaded UI: read that component's markup, or screenshot
+    it with real data, and copy its toolbars, headers, rows, and panes at
+    their real heights. Compact layout gets compact skeleton rows, cards get
+    card rows, and a page's header, tab row, and panes keep their places. A
+    single block standing in for a panel or tab is wrong. See
     [Frontend development → Loading states](docs/guidelines/frontend-development.md#loading-states).
 
 ## Working on Convoy tasks

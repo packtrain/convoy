@@ -579,10 +579,19 @@ An editor whose entity is missing renders `NotFoundState`
 (`components/blocks/not-found-state.tsx`) with a Back action instead of its own
 heading.
 
-Skeletons should roughly match the final layout: use row skeletons for lists,
-form-field skeletons for forms, and compact line/control skeletons for toolbars.
-This keeps project settings popups and dense operational surfaces from shifting
-or feeling unfinished while data loads.
+Skeletons match the final layout: use row skeletons for lists, form-field
+skeletons for forms, and compact line/control skeletons for toolbars. This
+keeps project settings popups and dense operational surfaces from shifting or
+feeling unfinished while data loads.
+
+Build a skeleton from the loaded UI, not from memory. Read the component it
+replaces, or screenshot that component with real data filled in, then copy its
+structure: the same toolbars, section headers, rows, and side panes, at their
+real heights and inside the same containers. The PR reader's Diff skeleton
+(`PullRequestChangesSkeleton`) is the example: the summary toolbar, file
+sections with their header and a few code lines, and the Files pane. A single
+`Skeleton` block standing in for a panel or tab is wrong, however short the
+load.
 
 A skeleton follows the same layout switches as the content it stands for. If
 rows render as cards or as compact lines depending on a preference, the

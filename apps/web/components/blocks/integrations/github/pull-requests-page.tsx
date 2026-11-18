@@ -24,7 +24,7 @@ import {
 import { Skeleton } from "@/components/ui/skeleton";
 import { useAppConvexAuth } from "@/lib/auth/hooks";
 import { useGithubIntegrationEnabled } from "@/lib/dev-mode/use-dev-mode";
-import { AppLink, appRoute, useNavigation, useRouteParams } from "@/lib/navigation";
+import { AppLink, appRoute, PULL_REQUEST_TABS, useNavigation, useRouteParams } from "@/lib/navigation";
 import { useCurrentOrgProject } from "@/lib/routing/current-org-project-context";
 import { NoAccess } from "@/components/blocks/no-access";
 import { PullRequestCheckIcons, usePullRequestListChecks } from "@/components/blocks/checks";
@@ -70,6 +70,7 @@ function PullRequests() {
   const params = new URLSearchParams(navigation.location.search);
   const repositoryId = params.get("repo");
   const number = Number(params.get("pr"));
+  const tab = PULL_REQUEST_TABS.find((name) => name === params.get("tab"));
 
   if (project === null) {
     return <NoAccess organizationSlug={organizationSlug} message="You don't have access to this project." />;
@@ -84,7 +85,7 @@ function PullRequests() {
         {!projectId || status === undefined ? (
           <>
             <PullRequestBrowserSkeleton />
-            <PullRequestReaderSkeleton />
+            <PullRequestReaderSkeleton tab={tab} />
           </>
         ) : (
           <>
@@ -111,6 +112,10 @@ function PullRequests() {
               hrefFor={prHref}
               organizationSlug={organizationSlug}
               projectAlias={projectAlias}
+              defaultTab={tab}
+              onTabChange={(next) =>
+                navigation.replace(appRoute.projectPullRequest(organizationSlug, projectAlias, repositoryId, number, next))
+              }
             />
           </>
         )}

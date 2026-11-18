@@ -230,3 +230,68 @@ function WholeFile({
     </div>
   );
 }
+
+// Line widths per placeholder file, so sections differ the way real files do.
+const SKELETON_FILES = [
+  { path: "w-28", lines: ["w-2/3", "w-1/2"] },
+  { path: "w-36", lines: ["w-1/2", "w-3/5", "w-2/3", "w-0", "w-1/4", "w-2/5"] },
+  { path: "w-24", lines: ["w-1/2", "w-2/5", "w-3/5"] },
+];
+
+/** The Diff tab's outline while the diff loads: summary toolbar, file sections, and the Files pane. */
+export function PullRequestChangesSkeleton() {
+  const isMobile = useIsMobile();
+  return (
+    <ThreadWorkspaceSplitPane
+      isSidebarOpen={!isMobile}
+      onCloseSidebar={() => {}}
+      sidebarTitle="Files"
+      sidebarHeader={<div className="flex h-[41px] items-center border-b px-3 text-xs font-medium">Files</div>}
+      sidebarContent={
+        <ul aria-label="Loading files" className="py-1">
+          {SKELETON_FILES.map((file, index) => (
+            <li key={index} className="flex h-7 items-center gap-1.5 pr-3 pl-3">
+              <Skeleton className="size-4" />
+              <Skeleton className={`h-3.5 ${file.path}`} />
+              <Skeleton className="ml-auto h-3 w-10" />
+            </li>
+          ))}
+        </ul>
+      }
+    >
+      <div aria-label="Loading changes" className="flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden">
+        <div data-slot="changes-toolbar" className="flex h-[41px] shrink-0 items-center gap-3 border-b bg-card px-4">
+          <Skeleton className="h-3 w-12" />
+          <Skeleton className="h-3 w-14" />
+          <Skeleton className="h-3 w-24" />
+          <div className="ml-auto flex items-center gap-1">
+            <Skeleton className="size-6" />
+            <Skeleton className="size-6" />
+            <Skeleton className="size-6" />
+          </div>
+        </div>
+        <div className="min-h-0 flex-1 overflow-hidden">
+          {SKELETON_FILES.map((file, index) => (
+            <section key={index}>
+              <div className="flex h-[37px] items-center gap-1.5 border-b px-2">
+                <Skeleton className="size-3.5" />
+                <Skeleton className={`h-3 ${file.path}`} />
+                <Skeleton className="ml-auto h-3 w-10" />
+                <Skeleton className="ml-2 h-3.5 w-20" />
+                <Skeleton className="size-6" />
+              </div>
+              <div className="py-2">
+                {file.lines.map((width, line) => (
+                  <div key={line} className="flex h-5 items-center gap-4 px-4">
+                    <Skeleton className="h-3 w-3" />
+                    {width === "w-0" ? null : <Skeleton className={`h-3 ${width}`} />}
+                  </div>
+                ))}
+              </div>
+            </section>
+          ))}
+        </div>
+      </div>
+    </ThreadWorkspaceSplitPane>
+  );
+}

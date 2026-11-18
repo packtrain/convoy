@@ -486,7 +486,7 @@ function GuideSteps({
 }
 
 /** Two columns, as the steps lay out once they load. */
-function GuideSkeleton() {
+export function GuideSkeleton() {
   return (
     <div aria-label="Loading guide" className="lg:grid lg:grid-cols-[440px_minmax(0,1fr)]">
       <div className="space-y-3 px-5 pt-6 md:px-8">

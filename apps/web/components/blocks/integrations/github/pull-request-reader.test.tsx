@@ -158,9 +158,10 @@ const overview = {
   milestone: null,
 };
 
-function reader() {
+function reader(props: Partial<React.ComponentProps<typeof PullRequestReader>> = {}) {
   return (
     <PullRequestReader
+      {...props}
       projectId={"project_1" as Id<"projects">}
       repositoryId="repo_1"
       number={7}
@@ -183,6 +184,18 @@ async function openDiff() {
   await waitFor(() => expect(screen.getByText(/\+search\(\)/)).toBeTruthy());
   return view;
 }
+
+describe("PullRequestReader tabs", () => {
+  test("opens on the tab it is given and reports each tab picked", async () => {
+    const onTabChange = vi.fn();
+    render(reader({ defaultTab: "diff", onTabChange }));
+    expect(screen.getByRole("tab", { name: "Diff" }).getAttribute("aria-selected")).toBe("true");
+    await waitFor(() => expect(screen.getByText(/\+search\(\)/)).toBeTruthy());
+    openTab("Overview");
+    expect(onTabChange).toHaveBeenCalledWith("overview");
+    expect(screen.getByRole("tab", { name: "Overview" }).getAttribute("aria-selected")).toBe("true");
+  });
+});
 
 describe("PullRequestReader diff", () => {
   test("renders GitHub's files, labels a missing patch, and keeps the diff when new commits land", async () => {

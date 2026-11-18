@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useState, type ReactNode } from "react";
 import { useAction, useQuery } from "convex/react";
 import { useHotkey } from "@tanstack/react-hotkeys";
 import { ArrowUpRight, GitPullRequest, RefreshCw, RotateCcw } from "lucide-react";
@@ -15,10 +15,10 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { PR_STACK_LAYER_ABOVE_HOTKEY, PR_STACK_LAYER_BELOW_HOTKEY } from "@/lib/browser/hotkeys";
 import { getErrorMessage } from "@/lib/errors";
-import { useNavigation, type RouteTarget } from "@/lib/navigation";
+import { PULL_REQUEST_TABS, useNavigation, type PullRequestTab, type RouteTarget } from "@/lib/navigation";
 import type { DiffState } from "./github-patch";
-import { PullRequestChanges } from "./pull-request-changes";
-import { GuideMenu, PullRequestGuideTab, usePullRequestGuides } from "./pull-request-guide";
+import { PullRequestChanges, PullRequestChangesSkeleton } from "./pull-request-changes";
+import { GuideMenu, GuideSkeleton, PullRequestGuideTab, usePullRequestGuides } from "./pull-request-guide";
 import { MergeStatus } from "./pull-request-merge-status";
 import { PullRequestOverviewSkeleton, PullRequestOverviewTab, type OverviewState } from "./pull-request-overview";
 import { StackBadge, useStackLayers } from "./pull-request-stack";
@@ -49,6 +49,8 @@ export function PullRequestReader({
   organizationSlug,
   projectAlias,
   stackHotkeys = true,
+  defaultTab = "overview",
+  onTabChange,
 }: {
   projectId: Id<"projects">;
   repositoryId: string;
@@ -59,6 +61,9 @@ export function PullRequestReader({
   projectAlias: string;
   /** Off in the thread sidebar, where Shift+K/J would leave the thread. */
   stackHotkeys?: boolean;
+  defaultTab?: PullRequestTab;
+  /** The PR page mirrors the tab into its URL. */
+  onTabChange?: (tab: PullRequestTab) => void;
 }) {
   const args = { projectId, repositoryId, number };
   const result = useQuery(api.integrations.github.pullRequests.get, args);
@@ -69,7 +74,7 @@ export function PullRequestReader({
   const stored = result?.pullRequest ?? null;
   const marks = useReviewedMarks(repositoryId, number);
   const navigation = useNavigation();
-  const [tab, setTab] = useState("overview");
+  const [tab, setTab] = useState<PullRequestTab>(defaultTab);
   // Bumped by Refresh/Retry; a held result for an older request reads as loading.
   const [request, setRequest] = useState(0);
   // `seen` is the stored revision when the diff arrived; it may lag the live diff.
@@ -196,7 +201,16 @@ export function PullRequestReader({
           </Button>
         ) : null}
       </header>
-      <Tabs value={tab} onValueChange={setTab} className="min-h-0 flex-1 gap-0">
+      <Tabs
+        value={tab}
+        onValueChange={(value) => {
+          const next = PULL_REQUEST_TABS.find((name) => name === value);
+          if (!next) return;
+          setTab(next);
+          onTabChange?.(next);
+        }}
+        className="min-h-0 flex-1 gap-0"
+      >
         <div className="flex h-[41px] shrink-0 items-center justify-between gap-2 border-b px-4">
           <TabsList variant="underline" className="w-auto border-b-0" aria-label="Pull request content">
             <TabsTrigger value="overview">Overview</TabsTrigger>
@@ -251,7 +265,7 @@ export function PullRequestReader({
           />
         </TabsContent>
         <TabsContent value="diff" className="flex min-h-0 flex-1 flex-col gap-0">
-          {diffState.kind === "loading" ? <Skeleton className="m-4 h-48 rounded-lg" aria-label="Loading changes" /> : null}
+          {diffState.kind === "loading" ? <PullRequestChangesSkeleton /> : null}
           {diffState.kind === "error" ? (
             <div className="m-4 flex items-center gap-3 rounded-md border px-3 py-2 text-sm text-destructive">
               <span className="flex-1">{diffState.message}</span>
@@ -269,8 +283,27 @@ export function PullRequestReader({
   );
 }
 
-/** The reader's header, tab row, and Overview, outlined until the PR loads. */
-export function PullRequestReaderSkeleton() {
+/** Each tab's body while the PR loads, in the wrapper its `TabsContent` uses. */
+const TAB_SKELETONS: Record<PullRequestTab, ReactNode> = {
+  overview: (
+    <div className="@container overflow-auto">
+      <PullRequestOverviewSkeleton />
+    </div>
+  ),
+  guide: (
+    <div className="overflow-auto">
+      <GuideSkeleton />
+    </div>
+  ),
+  diff: (
+    <div className="flex min-h-0 flex-1 flex-col">
+      <PullRequestChangesSkeleton />
+    </div>
+  ),
+};
+
+/** The reader's header, tab row, and the open tab, outlined until the PR loads. */
+export function PullRequestReaderSkeleton({ tab = "overview" }: { tab?: PullRequestTab }) {
   return (
     <div aria-label="Loading pull request" className="flex min-h-0 min-w-0 flex-1 flex-col">
       <header className="flex h-14 shrink-0 items-center gap-3 border-b px-4">
@@ -282,9 +315,7 @@ export function PullRequestReaderSkeleton() {
         <Skeleton className="h-4 w-12" />
         <Skeleton className="h-4 w-10" />
       </div>
-      <div className="@container overflow-auto">
-        <PullRequestOverviewSkeleton />
-      </div>
+      {TAB_SKELETONS[tab]}
     </div>
   );
 }
