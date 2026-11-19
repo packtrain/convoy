@@ -4,7 +4,7 @@ Planning specification for OS-1852 under OS-1371. Product decisions below
 are accepted from the planning interviews; the second one (2026-10-24 to
 2026-10-26) widened the scope from read-only browsing to the full feature set
 designed in the [playground prototype](playground-github-integration.md).
-Slices 1 (OS-2178), 2 (OS-2179), 3 (OS-2180), 4 (OS-2181), 6 (OS-2183), 7 (OS-2184), 8 (OS-2185), and 9 (OS-2186) are implemented; see
+Slices 1 (OS-2178), 2 (OS-2179), 3 (OS-2180), 4 (OS-2181), 6 (OS-2183), 6.1 (OS-2434), 7 (OS-2184), 8 (OS-2185), and 9 (OS-2186) are implemented; see
 [As built](#as-built). The other technical defaults are still proposals.
 
 ## Scope
@@ -1626,8 +1626,8 @@ Slice 6 (OS-2183).
   Connect, or Reconnect GitHub. The GitHub page's Your GitHub account section
   shows the same row for its organization to every member. Activity's
   composer opens on the thread side, as in the task sidebar, with "Add
-  comment..." as its trigger for the comment side (`CommentInput` without its
-  attach button, "Leave a comment on GitHub..."); Fix and the Threads "+"
+  comment..." as its trigger for the comment side (`CommentInput`, "Leave a
+  comment on GitHub..."); Fix and the Threads "+"
   switch back to the thread side. Without a link
   the trigger reads "Connect GitHub to comment...", with a revoked one
   "Reconnect GitHub to comment...", and for an account with no access on
@@ -1638,6 +1638,23 @@ Slice 6 (OS-2183).
   and another member signing in on the same browser never sees it. The
   GitHub account id identifies the member, since one GitHub account links to
   one member per organization.
+- **Attachments and @mentions** (OS-2434). GitHub's API can't upload comment
+  attachments, so the comment side has no attach button and a pasted image
+  does nothing, until Convoy hosts the file and links it (OS-2172). A button
+  that only explains it can't attach is a dead end. Typing `@` at the start of a
+  word opens a picker over the PR's people, from the Overview the reader
+  already holds: the author, reviewers, assignees, then commenters, the
+  viewer among them (on a PR nobody else touched, they are the only one).
+  Bots and requested teams aren't offered. A query nobody matches shows "No
+  matches for @query", and Enter still sends. Picking one inserts `@login `,
+  which GitHub turns into a mention. Arrow keys move, Enter or Tab picks, and
+  Escape closes it until a new `@` is typed. Convoy members without a Linked
+  GitHub account aren't offered, and no read is added. Comment and description
+  bodies show `@login` in bold, as GitHub does, except inside code, links, and
+  email addresses. So does the composer while typing: a textarea can't style
+  its text, so its text goes transparent over a copy that draws each `@login`
+  with a text stroke, which keeps letter widths, and with them the caret, in
+  place.
 
 ### State actions and bulk actions
 
@@ -2027,8 +2044,8 @@ the agreed priority.
    authorization per organization, Reconnect, access-based disabling, and
    conversation comments with edit and delete: the comment side of the
    Activity composer, and "Connect GitHub to comment..." without an
-   account. The comment side has no attach button and no @mention picker.
-   Follow-ups: attachments and @mentions (6.1, OS-2434), You filters (6.2,
+   account. Follow-ups: @mentions (6.1, built, OS-2434; attachments wait for OS-2172; see
+   [Linked GitHub accounts and comments](#linked-github-accounts-and-comments)), You filters (6.2,
    OS-2435), and Convoy names for linked GitHub users (6.3, OS-2436).
 7. **State actions** (built, OS-2184; see
    [State actions and bulk actions](#state-actions-and-bulk-actions)). Close, reopen, draft, ready for review, assign, archive

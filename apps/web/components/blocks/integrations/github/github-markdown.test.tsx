@@ -33,4 +33,10 @@ describe("GithubMarkdown (OS-2403)", () => {
 
     expect(screen.getByText("2").tagName).toBe("SUP");
   });
+
+  test("an @mention is bold, as on GitHub; an email, code, and a link aren't", () => {
+    const { container } = render(<GithubMarkdown>{"cc @octo-cat, (@sam) me@example.com `@code` [@link](https://x.dev)"}</GithubMarkdown>);
+
+    expect([...container.querySelectorAll('[data-streamdown="strong"]')].map((strong) => strong.textContent)).toEqual(["@octo-cat", "@sam"]);
+  });
 });

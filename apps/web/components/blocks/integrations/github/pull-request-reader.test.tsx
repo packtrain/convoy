@@ -136,7 +136,7 @@ vi.mock("@/lib/auth/hooks", () => ({ useAppUser: () => ({ user: null }) }));
 vi.mock("@/lib/threads/hooks/use-diff-theme", () => ({ useDiffTheme: () => ({}) }));
 // Radix shows the image only after it loads, which jsdom never does.
 vi.mock("@/components/ui/avatar", () => ({
-  Avatar: ({ children }: { children: React.ReactNode }) => <span>{children}</span>,
+  Avatar: ({ children, "aria-hidden": hidden }: { children: React.ReactNode; "aria-hidden"?: boolean }) => <span aria-hidden={hidden}>{children}</span>,
   // eslint-disable-next-line @next/next/no-img-element -- stands in for Radix's own <img>
   AvatarImage: ({ src }: { src?: string }) => (src ? <img alt="" src={src} /> : null),
   AvatarFallback: ({ children }: { children: React.ReactNode }) => <span>{children}</span>,
@@ -822,10 +822,9 @@ describe("PullRequestReader GitHub comments (OS-2183)", () => {
     render(connected());
     await screen.findByText("Nice work");
 
-    // The comment side is a trigger away, without an attach button.
+    // The comment side is a trigger away.
     fireEvent.click(screen.getByRole("button", { name: "Add comment..." }));
     const input = screen.getByPlaceholderText("Leave a comment on GitHub...");
-    expect(screen.queryByRole("button", { name: "Attach file" })).toBeNull();
     fireEvent.change(input, { target: { value: "Ship it" } });
     fireEvent.click(screen.getByRole("button", { name: "Send comment" }));
 
@@ -834,6 +833,48 @@ describe("PullRequestReader GitHub comments (OS-2183)", () => {
     expect(readPermission).toHaveBeenCalledTimes(1);
     // Only the viewer's own comment can be edited or deleted.
     expect(screen.getAllByRole("button", { name: "Comment actions" })).toHaveLength(1);
+  });
+
+  test("@ offers the PR's people, and there's no attach button until Convoy can host the file", async () => {
+    linkedAs({ login: "maya", githubUserId: 42, status: "active" });
+    readOverview.mockResolvedValue({
+      ...overview,
+      requestedReviewers: ["sam"],
+      assignees: [{ login: "jo", avatarUrl: null }],
+      comments: [...overview.comments, { ...overview.comments[0], id: 3, author: "vercel[bot]", authorId: 5, body: "Deployed" }],
+    });
+    const { container } = render(connected());
+    await screen.findByText("Nice work");
+    fireEvent.click(screen.getByRole("button", { name: "Add comment..." }));
+    const input = screen.getByPlaceholderText("Leave a comment on GitHub...") as HTMLTextAreaElement;
+
+    input.focus();
+    fireEvent.change(input, { target: { value: "@", selectionStart: 1, selectionEnd: 1 } });
+    // The author, reviewers, assignees, then commenters, the viewer (maya) among them; never a bot.
+    expect(within(screen.getByRole("listbox", { name: "Mention" })).getAllByRole("option").map((option) => option.lastChild?.textContent)).toEqual([
+      "octocat",
+      "maya",
+      "sam",
+      "jo",
+      "alex",
+    ]);
+    fireEvent.click(screen.getByRole("option", { name: "alex" }));
+    expect(input.value).toBe("@alex ");
+
+    expect(screen.queryByRole("button", { name: "Attach file" })).toBeNull();
+    expect(container.querySelector('input[type="file"]')).toBeNull();
+  });
+
+  test("@ offers someone whose review was dismissed, and a requested team's name never hides a user", async () => {
+    linkedAs({ login: "maya", githubUserId: 42, status: "active" });
+    readOverview.mockResolvedValue({ ...overview, reviews: [{ ...overview.reviews[0], author: "dana", state: "dismissed" }], requestedTeams: ["alex"] });
+    render(connected());
+    await screen.findByText("Nice work");
+    fireEvent.click(screen.getByRole("button", { name: "Add comment..." }));
+    const input = screen.getByPlaceholderText("Leave a comment on GitHub...") as HTMLTextAreaElement;
+    input.focus();
+    fireEvent.change(input, { target: { value: "@", selectionStart: 1, selectionEnd: 1 } });
+    expect(screen.getAllByRole("option").map((option) => option.lastChild?.textContent)).toEqual(["octocat", "dana", "alex"]);
   });
 
   test("the author edits and deletes their own comment on GitHub", async () => {
