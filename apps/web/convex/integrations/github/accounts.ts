@@ -413,6 +413,38 @@ export async function withUserToken<T>(
   }
 }
 
+/**
+ * Runs `write` as the caller on a PR in the project's connected repository.
+ * GitHub refusing it reads as `refused`; `refresh` resyncs the stored PR afterwards.
+ */
+export async function writeAs<T>(
+  ctx: ActionCtx,
+  args: { projectId: Id<"projects">; repositoryId: string; number: number },
+  write: (token: string, repository: string, githubUserId: number, names: { owner: string; name: string }) => Promise<T>,
+  { refused, refresh = false }: { refused: string; refresh?: boolean }
+): Promise<T> {
+  const live = await ctx.runQuery(internal.integrations.github.pullRequests.getReadableContext, args);
+  if (!live) throw new ConvexError(errors.NOT_CONNECTED);
+  const repository = `/repositories/${live.context.providerRepositoryId}`;
+  const result = await withUserToken(ctx, live.organizationId, (token, githubUserId) => write(token, repository, githubUserId, live)).catch(
+    (error: unknown) => {
+      if (error instanceof GithubError && !error.rateLimited && [403, 404, 410, 422].includes(error.status ?? 0)) {
+        throw new ConvexError(refused);
+      }
+      throw toUserError(error);
+    }
+  );
+  if (refresh) {
+    await ctx.scheduler.runAfter(0, internal.integrations.github.sync.syncRepository, {
+      repositoryId: live.repositoryId,
+      repositoryLinkId: live.repositoryLinkId,
+      generation: live.generation,
+      target: { kind: "pullRequest", number: args.number },
+    });
+  }
+  return result;
+}
+
 const repositoryPermissionValidator = v.union(
   v.literal("none"),
   v.literal("read"),

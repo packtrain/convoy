@@ -21,12 +21,22 @@ const readPermission = vi.fn();
 const createComment = vi.fn();
 const updateComment = vi.fn();
 const removeComment = vi.fn();
+const updateState = vi.fn();
+const listAssignable = vi.fn();
+const updateAssignee = vi.fn();
 const beginLink = vi.fn();
 const readOverview = vi.fn();
 const readFile = vi.fn();
 const push = vi.fn();
 
 const name = (fn: Parameters<typeof getFunctionName>[0]) => getFunctionName(fn);
+
+// cmdk, behind the Assignees picker, measures its list.
+globalThis.ResizeObserver ??= class {
+  observe() {}
+  unobserve() {}
+  disconnect() {}
+} as unknown as typeof ResizeObserver;
 
 vi.mock("convex/react", () => ({
   useQuery: (fn: Parameters<typeof getFunctionName>[0], args: unknown) => {
@@ -52,6 +62,10 @@ vi.mock("convex/react", () => ({
       [name(api.integrations.github.comments.create)]: createComment,
       [name(api.integrations.github.comments.update)]: updateComment,
       [name(api.integrations.github.comments.remove)]: removeComment,
+      [name(api.integrations.github.states.update)]: updateState,
+      [name(api.integrations.github.assignees.list)]: listAssignable,
+      [name(api.integrations.github.assignees.update)]: updateAssignee,
+      [name(api.integrations.github.assignees.clear)]: vi.fn(),
     })[name(fn)],
   useConvex: () => ({}),
 }));
@@ -384,6 +398,7 @@ describe("PullRequestReader overview layout", () => {
       ["Status", "Open"],
       ["Tasks", "—"],
       ["Reviewers", "—"],
+      ["Assignees", "—"],
       ["Branch", "Up to date with main"],
     ]);
     expect(within(properties).getByText("Up to date with main").querySelector(".lucide-circle-check")).toBeTruthy();
@@ -792,6 +807,144 @@ describe("PullRequestReader GitHub comments (OS-2183)", () => {
     const trigger = await screen.findByRole("button", { name: "@maya has no access to this repository on GitHub" });
     expect((trigger as HTMLButtonElement).disabled).toBe(true);
     expect(screen.queryByPlaceholderText("Leave a comment on GitHub...")).toBeNull();
+  });
+
+  const openMenu = async (label: string) => {
+    fireEvent.pointerDown(await screen.findByRole("button", { name: label }), { button: 0, pointerType: "mouse" });
+    return screen.findByRole("menu");
+  };
+
+  test("an open PR's More actions run on GitHub as the member", async () => {
+    linkedAs({ login: "maya", githubUserId: 42, status: "active" });
+    readPermission.mockResolvedValue("write");
+    updateState.mockResolvedValue(null);
+    render(connected());
+    await screen.findByText("Nice work");
+
+    const menu = await openMenu("More actions");
+    expect(within(menu).getAllByRole("menuitem").map((item) => item.textContent)).toEqual(["Convert to draft", "Close pull request", "Archive"]);
+    fireEvent.click(within(menu).getByRole("menuitem", { name: "Close pull request" }));
+    await waitFor(() => expect(updateState).toHaveBeenCalledWith({ projectId: "project_1", repositoryId: "repo_1", number: 7, change: "close" }));
+  });
+
+  test("actions GitHub's role doesn't allow stay visible, disabled with the reason", async () => {
+    linkedAs({ login: "maya", githubUserId: 42, status: "active" });
+    readPermission.mockResolvedValue("triage");
+    stored = { pullRequest: { ...pullRequest, draft: true } };
+    render(connected());
+    await screen.findByText("Nice work");
+
+    await waitFor(() => expect((screen.getByRole("button", { name: "Ready for review" }) as HTMLButtonElement).disabled).toBe(true));
+    expect(screen.getByRole("button", { name: "Ready for review" }).parentElement?.title).toBe("Needs write access");
+    const menu = await openMenu("More actions");
+    expect(within(menu).getByRole("menuitem", { name: "Close pull request" }).getAttribute("aria-disabled")).toBeNull();
+
+    readPermission.mockResolvedValue("read");
+    cleanup();
+    render(connected());
+    const closeItem = within(await openMenu("More actions")).getByRole("menuitem", { name: /Close pull request/ });
+    await waitFor(() => expect(closeItem.textContent).toBe("Close pull requestNeeds triage access"));
+    expect(closeItem.getAttribute("aria-disabled")).toBe("true");
+  });
+
+  test("without a Linked GitHub account the actions ask to connect first", async () => {
+    linkedAs(null);
+    stored = { pullRequest: { ...pullRequest, state: "closed" } };
+    render(connected());
+    const reopen = await screen.findByRole("button", { name: "Reopen" });
+    expect((reopen as HTMLButtonElement).disabled).toBe(true);
+    expect(reopen.parentElement?.title).toBe("Connect GitHub first");
+  });
+
+  test("an Archived PR offers only Unarchive and locks its conversation", async () => {
+    linkedAs({ login: "alex", githubUserId: 2, status: "active" });
+    stored = { pullRequest: { ...pullRequest, state: "closed", archived: true } };
+    render(connected());
+    await screen.findByText("Nice work");
+
+    expect(screen.getByRole("button", { name: "Unarchive" })).toBeTruthy();
+    expect(screen.queryByRole("button", { name: "More actions" })).toBeNull();
+    expect((screen.getByRole("button", { name: "This pull request is archived. Unarchive it to comment." }) as HTMLButtonElement).disabled).toBe(true);
+    // alex wrote the comment, but an archived conversation can't be edited.
+    expect(screen.queryByRole("button", { name: "Comment actions" })).toBeNull();
+  });
+
+  test("Status is a select of the states GitHub can move the PR to", async () => {
+    linkedAs({ login: "maya", githubUserId: 42, status: "active" });
+    readPermission.mockResolvedValue("triage");
+    updateState.mockResolvedValue(null);
+    stored = { pullRequest: { ...pullRequest, draft: true } };
+    render(connected());
+    await screen.findByText("Nice work");
+
+    const properties = screen.getByRole("complementary", { name: "Pull request properties" });
+    fireEvent.pointerDown(within(properties).getByRole("button", { name: "Status: Draft" }), { button: 0, pointerType: "mouse" });
+    const menu = await screen.findByRole("menu");
+    const items = within(menu).getAllByRole("menuitemradio");
+    expect(items.map((item) => item.textContent)).toEqual(["Draft", "OpenNeeds write access", "Closed", "Archived"]);
+    expect(items[0].getAttribute("aria-checked")).toBe("true");
+    await waitFor(() => expect(items[1].getAttribute("aria-disabled")).toBe("true"));
+    fireEvent.click(within(menu).getByRole("menuitemradio", { name: "Closed" }));
+    await waitFor(() => expect(updateState).toHaveBeenCalledWith({ projectId: "project_1", repositoryId: "repo_1", number: 7, change: "close" }));
+  });
+
+  test("an Archived PR's Status offers its state back, which unarchives it", async () => {
+    linkedAs({ login: "maya", githubUserId: 42, status: "active" });
+    readPermission.mockResolvedValue("triage");
+    updateState.mockResolvedValue(null);
+    stored = { pullRequest: { ...pullRequest, state: "closed", archived: true } };
+    render(connected());
+    await screen.findByText("Nice work");
+
+    const properties = screen.getByRole("complementary", { name: "Pull request properties" });
+    fireEvent.pointerDown(within(properties).getByRole("button", { name: "Status: Archived" }), { button: 0, pointerType: "mouse" });
+    const menu = await screen.findByRole("menu");
+    expect(within(menu).getAllByRole("menuitemradio").map((item) => item.textContent)).toEqual(["Archived", "Closed"]);
+    fireEvent.click(within(menu).getByRole("menuitemradio", { name: "Closed" }));
+    await waitFor(() => expect(updateState).toHaveBeenCalledWith({ projectId: "project_1", repositoryId: "repo_1", number: 7, change: "unarchive" }));
+  });
+
+  test("Assignees picks from GitHub's assignable people and shows GitHub's answer", async () => {
+    linkedAs({ login: "maya", githubUserId: 42, status: "active" });
+    readPermission.mockResolvedValue("triage");
+    // GitHub searches; "sam" is past the first page.
+    listAssignable.mockImplementation(({ query }: { query?: string }) =>
+      Promise.resolve(query === "sa" ? [{ login: "sam", avatarUrl: null }] : [{ login: "maya", avatarUrl: null }])
+    );
+    updateAssignee.mockResolvedValue([{ login: "sam", avatarUrl: null }]);
+    render(connected());
+    await screen.findByText("Nice work");
+
+    await waitFor(() => expect((screen.getByRole("button", { name: "Edit assignees" }) as HTMLButtonElement).disabled).toBe(false));
+    fireEvent.click(screen.getByRole("button", { name: "Edit assignees" }));
+    // The task Status dropdown's search input.
+    const search = await screen.findByPlaceholderText("Search people...");
+    await screen.findByRole("button", { name: "maya, not assigned" });
+    fireEvent.change(search, { target: { value: "sa" } });
+    fireEvent.click(await screen.findByRole("button", { name: "sam, not assigned" }));
+    expect(listAssignable).toHaveBeenLastCalledWith({ projectId: "project_1", repositoryId: "repo_1", number: 7, query: "sa" });
+    expect(screen.queryByRole("button", { name: "maya, not assigned" })).toBeNull();
+    expect(updateAssignee).toHaveBeenCalledWith({ projectId: "project_1", repositoryId: "repo_1", number: 7, login: "sam", assigned: true });
+    const properties = screen.getByRole("complementary", { name: "Pull request properties" });
+    expect(await within(properties).findByText("sam")).toBeTruthy();
+  });
+
+  test("Assignees waits for GitHub's answer before taking another edit", async () => {
+    linkedAs({ login: "maya", githubUserId: 42, status: "active" });
+    readPermission.mockResolvedValue("triage");
+    listAssignable.mockResolvedValue([{ login: "sam", avatarUrl: null }]);
+    let answer!: (assignees: unknown[]) => void;
+    updateAssignee.mockReturnValue(new Promise((resolve) => (answer = resolve)));
+    render(connected());
+    await screen.findByText("Nice work");
+
+    const edit = () => screen.getByRole("button", { name: "Edit assignees" }) as HTMLButtonElement;
+    await waitFor(() => expect(edit().disabled).toBe(false));
+    fireEvent.click(edit());
+    fireEvent.click(await screen.findByRole("button", { name: "sam, not assigned" }));
+    await waitFor(() => expect(edit().disabled).toBe(true));
+    await act(async () => answer([{ login: "sam", avatarUrl: null }]));
+    expect(edit().disabled).toBe(false);
   });
 
   test("a comment draft survives Reconnect and the round trip to GitHub", async () => {

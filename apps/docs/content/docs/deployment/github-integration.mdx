@@ -3,7 +3,7 @@ title: GitHub Integration
 description: Register a GitHub App so projects can connect a repository and browse its pull requests.
 ---
 
-Projects connect one GitHub.com repository under **Project settings → Integrations**. Every project member, viewers included, can then read its open pull requests and their diffs on the project's **Pull Requests** page. Convoy reads with the App's installation credentials, so reading needs no GitHub account; commenting uses each member's own, linked under [Link your GitHub account](#link-your-github-account).
+Projects connect one GitHub.com repository under **Project settings → Integrations**. Every project member, viewers included, can then read its open pull requests and their diffs on the project's **Pull Requests** page. Convoy reads with the App's installation credentials, so reading needs no GitHub account; commenting and other changes use each member's own, linked under [Link your GitHub account](#link-your-github-account).
 
 Without the variables below, the GitHub integration page says GitHub isn't set up and the rest of Convoy works as usual. Local-demo deployments always show GitHub as unavailable: they have no signed-in user to bind a connection to.
 
@@ -76,4 +76,4 @@ Use a separate App per deployment (dev, preview, production), each with its own 
 
 ## Link your GitHub account
 
-To comment on pull requests, each member links their own GitHub account once per Convoy organization: **Profile settings → Connected accounts → Connect**, the **Your GitHub account** row on the project's GitHub page, or **Connect GitHub to comment...** on a pull request. GitHub asks them to authorize the App, then returns them to where they started. Comments then post as that account, with whatever access GitHub gives it on the repository. **Disconnect** unlinks it and revokes Convoy's token. Leaving the organization unlinks it too.
+To comment on or change pull requests, each member links their own GitHub account once per Convoy organization: **Profile settings → Connected accounts → Connect**, the **Your GitHub account** row on the project's GitHub page, or **Connect GitHub to comment...** on a pull request. GitHub asks them to authorize the App, then returns them to where they started. Comments, closing, reopening, drafts, archiving, and assignees then run as that account, with whatever access GitHub gives it on the repository: triage access to close, reopen, archive, and assign, write access to convert to draft or mark ready for review. **Disconnect** unlinks it and revokes Convoy's token. Leaving the organization unlinks it too.

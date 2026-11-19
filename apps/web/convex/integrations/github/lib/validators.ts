@@ -60,6 +60,10 @@ export const verifiedEventValidator = v.object({
 });
 export type VerifiedEvent = Infer<typeof verifiedEventValidator>;
 
+/** A GitHub person who is, or can be, assigned to a PR. */
+export const assigneeValidator = v.object({ login: v.string(), avatarUrl: v.union(v.string(), v.null()) });
+export type Assignee = Infer<typeof assigneeValidator>;
+
 /** Live link context a sync or diff job needs; null once the link is obsolete. */
 export const syncContextValidator = v.object({
   installationId: v.number(),
@@ -83,6 +87,8 @@ export const pullRequestSummaryValidator = v.object({
   state: pullRequestStateValidator,
   draft: v.boolean(),
   labels: v.array(v.string()),
+  /** Assignee logins. */
+  assignees: v.array(v.string()),
   headRef: v.string(),
   baseRef: v.string(),
   providerUpdatedAt: v.number(),
@@ -103,6 +109,7 @@ export function toPullRequestSummary(row: Doc<"integrationPullRequests">): PullR
     state: row.state,
     draft: row.draft,
     labels: row.labels,
+    assignees: row.assignees ?? [],
     headRef: row.headRef,
     baseRef: row.baseRef,
     providerUpdatedAt: row.providerUpdatedAt,
@@ -144,6 +151,7 @@ export function toLivePullRequest(repositoryId: Id<"integrationRepositories">, p
     state: pr.state,
     draft: pr.draft,
     labels: pr.labels,
+    assignees: pr.assignees ?? [],
     headRef: pr.headRef,
     baseRef: pr.baseRef,
     providerUpdatedAt: pr.providerUpdatedAt,
@@ -310,7 +318,7 @@ export const pullRequestOverviewValidator = v.object({
       ),
     })
   ),
-  assignees: v.array(v.object({ login: v.string(), avatarUrl: v.union(v.string(), v.null()) })),
+  assignees: v.array(assigneeValidator),
   milestone: v.union(v.object({ title: v.string(), url: v.string() }), v.null()),
 });
 export type PullRequestOverview = Infer<typeof pullRequestOverviewValidator>;

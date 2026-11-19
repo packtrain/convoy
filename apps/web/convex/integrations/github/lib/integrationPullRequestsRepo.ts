@@ -132,7 +132,8 @@ function isUnchanged(existing: Doc<"integrationPullRequests">, incoming: Normali
     (incoming.conflicts === undefined || existing.conflicts === incoming.conflicts) &&
     JSON.stringify(existing.stack) === JSON.stringify(incoming.stack) &&
     existing.labels.length === incoming.labels.length &&
-    existing.labels.every((label, index) => label === incoming.labels[index])
+    existing.labels.every((label, index) => label === incoming.labels[index]) &&
+    JSON.stringify(existing.assignees ?? []) === JSON.stringify(incoming.assignees ?? [])
   );
 }
 

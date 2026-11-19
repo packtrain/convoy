@@ -21,7 +21,7 @@ import { TaskRefWithType } from "@/components/blocks/tasks/task-ref-with-type";
 import { TimelineHeader, TimelineThreadRowCard, type TimelineComposerMode } from "@/components/blocks/tasks/task-timeline";
 import { TaskThreadComposer } from "@/components/blocks/tasks/task-thread-composer";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
-import { Badge } from "@/components/ui/badge";
+import { Badge, badgeVariants } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Skeleton } from "@/components/ui/skeleton";
@@ -36,14 +36,13 @@ import { GithubMarkdown } from "./github-markdown";
 import {
   ActivityComment,
   PullRequestActivityComposer,
-  useGithubCommenting,
-  type CommentsChange,
   type GithubCommenting,
   type QuoteLine,
 } from "./pull-request-comments";
+import { AssigneesButton } from "./pull-request-assignees";
 import { reviewerStates, type ReviewerState } from "./pull-request-merge-status";
 import { layerBelow, StackMap } from "./pull-request-stack";
-import { displayState, PullRequestStateIcon } from "./pull-request-state-icon";
+import { PullRequestStatusSelect, writeBlocker } from "./pull-request-state-actions";
 import { PullRequestThreadsComposeButton, PullRequestThreadsProperty, toTimelineThreadRow, usePullRequestThreads } from "./pull-request-threads";
 import type { PullRequestOverview, PullRequestSummary, PullRequestView, ReferencedTask } from "./types";
 
@@ -438,8 +437,6 @@ function SummaryItem({ label, children }: { label: string; children: ReactNode }
   );
 }
 
-const STATE_WORDS = { open: "Open", draft: "Draft", merged: "Merged", closed: "Closed" } as const;
-
 /** The Overview's outline before the PR itself has loaded: title, meta, description, cards, properties. */
 export function PullRequestOverviewSkeleton() {
   return (
@@ -492,7 +489,8 @@ export function PullRequestOverviewTab({
   projectAlias,
   pullRequest,
   repositoryId,
-  onCommentsChange,
+  commenting,
+  onAssigneesChange,
 }: {
   pr: PullRequestView;
   summary: PullRequestView;
@@ -507,11 +505,11 @@ export function PullRequestOverviewTab({
   /** Null when the repository is not connected here: no Threads, composer, or Fix. */
   pullRequest: AttachedPullRequest | null;
   repositoryId: string;
-  onCommentsChange: CommentsChange;
+  commenting: GithubCommenting;
+  onAssigneesChange: (assignees: PullRequestOverview["assignees"]) => void;
 }) {
   const overview = state.kind === "loaded" ? state.overview : null;
   const threads = usePullRequestThreads(projectId, pullRequest);
-  const commenting = useGithubCommenting({ projectId, repositoryId, number: pr.number, organizationSlug, onCommentsChange });
   const composerRef = useRef<HTMLDivElement>(null);
   // Threads first, as in the task sidebar; "Add comment..." swaps in the GitHub comment.
   const [mode, setMode] = useState<TimelineComposerMode>("thread");
@@ -561,11 +559,8 @@ export function PullRequestOverviewTab({
   const reviewers = overview ? reviewerStates(overview, pr.author) : state.kind === "loading" ? undefined : [];
   const below = layerBelow(layers, pr.number);
   const baseName = below ? `#${below.number}` : pr.baseRef;
-  const status = (
-    <>
-      <PullRequestStateIcon pr={pr} />
-      {STATE_WORDS[displayState(pr)]}
-    </>
+  const status = (className: string) => (
+    <PullRequestStatusSelect projectId={projectId} repositoryId={repositoryId} pr={pr} commenting={commenting} className={className} />
   );
   const branchStatus = !overview ? null : overview.mergeable === "conflicting" ? (
     <span className="flex min-w-0 items-center gap-2">
@@ -596,9 +591,7 @@ export function PullRequestOverviewTab({
           <h2 className="text-xl font-semibold">
             {pr.title} <span className="font-normal text-muted-foreground">#{pr.number}</span>
           </h2>
-          <Badge variant="outline" className="h-7 shrink-0 gap-1.5 px-2.5 text-sm [&>svg]:size-4! @4xl:hidden">
-            {status}
-          </Badge>
+          {status(cn(badgeVariants({ variant: "outline" }), "h-7 shrink-0 cursor-pointer gap-1.5 px-2.5 text-sm hover:bg-accent @4xl:hidden"))}
         </div>
         <p className="mt-2 flex min-w-0 flex-wrap items-center gap-1.5 text-xs text-muted-foreground">
           <span className="font-medium text-foreground">{pr.author}</span>
@@ -772,7 +765,7 @@ export function PullRequestOverviewTab({
       </div>
       <aside aria-label="Pull request properties" className="hidden space-y-6 text-sm @4xl:block">
         <Property label="Status">
-          <span className="flex items-center gap-2">{status}</span>
+          {status("flex cursor-pointer items-center gap-2 hover:opacity-80 disabled:cursor-default")}
         </Property>
         {pullRequest ? (
           <Property label="Threads" action={<PullRequestThreadsComposeButton onClick={compose} />}>
@@ -819,17 +812,37 @@ export function PullRequestOverviewTab({
             <span className="flex h-5 items-center">{reviewers ? <EmptyValue /> : <PropertySkeleton />}</span>
           )}
         </Property>
-        {overview?.assignees.length ? (
-          <Property label="Assignees">
-            {overview.assignees.map((assignee) => (
-              <span key={assignee.login} className="flex items-center gap-2">
-                <Avatar className="size-5">
-                  <AvatarImage src={assignee.avatarUrl ?? undefined} />
-                  <AvatarFallback className="text-[10px]">{assignee.login.slice(0, 2).toUpperCase()}</AvatarFallback>
-                </Avatar>
-                {assignee.login}
+        {overview ? (
+          <Property
+            label="Assignees"
+            action={
+              pullRequest ? (
+                <AssigneesButton
+                  projectId={projectId}
+                  repositoryId={repositoryId}
+                  number={pr.number}
+                  assignees={overview.assignees}
+                  blocker={writeBlocker(commenting.account, commenting.role, "triage")}
+                  onChange={onAssigneesChange}
+                />
+              ) : null
+            }
+          >
+            {overview.assignees.length ? (
+              overview.assignees.map((assignee) => (
+                <span key={assignee.login} className="flex items-center gap-2">
+                  <Avatar className="size-5">
+                    <AvatarImage src={assignee.avatarUrl ?? undefined} />
+                    <AvatarFallback className="text-[10px]">{assignee.login.slice(0, 2).toUpperCase()}</AvatarFallback>
+                  </Avatar>
+                  {assignee.login}
+                </span>
+              ))
+            ) : (
+              <span className="flex h-5 items-center">
+                <EmptyValue />
               </span>
-            ))}
+            )}
           </Property>
         ) : null}
         {pr.labels.length ? (

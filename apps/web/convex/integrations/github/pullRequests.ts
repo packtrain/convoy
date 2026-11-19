@@ -208,6 +208,9 @@ const readableContextValidator = v.object({
   repositoryLinkId: v.id("integrationRepositoryLinks"),
   generation: v.number(),
   context: syncContextValidator,
+  /** As stored; GitHub's GraphQL follows a rename. */
+  owner: v.string(),
+  name: v.string(),
   /** The stored row's revision and mergeability, to spot a missed event. */
   stored: v.union(v.object({ baseSha: v.string(), headSha: v.string(), conflicts: v.optional(v.boolean()) }), v.null()),
 });
@@ -230,6 +233,8 @@ export const getReadableContext = internalQuery({
       repositoryLinkId: link._id,
       generation: link.generation,
       context: toSyncContext(link, repository),
+      owner: repository.owner,
+      name: repository.name,
       stored: row ? { baseSha: row.baseSha, headSha: row.headSha, conflicts: row.conflicts } : null,
     };
   },

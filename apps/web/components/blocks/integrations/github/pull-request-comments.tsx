@@ -41,18 +41,21 @@ type Permission = FunctionReturnType<typeof api.integrations.github.accounts.rea
 
 const ago = (at: number) => formatDistanceToNow(at, { addSuffix: true });
 
-/** The member's account in this organization, its role on the repository (read once per open), and the writes. */
+/** The member's account in this organization, its role on the repository (read once per open), and the comment writes. */
 export function useGithubCommenting({
   projectId,
   repositoryId,
   number,
   organizationSlug,
+  archived,
   onCommentsChange,
 }: {
   projectId: Id<"projects">;
   repositoryId: string;
   number: number;
   organizationSlug: string;
+  /** Archiving locks the conversation: no new comments, edits, or deletes. */
+  archived: boolean;
   onCommentsChange: CommentsChange;
 }) {
   const accounts = useLinkedGithubAccounts();
@@ -83,12 +86,16 @@ export function useGithubCommenting({
     showConvexErrorToast(error, fallback);
     throw error;
   };
+  const role = active && permission?.key === key ? permission.value : null;
   return {
     organization,
     account,
+    /** The account's role on the repository; null while unknown, which still allows writing: GitHub has the last word. */
+    role,
     /** Null (unknown) still allows writing: GitHub has the last word. */
-    noAccess: active && permission?.key === key && permission.value === "none",
-    viewerId: active ? account.githubUserId : null,
+    noAccess: role === "none",
+    archived,
+    viewerId: active && !archived ? account.githubUserId : null,
     post: (body: string) =>
       createComment({ ...target, body })
         .then((comment) => onCommentsChange((comments) => [...comments, comment]))
@@ -131,12 +138,14 @@ export function PullRequestActivityComposer({
   draftKey: string;
 }) {
   const { connect, connecting } = useConnectGithubAccount();
-  const { organization, account, noAccess } = commenting;
-  const canComment = account?.status === "active" && !noAccess;
+  const { organization, account, noAccess, archived } = commenting;
+  const canComment = account?.status === "active" && !noAccess && !archived;
   const resolved = canComment ? mode : "thread";
   const connectTrigger = (label: string) =>
     organization ? <Trigger key="trigger" icon={Github} label={label} disabled={connecting} onClick={() => connect(organization.organizationId, returnTo)} /> : null;
-  const trigger = !organization ? null : !account ? (
+  const trigger = !organization ? null : archived ? (
+    <Trigger key="trigger" icon={Github} label="This pull request is archived. Unarchive it to comment." disabled />
+  ) : !account ? (
     connectTrigger("Connect GitHub to comment...")
   ) : account.status === "reconnect" ? (
     connectTrigger("Reconnect GitHub to comment...")

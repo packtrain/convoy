@@ -1,7 +1,7 @@
 import { ConvexError } from "convex/values";
 import { errors } from "../errors";
 import { GITHUB_API_URL, GITHUB_WEB_URL, githubCallbackUrl, readGithubAppConfig, type GithubAppConfig } from "./constants";
-import { record, str } from "./parsers";
+import { list, record, str } from "./parsers";
 import type { SyncContext } from "./validators";
 
 // GitHub REST client and credentials: App JWT, installation tokens, token encryption, and user-to-server tokens.
@@ -70,6 +70,21 @@ export async function githubFetch(path: string, auth: GithubAuth, init: { method
     throw new GithubError(response.status, `GitHub returned ${response.status}`, rateLimited, retryAfterMs);
   }
   return response.status === 204 ? null : response.json();
+}
+
+/** REST's status for a GraphQL error type; any other type reads as GitHub refusing the change. */
+const GRAPHQL_ERROR_STATUS: Record<string, number> = { FORBIDDEN: 403, NOT_FOUND: 404 };
+
+/** GitHub GraphQL. It reports errors with a 200, so they are rethrown as REST would answer them. */
+export async function githubGraphql(token: string, query: string, variables: Record<string, unknown>): Promise<unknown> {
+  const body = record(await githubFetch("/graphql", { token }, { method: "POST", body: { query, variables } }));
+  const [error] = list(body.errors ?? []);
+  if (error !== undefined) {
+    const type = record(error).type;
+    const rateLimited = type === "RATE_LIMITED";
+    throw new GithubError(rateLimited ? 403 : (GRAPHQL_ERROR_STATUS[String(type)] ?? 422), `GitHub GraphQL returned ${String(type)}`, rateLimited);
+  }
+  return body.data;
 }
 
 // --- App and installation credentials ---

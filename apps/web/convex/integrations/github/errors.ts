@@ -35,6 +35,7 @@ export const errors = {
   COMMENT_TOO_LONG: "A comment can be at most 65,536 characters",
   COMMENT_NOT_YOURS: "You can only edit or delete your own comments on this pull request",
   COMMENT_REFUSED: "GitHub refused this. Your GitHub account may not have access to the repository, or the conversation is locked.",
+  PULL_REQUEST_WRITE_REFUSED: "GitHub refused this. Your GitHub account may not have the access it needs on this repository.",
   GUIDE_NOT_FOUND: "The guide was deleted.",
   GUIDE_NOT_FOR_THREAD: "This thread is not writing a guide. Start one with Generate guide on the pull request's Guide tab.",
   GUIDE_ALREADY_SUBMITTED: "This guide was already submitted. Use New guide to write another one.",

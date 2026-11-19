@@ -4,7 +4,7 @@ Planning specification for OS-1852 under OS-1371. Product decisions below
 are accepted from the planning interviews; the second one (2026-10-24 to
 2026-10-26) widened the scope from read-only browsing to the full feature set
 designed in the [playground prototype](playground-github-integration.md).
-Slices 1 (OS-2178), 2 (OS-2179), 3 (OS-2180), 4 (OS-2181), and 6 (OS-2183) are implemented; see
+Slices 1 (OS-2178), 2 (OS-2179), 3 (OS-2180), 4 (OS-2181), 6 (OS-2183), and 7 (OS-2184) are implemented; see
 [As built](#as-built). The other technical defaults are still proposals.
 
 ## Scope
@@ -881,8 +881,10 @@ separate Convex component or generic plugin framework is required.
 | `integrations/github/lib/github.ts` | GitHub REST client and credentials: App JWT, installation tokens, setup token encryption, and the OAuth exchange |
 | `integrations/github/lib/parsers.ts` | Narrowing GitHub JSON into normalized PR and diff metadata |
 | `integrations/github/lib/lifecycle.ts` | Starting a reconciliation pass and disconnecting a link, shared by connect, disconnect, and the cron |
-| `integrations/github/accounts.ts` | Linked GitHub accounts and user-to-server tokens: Connect, Disconnect, revocation, refresh on use (`withUserToken`), and the repository permission |
+| `integrations/github/accounts.ts` | Linked GitHub accounts and user-to-server tokens: Connect, Disconnect, revocation, refresh on use (`withUserToken`), writing to a PR as the member (`writeAs`), and the repository permission |
 | `integrations/github/comments.ts` | Conversation comments written as the member: `create`, `update`, `remove` |
+| `integrations/github/states.ts` | PR state changes written as the member: `update` (close, reopen, draft, ready, archive, unarchive) |
+| `integrations/github/assignees.ts` | PR assignees as the member: `list` (searches assignable people), `update` (one person), `clear` |
 | `integrations/github/guides.ts` | Guides: requests, submission, validation, and reads |
 | `integrations/github/httpHandlers.ts` | Callback and webhook entry points |
 | `integrations/github/lib/*Repo.ts` | One data-access contract per owned table |
@@ -1643,6 +1645,82 @@ Slice 6 (OS-2183).
   GitHub account id identifies the member, since one GitHub account links to
   one member per organization.
 
+### State actions and bulk actions
+
+Slice 7 (OS-2184).
+
+- **Writes.** `states.update` takes one `change`: close and reopen are REST
+  `PATCH /repositories/{id}/pulls/{number}`; convert to draft, ready for
+  review, archive, and unarchive are GraphQL (`convertPullRequestToDraft`,
+  `markPullRequestReadyForReview`, `archivePullRequest`,
+  `unarchivePullRequest`) on the PR's `node_id`, read first. GraphQL answers
+  errors with a 200, so `githubGraphql` rethrows `FORBIDDEN` as a 403,
+  `NOT_FOUND` as a 404, `RATE_LIMITED` as a rate limit, and anything else as a
+  422. `assignees.update` assigns or unassigns one login
+  (`POST`/`DELETE /repositories/{id}/issues/{number}/assignees`) and returns
+  GitHub's assignees after; `assignees.clear` is Assign to nobody (`PATCH` the
+  issue with no assignees) and returns them too. GitHub answers 200 even when
+  it drops an assignee change, so both check its answer and read a change
+  that didn't happen as refused. `assignees.list` searches the repository's assignable
+  people through GraphQL `repository(owner, name).assignableUsers(query,
+  first: 20)`, with the stored owner and name (GitHub follows a rename). The
+  picker asks again 250 ms after the member stops typing, and only the
+  latest answer lands, so a repository of any size is searchable at one
+  GitHub call per pause. GitHub matches login and name. Someone assigned but
+  not in the answer still shows, matched by login, so they can be removed. Every one runs through `accounts.writeAs`, which needs
+  project view and the project's active link, writes with the member's token,
+  and reads a 403, 404, 410, or 422 as "GitHub refused this…". Convoy checks
+  no GitHub role itself.
+- **Stored row.** Each state or assignee write schedules a single-PR sync, so
+  the stored row (and the list) follow without waiting for the webhook,
+  including for an archive, which may send none. A PR Convoy never stored (a
+  search result) is stored by that sync: a write is an explicit action, like
+  requesting a Guide. Stored PRs gain `assignees` (logins) from every sync;
+  rows synced before this slice have none until their next sync.
+- **Role.** The UI disables an action with its reason from the member's
+  Linked GitHub account and `readRepositoryPermission`: "Connect GitHub
+  first", "Reconnect GitHub first", "Needs triage access" (close, reopen,
+  archive, unarchive, assign), "Needs write access" (draft, ready for
+  review). GitHub's role table lets triage assign, but its REST assignee
+  endpoints note push access; Convoy follows the role table, and a change
+  GitHub drops reads as refused. Confirm with a live triage account. An unknown role (GitHub didn't answer) leaves it enabled, and
+  GitHub decides. Disabled buttons show the reason as their tooltip; disabled
+  menu items show it under the label.
+- **Reader.** The header has, by state: Open, a More actions menu with
+  Convert to draft, Close pull request, and Archive; Draft, Ready for review
+  and More actions with Close pull request and Archive; Closed, Reopen and
+  More actions with Archive; Merged, More actions with Archive; Archived, only
+  Unarchive. The Overview's Status (the property, and the header badge in a
+  narrow pane) is a select, like a task's: it lists the current status and
+  the ones GitHub can move the PR to, and picking one runs that change.
+  Open goes to Draft, Closed, or Archived; Draft to Open (ready for review),
+  Closed, or Archived; Closed to Open or Archived; Merged to Archived. An
+  Archived PR lists its own state, which unarchives it. Merged is never a
+  pick: it needs a merge. The Overview's Assignees property always shows, with an Edit
+  assignees button opening the picker; GitHub's answer replaces the held
+  Overview's assignees. The button waits for that answer before taking
+  another edit, so an older answer never lands over a newer one. An Archived PR's composer trigger reads "This pull
+  request is archived. Unarchive it to comment.", disabled, and its comments
+  lose Edit and Delete.
+- **List.** Stored rows have checkboxes, and the list frame's header row
+  selects all loaded rows and shows "N of M selected". Changing the tab, a
+  filter, or the sort clears the selection; Load more keeps it. Search hits
+  have no checkboxes. With a selection the header adds Mark as (Closed for
+  open, unarchived rows; Archived for unarchived rows; Unarchived for
+  archived rows; an item with no matching rows is disabled), Assign, and
+  Clear. The role is read once per repository in the selection, and the
+  lowest one decides. Linking another account or reconnecting reads the
+  roles again. Assign is the picker the reader uses: a person on every
+  selected PR is checked, on some is mixed, and picking them assigns the ones
+  without them, or unassigns all when every PR has them. Until a row's sync
+  lands, GitHub's answer to the last write decides its checked state, so a
+  quick second edit never works from the stale row. Assign to nobody clears
+  every selected PR, since a row stored before assignees were synced may
+  still have some. Each action writes
+  one PR at a time, then toasts "Closed 3 pull requests" or "1 of 3 pull
+  requests failed" with each failed PR's number and GitHub's reason. Mark as
+  clears the selection afterwards; Assign keeps it.
+
 ### Error messages
 
 Defined in `apps/web/convex/integrations/github/errors.ts`; tests assert on them.
@@ -1676,6 +1754,7 @@ Defined in `apps/web/convex/integrations/github/errors.ts`; tests assert on them
 | Another write held the refresh past its wait | Convoy is renewing your GitHub access. Try again in a moment. |
 | Empty comment | Write a comment first |
 | Comment over GitHub's limit | A comment can be at most 65,536 characters |
+| GitHub refuses a state change or an assignee write | GitHub refused this. Your GitHub account may not have the access it needs on this repository. |
 | Edit or delete of another author's comment, or one on another PR | You can only edit or delete your own comments on this pull request |
 | GitHub refuses a comment write | GitHub refused this. Your GitHub account may not have access to the repository, or the conversation is locked. |
 | Confirmed revocation (shown on the link) | GitHub access to this repository was removed |
@@ -1787,7 +1866,8 @@ the agreed priority.
    account. The comment side has no attach button and no @mention picker.
    Follow-ups: attachments and @mentions (6.1, OS-2434), You filters (6.2,
    OS-2435), and Convoy names for linked GitHub users (6.3, OS-2436).
-7. **State actions.** Close, reopen, draft, ready for review, assign, archive
+7. **State actions** (built, OS-2184; see
+   [State actions and bulk actions](#state-actions-and-bulk-actions)). Close, reopen, draft, ready for review, assign, archive
    and unarchive, and the list's bulk actions.
 8. **Merge.** Methods, the confirm popup, `merge-async` with Merging…,
    Update branch, Stack merges, and deleting the branch.

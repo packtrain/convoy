@@ -19,11 +19,13 @@ import { PULL_REQUEST_TABS, useNavigation, type PullRequestTab, type RouteTarget
 import type { DiffState } from "./github-patch";
 import { PullRequestChanges, PullRequestChangesSkeleton } from "./pull-request-changes";
 import { GuideMenu, GuideSkeleton, PullRequestGuideTab, usePullRequestGuides } from "./pull-request-guide";
+import { useGithubCommenting } from "./pull-request-comments";
 import { MergeStatus } from "./pull-request-merge-status";
 import { PullRequestOverviewSkeleton, PullRequestOverviewTab, type OverviewState } from "./pull-request-overview";
 import { StackBadge, useStackLayers } from "./pull-request-stack";
+import { PullRequestStateActions } from "./pull-request-state-actions";
 import { PullRequestStateIcon } from "./pull-request-state-icon";
-import type { PullRequestView } from "./types";
+import type { PullRequestOverview, PullRequestView } from "./types";
 import { useReviewedMarks } from "./use-reviewed-marks";
 import { useGenerateGuide } from "./run-pull-request-guide";
 import type { IntegrationStatus } from "./use-integration-status";
@@ -94,6 +96,19 @@ export function PullRequestReader({
   const stackLayers = useStackLayers(pr?.stack ? { projectId, repositoryId, stackId: pr.stack.id } : null);
   const layers = stackLayers ?? [];
   const load = () => setRequest((value) => value + 1);
+  // GitHub's answer to a write patches the held Overview, so it updates without another read.
+  const updateOverview = (change: (overview: PullRequestOverview) => PullRequestOverview) =>
+    setHeld((previous) =>
+      previous?.overview.kind === "loaded" ? { ...previous, overview: { kind: "loaded", overview: change(previous.overview.overview) } } : previous
+    );
+  const commenting = useGithubCommenting({
+    projectId,
+    repositoryId,
+    number,
+    organizationSlug,
+    archived: pr?.archived ?? false,
+    onCommentsChange: (change) => updateOverview((overview) => ({ ...overview, comments: change(overview.comments) })),
+  });
   const repository = status?.connections.find((connection) => connection.repositoryId === repositoryId)?.repository;
   const attached = repository ? toAttachedPullRequest({ owner: repository.owner, name: repository.name, number }) : null;
   // Live only while the Guide tab shows.
@@ -186,6 +201,7 @@ export function PullRequestReader({
             hrefFor={layerHref}
           />
         ) : null}
+        <PullRequestStateActions projectId={projectId} repositoryId={repositoryId} pr={pr} commenting={commenting} />
         <Button
           variant="ghost"
           size="icon-sm"
@@ -255,13 +271,8 @@ export function PullRequestReader({
             projectAlias={projectAlias}
             pullRequest={attached}
             repositoryId={repositoryId}
-            onCommentsChange={(change) =>
-              setHeld((previous) =>
-                previous?.overview.kind === "loaded"
-                  ? { ...previous, overview: { kind: "loaded", overview: { ...previous.overview.overview, comments: change(previous.overview.overview.comments) } } }
-                  : previous
-              )
-            }
+            commenting={commenting}
+            onAssigneesChange={(assignees) => updateOverview((overview) => ({ ...overview, assignees }))}
           />
         </TabsContent>
         <TabsContent value="guide" className="overflow-auto">

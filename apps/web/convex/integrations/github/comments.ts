@@ -1,10 +1,8 @@
 import { ConvexError, v } from "convex/values";
-import { action, type ActionCtx } from "../../_generated/server";
-import { internal } from "../../_generated/api";
-import type { Id } from "../../_generated/dataModel";
+import { action } from "../../_generated/server";
 import { errors } from "./errors";
-import { withUserToken } from "./accounts";
-import { GithubError, githubFetch, toUserError } from "./lib/github";
+import { writeAs } from "./accounts";
+import { githubFetch } from "./lib/github";
 import { normalizeComment, record, str } from "./lib/parsers";
 import { pullRequestCommentValidator, type PullRequestComment } from "./lib/validators";
 
@@ -14,6 +12,8 @@ import { pullRequestCommentValidator, type PullRequestComment } from "./lib/vali
 /** GitHub's limit for a comment body. */
 const MAX_COMMENT_LENGTH = 65_536;
 
+const refused = { refused: errors.COMMENT_REFUSED };
+
 const target = { projectId: v.id("projects"), repositoryId: v.string(), number: v.number() };
 
 function requireBody(body: string): string {
@@ -21,25 +21,6 @@ function requireBody(body: string): string {
   if (!trimmed) throw new ConvexError(errors.COMMENT_EMPTY);
   if (trimmed.length > MAX_COMMENT_LENGTH) throw new ConvexError(errors.COMMENT_TOO_LONG);
   return trimmed;
-}
-
-/** Runs `write` as the caller on the project's connected repository, with GitHub's refusals as catalog messages. */
-async function writeAs<T>(
-  ctx: ActionCtx,
-  args: { projectId: Id<"projects">; repositoryId: string; number: number },
-  write: (token: string, repositoryPath: string, githubUserId: number) => Promise<T>
-): Promise<T> {
-  const live = await ctx.runQuery(internal.integrations.github.pullRequests.getReadableContext, args);
-  if (!live) throw new ConvexError(errors.NOT_CONNECTED);
-  const repository = `/repositories/${live.context.providerRepositoryId}`;
-  return withUserToken(ctx, live.organizationId, (token, githubUserId) => write(token, repository, githubUserId)).catch(
-    (error: unknown) => {
-      if (error instanceof GithubError && !error.rateLimited && [403, 404, 410, 422].includes(error.status ?? 0)) {
-        throw new ConvexError(errors.COMMENT_REFUSED);
-      }
-      throw toUserError(error);
-    }
-  );
 }
 
 /**
@@ -59,8 +40,12 @@ export const create = action({
   returns: pullRequestCommentValidator,
   handler: async (ctx, { body, ...args }): Promise<PullRequestComment> => {
     const text = requireBody(body);
-    return writeAs(ctx, args, async (token, repository) =>
-      normalizeComment(await githubFetch(`${repository}/issues/${args.number}/comments`, { token }, { method: "POST", body: { body: text } }))
+    return writeAs(
+      ctx,
+      args,
+      async (token, repository) =>
+        normalizeComment(await githubFetch(`${repository}/issues/${args.number}/comments`, { token }, { method: "POST", body: { body: text } })),
+      refused
     );
   },
 });
@@ -73,7 +58,7 @@ export const update = action({
     return writeAs(ctx, args, async (token, repository, githubUserId) => {
       await requireOwnComment(token, repository, githubUserId, args.number, commentId);
       return normalizeComment(await githubFetch(`${repository}/issues/comments/${commentId}`, { token }, { method: "PATCH", body: { body: text } }));
-    });
+    }, refused);
   },
 });
 
@@ -84,7 +69,7 @@ export const remove = action({
     await writeAs(ctx, args, async (token, repository, githubUserId) => {
       await requireOwnComment(token, repository, githubUserId, args.number, commentId);
       await githubFetch(`${repository}/issues/comments/${commentId}`, { token }, { method: "DELETE" });
-    });
+    }, refused);
     return null;
   },
 });

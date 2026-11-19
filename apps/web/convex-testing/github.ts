@@ -139,6 +139,10 @@ export function createFakeGithub() {
     revokedTokens: [] as string[],
     /** A person's `permissions` on every repository; the default reads only. */
     userPermissions: new Map<number, Record<string, boolean>>(),
+    /** Who GitHub lists as assignable on every repository. */
+    assignable: ["octocat", "maya", "sam"],
+    /** GitHub answers assignee writes with 200 but drops them, as it does without push access. */
+    dropAssigneeWrites: false,
     /** Called between the two PR reads of a diff, to simulate a push mid-read. */
     onFilesRead: null as (() => void) | null,
     requests: [] as string[],
@@ -190,6 +194,7 @@ export function createFakeGithub() {
   function pullJson(pr: FakePullRequest) {
     return {
       id: pr.id,
+      node_id: `PR_${pr.id}`,
       number: pr.number,
       title: pr.title,
       body: pr.body,
@@ -197,6 +202,7 @@ export function createFakeGithub() {
       merged_at: pr.merged ? new Date(pr.updatedAt).toISOString() : null,
       draft: pr.draft,
       labels: pr.labels.map((name) => ({ name })),
+      assignees: (pr.assignees ?? []).map(githubUser),
       user: { login: "octocat" },
       head: { ref: pr.headRef, sha: pr.headSha },
       base: { ref: "main", sha: pr.baseSha },
@@ -233,7 +239,6 @@ export function createFakeGithub() {
       commits: pr.commits?.length ?? 0,
       requested_reviewers: (pr.requestedReviewers ?? []).map((login) => ({ login })),
       requested_teams: [],
-      assignees: (pr.assignees ?? []).map(githubUser),
       milestone: pr.milestone ? { ...pr.milestone, html_url: `https://github.com/milestone/${pr.milestone.number}` } : null,
     };
   }
@@ -335,6 +340,61 @@ export function createFakeGithub() {
       }
       comments[index] = { ...comments[index], body: (JSON.parse(String(init?.body)) as { body: string }).body };
       return json(200, toJson(comments[index]));
+    }
+    // State and assignee writes, refused like GitHub below the role each needs.
+    const allowed = (role: "triage" | "write") => {
+      const granted = person ? (state.userPermissions.get(person.id) ?? { pull: true }) : {};
+      return Boolean(granted.admin || granted.maintain || granted.push || (role === "triage" && granted.triage));
+    };
+    const changed = (pr: FakePullRequest) => {
+      pr.updatedAt = Math.max(Date.now(), pr.updatedAt + 1);
+    };
+    if (path === "/graphql" && method === "POST") {
+      if (!person) return json(401, {});
+      const { query, variables } = JSON.parse(String(init?.body)) as { query: string; variables: { id: string; owner: string; name: string; query: string | null } };
+      if (query.includes("assignableUsers")) {
+        if (!findRepo(variables.owner, variables.name)) return json(200, { data: { repository: null }, errors: [{ type: "NOT_FOUND", message: "Could not resolve to a Repository" }] });
+        const nodes = state.assignable
+          .filter((login) => !variables.query || login.includes(variables.query))
+          .slice(0, 20)
+          .map(githubUser);
+        return json(200, { data: { repository: { assignableUsers: { nodes } } } });
+      }
+      const pr = [...state.pulls.values()].flat().find((candidate) => `PR_${candidate.id}` === variables.id);
+      const mutation = /\{\s*(\w+)\(/.exec(query)?.[1] ?? "";
+      const role = mutation === "archivePullRequest" || mutation === "unarchivePullRequest" ? "triage" : "write";
+      if (!pr) return json(200, { data: null, errors: [{ type: "NOT_FOUND", message: "Could not resolve to a node" }] });
+      if (!allowed(role)) return json(200, { data: null, errors: [{ type: "FORBIDDEN", message: "Resource not accessible by user" }] });
+      if (mutation === "convertPullRequestToDraft") pr.draft = true;
+      else if (mutation === "markPullRequestReadyForReview") pr.draft = false;
+      else if (mutation === "archivePullRequest") Object.assign(pr, { archived: true, state: "closed" });
+      else if (mutation === "unarchivePullRequest") pr.archived = false;
+      else return json(200, { data: null, errors: [{ type: "UNPROCESSABLE", message: `no ${mutation}` }] });
+      changed(pr);
+      return json(200, { data: { [mutation]: { clientMutationId: null } } });
+    }
+    match = /^\/repositories\/(\d+)\/(issues|pulls)\/(\d+)(\/assignees)?$/.exec(path);
+    if (match && method !== "GET") {
+      if (!person) return json(401, {});
+      const pr = state.pulls.get(Number(match[1]))?.find((candidate) => candidate.number === Number(match![3]));
+      if (!pr) return json(404, {});
+      if (!allowed("triage")) return json(403, { message: "Must have triage access" });
+      const body = JSON.parse(String(init?.body)) as { state?: "open" | "closed"; assignees?: string[] };
+      const current = pr.assignees ?? [];
+      if (state.dropAssigneeWrites && (match[4] || body.assignees)) {
+        return json(200, pullDetailJson(pr));
+      }
+      if (match[4]) {
+        const named = (body.assignees ?? []).filter((login) => state.assignable.includes(login));
+        pr.assignees = method === "POST" ? [...new Set([...current, ...named])] : current.filter((login) => !named.includes(login));
+      } else if (body.assignees) {
+        pr.assignees = body.assignees;
+      } else if (body.state) {
+        if (pr.merged) return json(422, { message: "Cannot change the state of a merged pull request" });
+        pr.state = body.state;
+      }
+      changed(pr);
+      return json(200, pullDetailJson(pr));
     }
     if (path === "/user/installations") {
       return json(200, { installations: [...state.installations.keys()].map((id) => ({ id })) });
@@ -510,6 +570,21 @@ export async function connectedProject(
   await drain(setup.t);
   const link = await setup.t.run((run) => run.db.get("integrationRepositoryLinks", repositoryLinkId));
   return { ...setup, ctx, github, repositoryLinkId, repositoryId: link!.repositoryId };
+}
+
+/** Connect GitHub as `person`: the authorize URL's state comes back through the callback with GitHub's code. */
+export async function linkGithubAccount(
+  asUser: ReturnType<T["withIdentity"]>,
+  github: FakeGithub,
+  organizationId: Id<"organizations">,
+  person: FakeGithubUser,
+  returnTo = "/o/acme/WEB/pull-requests?repo=r&pr=1"
+) {
+  const { authorizeUrl } = await asUser.mutation(api.integrations.github.accounts.beginLink, { organizationId, returnTo });
+  const state = new URL(authorizeUrl).searchParams.get("state")!;
+  const code = `code-${person.login}-${Math.random()}`;
+  github.state.oauthCodes.set(code, person);
+  return asUser.action(api.integrations.github.accounts.completeLink, { state, code });
 }
 
 export async function listTitles(

@@ -43,6 +43,7 @@ export function normalizePullRequest(raw: unknown): NormalizedPullRequest {
     state: pr.merged_at ? "merged" : str(pr.state) === "open" ? "open" : "closed",
     draft: pr.draft === true,
     labels: list(pr.labels ?? []).map((label) => str(record(label).name)),
+    assignees: list(pr.assignees ?? []).map(login),
     headRef: str(head.ref),
     baseRef: str(base.ref),
     headSha: str(head.sha),

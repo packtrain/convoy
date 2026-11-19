@@ -37,6 +37,8 @@ export const normalizedPullRequestValidator = v.object({
   state: pullRequestStateValidator,
   draft: v.boolean(),
   labels: v.array(v.string()),
+  /** Assignee logins; rows stored before slice 7 lack them until their next sync. */
+  assignees: v.optional(v.array(v.string())),
   headRef: v.string(),
   baseRef: v.string(),
   headSha: v.string(),

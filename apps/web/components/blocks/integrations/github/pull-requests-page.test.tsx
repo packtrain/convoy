@@ -2,7 +2,7 @@
  * @vitest-environment jsdom
  */
 import { afterEach, beforeEach, describe, expect, test, vi } from "vitest";
-import { cleanup, fireEvent, render, screen } from "@testing-library/react";
+import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { getFunctionName } from "convex/server";
 import { api } from "@/convex/_generated/api";
 import { appRoute } from "@/lib/navigation";
@@ -15,12 +15,14 @@ let results: unknown[] = [];
 let pageStatus = "Exhausted";
 let locationSearch = "";
 let listChecks: unknown[] = [];
+let accounts: unknown = { configured: true, organizations: [] };
 const paginatedArgs = vi.fn();
 const listChecksArgs = vi.fn();
 
 vi.mock("convex/react", () => ({
   useQuery: (fn: Parameters<typeof getFunctionName>[0], args: unknown) => {
     if (getFunctionName(fn) === getFunctionName(api.projects.core.getByAlias)) return project;
+    if (getFunctionName(fn) === getFunctionName(api.integrations.github.accounts.listMine)) return accounts;
     return args === "skip" ? undefined : status;
   },
   // Only the list's status icons read through useQueries: one entry per batch of rows.
@@ -34,10 +36,32 @@ vi.mock("convex/react", () => ({
     return { results, status: pageStatus, loadMore: vi.fn() };
   },
   useMutation: () => loadHistory,
-  useAction: () => search,
+  useAction: (fn: Parameters<typeof getFunctionName>[0]) =>
+    ({
+      [getFunctionName(api.integrations.github.states.update)]: updateState,
+      [getFunctionName(api.integrations.github.accounts.readRepositoryPermission)]: readPermission,
+      [getFunctionName(api.integrations.github.assignees.list)]: listAssignable,
+      [getFunctionName(api.integrations.github.assignees.update)]: updateAssignee,
+      [getFunctionName(api.integrations.github.assignees.clear)]: clearAssignees,
+    })[getFunctionName(fn)] ?? search,
 }));
 const loadHistory = vi.fn(async () => null);
 const search = vi.fn();
+const updateState = vi.fn();
+const readPermission = vi.fn();
+const listAssignable = vi.fn();
+const updateAssignee = vi.fn();
+const clearAssignees = vi.fn();
+const toastSuccess = vi.fn();
+const toastError = vi.fn();
+vi.mock("sonner", () => ({ toast: { success: (...args: unknown[]) => toastSuccess(...args), error: (...args: unknown[]) => toastError(...args) } }));
+// cmdk, behind the Assign picker, measures its list and scrolls the active item; jsdom has neither.
+globalThis.ResizeObserver ??= class {
+  observe() {}
+  unobserve() {}
+  disconnect() {}
+} as unknown as typeof ResizeObserver;
+Element.prototype.scrollIntoView ??= () => {};
 const replace = vi.fn();
 // The reader has its own tests; this file checks only what the page hands it.
 vi.mock("./pull-request-reader", async (importActual) => ({
@@ -69,6 +93,8 @@ afterEach(() => {
   pageStatus = "Exhausted";
   locationSearch = "";
   listChecks = [];
+  accounts = { configured: true, organizations: [] };
+  vi.clearAllMocks();
   paginatedArgs.mockClear();
   listChecksArgs.mockClear();
   search.mockReset();
@@ -109,6 +135,7 @@ const pr = {
   state: "open",
   draft: false,
   labels: ["bug"],
+  assignees: [],
   headRef: "fix",
   baseRef: "main",
   providerUpdatedAt: Date.now() - 60_000,
@@ -369,5 +396,115 @@ describe("PullRequestsPage", () => {
     expect(await screen.findByRole("link", { name: "Old fix" })).toBeTruthy();
     expect(listChecksArgs).toHaveBeenLastCalledWith([{ projectId: "project_1", refs: ["acme/web#40"] }]);
     expect(screen.getByLabelText("Pull request checks").querySelector('[aria-label="Failed"]')).toBeTruthy();
+  });
+  describe("bulk actions (OS-2184)", () => {
+    const linked = (status: "active" | "reconnect" = "active", githubUserId = 42) => {
+      accounts = {
+        configured: true,
+        organizations: [{ organizationId: "org_1", organizationSlug: "org", organizationName: "Org", account: { githubUserId, login: "maya", avatarUrl: null, status } }],
+      };
+    };
+    const rows = () => {
+      status = connected({ syncStatus: "synced", openCount: 2 });
+      results = [
+        { ...pr, repositoryId: "repo_1" },
+        { ...pr, _id: "pr_2", repositoryId: "repo_1", number: 13, title: "Add search", assignees: ["sam"] },
+      ];
+    };
+    const target = (number: number) => ({ projectId: "project_1", repositoryId: "repo_1", number });
+
+    test("Mark as Closed writes each selected PR in turn as the member and reports the ones GitHub refused", async () => {
+      linked();
+      rows();
+      readPermission.mockResolvedValue("triage");
+      updateState.mockResolvedValueOnce(null).mockRejectedValueOnce(new Error("GitHub refused this."));
+      render(<PullRequestsPage />);
+
+      fireEvent.click(screen.getByRole("checkbox", { name: "Select all visible pull requests" }));
+      expect(screen.getByText("2 of 2 selected")).toBeTruthy();
+      await waitFor(() => expect(readPermission).toHaveBeenCalledTimes(1));
+      fireEvent.pointerDown(screen.getByRole("button", { name: "Mark as" }), { button: 0, pointerType: "mouse" });
+      fireEvent.click(await screen.findByRole("menuitem", { name: "Closed" }));
+
+      await waitFor(() => expect(toastError).toHaveBeenCalledWith("1 of 2 pull requests failed", { description: "#13: GitHub refused this." }));
+      expect(updateState.mock.calls).toEqual([[{ ...target(12), change: "close" }], [{ ...target(13), change: "close" }]]);
+      expect(screen.getByText("2 pull requests")).toBeTruthy();
+    });
+
+    test("a read-only GitHub account sees the actions disabled with the reason", async () => {
+      linked();
+      rows();
+      readPermission.mockResolvedValue("read");
+      render(<PullRequestsPage />);
+      fireEvent.click(screen.getByRole("checkbox", { name: "Select pull request #12" }));
+      expect(await screen.findByText("Needs triage access")).toBeTruthy();
+      expect((screen.getByRole("button", { name: "Mark as" }) as HTMLButtonElement).disabled).toBe(true);
+      expect((screen.getByRole("button", { name: "Assign selected pull requests" }) as HTMLButtonElement).disabled).toBe(true);
+    });
+
+    test("Assign shows GitHub's answers before the rows resync, and Assign to nobody clears every selected PR", async () => {
+      linked();
+      rows();
+      readPermission.mockResolvedValue("write");
+      listAssignable.mockResolvedValue([{ login: "sam", avatarUrl: null }]);
+      updateAssignee.mockResolvedValue([{ login: "sam", avatarUrl: null }]);
+      clearAssignees.mockResolvedValue([]);
+      render(<PullRequestsPage />);
+      fireEvent.click(screen.getByRole("checkbox", { name: "Select all visible pull requests" }));
+      fireEvent.click(screen.getByRole("button", { name: "Assign selected pull requests" }));
+      fireEvent.click(await screen.findByRole("button", { name: "sam, assigned to some selected" }));
+      await waitFor(() => expect(toastSuccess).toHaveBeenCalledTimes(1));
+
+      // The stored rows haven't synced yet; GitHub's answer says sam is on both.
+      fireEvent.click(screen.getByRole("button", { name: "Assign selected pull requests" }));
+      expect(await screen.findByRole("button", { name: "sam, assigned" })).toBeTruthy();
+      fireEvent.click(screen.getByRole("button", { name: "Assign to nobody" }));
+      await waitFor(() => expect(clearAssignees.mock.calls).toEqual([[target(12)], [target(13)]]));
+    });
+
+    test("linking another GitHub account, or reconnecting, reads the role again", async () => {
+      linked();
+      rows();
+      readPermission.mockResolvedValue("read");
+      const { rerender } = render(<PullRequestsPage />);
+      fireEvent.click(screen.getByRole("checkbox", { name: "Select pull request #12" }));
+      expect(await screen.findByText("Needs triage access")).toBeTruthy();
+
+      readPermission.mockResolvedValue("write");
+      linked("active", 7);
+      rerender(<PullRequestsPage />);
+      await waitFor(() => expect((screen.getByRole("button", { name: "Mark as" }) as HTMLButtonElement).disabled).toBe(false));
+
+      readPermission.mockResolvedValue("read");
+      linked("reconnect", 7);
+      rerender(<PullRequestsPage />);
+      expect(screen.getByText("Reconnect GitHub first")).toBeTruthy();
+      linked("active", 7);
+      rerender(<PullRequestsPage />);
+      expect(await screen.findByText("Needs triage access")).toBeTruthy();
+      expect(readPermission).toHaveBeenCalledTimes(3);
+    });
+
+    test("without a Linked GitHub account the actions ask to connect first, and reading the role waits for one", () => {
+      rows();
+      render(<PullRequestsPage />);
+      fireEvent.click(screen.getByRole("checkbox", { name: "Select pull request #12" }));
+      expect(screen.getByText("Connect GitHub first")).toBeTruthy();
+      expect(readPermission).not.toHaveBeenCalled();
+    });
+
+    test("Assign on a mixed selection assigns the person to the PRs that lack them", async () => {
+      linked();
+      rows();
+      readPermission.mockResolvedValue("write");
+      listAssignable.mockResolvedValue([{ login: "sam", avatarUrl: null }]);
+      updateAssignee.mockResolvedValue([]);
+      render(<PullRequestsPage />);
+      fireEvent.click(screen.getByRole("checkbox", { name: "Select all visible pull requests" }));
+      fireEvent.click(screen.getByRole("button", { name: "Assign selected pull requests" }));
+      fireEvent.click(await screen.findByRole("button", { name: "sam, assigned to some selected" }));
+      await waitFor(() => expect(toastSuccess).toHaveBeenCalledWith("Assigned sam to 1 pull request"));
+      expect(updateAssignee.mock.calls).toEqual([[{ ...target(12), login: "sam", assigned: true }]]);
+    });
   });
 });

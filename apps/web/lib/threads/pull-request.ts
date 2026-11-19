@@ -38,7 +38,7 @@ const PR_STATE_PRESENTATION: Record<ThreadPullRequest["state"], ThreadPullReques
   },
   closed: {
     icon: GitPullRequestClosed,
-    colorClass: "text-zinc-500 dark:text-zinc-400/80",
+    colorClass: "text-destructive",
     stateLabel: "Closed",
   },
 };

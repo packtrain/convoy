@@ -22,6 +22,7 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { Skeleton } from "@/components/ui/skeleton";
+import { cn } from "@/lib/utils";
 import { useAppConvexAuth } from "@/lib/auth/hooks";
 import { useGithubIntegrationEnabled } from "@/lib/dev-mode/use-dev-mode";
 import { AppLink, appRoute, PULL_REQUEST_TABS, useNavigation, useRouteParams } from "@/lib/navigation";
@@ -29,7 +30,9 @@ import { useCurrentOrgProject } from "@/lib/routing/current-org-project-context"
 import { NoAccess } from "@/components/blocks/no-access";
 import { PullRequestCheckIcons, usePullRequestListChecks } from "@/components/blocks/checks";
 import { toAttachedPullRequest } from "@/convex/lib/contracts/github";
+import { Checkbox } from "@/components/ui/checkbox";
 import { PullRequestBrowser, PullRequestBrowserSkeleton, repositoryName } from "./pull-request-browser";
+import { BulkActionsBar } from "./pull-request-bulk-actions";
 import { PullRequestReader, PullRequestReaderSkeleton } from "./pull-request-reader";
 import { StackBadge } from "./pull-request-stack";
 import { StartThreadButton } from "./start-thread-button";
@@ -254,6 +257,11 @@ function PullRequestList({
   const shown = search.active ? search.results : results;
   const listChecks = usePullRequestListChecks(projectId, shown.flatMap((pr) => refOf(pr) ?? []));
   const checksOf = (pr: { repositoryId: Id<"integrationRepositories">; number: number }) => listChecks.get(refOf(pr) ?? "");
+  // Changing a filter, the sort, or the tab clears the selection.
+  const [selection, setSelection] = useState<{ options: ListOptions; ids: Id<"integrationPullRequests">[] }>({ options, ids: [] });
+  const selectedIds = selection.options === options ? selection.ids : [];
+  const select = (ids: Id<"integrationPullRequests">[]) => setSelection({ options, ids });
+  const selected = results.filter((pr) => selectedIds.includes(pr._id));
 
   return (
     <>
@@ -363,11 +371,14 @@ function PullRequestList({
         <ListSkeleton />
       ) : results.length ? (
         <SettingsCatalogListFrame>
+          <BulkActionsBar projectId={projectId} organizationSlug={organizationSlug} rows={results} selected={selected} onSelectionChange={select} />
           {notice ? <p className="p-4 text-sm text-muted-foreground">{notice}</p> : null}
           {results.map((pr) => (
             <PullRequestRow
               key={pr._id}
               pr={pr}
+              selected={selectedIds.includes(pr._id)}
+              onSelectedChange={(checked) => select(checked ? [...selectedIds, pr._id] : selectedIds.filter((id) => id !== pr._id))}
               checks={checksOf(pr)}
               projectId={projectId}
               repository={repositories.get(pr.repositoryId)}
@@ -510,6 +521,8 @@ function EmptyList({
 
 function PullRequestRow({
   pr,
+  selected,
+  onSelectedChange,
   checks,
   projectId,
   repository,
@@ -517,6 +530,9 @@ function PullRequestRow({
   projectAlias,
 }: {
   pr: Summary | PullRequestSearchHit;
+  /** Stored rows only: search hits take no bulk actions. */
+  selected?: boolean;
+  onSelectedChange?: (selected: boolean) => void;
   /** Its current results for the Checks shown in the list (OS-2400). */
   checks?: Parameters<typeof PullRequestCheckIcons>[0]["checks"];
   projectId: Id<"projects">;
@@ -528,7 +544,20 @@ function PullRequestRow({
   const stored = "headRef" in pr ? pr : null;
   return (
     // The title link covers the row, leaving the stack badge clickable on top.
-    <div className="relative flex items-center gap-3 p-4 transition-colors first:rounded-t-lg last:rounded-b-lg hover:bg-muted/50">
+    <div
+      className={cn(
+        "relative flex items-center gap-3 p-4 transition-colors first:rounded-t-lg last:rounded-b-lg hover:bg-muted/50",
+        selected && "bg-accent/60"
+      )}
+    >
+      {onSelectedChange ? (
+        <Checkbox
+          className="relative z-10"
+          aria-label={`Select pull request #${pr.number}`}
+          checked={selected}
+          onCheckedChange={(checked) => onSelectedChange(checked === true)}
+        />
+      ) : null}
       <span className="min-w-0 flex-1 space-y-1">
         <span className="flex min-w-0 items-center gap-1.5">
           <PullRequestStateIcon pr={pr} />

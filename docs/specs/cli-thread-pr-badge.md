@@ -30,7 +30,7 @@ because the work is about it is the separate **Attached pull request**; see
   | open   | `GitPullRequestArrow`   | `text-emerald-600 dark:text-emerald-300/90` |
   | draft  | `GitPullRequestDraft`   | `text-muted-foreground` |
   | merged | `GitMerge`              | `text-violet-600 dark:text-violet-300/90` |
-  | closed | `GitPullRequestClosed`  | `text-zinc-500 dark:text-zinc-400/80` |
+  | closed | `GitPullRequestClosed`  | `text-destructive` |
 
 - Placement follows the branch, since the PR is branch-derived:
   - **Compact rows**: leading position in the title line, after the task-ref

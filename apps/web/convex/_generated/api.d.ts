@@ -147,6 +147,7 @@ import type * as events_lib_constants from "../events/lib/constants.js";
 import type * as events_lib_eventsRepo from "../events/lib/eventsRepo.js";
 import type * as http from "../http.js";
 import type * as integrations_github_accounts from "../integrations/github/accounts.js";
+import type * as integrations_github_assignees from "../integrations/github/assignees.js";
 import type * as integrations_github_checkRuns from "../integrations/github/checkRuns.js";
 import type * as integrations_github_comments from "../integrations/github/comments.js";
 import type * as integrations_github_core from "../integrations/github/core.js";
@@ -169,6 +170,7 @@ import type * as integrations_github_lib_permissions from "../integrations/githu
 import type * as integrations_github_lib_validators from "../integrations/github/lib/validators.js";
 import type * as integrations_github_pullRequests from "../integrations/github/pullRequests.js";
 import type * as integrations_github_setup from "../integrations/github/setup.js";
+import type * as integrations_github_states from "../integrations/github/states.js";
 import type * as integrations_github_sync from "../integrations/github/sync.js";
 import type * as lib_access_apiKeys from "../lib/access/apiKeys.js";
 import type * as lib_access_auth from "../lib/access/auth.js";
@@ -516,6 +518,7 @@ declare const fullApi: ApiFromModules<{
   "events/lib/eventsRepo": typeof events_lib_eventsRepo;
   http: typeof http;
   "integrations/github/accounts": typeof integrations_github_accounts;
+  "integrations/github/assignees": typeof integrations_github_assignees;
   "integrations/github/checkRuns": typeof integrations_github_checkRuns;
   "integrations/github/comments": typeof integrations_github_comments;
   "integrations/github/core": typeof integrations_github_core;
@@ -538,6 +541,7 @@ declare const fullApi: ApiFromModules<{
   "integrations/github/lib/validators": typeof integrations_github_lib_validators;
   "integrations/github/pullRequests": typeof integrations_github_pullRequests;
   "integrations/github/setup": typeof integrations_github_setup;
+  "integrations/github/states": typeof integrations_github_states;
   "integrations/github/sync": typeof integrations_github_sync;
   "lib/access/apiKeys": typeof lib_access_apiKeys;
   "lib/access/auth": typeof lib_access_auth;

@@ -1,8 +1,7 @@
 /// <reference types="vite/client" />
 import { afterEach, beforeEach, describe, expect, test, vi } from "vitest";
 import { api } from "../../_generated/api";
-import type { Id } from "../../_generated/dataModel";
-import { connectedProject, signedWebhook, stubGithubAppEnv, type FakeGithub, type FakeGithubUser, type T } from "../../../convex-testing/github";
+import { connectedProject, linkGithubAccount, signedWebhook, stubGithubAppEnv, type FakeGithubUser, type T } from "../../../convex-testing/github";
 import { errors } from "./errors";
 import { readGithubAppConfig } from "./lib/constants";
 import { encryptToken } from "./lib/github";
@@ -22,20 +21,11 @@ afterEach(() => {
 
 const MAYA: FakeGithubUser = { id: 42, login: "maya" };
 
-/** Connect GitHub as `person`: the authorize URL's state comes back through the callback with GitHub's code. */
-async function link(asUser: AsUser, github: FakeGithub, organizationId: Id<"organizations">, person: FakeGithubUser, returnTo = "/o/acme/WEB/pull-requests?repo=r&pr=1") {
-  const { authorizeUrl } = await asUser.mutation(api.integrations.github.accounts.beginLink, { organizationId, returnTo });
-  const state = new URL(authorizeUrl).searchParams.get("state")!;
-  const code = `code-${person.login}-${Math.random()}`;
-  github.state.oauthCodes.set(code, person);
-  return asUser.action(api.integrations.github.accounts.completeLink, { state, code });
-}
-
 /** `expiring`: the App expires tokens, so links get 8-hour tokens with a refresh token. */
 async function linkedProject({ expiring = false } = {}) {
   const setup = await connectedProject();
   setup.github.state.expiringTokens = expiring;
-  await link(setup.asUser, setup.github, setup.org._id, MAYA);
+  await linkGithubAccount(setup.asUser, setup.github, setup.org._id, MAYA);
   const target = { projectId: setup.project._id, repositoryId: setup.repositoryId, number: 1 };
   return { ...setup, target };
 }
@@ -52,14 +42,14 @@ describe("integrations.github.accounts", () => {
       organizations: [{ organizationId: org._id, account: null }],
     });
 
-    expect(await link(asUser, github, org._id, MAYA)).toEqual({ returnTo: "/o/acme/WEB/pull-requests?repo=r&pr=1" });
+    expect(await linkGithubAccount(asUser, github, org._id, MAYA)).toEqual({ returnTo: "/o/acme/WEB/pull-requests?repo=r&pr=1" });
     expect(await myAccount(asUser)).toEqual({ githubUserId: 42, login: "maya", avatarUrl: "https://avatars.githubusercontent.com/u/42", status: "active" });
   });
 
   test("a return path off the app falls back to the app's root", async () => {
     const { asUser, github, org } = await connectedProject();
-    expect(await link(asUser, github, org._id, MAYA, "//evil.example/steal")).toEqual({ returnTo: "/" });
-    expect(await link(asUser, github, org._id, MAYA, "https://evil.example")).toEqual({ returnTo: "/" });
+    expect(await linkGithubAccount(asUser, github, org._id, MAYA, "//evil.example/steal")).toEqual({ returnTo: "/" });
+    expect(await linkGithubAccount(asUser, github, org._id, MAYA, "https://evil.example")).toEqual({ returnTo: "/" });
   });
 
   test("a state started by one member can't be finished by another, and a tampered state is refused", async () => {
@@ -82,10 +72,10 @@ describe("integrations.github.accounts", () => {
     const { asUser, github, org, ctx } = await connectedProject();
     const other = await ctx.user();
     await ctx.orgMember(org._id, other._id, "member");
-    await link(asUser, github, org._id, MAYA);
-    await expect(link(ctx.asUser(other), github, org._id, MAYA)).rejects.toThrow(errors.ACCOUNT_LINKED_TO_ANOTHER_MEMBER);
+    await linkGithubAccount(asUser, github, org._id, MAYA);
+    await expect(linkGithubAccount(ctx.asUser(other), github, org._id, MAYA)).rejects.toThrow(errors.ACCOUNT_LINKED_TO_ANOTHER_MEMBER);
     // Relinking your own account is fine.
-    await link(asUser, github, org._id, MAYA);
+    await linkGithubAccount(asUser, github, org._id, MAYA);
   });
 
   test("Disconnect unlinks the account and revokes that token on GitHub", async () => {
@@ -100,7 +90,7 @@ describe("integrations.github.accounts", () => {
     const { github, org, ctx, t } = await connectedProject();
     const other = await ctx.user();
     await ctx.orgMember(org._id, other._id, "member");
-    await link(ctx.asUser(other), github, org._id, MAYA);
+    await linkGithubAccount(ctx.asUser(other), github, org._id, MAYA);
     await ctx.asUser(other).mutation(api.organizations.members.leave, { organizationId: org._id });
     expect(await t.run((run) => run.db.query("integrationLinkedAccounts").collect())).toEqual([]);
   });
