@@ -59,7 +59,7 @@ export const featureGroups: FeatureGroup[] = [
       { name: "Rich tasks", body: "Break work into subtasks and keep comments, attachments, artifacts and check results with the task. Commits and pull requests linked by agents or the CLI show up on the task." },
       { name: "Keyboard-first tasks", body: "Create, indent, reorder and update tasks from the keyboard, and open any task by its ref. Bulk edits, archive and delete come with undo." },
       { name: "Teams & permissions", body: "Invite teammates to organizations and projects, and give each role the access it needs." },
-      { name: "Git-forge integration", body: "Review comments go back to the agent, and merging closes the task.", soon: true },
+      { name: "GitHub pull requests", body: "Read pull requests from connected repositories with their checks, commits and agent threads. Ask an agent for a Guide, then comment, review and merge from Convoy." },
     ],
   },
   {

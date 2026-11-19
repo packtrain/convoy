@@ -1,9 +1,11 @@
+import type { LucideIcon } from "lucide-react";
 import { Bot, ChevronDown, CornerDownLeft, GitBranch, Laptop, MousePointerClick, Plus, SquareCheck, Workflow } from "lucide-react";
 import OpenAIIcon from "./openai";
 import styles from "./preview-composer.module.css";
 
 // Geometry and spacing mirror thread-composer.tsx and context-window-meter.tsx.
-export function PreviewComposer({ task }: { task?: { id: string; title: string } }) {
+export function PreviewComposer({ task }: { task?: { id: string; title: string; icon?: LucideIcon } }) {
+  const TaskIcon = task?.icon ?? SquareCheck;
   const circumference = 2 * Math.PI * 7.5;
   return (
     <section className={`${styles.area} ${task ? styles.embedded : ""}`} aria-label={task ? "Activity composer" : "Thread composer"}>
@@ -30,7 +32,7 @@ export function PreviewComposer({ task }: { task?: { id: string; title: string }
           </div>}
         </div>
         <div className={styles.input}>
-          {task && <div className={styles.attachments}><span className={styles.task}><SquareCheck /><span>{task.id}</span><span className={styles.taskTitle}>{task.title}</span></span></div>}
+          {task && <div className={styles.attachments}><span className={styles.task}><TaskIcon /><span>{task.id}</span><span className={styles.taskTitle}>{task.title}</span></span></div>}
           <textarea readOnly aria-label={task ? "Start a new thread" : "Follow-up message"} placeholder={task ? "Start a new thread..." : "Ask a follow-up question..."} className={styles.textarea} />
           <div className={styles.footer}>
             <div className={styles.tools}>

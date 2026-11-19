@@ -11,6 +11,7 @@ import { ProjectOrganizationPreview } from "@/components/product-preview/project
 import { TaskArtifactsPreview } from "@/components/product-preview/task-artifacts";
 import { EnvironmentsPreview } from "@/components/product-preview/environments";
 import { ChecksPreview } from "@/components/product-preview/checks";
+import { PullRequestPreview } from "@/components/product-preview/pull-request";
 import { SelfHostingPreview } from "@/components/product-preview/self-hosting";
 import styles from "./page.module.css";
 import { Footer } from "@/components/footer";
@@ -202,6 +203,19 @@ export default function Home() {
               <a href={`${site.docsUrl}docs/using/checks`} className="mt-7 inline-flex items-center gap-2 text-[13px] text-[#c6cad3] hover:text-white">How checks work <ArrowRight aria-hidden className="size-4" /></a>
             </div>
             <div data-preview="checks" className="min-w-0 self-center p-3 sm:p-6"><ChecksPreview /></div>
+          </section>
+
+          <section id="pull-requests" className={`reveal scroll-mt-[61px] border-b ${LINE}`}>
+            <div className={`grid gap-6 border-b ${LINE} p-8 sm:p-10 lg:grid-cols-[minmax(0,1fr)_minmax(0,1fr)] lg:gap-12`}>
+              <div>
+                <p className="mb-5 text-[12px] font-medium tracking-[0.08em] text-[#a3a3a3] uppercase">Guided reviews</p>
+                <h2 className="max-w-[18ch] text-[28px] font-[450] leading-[1.08] tracking-[-0.035em] sm:text-[34px]">Review pull requests chapter by chapter.</h2>
+              </div>
+              <div className="lg:pt-9">
+                <p className={`max-w-[52ch] text-[15px] leading-relaxed ${DIM}`}>Guided reviews group related changes into chapters, so you can see how a change fits together even when it spans a dozen files. Notes beside the code explain what changed and where to look closely. When you come back to a review, you can see what still needs your attention and catch up on checks, commits, and agent discussions in one timeline.</p>
+              </div>
+            </div>
+            <div data-preview="pull-request" className="min-w-0 p-3 sm:p-6"><PullRequestPreview /></div>
           </section>
 
           <section id="environments" className={`reveal grid border-b ${LINE} lg:grid-cols-[minmax(0,1fr)_320px]`}>

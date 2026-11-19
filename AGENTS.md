@@ -209,6 +209,12 @@ commands. Color preference does not override a site's saved theme. See
 Inspect screenshots before attaching them with the run's `convoy threads attach`
 command. Close your named session; do not close another agent's sessions.
 
+Run `convoy threads attach` once per file set, and never pipe its output
+through `tail` or `grep`. Each run adds new attachments, and the CLI cannot
+remove them, so a retry after an upload that worked leaves duplicates. Judge
+success by the exit code and the `✓ Attached` line, not by whether any
+output appeared.
+
 ## Commands
 
 ```bash

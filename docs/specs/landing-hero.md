@@ -695,3 +695,37 @@ Verify native disclosures and keyboard access, menu Escape and focus return,
 result preservation, both request scopes, the reference row structure, and
 320px/390px layouts without page overflow. Check section geometry in the
 assembled homepage. Product behavior remains defined in [task-checks.md](task-checks.md).
+
+## Pull request reviews, OS-2382
+
+A section after Checks and before environments introduces pull request
+reviews under a "Guided reviews" label with "Review pull requests chapter by
+chapter." The copy sits above a full-width preview. It explains how chapters and notes help reviewers follow changes across files
+and how reviewers can pick up where they left off. The feature index lists GitHub pull requests as shipped, replacing the
+"Git-forge integration" /soon entry.
+
+The isolated `product-preview/pull-request` folder exports
+`PullRequestPreview`. The homepage section and `/playground/pull-request` are
+its wiring points. `PreviewComposer` accepts an optional chip icon so the
+Activity composer shows a pull request chip.
+
+The scene follows the user's CleanShot 2026-11-19 at 18.40.09 and 18.40.24
+references. The header has the PR title, Merge status, Submit review with a
+count, and icon actions. Overview, Guide and Diff tabs switch locally; the scene opens on Guide. The
+right side of the tab row shows `main → sha` on Overview and Diff, and the
+Guide's model, sha and age on Guide.
+
+Overview shows the title with its number, author and branches, the
+description, a Pull request checks card with four expandable check rows (one
+Outdated badge), GitHub checks and Commits cards that expand to their lists,
+and Activity: the embedded composer, Add comment, a comment, a thread group,
+a commit and an approval. A sidebar lists Status, Threads, Tasks, Reviewers,
+Assignees and Branch. Below 940px the sidebar is hidden.
+
+Guide shows two chapters, each with numbered notes (summary, optional Product
+callout, file rows with per-file notes, optional question) beside that
+chapter's diffs. Diff lists every file's diff. Each file header has a
+disclosure, path, +/- counts and a Reviewed checkbox. Reviewed marks are shared
+between Guide and Diff, and the Guide's file row shows a check. Below 760px
+notes stack above diffs. Code lines scroll inside their block; the page never
+overflows at 320px or 390px. No requests or backend state.

@@ -6,7 +6,7 @@ import { launchChromium } from '../lib/browser.mjs';
 
 // Run after the landing build; serve its HTML through browser interception.
 const root = fileURLToPath(new URL('../', import.meta.url));
-const scenes = ['hero', 'workflows', 'skills-agents', 'watch-tower', 'artifact-review', 'thread-groups', 'agent-threads', 'remote-thread', 'task-assignment', 'project-organization', 'task-artifacts', 'checks', 'environments', 'self-hosting'];
+const scenes = ['hero', 'workflows', 'skills-agents', 'watch-tower', 'artifact-review', 'thread-groups', 'agent-threads', 'remote-thread', 'task-assignment', 'project-organization', 'task-artifacts', 'checks', 'pull-request', 'environments', 'self-hosting'];
 
 const serve = (page, { blockScripts = false } = {}) => page.route('**/*', async route => {
   const path = new URL(route.request().url()).pathname;

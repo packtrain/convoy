@@ -16,6 +16,7 @@ const previews = [
   { href: "/playground/thread-groups", title: "Thread groups preview", description: "Related conversations in a thread container with tabs at the top." },
   { href: "/playground/task-artifacts", title: "Task artifacts preview", description: "Plans, reports and handoffs listed on a task, with the selected document open." },
   { href: "/playground/artifact-review", title: "Artifact review preview", description: "A plan, a highlighted passage and the feedback attached to it." },
+  { href: "/playground/pull-request", title: "Pull request review preview", description: "A pull request's checks and Activity, its Guide, and Reviewed marks on the diff." },
   { href: "/playground/watch-tower", title: "Watch Tower preview", description: "Runs waiting for input, failed runs and work ready for review across projects." },
   {
     href: "/playground/skills-agents",
