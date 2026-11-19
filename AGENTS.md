@@ -84,8 +84,10 @@ These apply to every task, no exceptions.
     [.agents/skills/unslop/SKILL.md](.agents/skills/unslop/SKILL.md).
 13. **Bump `version` in `apps/cli/package.json` in every change that touches
     `apps/cli` code.** Minor for features, patch for fixes. The publish workflow
-    skips a version npm already has, so an unbumped change never ships. See
-    [Publishing the CLI](docs/agents/publishing-the-cli.md).
+    skips a version npm already has, so an unbumped change never ships. Set
+    `CONVOY_VERSION` in `templates/project-isolation/devcontainer.json` to the
+    same version in the same commit; `install.test.ts` fails the publish run
+    otherwise. See [Publishing the CLI](docs/agents/publishing-the-cli.md).
 14. **Plan in vertical slices, never by layer.** Each slice is one commit that
     carries whatever backend, CLI, and UI it needs to be verified by clicking in
     the running app, and the first slice is already end to end. Later slices

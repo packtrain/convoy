@@ -28,8 +28,9 @@ to push. A staged version does not count as published, so another push touching
 
 ## One-time npm setup
 
-When releasing the project-isolation template, update `CONVOY_VERSION` in
-`templates/project-isolation/devcontainer.json` to match `apps/cli/package.json`.
+Every CLI version bump also updates `CONVOY_VERSION` in
+`templates/project-isolation/devcontainer.json` to match `apps/cli/package.json`;
+`src/commands/devcontainer/install.test.ts` fails the publish run otherwise.
 Keep the CLI, bundled launcher and downloaded template compatible. Test the
 packed package and rerun the root launcher installer on the acceptance VM;
 updating npm alone does not replace the installed helper. Publish the package
