@@ -40,7 +40,6 @@ import { ThreadPlanProgress } from "@/components/blocks/thread/thread-plan-progr
 import { ThreadTaskSelectorDialog } from "@/components/blocks/thread/thread-task-selector-dialog";
 import { AttachedPullRequestPill, PullRequestSelectorDialog } from "@/components/blocks/integrations";
 import { attachedPullRequestUrl, type AttachedPullRequest } from "@/convex/lib/contracts/github";
-import { useGithubIntegrationEnabled } from "@/lib/dev-mode/use-dev-mode";
 import { ThreadAgentChip, type ThreadAgentChipAgent } from "@/components/blocks/thread/thread-agent-chip";
 import { Spinner } from "@/components/custom/spinner";
 import { TooltipExt } from "@/components/custom/tooltip-ext";
@@ -73,6 +72,7 @@ import {
 import type { ThreadComposerSerializedContent } from "@/lib/threads/draft-storage";
 import type { FileMentionContext } from "@/lib/threads/hooks/use-file-mention-search";
 import type { PlanProgress } from "@/lib/threads/plan-progress";
+import { supportsAttachedPullRequest } from "@/lib/threads/cli-version";
 import type { ThreadPullRequest } from "@/lib/threads/pull-request";
 import { isRecord } from "@/lib/type-guards";
 import { appRoute, href, useRouteParams } from "@/lib/navigation";
@@ -568,16 +568,15 @@ function ThreadComposerAttachmentTools({
   attachTaskDisabled?: boolean;
   hotkeyTargetRef: RefObject<HTMLDivElement | null>;
   onSelectTask: (task: ThreadComposerAttachedTask) => void;
-  /** Absent while the PR is locked: the menu offers no picker. */
+  /** Absent while the PR is locked or the profile's CLI predates PRs: the menu offers no picker. */
   onSelectPullRequest?: (pullRequest: AttachedPullRequest) => void;
   getTaskHref?: (task: Pick<TaskSelectorOption, "refId" | "isArchived">) => string;
 }) {
   const { openFileDialog } = usePromptInputAttachments();
   const [isTaskSelectorOpen, setIsTaskSelectorOpen] = useState(false);
   const [isPullRequestSelectorOpen, setIsPullRequestSelectorOpen] = useState(false);
-  const githubEnabled = useGithubIntegrationEnabled();
   const canAttachTask = !!projectId && !attachTaskDisabled;
-  const canAttachPullRequest = githubEnabled && !!projectId && !!onSelectPullRequest;
+  const canAttachPullRequest = !!projectId && !!onSelectPullRequest;
 
   const handleOpenTaskSelector = useCallback(() => {
     if (!canAttachTask) {
@@ -1336,7 +1335,11 @@ function ThreadComposerContent({
                           setAttachedTask(task);
                           onAttachedTaskChange?.(task);
                         }}
-                        onSelectPullRequest={isAttachedPullRequestRemovable ? setAttachedPullRequest : undefined}
+                        onSelectPullRequest={
+                          isAttachedPullRequestRemovable && supportsAttachedPullRequest(selectedProfile?.appVersion)
+                            ? setAttachedPullRequest
+                            : undefined
+                        }
                         getTaskHref={getTaskHref}
                       />
                     )}

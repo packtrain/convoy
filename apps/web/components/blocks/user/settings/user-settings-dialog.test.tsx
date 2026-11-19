@@ -43,15 +43,7 @@ describe("UserSettingsDialog", () => {
     });
   });
 
-  test("Connected accounts lists each organization's GitHub account, behind the GitHub integration toggle", () => {
-    const dialog = (
-      <UserSettingsDialog open onOpenChange={vi.fn()} section="connected-accounts" onSectionChange={vi.fn()} />
-    );
-    const { unmount } = render(dialog);
-    expect(screen.queryByRole("button", { name: "Connected accounts" })).toBeNull();
-    unmount();
-
-    window.localStorage.setItem(DEV_SETTINGS.githubIntegration.storageKey, DEV_SETTING_ENABLED_VALUE);
+  test("Connected accounts lists each organization's GitHub account", () => {
     useQueryMock.mockReturnValue({
       configured: true,
       organizations: [
@@ -59,7 +51,7 @@ describe("UserSettingsDialog", () => {
         { organizationId: "org_2", organizationSlug: "globex", organizationName: "Globex", account: null },
       ],
     });
-    render(dialog);
+    render(<UserSettingsDialog open onOpenChange={vi.fn()} section="connected-accounts" onSectionChange={vi.fn()} />);
     expect(screen.getByRole("button", { name: "Connected accounts" })).toBeTruthy();
     expect(screen.getByText("Connected as @maya")).toBeTruthy();
     expect(screen.getByText("Not connected")).toBeTruthy();

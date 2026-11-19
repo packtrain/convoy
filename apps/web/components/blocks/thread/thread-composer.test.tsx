@@ -192,10 +192,6 @@ vi.mock("@/components/blocks/thread/thread-task-selector-dialog", () => ({
   ),
 }));
 
-vi.mock("@/lib/dev-mode/use-dev-mode", () => ({
-  useGithubIntegrationEnabled: () => true,
-}));
-
 vi.mock("@/components/blocks/integrations", () => ({
   AttachedPullRequestPill: ({ pullRequest, onRemove }: { pullRequest: { ref: string }; onRemove?: () => void }) => (
     <button type="button" onClick={onRemove}>Remove {pullRequest.ref}</button>
@@ -229,6 +225,17 @@ vi.mock("@/components/ui/tooltip", async (importOriginal) => ({
   TooltipTrigger: ({ children }: { children: ReactNode }) => children,
   TooltipContent: () => null,
 }));
+
+const selectorsWithCli = (appVersion: string | undefined) => ({
+  profiles: [{ _id: "profile_1" as Id<"cliProfiles">, name: "Laptop", isOnline: true, appVersion, paths: [] }],
+  profileId: "profile_1",
+  pathId: "",
+  cliType: "claude-code" as const,
+  mode: "agent",
+  cliModel: undefined,
+  onModeChange: vi.fn(),
+  hideWorkingDirectory: true,
+});
 
 describe("ThreadComposer", () => {
   afterEach(() => {
@@ -337,6 +344,27 @@ describe("ThreadComposer", () => {
     });
   });
 
+  // An older CLI drops `pr(github):`, so a PR-only message would reach the agent empty.
+  test("offers the pull request picker only when the selected profile's CLI is 0.142.0 or newer", () => {
+    const renderWithCli = (appVersion: string | undefined) =>
+      render(
+        <ThreadComposer
+          projectId={"project_1" as Id<"projects">}
+          onSubmit={vi.fn()}
+          textareaPlaceholder="Ask"
+          selectorsProps={selectorsWithCli(appVersion)}
+        />
+      );
+    renderWithCli("0.141.9");
+    expect(screen.queryByRole("button", { name: "Pick PR" })).toBeNull();
+    cleanup();
+    renderWithCli(undefined);
+    expect(screen.queryByRole("button", { name: "Pick PR" })).toBeNull();
+    cleanup();
+    renderWithCli("0.142.0");
+    expect(screen.getByRole("button", { name: "Pick PR" })).toBeTruthy();
+  });
+
   test("an attached pull request goes out with the message as a URL and clears after send", async () => {
     const onSubmit = vi.fn();
     render(
@@ -344,7 +372,7 @@ describe("ThreadComposer", () => {
         projectId={"project_1" as Id<"projects">}
         onSubmit={onSubmit}
         textareaPlaceholder="Ask"
-        selectorsProps={{ profiles: [], profileId: "", pathId: "", cliType: "claude-code", mode: "agent", cliModel: undefined, onModeChange: vi.fn(), hideWorkingDirectory: true }}
+        selectorsProps={selectorsWithCli("0.142.0")}
       />
     );
 
@@ -366,7 +394,7 @@ describe("ThreadComposer", () => {
         onSubmit={onSubmit}
         textareaPlaceholder="Ask"
         initialAttachedPullRequest={{ owner: "contoso", name: "convoy", number: 482, ref: "contoso/convoy#482" }}
-        selectorsProps={{ profiles: [], profileId: "", pathId: "", cliType: "claude-code", mode: "agent", cliModel: undefined, onModeChange: vi.fn(), hideWorkingDirectory: true }}
+        selectorsProps={selectorsWithCli("0.142.0")}
       />
     );
 
@@ -382,7 +410,7 @@ describe("ThreadComposer", () => {
       projectId: "project_1" as Id<"projects">,
       onSubmit: vi.fn(),
       textareaPlaceholder: "Ask",
-      selectorsProps: { profiles: [], profileId: "", pathId: "", cliType: "claude-code" as const, mode: "agent", cliModel: undefined, onModeChange: vi.fn(), hideWorkingDirectory: true },
+      selectorsProps: selectorsWithCli("0.142.0"),
     };
     const { rerender } = render(<ThreadComposer {...props} />);
     fireEvent.click(screen.getByRole("button", { name: "Pick PR" }));

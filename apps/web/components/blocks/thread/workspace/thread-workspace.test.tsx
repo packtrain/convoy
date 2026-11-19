@@ -199,11 +199,6 @@ vi.mock("@/components/blocks/integrations", async (importOriginal) => {
   };
 });
 
-vi.mock("@/lib/dev-mode/use-dev-mode", async (importOriginal) => ({
-  ...(await importOriginal<object>()),
-  useGithubIntegrationEnabled: () => true,
-}));
-
 vi.mock("@/lib/threads/hooks/use-cli-thread", () => ({
   useCliThread: (...args: unknown[]) => useCliThreadMock(...args),
 }));

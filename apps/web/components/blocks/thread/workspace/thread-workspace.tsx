@@ -82,7 +82,6 @@ import { WorkflowRunContainerView } from "@/components/blocks/workflows/workflow
 import { WorkflowRunPanel } from "@/components/blocks/workflows/workflow-run-panel";
 import { EvidencePanel } from "@/components/blocks/evidence";
 import { AttachedPullRequestReader } from "@/components/blocks/integrations";
-import { useGithubIntegrationEnabled } from "@/lib/dev-mode/use-dev-mode";
 import { WorkflowRunRail } from "@/components/blocks/workflows/workflow-run-rail";
 import type { ThreadTaskPaneRenderer } from "./thread-task-pane";
 import { buildTimelineRuns } from "@/lib/threads/run-timeline";
@@ -1437,8 +1436,7 @@ function ThreadWorkspaceBody({
     return byThreadId;
   }, [chat, group, threadId]);
 
-  const githubIntegrationEnabled = useGithubIntegrationEnabled();
-  const attachedPullRequest = githubIntegrationEnabled ? chat?.attachedPullRequest : undefined;
+  const attachedPullRequest = chat?.attachedPullRequest;
   // Not URL-backed like the task tab, so it is a plain panel pick (OS-2405).
   const openPullRequestTab = () => {
     setActivePanel("pullRequest");

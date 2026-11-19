@@ -27,7 +27,6 @@ This document defines the `Developer` section inside the user settings dialog.
   - `Task list: Show rank`
   - `Show unfinished items`
   - `Threads: Tool call debug`
-  - `GitHub integration` ([github-integration.md](github-integration.md#developer-toggle))
 
 ## Tool Call Debug
 

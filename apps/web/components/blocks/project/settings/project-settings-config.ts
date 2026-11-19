@@ -136,14 +136,12 @@ const PROJECT_SETTINGS_PRIMARY_SECTION_CONFIG: readonly SettingsSectionConfig[] 
     icon: GitPullRequest,
     label: "Pull requests",
     description: "How Convoy checks pull requests and writes their Guides.",
-    devSettingId: "githubIntegration",
   },
   {
     id: "integrations",
     icon: Plug,
     label: "Integrations",
     description: "Connect the tools your project works with.",
-    devSettingId: "githubIntegration",
   },
   {
     id: "import-export",

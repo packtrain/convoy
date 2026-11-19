@@ -698,6 +698,7 @@ export function ThreadView({
         profileKey: activeProfile?.profileKey,
         hostname: activeProfile?.hostname,
         isOnline: activeProfile?.isOnline ?? false,
+        appVersion: activeProfile?.appVersion,
         availableClis: activeProfileClis,
         paths: activeProfile
           ? activeProfile.paths.some((path) => path.id === chatPathId)

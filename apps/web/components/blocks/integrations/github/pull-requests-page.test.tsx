@@ -7,7 +7,6 @@ import { getFunctionName } from "convex/server";
 import { api } from "@/convex/_generated/api";
 import { appRoute } from "@/lib/navigation";
 import { PullRequestsPage } from "./pull-requests-page";
-import { DEV_SETTINGS, DEV_SETTING_ENABLED_VALUE } from "@/lib/dev-mode/constants";
 
 let status: unknown;
 let project: unknown = { _id: "project_1" };
@@ -141,19 +140,7 @@ const pr = {
   providerUpdatedAt: Date.now() - 60_000,
 };
 
-beforeEach(() => {
-  window.localStorage.setItem(DEV_SETTINGS.githubIntegration.storageKey, DEV_SETTING_ENABLED_VALUE);
-});
-
 describe("PullRequestsPage", () => {
-  test("with the GitHub integration toggle off, says so and reads nothing", () => {
-    window.localStorage.removeItem(DEV_SETTINGS.githubIntegration.storageKey);
-    status = connected({ syncStatus: "synced" });
-    render(<PullRequestsPage />);
-    expect(screen.getByText("GitHub integration is off")).toBeTruthy();
-    expect(screen.queryByRole("heading", { name: "Pull requests" })).toBeNull();
-  });
-
   test("a failed first import says so instead of showing an empty repository", () => {
     status = connected({ syncStatus: "error", error: "GitHub sync failed: GitHub returned 502" });
     render(<PullRequestsPage />);

@@ -34,8 +34,7 @@ This specification defines behavior for project actions shown in the sidebar `..
    page from the settings nav). The
    section items show only when the section is open to the caller. `Delete`
    needs the org `PROJECT_DELETE`. While the roles load, only `Settings` shows.
-   A section hidden by its developer toggle has no action either
-   (`Integrations` while `GitHub integration` is off).
+   A section hidden by its developer toggle has no action either.
 
 ## Label and Icon Rules
 

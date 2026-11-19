@@ -15,7 +15,6 @@ const DISABLED_SETTINGS = {
   taskListShowRank: false,
   showUnfinishedItems: false,
   toolCallDebug: false,
-  githubIntegration: false,
 } as const;
 
 describe("developer settings selection helpers", () => {

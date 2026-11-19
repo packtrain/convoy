@@ -24,7 +24,6 @@ import {
 import { Skeleton } from "@/components/ui/skeleton";
 import { cn } from "@/lib/utils";
 import { useAppConvexAuth } from "@/lib/auth/hooks";
-import { useGithubIntegrationEnabled } from "@/lib/dev-mode/use-dev-mode";
 import { AppLink, appRoute, PULL_REQUEST_TABS, useNavigation, useRouteParams } from "@/lib/navigation";
 import { useCurrentOrgProject } from "@/lib/routing/current-org-project-context";
 import { NoAccess } from "@/components/blocks/no-access";
@@ -47,19 +46,8 @@ type ListOptions = Omit<FunctionArgs<typeof api.integrations.github.pullRequests
 
 const DEFAULT_OPTIONS: ListOptions = { tab: "open", sort: "updated", order: "desc" };
 
-/** Gated by the GitHub integration developer toggle until the integration ships. */
-export function PullRequestsPage() {
-  return useGithubIntegrationEnabled() ? (
-    <PullRequests />
-  ) : (
-    <main className="flex min-h-screen flex-col bg-background px-6 py-6">
-      <EmptyState fill icon={Github} title="GitHub integration is off" description="Turn it on in Settings → Developer." />
-    </main>
-  );
-}
-
 /** The project's PR page: the list, or the reader when `?repo=&pr=` name one PR. Filters survive opening a PR. */
-function PullRequests() {
+export function PullRequestsPage() {
   const { organizationSlug, projectAlias } = useRouteParams<{ organizationSlug: string; projectAlias: string }>();
   const { organizationId } = useCurrentOrgProject();
   const { isAuthenticated } = useAppConvexAuth();

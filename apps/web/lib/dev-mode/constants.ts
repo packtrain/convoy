@@ -26,12 +26,6 @@ export const DEV_SETTINGS = {
     description: "Show a button on tool call rows that copies the raw tool call JSON.",
     storageKey: "convoy.dev-setting.tool-call-debug",
   },
-  githubIntegration: {
-    label: "GitHub integration",
-    description:
-      "Show project Integrations settings and the Pull Requests page while the GitHub integration is in progress.",
-    storageKey: "convoy.dev-setting.github-integration",
-  },
 } as const;
 
 export type DevSettingId = keyof typeof DEV_SETTINGS;

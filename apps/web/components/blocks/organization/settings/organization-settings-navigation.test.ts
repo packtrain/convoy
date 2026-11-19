@@ -8,7 +8,6 @@ const DEV_SETTINGS_ALL_DISABLED: DevSettingsSnapshot = {
   taskListShowRank: false,
   showUnfinishedItems: false,
   toolCallDebug: false,
-  githubIntegration: false,
 };
 
 const FUTURE_IDS = ["workflows", "task-templates", "project-templates"];

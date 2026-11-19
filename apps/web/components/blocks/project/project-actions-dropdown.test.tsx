@@ -72,11 +72,7 @@ describe("ProjectActionsDropdown", () => {
     orgRole: "admin",
   } as const;
 
-  const enableGithubIntegration = () =>
-    window.localStorage.setItem(DEV_SETTINGS.githubIntegration.storageKey, DEV_SETTING_ENABLED_VALUE);
-
   test("renders navigating actions as links so the browser can open them in a new tab", () => {
-    enableGithubIntegration();
     render(<ProjectActionsDropdown {...project} onDelete={vi.fn()} />);
 
     expect(screen.queryByText("Share")).toBeNull();
@@ -100,13 +96,6 @@ describe("ProjectActionsDropdown", () => {
       "Integrations",
       "Lists",
     ]);
-  });
-
-  test("hides Integrations while the GitHub integration toggle is off", () => {
-    render(<ProjectActionsDropdown {...project} onDelete={vi.fn()} />);
-
-    expect(screen.queryByRole("link", { name: "Integrations" })).toBeNull();
-    expect(screen.getByRole("link", { name: "Lists" })).toBeTruthy();
   });
 
   test("hides the unfinished Archive action", () => {
@@ -144,7 +133,6 @@ describe("ProjectActionsDropdown", () => {
   });
 
   test("a member manages everything but members, integrations, and delete", () => {
-    enableGithubIntegration();
     render(
       <ProjectActionsDropdown {...project} myRole="member" orgRole="member" onDelete={vi.fn()} />
     );

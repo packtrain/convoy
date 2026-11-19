@@ -410,8 +410,7 @@ guide in the corner menu.
   expire after 30 days). A choice that fails to save says so in a toast. Retry always
   opens the popup, since the failed run's choices are often what failed.
   User settings → Agents shows a "Generate PR guide" dropdown per project
-  (Ask each time / Start automatically) while the GitHub integration
-  developer toggle is on.
+  (Ask each time / Start automatically).
 - The run is a normal CLI thread with the PR as its Attached pull request,
   private to the requester unless they share it, so only the requester sees
   Open thread. `cli.threads.core.create` takes `pullRequestGuide: { headSha }`,
@@ -913,8 +912,7 @@ is the only public entry, `project-integrations-page.tsx` holds the catalog
 index and routes to a provider page, and everything GitHub-specific lives in
 `github/`. Its `index.ts` and exports at most three things:
 `ProjectIntegrationsPage`, `PullRequestsPage`, and `PullRequestLink`.
-The OAuth callback route mounts `<ProjectIntegrationsPage callback="github" />`,
-which the developer toggle does not gate.
+The OAuth callback route mounts `<ProjectIntegrationsPage callback="github" />`.
 The PR page owns both list and reader modes. Its hooks and pure helpers
 (`use-integration-status.ts`, `github-patch.ts`) live inside the UI folder
 and are private to it, with no separate entry point. Enforce these imports through the existing ESLint restrictions.
@@ -938,16 +936,6 @@ Name the external wiring before implementation:
   the same public entry. Its lookup is one `integrations.github.core.listLinkTargets`
   subscription per organization, shared by every link on screen, never a
   GitHub call per row.
-
-### Developer toggle
-
-Until the integration ships, the `GitHub integration` developer toggle
-(off by default, [user-settings-developer-section.md](user-settings-developer-section.md))
-gates its frontend. Off: the Integrations and Pull requests settings
-sections and the project `...` menu's Integrations action are hidden, the sidebar has no Pull Requests item, and the
-PR and GitHub settings routes say the integration is off without reading any
-data. The backend, webhooks, and the OAuth callback route are not gated.
-Remove the toggle once the integration ships.
 
 The Pull requests settings section is `PullRequestSettingsSection`, mounted by
 the project settings content; it takes `PullRequestChecksSettings` from the
@@ -1156,8 +1144,7 @@ configured.
   against `integrations.github.core.listLinkTargets` (the active links of the
   organization's projects the caller can read, up to 500), case-insensitively.
   A match opens the reader in that project, preferring the project in view;
-  anything else, and every link while the developer toggle is off, opens
-  GitHub in a new tab as before.
+  anything else opens GitHub in a new tab as before.
 - `integrations.github.pullRequests.readDiff` is a one-shot action. It reads the PR, its
   files (first 100), and the PR again; if the revision moved, it retries once,
   then asks the reader to refresh. It rechecks access after GitHub answers.
@@ -1519,8 +1506,8 @@ OS-2193 attaches PRs to threads.
   message, like a Task, and titles a new thread `owner/name#number`. A fork
   copies the thread's and each message's PR. The `pr(github):` line needs
   CLI 0.142.0: an older CLI drops the field, so a PR-only message reaches the
-  agent empty. Gate the "+" item on the profile's CLI version before the
-  developer toggle goes.
+  agent empty. The "+" menu offers the PR picker only when the composer's
+  profile runs CLI 0.142.0 or newer.
 - The composer keeps the PR above its keyed content, so attaching a task
   (which remounts it) keeps the PR. A new `initialAttachedPullRequest` from the
   host replaces it. A workflow run can't carry a PR yet, so starting one with
@@ -1539,8 +1526,6 @@ OS-2193 attaches PRs to threads.
   thread tab in full view and the group strip). Like the task ref, a plain
   click opens the sidebar on the `#number` tab; a modified click opens GitHub
   (OS-2405).
-- The "+" menu item and live pills sit behind the GitHub integration
-  developer toggle.
 - The reader header has Refresh, which re-reads the diff and overview from
   GitHub, the same as the new-changes prompt's Refresh. Start thread (a PR
   list row) opens
@@ -1629,8 +1614,7 @@ Slice 6 (OS-2183).
   Activity updates without another read. `authorId` (GitHub's user id) on
   Overview comments marks the viewer's own conversation comments. Only those
   get Edit and Delete; review comments and review bodies get neither.
-- **UI.** Profile settings → Connected accounts, behind the developer
-  toggle, lists one row per organization: its name over "Connected as
+- **UI.** Profile settings → Connected accounts lists one row per organization: its name over "Connected as
   @login", "Not connected", or "@login needs reconnecting", with Disconnect,
   Connect, or Reconnect GitHub. The GitHub page's Your GitHub account section
   shows the same row for its organization to every member. Activity's

@@ -9,7 +9,6 @@ import type { Id } from "@/convex/_generated/dataModel";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
-import { useGithubIntegrationEnabled } from "@/lib/dev-mode/use-dev-mode";
 import { showConvexErrorToast } from "@/lib/errors";
 import { href, useNavigation, type RouteTarget } from "@/lib/navigation";
 
@@ -97,10 +96,8 @@ export function LinkedAccountRow({ organization, returnTo }: { organization: Org
 
 /** The profile settings section: writes to GitHub act as the account linked in each organization. */
 export function ConnectedAccountsSection() {
-  const enabled = useGithubIntegrationEnabled();
   const accounts = useLinkedGithubAccounts();
   const navigation = useNavigation();
-  if (!enabled) return null;
   // The dialog has no route of its own, so Connect returns to the page under it.
   const returnTo: RouteTarget = { pathname: navigation.location.pathname, query: new URLSearchParams(navigation.location.search) };
   return (

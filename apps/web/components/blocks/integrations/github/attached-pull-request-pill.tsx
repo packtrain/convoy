@@ -10,7 +10,6 @@ import { PullRequestStateIcon } from "./pull-request-state-icon";
 import { TooltipExt } from "@/components/custom/tooltip-ext";
 import { Pill, PillAction, PillContent, PillText } from "@/components/ui/pill";
 import { useAppConvexAuth } from "@/lib/auth/hooks";
-import { useGithubIntegrationEnabled } from "@/lib/dev-mode/use-dev-mode";
 import { cn } from "@/lib/utils";
 
 type AttachedPullRequestPillProps = {
@@ -24,12 +23,11 @@ type AttachedPullRequestPillProps = {
 
 /** The PR's live state and title when its repository is connected, else its full `owner/name#number`. */
 export function AttachedPullRequestPill({ pullRequest, projectId, onRemove, className }: AttachedPullRequestPillProps) {
-  const enabled = useGithubIntegrationEnabled();
   const { isAuthenticated } = useAppConvexAuth();
   const { owner, name, number } = pullRequest;
   const live = useQuery(
     api.integrations.github.pullRequests.getAttached,
-    enabled && isAuthenticated && projectId ? { projectId, owner, name, number } : "skip"
+    isAuthenticated && projectId ? { projectId, owner, name, number } : "skip"
   );
   const fullName = attachedPullRequestName(pullRequest);
   // A connected repository's PR shows only its number; the tooltip ends with the repository.

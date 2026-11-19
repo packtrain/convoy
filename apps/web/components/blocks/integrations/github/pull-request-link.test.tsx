@@ -4,7 +4,6 @@
 import { afterEach, beforeEach, describe, expect, test, vi } from "vitest";
 import { cleanup, fireEvent, render, screen } from "@testing-library/react";
 import { PullRequestLink } from "./pull-request-link";
-import { DEV_SETTINGS, DEV_SETTING_ENABLED_VALUE } from "@/lib/dev-mode/constants";
 
 let targets: unknown = [];
 let route: unknown = { organizationId: "org_1", organizationSlug: "org", projectAlias: "WEB" };
@@ -27,7 +26,6 @@ vi.mock("@/lib/navigation", async (importActual) => ({
 const URL_482 = "https://github.com/Acme/Web/pull/482";
 
 beforeEach(() => {
-  window.localStorage.setItem(DEV_SETTINGS.githubIntegration.storageKey, DEV_SETTING_ENABLED_VALUE);
   targets = [{ projectAlias: "API", repositoryId: "repo_1", owner: "acme", name: "web" }];
 });
 
@@ -60,20 +58,13 @@ describe("PullRequestLink", () => {
     expect(screen.getByRole("link", { name: "PR #482" }).getAttribute("href")).toBe("/o/org/WEB/pull-requests?repo=repo_2&pr=482");
   });
 
-  test("an unconnected repository, another host, or the toggle off opens GitHub in a new tab", () => {
+  test("an unconnected repository or another host opens GitHub in a new tab", () => {
     renderLink("https://github.com/other/repo/pull/1");
     expect(screen.getByRole("link", { name: "PR #482" }).getAttribute("target")).toBe("_blank");
     cleanup();
 
     renderLink("https://gitlab.com/acme/web/-/merge_requests/1");
     expect(screen.getByRole("link", { name: "PR #482" }).getAttribute("href")).toBe("https://gitlab.com/acme/web/-/merge_requests/1");
-    cleanup();
-
-    window.localStorage.removeItem(DEV_SETTINGS.githubIntegration.storageKey);
-    queryMock.mockClear();
-    renderLink();
-    expect(screen.getByRole("link", { name: "PR #482" }).getAttribute("href")).toBe(URL_482);
-    expect(queryMock).not.toHaveBeenCalled();
   });
 
   test("nested in a row link, it is a span that navigates without bubbling", () => {

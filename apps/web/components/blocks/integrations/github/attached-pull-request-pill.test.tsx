@@ -9,7 +9,6 @@ import { AttachedPullRequestPill } from "./attached-pull-request-pill";
 let live: unknown;
 vi.mock("convex/react", () => ({ useQuery: () => live }));
 vi.mock("@/lib/auth/hooks", () => ({ useAppConvexAuth: () => ({ isAuthenticated: true }) }));
-vi.mock("@/lib/dev-mode/use-dev-mode", () => ({ useGithubIntegrationEnabled: () => true }));
 
 const pullRequest = { owner: "vercel", name: "next.js", number: 1, ref: "vercel/next.js#1" };
 const pill = () => <AttachedPullRequestPill pullRequest={pullRequest} projectId={"project_1" as Id<"projects">} />;

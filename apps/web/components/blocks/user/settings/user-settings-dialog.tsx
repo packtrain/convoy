@@ -5,7 +5,7 @@ import { Button } from "@/components/ui/button";
 import { Settings, Bell, Bot, Shield, AlertTriangle, Key, Wrench, Server, Palette, Github } from "lucide-react";
 import { ConnectedAccountsSection } from "@/components/blocks/integrations";
 import { cn } from "@/lib/utils";
-import { useGithubIntegrationEnabled, useShowUnfinishedItems } from "@/lib/dev-mode/use-dev-mode";
+import { useShowUnfinishedItems } from "@/lib/dev-mode/use-dev-mode";
 import { GeneralSection } from "./general-section";
 import { AppearanceSection } from "./appearance-section";
 import { AgentAutomationSection } from "./agent-automation-section";
@@ -49,7 +49,6 @@ const sections = [
 
 export function UserSettingsDialog({ open, onOpenChange, section, onSectionChange }: UserSettingsDialogProps) {
   const showUnfinishedItems = useShowUnfinishedItems();
-  const githubIntegration = useGithubIntegrationEnabled();
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="max-w-3xl sm:max-w-3xl p-0 gap-0 overflow-hidden">
@@ -58,7 +57,7 @@ export function UserSettingsDialog({ open, onOpenChange, section, onSectionChang
         <div className="flex h-[500px] min-w-0">
           {/* Sidebar */}
           <nav className="w-52 shrink-0 bg-muted/30 p-2 flex flex-col gap-1">
-            {sections.filter((s) => (showUnfinishedItems || !s.disabled) && (githubIntegration || s.id !== "connected-accounts")).map((s) => (
+            {sections.filter((s) => showUnfinishedItems || !s.disabled).map((s) => (
               <Button
                 key={s.id}
                 variant="ghost"

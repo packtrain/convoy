@@ -17,8 +17,6 @@ This document defines which project settings areas are available by default and 
   - `Recurring tasks`
   - `Automations`
   - `Import & export`
-- `Integrations` is gated by `GitHub integration`
-  ([github-integration.md](github-integration.md#developer-toggle)).
 - Outside that toggle, gated sections are hidden, or shown disabled under
   [`Show unfinished items`](user-settings-developer-section.md#unfinished-items).
 

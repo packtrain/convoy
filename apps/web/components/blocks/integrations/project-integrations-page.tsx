@@ -5,11 +5,9 @@ import { ChevronRight, Github } from "lucide-react";
 import { api } from "@/convex/_generated/api";
 import type { Id } from "@/convex/_generated/dataModel";
 import { SettingsCatalogListFrame } from "@/components/blocks/settings-catalog/settings-catalog-list-frame";
-import { EmptyState } from "@/components/custom/empty-state";
 import { SettingsPageHeader } from "@/components/custom/settings-layout";
 import { Badge } from "@/components/ui/badge";
 import { useAppConvexAuth } from "@/lib/auth/hooks";
-import { useGithubIntegrationEnabled } from "@/lib/dev-mode/use-dev-mode";
 import { AppLink, appRoute } from "@/lib/navigation";
 import { useCurrentOrgProject } from "@/lib/routing/current-org-project-context";
 import { GithubCallbackPage } from "./github/github-callback-page";
@@ -25,17 +23,7 @@ type SettingsProps = { organizationSlug: string; projectAlias: string; provider?
 type ProjectIntegrationsPageProps = SettingsProps | { callback: "github" };
 
 export function ProjectIntegrationsPage(props: ProjectIntegrationsPageProps) {
-  // The callback only finishes a flow started in settings, so the toggle does not gate it.
-  return "callback" in props ? <GithubCallbackPage /> : <GatedProjectIntegrations {...props} />;
-}
-
-/** Gated by the GitHub integration developer toggle until the integration ships. */
-function GatedProjectIntegrations(props: SettingsProps) {
-  return useGithubIntegrationEnabled() ? (
-    <ProjectIntegrations {...props} />
-  ) : (
-    <EmptyState fill icon={Github} title="GitHub integration is off" description="Turn it on in Settings → Developer." />
-  );
+  return "callback" in props ? <GithubCallbackPage /> : <ProjectIntegrations {...props} />;
 }
 
 function ProjectIntegrations({ organizationSlug, projectAlias, provider }: SettingsProps) {

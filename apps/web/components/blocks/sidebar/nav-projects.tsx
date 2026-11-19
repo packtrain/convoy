@@ -95,7 +95,6 @@ import {
 } from "./project-list-collapse-storage";
 import { useSidebarTaskDrop } from "./use-sidebar-task-drop";
 import { cn } from "@/lib/utils";
-import { useGithubIntegrationEnabled } from "@/lib/dev-mode/use-dev-mode";
 
 interface NavProjectsProps {
   organizationId: Id<"organizations">;
@@ -328,8 +327,7 @@ function ProjectPinnedListsDropdown({
   /** Null when the caller has no threads access in this project. */
   threadsHref: string | null;
   watchTowerHref: string | null;
-  /** Null while the GitHub integration developer toggle is off. */
-  pullRequestsHref: string | null;
+  pullRequestsHref: string;
   getListEntryHref: (list: PinnedSidebarList) => string;
   pinnedLists: PinnedSidebarList[];
   open: boolean;
@@ -372,14 +370,12 @@ function ProjectPinnedListsDropdown({
             </AppLink>
           </DropdownMenuItem>
         ) : null}
-        {pullRequestsHref ? (
-          <DropdownMenuItem asChild className="cursor-pointer gap-2">
-            <AppLink href={pullRequestsHref}>
-              <GitPullRequest className="size-3.5 shrink-0 text-muted-foreground" aria-hidden="true" />
-              <span className="min-w-0 flex-1 truncate">Pull Requests</span>
-            </AppLink>
-          </DropdownMenuItem>
-        ) : null}
+        <DropdownMenuItem asChild className="cursor-pointer gap-2">
+          <AppLink href={pullRequestsHref}>
+            <GitPullRequest className="size-3.5 shrink-0 text-muted-foreground" aria-hidden="true" />
+            <span className="min-w-0 flex-1 truncate">Pull Requests</span>
+          </AppLink>
+        </DropdownMenuItem>
         {pinnedLists.map((list) => (
           <DropdownMenuItem
             key={pinnedListKey(list)}
@@ -480,9 +476,7 @@ const ProjectItem = memo(
       ? href(appRoute.projectWatchTower(organizationSlug, project.alias))
       : null;
     // Every member reads PRs, viewers included (docs/specs/github-integration.md).
-    const pullRequestsHref = useGithubIntegrationEnabled()
-      ? href(appRoute.projectPullRequests(organizationSlug, project.alias))
-      : null;
+    const pullRequestsHref = href(appRoute.projectPullRequests(organizationSlug, project.alias));
     const getListEntryHref = (list: PinnedSidebarList) =>
       href(
         projectEntryTarget(projectPath, project, {
@@ -513,8 +507,6 @@ const ProjectItem = memo(
     const isSidebarCollapsed = iconOnly || state === "collapsed";
     const ToggleIcon = isListsCollapsed ? ChevronRight : ChevronDown;
     const pinnedListsId = useId();
-    // A viewer's project with no pinned Lists may have no sub-items: no toggle, no menu, plain icon.
-    const hasSubItems = Boolean(threadsHref) || Boolean(pullRequestsHref) || pinnedLists.length > 0;
 
     return (
       <>
@@ -531,18 +523,14 @@ const ProjectItem = memo(
           >
             <AppLink href={projectEntryPath} className="cursor-pointer">
               <Hash
-                className={cn(
-                  "size-4 transition-opacity",
-                  hasSubItems &&
-                    "opacity-0 md:opacity-100 md:group-hover/menu-item:opacity-0 md:group-focus-within/menu-item:opacity-0 group-data-[collapsible=icon]:opacity-0"
-                )}
+                className="size-4 opacity-0 transition-opacity md:opacity-100 md:group-hover/menu-item:opacity-0 md:group-focus-within/menu-item:opacity-0 group-data-[collapsible=icon]:opacity-0"
                 strokeWidth={1}
                 style={project.color ? { color: project.color } : undefined}
               />
               <span>{project.name}</span>
             </AppLink>
           </SidebarMenuButton>
-          {hasSubItems && (isSidebarCollapsed || pinnedListsOpen) ? (
+          {isSidebarCollapsed || pinnedListsOpen ? (
             <ProjectPinnedListsDropdown
               project={project}
               threadsHref={threadsHref}
@@ -554,7 +542,7 @@ const ProjectItem = memo(
               onOpenChange={setPinnedListsOpen}
             />
           ) : null}
-          {hasSubItems && !isSidebarCollapsed ? (
+          {!isSidebarCollapsed ? (
             <button
               type="button"
               aria-controls={pinnedListsId}
@@ -580,7 +568,7 @@ const ProjectItem = memo(
             onDelete={handleDelete}
           />
         </SidebarMenuItem>
-        {hasSubItems && !isSidebarCollapsed && !isListsCollapsed ? (
+        {!isSidebarCollapsed && !isListsCollapsed ? (
           <SidebarMenuItem>
             <SidebarMenuSub id={pinnedListsId} className="ml-3.5 mr-1 mt-1 pr-0">
               {threadsHref ? (
@@ -623,26 +611,24 @@ const ProjectItem = memo(
                   </SidebarMenuSubButton>
                 </SidebarMenuSubItem>
               ) : null}
-              {pullRequestsHref ? (
-                <SidebarMenuSubItem
-                  className={isPullRequestsActive ? SUB_ITEM_ACTIVE_RULE_CLASS : SUB_ITEM_HOVER_RULE_CLASS}
+              <SidebarMenuSubItem
+                className={isPullRequestsActive ? SUB_ITEM_ACTIVE_RULE_CLASS : SUB_ITEM_HOVER_RULE_CLASS}
+              >
+                <SidebarMenuSubButton
+                  asChild
+                  isActive={isPullRequestsActive}
+                  className={SUB_ITEM_BUTTON_CLASS}
                 >
-                  <SidebarMenuSubButton
-                    asChild
-                    isActive={isPullRequestsActive}
-                    className={SUB_ITEM_BUTTON_CLASS}
+                  <AppLink
+                    href={pullRequestsHref}
+                    aria-current={isPullRequestsActive ? "page" : undefined}
+                    className="cursor-pointer"
                   >
-                    <AppLink
-                      href={pullRequestsHref}
-                      aria-current={isPullRequestsActive ? "page" : undefined}
-                      className="cursor-pointer"
-                    >
-                      <GitPullRequest className="size-3.5 shrink-0 text-muted-foreground" aria-hidden="true" />
-                      <span className="min-w-0 flex-1 truncate">Pull Requests</span>
-                    </AppLink>
-                  </SidebarMenuSubButton>
-                </SidebarMenuSubItem>
-              ) : null}
+                    <GitPullRequest className="size-3.5 shrink-0 text-muted-foreground" aria-hidden="true" />
+                    <span className="min-w-0 flex-1 truncate">Pull Requests</span>
+                  </AppLink>
+                </SidebarMenuSubButton>
+              </SidebarMenuSubItem>
               {pinnedLists.length > 0 ? (
                 <ProjectPinnedLists
                   projectId={project._id}

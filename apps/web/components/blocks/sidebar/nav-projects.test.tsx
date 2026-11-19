@@ -22,7 +22,6 @@ import type { Id } from "@/convex/_generated/dataModel";
 import { NavProjects } from "./nav-projects";
 import { withProjectRole } from "@/test-utils/project-role";
 import { projectListCollapseStorageKey } from "./project-list-collapse-storage";
-import { DEV_SETTINGS, DEV_SETTING_ENABLED_VALUE } from "@/lib/dev-mode/constants";
 
 const pushMock = vi.fn();
 const usePathnameMock = vi.fn();
@@ -215,9 +214,6 @@ vi.mock("@/components/blocks/project/project-actions-dropdown", () => ({
   ),
 }));
 
-const enableGithubIntegration = () =>
-  window.localStorage.setItem(DEV_SETTINGS.githubIntegration.storageKey, DEV_SETTING_ENABLED_VALUE);
-
 describe("NavProjects", () => {
   afterEach(() => {
     cleanup();
@@ -267,7 +263,6 @@ describe("NavProjects", () => {
   });
 
   test("renders Threads as the first sub-item under every project", () => {
-    enableGithubIntegration();
     usePathnameMock.mockReturnValue("/o/org/ABC/threads/thread_1");
     window.history.replaceState(null, "", "/o/org/ABC/threads/thread_1");
     useQueryMock.mockImplementation((fn: Parameters<typeof getFunctionName>[0]) => {
@@ -362,7 +357,6 @@ describe("NavProjects", () => {
   test.each(["expanded", "collapsed"] as const)(
     "a viewer project with no pinned Lists still lists Pull Requests (%s sidebar)",
     (state) => {
-      enableGithubIntegration();
       sidebarState = state;
       usePathnameMock.mockReturnValue("/o/org/ABC");
       useQueryMock.mockImplementation((fn: Parameters<typeof getFunctionName>[0]) => {
@@ -390,30 +384,6 @@ describe("NavProjects", () => {
       expect(screen.queryByRole("link", { name: "Threads" })).toBeNull();
     }
   );
-
-  test("hides Pull Requests while the GitHub integration toggle is off", () => {
-    usePathnameMock.mockReturnValue("/o/org/ABC");
-    useQueryMock.mockImplementation((fn: Parameters<typeof getFunctionName>[0]) => {
-      switch (getFunctionName(fn)) {
-        case getFunctionName(api.projects.core.listByOrganization):
-          return [
-            { _id: "project_abc", name: "Alpha", alias: "ABC", myRole: "member" },
-            { _id: "project_xyz", name: "Beta", alias: "XYZ", myRole: "viewer" },
-          ];
-        case getFunctionName(api.tasks.lists.listPinnedForOrganization):
-          return [];
-        default: return undefined;
-      }
-    });
-    useMutationMock.mockReturnValue(createMutationMock());
-
-    render(<NavProjects organizationId={"org_1" as Id<"organizations">} organizationSlug="org" />);
-
-    expect(screen.queryByRole("link", { name: "Pull Requests" })).toBeNull();
-    expect(screen.getByRole("link", { name: "Threads" }).getAttribute("href")).toBe("/o/org/ABC/threads");
-    // A viewer project with no pinned Lists has no sub-items, so no toggle.
-    expect(screen.queryByRole("button", { name: /lists for Beta/ })).toBeNull();
-  });
 
   test("project entry links follow a changed list grouping default", () => {
     usePathnameMock.mockReturnValue("/o/org/ABC");

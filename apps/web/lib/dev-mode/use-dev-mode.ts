@@ -59,7 +59,3 @@ export function useShowUnfinishedItems(): boolean {
 export function useShowToolCallDebug(): boolean {
   return useDevSetting("toolCallDebug");
 }
-
-export function useGithubIntegrationEnabled(): boolean {
-  return useDevSetting("githubIntegration");
-}

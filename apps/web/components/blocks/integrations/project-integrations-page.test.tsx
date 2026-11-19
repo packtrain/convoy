@@ -7,7 +7,6 @@ import { getFunctionName } from "convex/server";
 import { api } from "@/convex/_generated/api";
 import { errors } from "@/convex/integrations/github/errors";
 import { ProjectIntegrationsPage } from "./project-integrations-page";
-import { DEV_SETTINGS, DEV_SETTING_ENABLED_VALUE } from "@/lib/dev-mode/constants";
 
 const queryMock = vi.fn();
 const listRepositoriesMock = vi.fn();
@@ -88,10 +87,6 @@ function renderPage(value: unknown, { index = false } = {}) {
 
 const activeConnection = { repositoryLinkId: "link_1", repositoryId: "repo_1", status: "active", accountLogin: "acme", connectedAt: 1, repository };
 
-beforeEach(() => {
-  window.localStorage.setItem(DEV_SETTINGS.githubIntegration.storageKey, DEV_SETTING_ENABLED_VALUE);
-});
-
 describe("ProjectIntegrationsPage", () => {
   test("coming back from GitHub without connecting (the browser's Back) enables Connect again", async () => {
     vi.stubGlobal("location", { ...window.location, assign: vi.fn() });
@@ -126,14 +121,6 @@ describe("ProjectIntegrationsPage", () => {
     linkedAccount = { githubUserId: 42, login: "maya", avatarUrl: null, status: "reconnect" };
     renderPage(status({ canManage: false, connections: [activeConnection] }));
     expect(screen.getByRole("button", { name: "Reconnect GitHub" })).toBeTruthy();
-  });
-
-  test("with the GitHub integration toggle off, the GitHub page says so and reads nothing", () => {
-    window.localStorage.removeItem(DEV_SETTINGS.githubIntegration.storageKey);
-    renderPage(status());
-    expect(screen.getByText("GitHub integration is off")).toBeTruthy();
-    expect(screen.queryByRole("button", { name: "Connect GitHub" })).toBeNull();
-    expect(queryMock).not.toHaveBeenCalled();
   });
 
   test("the index lists GitHub with its connection state and opens its page", () => {

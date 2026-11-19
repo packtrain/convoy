@@ -5,7 +5,6 @@ import { useQuery } from "convex/react";
 import { api } from "@/convex/_generated/api";
 import { isSameRepository, parseAttachedPullRequest, type AttachedPullRequest } from "@/convex/lib/contracts/github";
 import { useAppConvexAuth } from "@/lib/auth/hooks";
-import { useGithubIntegrationEnabled } from "@/lib/dev-mode/use-dev-mode";
 import { AppLink, appRoute, useNavigation, type RouteTarget } from "@/lib/navigation";
 import { useOptionalCurrentOrgProject, type CurrentOrgProjectRoute } from "@/lib/routing/current-org-project-context";
 
@@ -25,9 +24,8 @@ type PullRequestLinkProps = {
  * (docs/specs/github-integration.md#pr-reader-and-existing-links).
  */
 export function PullRequestLink(props: PullRequestLinkProps) {
-  const enabled = useGithubIntegrationEnabled();
   const route = useOptionalCurrentOrgProject();
-  const pullRequest = enabled && route ? parseAttachedPullRequest(props.url) : null;
+  const pullRequest = route ? parseAttachedPullRequest(props.url) : null;
   return route && pullRequest ? (
     <ConnectedPullRequestLink {...props} route={route} pullRequest={pullRequest} />
   ) : (
