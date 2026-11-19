@@ -14,7 +14,9 @@ export class GithubError extends Error {
     message: string,
     readonly rateLimited = false,
     /** GitHub's requested wait (Retry-After or the primary reset), when it gave one. */
-    readonly retryAfterMs: number | null = null
+    readonly retryAfterMs: number | null = null,
+    /** GitHub's own `message`, such as why it refused a merge. */
+    readonly detail: string | null = null
   ) {
     super(message);
   }
@@ -33,15 +35,24 @@ export function isAccessLoss(error: unknown): boolean {
 }
 
 /** Primary and secondary limits (docs.github.com/en/rest/using-the-rest-api/rate-limits-for-the-rest-api). */
-async function readRateLimit(response: Response): Promise<{ rateLimited: boolean; retryAfterMs: number | null }> {
+function readRateLimit(response: Response, body: string): { rateLimited: boolean; retryAfterMs: number | null } {
   const retryAfter = Number(response.headers.get("retry-after"));
   const reset = Number(response.headers.get("x-ratelimit-reset"));
   const primary = response.headers.get("x-ratelimit-remaining") === "0";
   const secondary =
     response.status === 403 &&
-    ((Number.isFinite(retryAfter) && retryAfter > 0) || /rate limit/i.test(await response.text().catch(() => "")));
+    ((Number.isFinite(retryAfter) && retryAfter > 0) || /rate limit/i.test(body));
   const retryAfterMs = retryAfter > 0 ? retryAfter * 1000 : primary && reset > 0 ? Math.max(0, reset * 1000 - Date.now()) : null;
   return { rateLimited: response.status === 429 || primary || secondary, retryAfterMs };
+}
+
+function githubMessage(body: string): string | null {
+  try {
+    const message = record(JSON.parse(body)).message;
+    return typeof message === "string" && message ? message : null;
+  } catch {
+    return null;
+  }
 }
 
 type GithubAuth = { token: string } | { appJwt: string };
@@ -65,9 +76,10 @@ export async function githubFetch(path: string, auth: GithubAuth, init: { method
     throw new GithubError(null, errors.GITHUB_UNAVAILABLE);
   }
   if (!response.ok) {
+    const body = await response.text().catch(() => "");
     const { rateLimited, retryAfterMs } =
-      response.status === 403 || response.status === 429 ? await readRateLimit(response) : { rateLimited: false, retryAfterMs: null };
-    throw new GithubError(response.status, `GitHub returned ${response.status}`, rateLimited, retryAfterMs);
+      response.status === 403 || response.status === 429 ? readRateLimit(response, body) : { rateLimited: false, retryAfterMs: null };
+    throw new GithubError(response.status, `GitHub returned ${response.status}`, rateLimited, retryAfterMs, githubMessage(body));
   }
   return response.status === 204 ? null : response.json();
 }

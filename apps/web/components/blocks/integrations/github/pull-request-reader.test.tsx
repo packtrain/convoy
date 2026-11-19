@@ -24,6 +24,8 @@ const removeComment = vi.fn();
 const updateState = vi.fn();
 const listAssignable = vi.fn();
 const updateAssignee = vi.fn();
+const mergePullRequest = vi.fn();
+const updateBranch = vi.fn();
 const beginLink = vi.fn();
 const readOverview = vi.fn();
 const readFile = vi.fn();
@@ -66,6 +68,8 @@ vi.mock("convex/react", () => ({
       [name(api.integrations.github.assignees.list)]: listAssignable,
       [name(api.integrations.github.assignees.update)]: updateAssignee,
       [name(api.integrations.github.assignees.clear)]: vi.fn(),
+      [name(api.integrations.github.merges.merge)]: mergePullRequest,
+      [name(api.integrations.github.merges.updateBranch)]: updateBranch,
     })[name(fn)],
   useConvex: () => ({}),
 }));
@@ -174,6 +178,8 @@ const overview = {
   htmlUrl: "https://github.com/acme/web/pull/7",
   mergeable: "clean",
   behindBy: 0,
+  mergeBlock: null,
+  mergeSettings: { methods: ["merge", "squash", "rebase"], deleteBranchOnMerge: false },
   commitCount: 1,
   commits: [{ sha: "c0ffee1234", message: "Add search box", author: "octocat", committedAt: Date.now(), url: "https://github.com/c" }],
   checks: [
@@ -1013,5 +1019,153 @@ describe("PullRequestReader GitHub comments (OS-2183)", () => {
     fireEvent.click(await screen.findByRole("button", { name: "Fix" }));
     expect(screen.getByLabelText("Thread composer").parentElement?.className).toContain("block");
     expect(screen.getByRole("button", { name: "Add comment..." })).toBeTruthy();
+  });
+
+  const openMergeStatus = async () => {
+    await screen.findByText("Nice work");
+    fireEvent.click(screen.getByRole("button", { name: "Merge status" }));
+    return screen.findByRole("dialog", { name: "Merge status" });
+  };
+  const mergeButton = (name: string | RegExp) => screen.getByRole("button", { name }) as HTMLButtonElement;
+
+  test("Merge confirms with warnings and the commit message, reads Merging… until GitHub answers, and sends only an edited title", async () => {
+    linkedAs({ login: "maya", githubUserId: 42, status: "active" });
+    readPermission.mockResolvedValue("write");
+    let answer!: (result: unknown) => void;
+    mergePullRequest.mockReturnValue(new Promise((resolve) => (answer = resolve)));
+    render(connected());
+    await openMergeStatus();
+    await waitFor(() => expect(mergeButton("Squash and merge").disabled).toBe(false));
+    fireEvent.click(mergeButton("Squash and merge"));
+
+    const confirm = await screen.findByRole("dialog", { name: "Squash and merge #7" });
+    expect(within(confirm).getByText("1 check failed.")).toBeTruthy();
+    const message = within(confirm).getByLabelText("Commit message") as HTMLTextAreaElement;
+    expect(message.tagName).toBe("TEXTAREA");
+    expect(message.value).toBe("Add search (#7)");
+    // The first line is the commit title, the rest its body.
+    fireEvent.change(message, { target: { value: "Add the search box\n\nWith keyboard support.\nAnd tests." } });
+    fireEvent.click(within(confirm).getByRole("checkbox", { name: "Delete the branch after merging" }));
+    fireEvent.click(within(confirm).getByRole("button", { name: "Confirm squash and merge" }));
+    expect(mergePullRequest).toHaveBeenCalledWith({
+      projectId: "project_1",
+      repositoryId: "repo_1",
+      number: 7,
+      method: "squash",
+      headSha: "head-1",
+      commitTitle: "Add the search box",
+      commitMessage: "With keyboard support.\nAnd tests.",
+      layersBelow: undefined,
+      deleteBranch: true,
+    });
+    expect(within(confirm).getByRole("button", { name: /Merging…/ })).toBeTruthy();
+    expect(within(confirm).queryByRole("button", { name: "Cancel" })).toBeNull();
+    await act(async () => answer({ status: "merged", branchesKept: [] }));
+    expect(screen.queryByRole("dialog", { name: "Squash and merge #7" })).toBeNull();
+  });
+
+  test("the merge menu offers only the repository's allowed methods; rebase has no commit message", async () => {
+    linkedAs({ login: "maya", githubUserId: 42, status: "active" });
+    readPermission.mockResolvedValue("write");
+    readOverview.mockResolvedValue({ ...overview, mergeSettings: { methods: ["merge", "rebase"], deleteBranchOnMerge: true } });
+    mergePullRequest.mockResolvedValue({ status: "merged", branchesKept: [] });
+    render(connected());
+    await openMergeStatus();
+    // Squash isn't allowed, so the first allowed method leads.
+    await waitFor(() => expect(mergeButton("Merge pull request").disabled).toBe(false));
+    fireEvent.pointerDown(mergeButton("Merge method"), { button: 0, pointerType: "mouse" });
+    const menu = await screen.findByRole("menu");
+    expect(within(menu).getAllByRole("menuitemradio").map((item) => item.textContent)).toEqual([
+      "Create a merge commitAdds the commit to main with a merge commit.",
+      "Rebase and mergeAdds the commit on top of main, without a merge commit.",
+    ]);
+    fireEvent.click(within(menu).getByRole("menuitemradio", { name: /Rebase and merge/ }));
+    fireEvent.click(mergeButton("Rebase and merge"));
+
+    const confirm = await screen.findByRole("dialog", { name: "Rebase and merge #7" });
+    expect(within(confirm).queryByLabelText("Commit message")).toBeNull();
+    // The repository deletes merged branches itself.
+    expect((within(confirm).getByRole("checkbox", { name: "Delete the branch after merging" }) as HTMLButtonElement).disabled).toBe(true);
+    fireEvent.click(within(confirm).getByRole("button", { name: "Confirm rebase and merge" }));
+    expect(mergePullRequest).toHaveBeenCalledWith(expect.objectContaining({ method: "rebase", commitTitle: undefined, deleteBranch: false }));
+  });
+
+  test("the picked merge method is remembered for the member's GitHub account", async () => {
+    linkedAs({ login: "maya", githubUserId: 42, status: "active" });
+    readPermission.mockResolvedValue("write");
+    render(connected());
+    await openMergeStatus();
+    await waitFor(() => expect(mergeButton("Squash and merge").disabled).toBe(false));
+    fireEvent.pointerDown(mergeButton("Merge method"), { button: 0, pointerType: "mouse" });
+    fireEvent.click(within(await screen.findByRole("menu")).getByRole("menuitemradio", { name: /Rebase and merge/ }));
+    expect(mergeButton("Rebase and merge")).toBeTruthy();
+    cleanup();
+
+    render(connected());
+    await openMergeStatus();
+    expect(await screen.findByRole("button", { name: "Rebase and merge" })).toBeTruthy();
+    cleanup();
+
+    linkedAs({ login: "sam", githubUserId: 7, status: "active" });
+    render(connected());
+    await openMergeStatus();
+    expect(await screen.findByRole("button", { name: "Squash and merge" })).toBeTruthy();
+  });
+
+  test("a mid-stack Layer merges the open Layers below it, and a draft below blocks it", async () => {
+    linkedAs({ login: "maya", githubUserId: 42, status: "active" });
+    readPermission.mockResolvedValue("write");
+    mergePullRequest.mockResolvedValue({ status: "merged", branchesKept: [] });
+    const stack = (position: number) => ({ id: 70, number: 12, size: 3, position });
+    stored = { pullRequest: { ...pullRequest, stack: stack(2) } };
+    const below = { ...pullRequest, _id: "pr_1", number: 6, title: "Add index", stack: stack(1) };
+    layers = [below, { ...pullRequest, stack: stack(2) }, { ...pullRequest, _id: "pr_3", number: 8, title: "Add filters", stack: stack(3) }];
+    const view = render(connected());
+    const popover = await openMergeStatus();
+    expect(within(popover).getByText("Merges #6 first")).toBeTruthy();
+    await waitFor(() => expect(mergeButton("Squash and merge 2 pull requests").disabled).toBe(false));
+    fireEvent.click(mergeButton("Squash and merge 2 pull requests"));
+
+    const confirm = await screen.findByRole("dialog", { name: "Squash and merge 2 pull requests" });
+    expect(within(within(confirm).getByRole("list", { name: "Pull requests to merge" })).getAllByRole("listitem").map((item) => item.textContent)).toEqual([
+      "#6Add index",
+      "#7Add search",
+    ]);
+    expect(within(confirm).queryByLabelText("Commit message")).toBeNull();
+    fireEvent.click(within(confirm).getByRole("button", { name: "Confirm squash and merge" }));
+    expect(mergePullRequest).toHaveBeenCalledWith(expect.objectContaining({ layersBelow: [6], commitTitle: undefined }));
+    await waitFor(() => expect(screen.queryByRole("dialog", { name: "Squash and merge 2 pull requests" })).toBeNull());
+
+    layers = [{ ...below, draft: true }, ...layers.slice(1)];
+    view.rerender(connected());
+    fireEvent.click(screen.getByRole("button", { name: "Merge status" }));
+    const blocked = await screen.findByRole("dialog", { name: "Merge status" });
+    expect(within(blocked).getAllByText("#6 is a draft")).toHaveLength(2);
+    expect(mergeButton("Squash and merge 2 pull requests").disabled).toBe(true);
+  });
+
+  test("Merge needs write access; Update branch runs as the member and clears the behind row", async () => {
+    linkedAs({ login: "maya", githubUserId: 42, status: "active" });
+    readPermission.mockResolvedValue("triage");
+    readOverview.mockResolvedValue({ ...overview, behindBy: 2 });
+    const view = render(connected());
+    let popover = await openMergeStatus();
+    await waitFor(() => expect(within(popover).getByText("Needs write access")).toBeTruthy());
+    expect(mergeButton("Squash and merge").disabled).toBe(true);
+    expect((within(popover).getByRole("button", { name: "Update branch" }) as HTMLButtonElement).disabled).toBe(true);
+    cleanup();
+    void view;
+
+    readPermission.mockResolvedValue("write");
+    updateBranch.mockResolvedValue(null);
+    render(connected());
+    popover = await openMergeStatus();
+    await waitFor(() => expect((within(popover).getByRole("button", { name: "Update branch" }) as HTMLButtonElement).disabled).toBe(false));
+    fireEvent.click(within(popover).getByRole("button", { name: "Update branch" }));
+    await waitFor(() => expect(within(popover).queryByText("This branch is out-of-date with the base branch")).toBeNull());
+    expect(updateBranch).toHaveBeenCalledWith({ projectId: "project_1", repositoryId: "repo_1", number: 7, headSha: "head-1" });
+    // GitHub rewrote the head, so mergeability is unknown until Refresh.
+    expect(within(popover).getByText("Checking mergeability…")).toBeTruthy();
+    expect(mergeButton("Squash and merge").disabled).toBe(true);
   });
 });

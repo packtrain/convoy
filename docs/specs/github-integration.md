@@ -349,7 +349,9 @@ Delivered in the slice order below:
   and archive (GraphQL `archivePullRequest` / `unarchivePullRequest`).
   Archiving closes and locks the PR; unarchiving leaves it closed; an
   Archived pull request offers only Unarchive.
-- Merge with the repository's allowed methods through `merge-async`. The
+- Merge with the repository's allowed methods: a stacked PR through
+  `merge-async`, any other through the merge endpoint, which takes a commit
+  title. The
   Merge status popover keeps blocking problems; the merge button opens a
   confirm popup holding non-blocking warnings, the commit message (except
   rebase), and Confirm, which reads Merging… until GitHub reports the merge.
@@ -1721,6 +1723,75 @@ Slice 7 (OS-2184).
   requests failed" with each failed PR's number and GitHub's reason. Mark as
   clears the selection afterwards; Assign keeps it.
 
+### Merge and update branch
+
+Slice 8 (OS-2185).
+
+- **Settings.** `readOverview` adds the repository's allowed merge methods and
+  whether it deletes merged branches, read through GraphQL on the PR's node
+  (`repository { mergeCommitAllowed squashMergeAllowed rebaseMergeAllowed
+  deleteBranchOnMerge }`) with the installation token. GitHub refusing that
+  read leaves them unknown, and the menu offers all three. It also adds
+  `mergeBlock` from REST `mergeable_state`: `blocked` (the base branch's rules,
+  such as required reviews or checks, aren't met) or `behind` (the rules
+  require an up-to-date branch).
+- **Merge.** `merges.merge` runs through `accounts.writeAs` at the displayed
+  revision's head (`sha`), so a push since the member read the PR is refused
+  with "The pull request has new commits…" (GitHub's 409). A PR outside a stack
+  uses `PUT /repositories/{id}/pulls/{number}/merge` with `merge_method`,
+  `commit_title` when the member edited it, and `commit_message` when they
+  wrote a body; otherwise GitHub writes its own defaults. A stacked PR uses `PUT …/merge-async` with `merge_method`,
+  `merge_action: default`, and `sha`, which merges the open Layers below too,
+  each with its default message. GitHub answers `pending` with a uuid, and the
+  action polls `GET …/merge-async/{uuid}` (1 s, doubling to 10 s) for up to two
+  minutes. `merged` and `enqueued` (a merge queue) succeed; `failed`, a 405,
+  and `merge-async`'s 400 (a closed or draft PR) read as "GitHub could not merge this pull request." followed by GitHub's
+  reason. A 409 from `merge-async` is a merge GitHub already has pending, read
+  as "GitHub is already merging this pull request…", while the merge endpoint's
+  409 is a moved head. Still `pending` returns as such, and the toast says the PR updates
+  once GitHub is done. The client sends the Layers it expects below
+  (`layersBelow`, at most 50); each, and the PR, gets a single-PR sync, so the
+  Layer above shows the base branch as its base once its sync lands.
+- **Deleting branches.** With Delete the branch after merging, each merged PR's
+  head is deleted (`DELETE …/git/refs/heads/{ref}`) after GitHub reports
+  `merged`, only when GitHub reports the PR merged and its head lives in the
+  connected repository: a fork's branch is never deleted, since a branch of
+  the same name here would be someone else's. A branch already gone (GitHub's
+  422 "Reference does not exist") counts as deleted; any other refusal, or a
+  failed PR read, keeps it, and the toast names the PRs whose branch stayed. A
+  merge that is queued or still running when the action stops waiting keeps
+  every branch, and the toast asks the member to delete them on GitHub once
+  it lands; Convoy does not remember the request. A repository that deletes merged branches
+  itself shows the box checked and disabled, and Convoy sends no delete.
+- **Update branch.** `merges.updateBranch` is `PUT …/update-branch` with
+  `expected_head_sha`; GitHub's 422 (a conflict or a moved head) reads as
+  "GitHub could not update the branch." with its reason. The held Overview
+  then drops its behind-base and reads mergeability as unknown, so Merge
+  waits for Refresh after GitHub pushes the merge commit (New changes
+  available).
+- **UI.** The Merge status popover ends with the merge split button: the
+  method menu lists only the allowed methods with a line on what each does.
+  The member's pick is remembered in this browser per GitHub account
+  (`convoy:github:merge-method:<githubUserId>`), as GitHub remembers it, and
+  leads whenever the repository allows it; otherwise squash leads when
+  allowed. The button reads "Squash and merge 2 pull
+  requests" when Layers below merge with it, and a Stack row says "Merges #482
+  first", or "#482 is a draft" / "#482 has conflicts" when one blocks it. Merge
+  is disabled, with the reason under it, for "Connect GitHub first",
+  "Reconnect GitHub first", "Needs write access", a draft, the stack still
+  loading, conflicts, mergeability being checked, branch rules, and a blocking
+  Layer below. The behind-base row (blocking when the rules require an
+  up-to-date branch) carries Update branch, disabled without write access. A
+  "Merging is blocked" row covers the other branch rules. The confirm popup
+  (a dialog outside the popover) is titled "Squash and merge #482", or the
+  button's label for a stack, with "Into main from <branch>", the warnings
+  (pending reviews, failed checks, running checks, out of date), the commit
+  message, a textarea whose first line is the commit title and the rest its
+  body (squash defaults to `Title (#482)`, a merge commit to `Merge pull
+  request #482 from <branch>`, each with GitHub's default body), the rebase description, or the stack's PRs
+  bottom first. While merging, Confirm reads Merging… and Cancel and the close
+  button hide; GitHub's answer closes it with a toast.
+
 ### Error messages
 
 Defined in `apps/web/convex/integrations/github/errors.ts`; tests assert on them.
@@ -1755,6 +1826,10 @@ Defined in `apps/web/convex/integrations/github/errors.ts`; tests assert on them
 | Empty comment | Write a comment first |
 | Comment over GitHub's limit | A comment can be at most 65,536 characters |
 | GitHub refuses a state change or an assignee write | GitHub refused this. Your GitHub account may not have the access it needs on this repository. |
+| Merge on a head that moved past the displayed one | The pull request has new commits. Refresh and review them before merging. |
+| GitHub refuses or fails a merge (405, `merge-async`'s 400, or `failed`) | GitHub could not merge this pull request. (followed by GitHub's reason) |
+| `merge-async` while GitHub already has a merge of the PR pending (409) | GitHub is already merging this pull request. It shows as merged here once it's done. |
+| GitHub refuses Update branch (422) | GitHub could not update the branch. (followed by GitHub's reason) |
 | Edit or delete of another author's comment, or one on another PR | You can only edit or delete your own comments on this pull request |
 | GitHub refuses a comment write | GitHub refused this. Your GitHub account may not have access to the repository, or the conversation is locked. |
 | Confirmed revocation (shown on the link) | GitHub access to this repository was removed |
@@ -1869,7 +1944,8 @@ the agreed priority.
 7. **State actions** (built, OS-2184; see
    [State actions and bulk actions](#state-actions-and-bulk-actions)). Close, reopen, draft, ready for review, assign, archive
    and unarchive, and the list's bulk actions.
-8. **Merge.** Methods, the confirm popup, `merge-async` with Merging…,
+8. **Merge** (built, OS-2185; see
+   [Merge and update branch](#merge-and-update-branch)). Methods, the confirm popup, `merge-async` with Merging…,
    Update branch, Stack merges, and deleting the branch.
 9. **Reviews.** Inline comments, approve, request changes, and requesting
    reviewers; settled review threads start feeding the Guide prompt.

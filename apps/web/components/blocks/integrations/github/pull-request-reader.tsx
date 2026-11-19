@@ -199,6 +199,11 @@ export function PullRequestReader({
             layers={layers}
             current={pr}
             hrefFor={layerHref}
+            projectId={projectId}
+            repositoryId={repositoryId}
+            commenting={commenting}
+            // GitHub rewrites the head; until Refresh, the held Overview stops claiming it is behind or mergeable.
+            onBranchUpdated={() => updateOverview((overview) => ({ ...overview, behindBy: 0, mergeBlock: null, mergeable: "unknown" }))}
           />
         ) : null}
         <PullRequestStateActions projectId={projectId} repositoryId={repositoryId} pr={pr} commenting={commenting} />

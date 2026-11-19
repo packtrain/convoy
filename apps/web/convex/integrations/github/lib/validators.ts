@@ -267,6 +267,10 @@ export const pullRequestCommentValidator = v.object({
 });
 export type PullRequestComment = Infer<typeof pullRequestCommentValidator>;
 
+/** GitHub's merge methods, in its merge menu's order. */
+export const mergeMethodValidator = v.union(v.literal("merge"), v.literal("squash"), v.literal("rebase"));
+export type MergeMethod = Infer<typeof mergeMethodValidator>;
+
 export const pullRequestOverviewValidator = v.object({
   headSha: v.string(),
   baseRef: v.string(),
@@ -275,6 +279,10 @@ export const pullRequestOverviewValidator = v.object({
   mergeable: v.union(v.literal("clean"), v.literal("conflicting"), v.literal("unknown")),
   /** Commits the base has that the head lacks; null when GitHub can't compare them. */
   behindBy: v.union(v.number(), v.null()),
+  /** GitHub's `mergeable_state` when the base branch's rules block the merge: unmet requirements, or a branch that must be up to date. */
+  mergeBlock: v.union(v.literal("blocked"), v.literal("behind"), v.null()),
+  /** The repository's allowed merge methods and whether it deletes merged branches; null when GitHub didn't say. */
+  mergeSettings: v.union(v.object({ methods: v.array(mergeMethodValidator), deleteBranchOnMerge: v.boolean() }), v.null()),
   commitCount: v.number(),
   commits: v.array(v.object({ sha: v.string(), message: v.string(), author: v.string(), committedAt: v.number(), url: v.string() })),
   checks: v.array(

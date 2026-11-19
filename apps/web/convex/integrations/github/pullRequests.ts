@@ -10,7 +10,7 @@ import { taskSummaryValidator, toTaskSummary, type TaskSummary } from "../../lib
 import { getActiveProjectByAlias, getProjectById } from "../../projects/lib/projectsRepo";
 import { findTaskByRefNumber } from "../../tasks/lib/tasksRepo";
 import { errors } from "./errors";
-import { GithubError, githubFetch, isAccessLoss, mintRepositoryToken, repoPath, requireConfig, toUserError } from "./lib/github";
+import { GithubError, githubFetch, githubGraphql, isAccessLoss, mintRepositoryToken, repoPath, requireConfig, toUserError } from "./lib/github";
 import { PAGE_SIZE } from "./lib/constants";
 import {
   DIFF_MAX_FILES,
@@ -389,6 +389,17 @@ async function compareOrNull(path: string, auth: { token: string }): Promise<unk
   });
 }
 
+/** The repository's merge settings, through the PR so a rename can't matter. GitHub refusing leaves them unknown. */
+async function repositoryMergeSettings(token: string, pullRequestId: string): Promise<unknown> {
+  const query = `query($id: ID!) { node(id: $id) { ... on PullRequest { repository { mergeCommitAllowed squashMergeAllowed rebaseMergeAllowed deleteBranchOnMerge } } } }`;
+  try {
+    return record(record(record(await githubGraphql(token, query, { id: pullRequestId })).node).repository);
+  } catch (error) {
+    if (error instanceof GithubError && !error.rateLimited) return null;
+    throw error;
+  }
+}
+
 // ponytail: first 100 commits, reviews, comments, and checks; page them when PRs outgrow that.
 // A push or base change before or during the read would mix revisions, so the PR must stay at the diff's revision.
 async function readOverviewFrom(
@@ -406,7 +417,7 @@ async function readOverviewFrom(
     return pr;
   };
   const pr = await readPr();
-  const [commits, reviews, comments, reviewComments, checkRuns, status, compare] = await Promise.all([
+  const [commits, reviews, comments, reviewComments, checkRuns, status, compare, repository] = await Promise.all([
     githubFetch(`${base}/pulls/${number}/commits?per_page=100`, auth),
     githubFetch(`${base}/pulls/${number}/reviews?per_page=100`, auth),
     githubFetch(`${base}/issues/${number}/comments?per_page=100`, auth),
@@ -414,9 +425,10 @@ async function readOverviewFrom(
     githubFetch(`${base}/commits/${headSha}/check-runs?per_page=100`, auth),
     githubFetch(`${base}/commits/${headSha}/status?per_page=100`, auth),
     compareOrNull(`${base}/compare/${baseSha}...${headSha}?per_page=1`, auth),
+    repositoryMergeSettings(token, str(pr.node_id)),
   ]);
   await readPr();
-  return normalizeOverview(appId, { pr, commits, reviews, comments, reviewComments, checkRuns, status, compare });
+  return normalizeOverview(appId, { pr, commits, reviews, comments, reviewComments, checkRuns, status, compare, repository });
 }
 
 /** Contents API limit for base64 bodies; larger files come back without content. */

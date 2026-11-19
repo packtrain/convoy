@@ -415,13 +415,13 @@ export async function withUserToken<T>(
 
 /**
  * Runs `write` as the caller on a PR in the project's connected repository.
- * GitHub refusing it reads as `refused`; `refresh` resyncs the stored PR afterwards.
+ * GitHub refusing it reads as `refused`; `refresh` resyncs the stored PR, or the PRs it names, afterwards.
  */
 export async function writeAs<T>(
   ctx: ActionCtx,
   args: { projectId: Id<"projects">; repositoryId: string; number: number },
-  write: (token: string, repository: string, githubUserId: number, names: { owner: string; name: string }) => Promise<T>,
-  { refused, refresh = false }: { refused: string; refresh?: boolean }
+  write: (token: string, repository: string, githubUserId: number, live: { owner: string; name: string; context: { providerRepositoryId: number } }) => Promise<T>,
+  { refused, refresh = false }: { refused: string; refresh?: boolean | ((result: T) => number[]) }
 ): Promise<T> {
   const live = await ctx.runQuery(internal.integrations.github.pullRequests.getReadableContext, args);
   if (!live) throw new ConvexError(errors.NOT_CONNECTED);
@@ -434,12 +434,13 @@ export async function writeAs<T>(
       throw toUserError(error);
     }
   );
-  if (refresh) {
+  const numbers = refresh === true ? [args.number] : refresh ? refresh(result) : [];
+  for (const number of numbers) {
     await ctx.scheduler.runAfter(0, internal.integrations.github.sync.syncRepository, {
       repositoryId: live.repositoryId,
       repositoryLinkId: live.repositoryLinkId,
       generation: live.generation,
-      target: { kind: "pullRequest", number: args.number },
+      target: { kind: "pullRequest", number },
     });
   }
   return result;

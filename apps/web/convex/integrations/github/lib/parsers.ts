@@ -179,6 +179,13 @@ export function normalizeComment(value: unknown): PullRequestComment {
   };
 }
 
+function mergeSettings(repository: Record<string, unknown>): PullRequestOverview["mergeSettings"] {
+  const methods = (["merge", "squash", "rebase"] as const).filter(
+    (method) => repository[{ merge: "mergeCommitAllowed", squash: "squashMergeAllowed", rebase: "rebaseMergeAllowed" }[method]] === true
+  );
+  return { methods, deleteBranchOnMerge: repository.deleteBranchOnMerge === true };
+}
+
 /** GitHub's PR, commits, reviews, comments, check runs, combined status, and compare, narrowed for the Overview. `appId` marks Convoy's own runs. */
 export function normalizeOverview(appId: string, raw: {
   pr: unknown;
@@ -189,6 +196,8 @@ export function normalizeOverview(appId: string, raw: {
   checkRuns: unknown;
   status: unknown;
   compare: unknown;
+  /** GraphQL's PullRequest node with its `repository`; null when unread. */
+  repository: unknown;
 }): PullRequestOverview {
   const pr = record(raw.pr);
   const checkRuns = list(record(raw.checkRuns).check_runs ?? []).map((value) => {
@@ -220,6 +229,8 @@ export function normalizeOverview(appId: string, raw: {
     htmlUrl: str(pr.html_url),
     mergeable: pr.mergeable === true ? "clean" : pr.mergeable === false ? "conflicting" : "unknown",
     behindBy: raw.compare === null ? null : num(record(raw.compare).behind_by),
+    mergeBlock: pr.mergeable_state === "blocked" || pr.mergeable_state === "behind" ? pr.mergeable_state : null,
+    mergeSettings: raw.repository === null ? null : mergeSettings(record(raw.repository)),
     commitCount: typeof pr.commits === "number" ? pr.commits : list(raw.commits).length,
     commits: list(raw.commits).map((value) => {
       const commit = record(value);

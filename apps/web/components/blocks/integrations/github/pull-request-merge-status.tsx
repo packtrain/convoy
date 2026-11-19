@@ -1,12 +1,15 @@
 "use client";
 
-import type { ReactNode } from "react";
+import { useState, type ReactNode } from "react";
 import { ArrowUpRight, CircleCheck, CircleDashed, CircleX, Loader2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import type { RouteTarget } from "@/lib/navigation";
+import type { Id } from "@/convex/_generated/dataModel";
 import { cn } from "@/lib/utils";
 import { checksRollup, GithubCheckList } from "./github-checks";
+import type { GithubCommenting } from "./pull-request-comments";
+import { layersMergedWith, MergeButton, MergeConfirmDialog, mergePlan, stuckLayer, UpdateBranchButton, useMergeMethod } from "./pull-request-merge";
 import { StackMap } from "./pull-request-stack";
 import type { PullRequestOverview, PullRequestSummary, PullRequestView } from "./types";
 
@@ -58,40 +61,55 @@ function reviewsRow(overview: PullRequestOverview, author: string) {
   return <StatusRow tone="pending" title="No reviews yet" body="Nobody has reviewed this pull request." />;
 }
 
-/** The header button's tone: conflicts or failing checks block; recomputing or running checks wait. */
+/** The header button's tone: conflicts, branch rules, or failing checks block; recomputing or running checks wait. */
 function overallTone(overview: PullRequestOverview): Tone {
   const checks = checksRollup(overview.checks).state;
-  if (overview.mergeable === "conflicting" || checks === "failure") return "blocked";
+  if (overview.mergeable === "conflicting" || overview.mergeBlock || checks === "failure") return "blocked";
   return overview.mergeable === "unknown" || checks === "pending" ? "pending" : "ok";
 }
 
 /**
- * GitHub's merge box, read-only: reviews, checks, behind-base, mergeability,
- * conflicts, and the stack. Merging from Convoy comes with slice 8.
+ * GitHub's merge box: reviews, checks, the stack, behind-base, branch rules,
+ * mergeability, and conflicts, then the merge button.
  */
 export function MergeStatus({
   overview,
   layers,
   current,
   hrefFor,
+  projectId,
+  repositoryId,
+  commenting,
+  onBranchUpdated,
 }: {
   overview: PullRequestOverview | null;
   layers: PullRequestSummary[];
   current: PullRequestView;
   hrefFor: (number: number) => RouteTarget;
+  projectId: Id<"projects">;
+  repositoryId: string;
+  commenting: GithubCommenting;
+  onBranchUpdated: () => void;
 }) {
+  const [open, setOpen] = useState(false);
+  const [picked, setPicked] = useMergeMethod(commenting);
+  const [confirming, setConfirming] = useState(false);
   const tone = overview ? overallTone(overview) : null;
   const Icon = tone ? TONES[tone].icon : Loader2;
   const rollup = overview ? checksRollup(overview.checks) : null;
+  const below = layersMergedWith(layers, current) ?? [];
+  const stuck = stuckLayer(below);
+  const target = overview ? { projectId, repositoryId, pr: current, commenting, overview } : null;
+  const plan = target ? mergePlan(target, layers, picked) : null;
   return (
-    <Popover>
+    <Popover open={open} onOpenChange={setOpen}>
       <PopoverTrigger asChild>
         <Button variant="outline" size="sm" disabled={!overview}>
           <Icon className={tone ? TONES[tone].className : "animate-spin"} />
           Merge status
         </Button>
       </PopoverTrigger>
-      {overview && rollup ? (
+      {overview && rollup && target && plan ? (
         <PopoverContent align="end" aria-label="Merge status" className="max-h-[70vh] w-96 max-w-[calc(100vw-2rem)] gap-0 overflow-y-auto p-0">
           <p className="border-b px-4 py-3 text-sm font-medium">Merge status</p>
           {current.stack && layers.length ? (
@@ -104,12 +122,28 @@ export function MergeStatus({
           <StatusRow tone={rollup.state === "success" ? "ok" : rollup.state === "failure" ? "blocked" : "pending"} title={rollup.title} body={rollup.body}>
             {overview.checks.length ? <GithubCheckList checks={overview.checks} className="mt-2" /> : null}
           </StatusRow>
-          {overview.behindBy ? (
+          {below.length ? (
             <StatusRow
-              tone="pending"
-              title="This branch is out-of-date with the base branch"
-              body={`${overview.behindBy} ${overview.behindBy === 1 ? "commit" : "commits"} behind ${overview.baseRef}.`}
+              tone={stuck ? "blocked" : "ok"}
+              title={stuck ? stuck.reason : `Merges ${below.map((layer) => `#${layer.number}`).join(", ")} first`}
+              body={stuck ? "Every Layer below has to be mergeable first." : "GitHub merges a stack from the bottom up."}
             />
+          ) : null}
+          {overview.behindBy || overview.mergeBlock === "behind" ? (
+            <StatusRow
+              tone={overview.mergeBlock === "behind" ? "blocked" : "pending"}
+              title="This branch is out-of-date with the base branch"
+              body={
+                overview.mergeBlock === "behind"
+                  ? `The base branch requires branches to be up to date with ${overview.baseRef} before merging.`
+                  : `${overview.behindBy} ${overview.behindBy === 1 ? "commit" : "commits"} behind ${overview.baseRef}.`
+              }
+            >
+              <UpdateBranchButton {...target} onUpdated={onBranchUpdated} />
+            </StatusRow>
+          ) : null}
+          {overview.mergeBlock === "blocked" ? (
+            <StatusRow tone="blocked" title="Merging is blocked" body="The base branch's rules aren't met yet, such as required reviews or checks." />
           ) : null}
           {overview.mergeable === "unknown" ? (
             <StatusRow tone="pending" title="Checking mergeability…" body={`GitHub is checking the latest commit for conflicts with ${overview.baseRef}.`} />
@@ -125,15 +159,19 @@ export function MergeStatus({
           ) : (
             <StatusRow tone="ok" title="No conflicts with base branch" body="Merging can be performed automatically." />
           )}
-          <p className="px-4 py-3 text-xs text-muted-foreground">
-            Merge on{" "}
-            <a href={overview.htmlUrl} target="_blank" rel="noreferrer" className="underline">
-              GitHub
-            </a>
-            .
-          </p>
+          <MergeButton
+            plan={plan}
+            overview={overview}
+            onPick={setPicked}
+            onMerge={() => {
+              setOpen(false);
+              setConfirming(true);
+            }}
+          />
         </PopoverContent>
       ) : null}
+      {/* Outside the content, so closing the popover keeps the confirm popup. */}
+      {confirming && target && plan ? <MergeConfirmDialog {...target} plan={plan} onClose={() => setConfirming(false)} /> : null}
     </Popover>
   );
 }

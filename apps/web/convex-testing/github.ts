@@ -54,6 +54,10 @@ export type FakePullRequest = {
   checkRuns?: { id: number; name: string; status: string; conclusion: string | null; title?: string; app?: { id: number } }[];
   statuses?: { id: number; context: string; state: string; description: string }[];
   behindBy?: number;
+  /** GitHub's `mergeable_state` on single-PR reads, such as "blocked" by branch rules. */
+  mergeableState?: string;
+  /** A fork's repository id; the head lives in the base repository by default. */
+  headRepositoryId?: number;
 };
 
 export type FakeGithubUser = { id: number; login: string };
@@ -143,6 +147,13 @@ export function createFakeGithub() {
     assignable: ["octocat", "maya", "sam"],
     /** GitHub answers assignee writes with 200 but drops them, as it does without push access. */
     dropAssigneeWrites: false,
+    /** The repository settings GraphQL reports for every repository. */
+    mergeSettings: { mergeCommitAllowed: true, squashMergeAllowed: true, rebaseMergeAllowed: true, deleteBranchOnMerge: false },
+    /** Every merge GitHub accepted, and the `merge-async` polls it answers "pending" before it settles. */
+    merges: [] as { number: number; method: string; title?: string; message?: string; async: boolean }[],
+    asyncMergePolls: 0,
+    /** Branches deleted through the Git refs API, as `<repositoryId>:<ref>`. */
+    deletedBranches: [] as string[],
     /** Called between the two PR reads of a diff, to simulate a push mid-read. */
     onFilesRead: null as (() => void) | null,
     requests: [] as string[],
@@ -232,10 +243,13 @@ export function createFakeGithub() {
   }
 
   /** The single-PR read adds what GitHub leaves out of list pages. */
-  function pullDetailJson(pr: FakePullRequest) {
+  function pullDetailJson(pr: FakePullRequest, repositoryId: number) {
+    const json = pullJson(pr);
     return {
-      ...pullJson(pr),
+      ...json,
+      head: { ...json.head, repo: { id: pr.headRepositoryId ?? repositoryId } },
       mergeable: pr.mergeable === undefined ? true : pr.mergeable,
+      mergeable_state: pr.mergeableState ?? "clean",
       commits: pr.commits?.length ?? 0,
       requested_reviewers: (pr.requestedReviewers ?? []).map((login) => ({ login })),
       requested_teams: [],
@@ -350,8 +364,12 @@ export function createFakeGithub() {
       pr.updatedAt = Math.max(Date.now(), pr.updatedAt + 1);
     };
     if (path === "/graphql" && method === "POST") {
-      if (!person) return json(401, {});
       const { query, variables } = JSON.parse(String(init?.body)) as { query: string; variables: { id: string; owner: string; name: string; query: string | null } };
+      if (query.includes("mergeCommitAllowed")) {
+        const found = [...state.pulls.values()].flat().some((candidate) => `PR_${candidate.id}` === variables.id);
+        return found ? json(200, { data: { node: { repository: state.mergeSettings } } }) : json(200, { data: { node: null }, errors: [{ type: "NOT_FOUND", message: "Could not resolve to a node" }] });
+      }
+      if (!person) return json(401, {});
       if (query.includes("assignableUsers")) {
         if (!findRepo(variables.owner, variables.name)) return json(200, { data: { repository: null }, errors: [{ type: "NOT_FOUND", message: "Could not resolve to a Repository" }] });
         const nodes = state.assignable
@@ -373,6 +391,60 @@ export function createFakeGithub() {
       changed(pr);
       return json(200, { data: { [mutation]: { clientMutationId: null } } });
     }
+    match = /^\/repositories\/(\d+)\/pulls\/(\d+)\/(merge|merge-async|update-branch)(?:\/([^/]+))?$/.exec(path);
+    if (match) {
+      if (!person) return json(401, {});
+      const [, repositoryId, number, action, uuid] = match;
+      const pulls = state.pulls.get(Number(repositoryId)) ?? [];
+      const pr = pulls.find((candidate) => candidate.number === Number(number));
+      if (!pr) return json(404, {});
+      if (action === "merge-async" && method === "GET") {
+        if (state.asyncMergePolls > 0) {
+          state.asyncMergePolls--;
+          return json(200, { status: "pending", details: { uuid } });
+        }
+        return json(200, { status: "merged", details: {} });
+      }
+      if (!allowed("write")) return json(403, { message: "Must have write access" });
+      const body = JSON.parse(String(init?.body)) as { merge_method?: string; sha?: string; commit_title?: string; commit_message?: string; expected_head_sha?: string };
+      if (action === "update-branch") {
+        if (body.expected_head_sha !== pr.headSha) return json(422, { message: "expected head sha didn't match current head ref." });
+        Object.assign(pr, { headSha: `${pr.headSha}-updated`, behindBy: 0, mergeable: null });
+        changed(pr);
+        return json(202, { message: "Updating pull request branch.", url: `https://github.com/pr/${pr.number}` });
+      }
+      if (body.sha !== pr.headSha) return json(409, { message: "Head branch was modified. Review and try the merge again." });
+      // merge-async refuses a closed or draft PR with a 400; the merge endpoint with a 405.
+      if (action === "merge-async" && (pr.state !== "open" || pr.draft)) return json(400, { message: "Pull request is closed or a draft" });
+      if (pr.state !== "open" || pr.draft || pr.mergeable === false) return json(405, { message: "Pull Request is not mergeable" });
+      if (pr.mergeableState === "blocked") return json(405, { message: "At least 1 approving review is required by reviewers with write access." });
+      // GitHub merges a stack bottom up: the open Layers below go first.
+      const below = pr.stack
+        ? pulls.filter((layer) => layer.stack?.id === pr.stack!.id && layer.stack.position < pr.stack!.position && layer.state === "open")
+        : [];
+      if (action === "merge-async") {
+        const stuck = below.find((layer) => layer.draft || layer.mergeable === false);
+        if (stuck) return json(202, { status: "failed", details: { message: `#${stuck.number} can't be merged.` } });
+      }
+      for (const layer of [...below.sort((a, b) => a.stack!.position - b.stack!.position), pr]) {
+        Object.assign(layer, { state: "closed", merged: true });
+        changed(layer);
+        state.merges.push({ number: layer.number, method: body.merge_method ?? "merge", title: layer === pr ? body.commit_title : undefined, message: layer === pr ? body.commit_message : undefined, async: action === "merge-async" });
+      }
+      if (action === "merge") return json(200, { merged: true, sha: `merge-${pr.number}` });
+      return state.asyncMergePolls > 0
+        ? json(202, { status: "pending", details: { uuid: `merge-${pr.number}` } })
+        : json(202, { status: "merged", details: {} });
+    }
+    match = /^\/repositories\/(\d+)\/git\/refs\/heads\/(.+)$/.exec(path);
+    if (match && method === "DELETE") {
+      if (!person) return json(401, {});
+      if (!allowed("write")) return json(403, { message: "Must have write access" });
+      const key = `${match[1]}:${decodeURIComponent(match[2])}`;
+      if (state.deletedBranches.includes(key)) return json(422, { message: "Reference does not exist" });
+      state.deletedBranches.push(key);
+      return new Response(null, { status: 204 });
+    }
     match = /^\/repositories\/(\d+)\/(issues|pulls)\/(\d+)(\/assignees)?$/.exec(path);
     if (match && method !== "GET") {
       if (!person) return json(401, {});
@@ -382,7 +454,7 @@ export function createFakeGithub() {
       const body = JSON.parse(String(init?.body)) as { state?: "open" | "closed"; assignees?: string[] };
       const current = pr.assignees ?? [];
       if (state.dropAssigneeWrites && (match[4] || body.assignees)) {
-        return json(200, pullDetailJson(pr));
+        return json(200, pullDetailJson(pr, Number(match[1])));
       }
       if (match[4]) {
         const named = (body.assignees ?? []).filter((login) => state.assignable.includes(login));
@@ -394,7 +466,7 @@ export function createFakeGithub() {
         pr.state = body.state;
       }
       changed(pr);
-      return json(200, pullDetailJson(pr));
+      return json(200, pullDetailJson(pr, Number(match[1])));
     }
     if (path === "/user/installations") {
       return json(200, { installations: [...state.installations.keys()].map((id) => ({ id })) });
@@ -523,7 +595,7 @@ export function createFakeGithub() {
         state.onFilesRead?.();
         return json(200, files);
       }
-      return json(200, pullDetailJson(pr));
+      return json(200, pullDetailJson(pr, Number(match[1])));
     }
     return json(404, { message: `fake GitHub has no route for ${method} ${path}` });
   }
