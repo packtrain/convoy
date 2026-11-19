@@ -184,7 +184,7 @@ export function ReviewButton({ review, onJump }: { review: PullRequestReview; on
   const titleId = useId();
   const count = review.comments.length;
   const trigger = (
-    <Button variant="outline" size="sm" disabled={review.blocker !== null} title={review.blocker ?? (count ? pendingLabel(count) : undefined)}>
+    <Button variant="outline" size="sm" className="gap-1.5" disabled={review.blocker !== null} title={review.blocker ?? (count ? pendingLabel(count) : undefined)}>
       Submit review
       {count ? (
         <>

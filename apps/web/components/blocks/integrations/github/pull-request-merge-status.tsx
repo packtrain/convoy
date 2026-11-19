@@ -104,7 +104,7 @@ export function MergeStatus({
   return (
     <Popover open={open} onOpenChange={setOpen}>
       <PopoverTrigger asChild>
-        <Button variant="outline" size="sm" disabled={!overview}>
+        <Button variant="outline" size="sm" className="gap-1.5" disabled={!overview}>
           <Icon className={tone ? TONES[tone].className : "animate-spin"} />
           Merge status
         </Button>

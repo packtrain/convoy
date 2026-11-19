@@ -419,7 +419,7 @@ function bulletList(heading: string, rows: [string, string | undefined][]) {
 function Property({ label, action, children }: { label: string; action?: ReactNode; children: ReactNode }) {
   return (
     <div className="space-y-2">
-      <h3 className="flex h-4 items-center justify-between text-xs text-muted-foreground">
+      <h3 className="flex h-5 items-center justify-between text-sm text-muted-foreground">
         {label}
         {action}
       </h3>
@@ -455,7 +455,6 @@ export function PullRequestOverviewSkeleton() {
           <Skeleton className="h-3 w-24" />
         </div>
         <div className="mt-8 space-y-2">
-          <Skeleton className="mb-3 h-3 w-20" />
           <Skeleton className="h-4 w-full" />
           <Skeleton className="h-4 w-4/5" />
         </div>
@@ -659,7 +658,6 @@ export function PullRequestOverviewTab({
           ) : null}
         </section>
         <section aria-label="Description" className="mt-8">
-          <h3 className="mb-3 text-xs font-medium text-muted-foreground">Description</h3>
           {pr.description.trim() ? (
             <GithubMarkdown>{pr.description}</GithubMarkdown>
           ) : (
