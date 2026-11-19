@@ -48,6 +48,7 @@ export const featureGroups: FeatureGroup[] = [
     features: [
       { name: "Checks & evidence", body: "Give tasks reusable checklists. Agents report passed, warning, failed or not-performed results with notes and evidence. Inspect the results and ask for pending and failed checks to run again." },
       { name: "Task artifacts", body: "Keep plans, reviews and handoff notes on the task. Edit Markdown documents or open HTML reports and interactive outputs." },
+      { name: "Guided reviews", body: "Ask an agent for a Guide to a pull request. It groups related changes into chapters, with notes beside the code on what changed and where to look closely. Mark files Reviewed as you go." },
       { name: "Artifact comments", body: "Comment on a passage in a Markdown plan or review. Ask an agent to address the feedback, revise the document and resolve the comments." },
       { name: "Project memory", body: "Each new agent run starts with the decisions, specs, review comments and failed attempts from earlier work.", soon: true },
     ],
@@ -59,7 +60,7 @@ export const featureGroups: FeatureGroup[] = [
       { name: "Rich tasks", body: "Break work into subtasks and keep comments, attachments, artifacts and check results with the task. Commits and pull requests linked by agents or the CLI show up on the task." },
       { name: "Keyboard-first tasks", body: "Create, indent, reorder and update tasks from the keyboard, and open any task by its ref. Bulk edits, archive and delete come with undo." },
       { name: "Teams & permissions", body: "Invite teammates to organizations and projects, and give each role the access it needs." },
-      { name: "GitHub pull requests", body: "Read pull requests from connected repositories with their checks, commits and agent threads. Ask an agent for a Guide, then comment, review and merge from Convoy." },
+      { name: "GitHub pull requests", body: "Read pull requests from connected repositories with their checks, commits and agent threads, then comment, review and merge from Convoy." },
     ],
   },
   {

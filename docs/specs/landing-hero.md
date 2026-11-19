@@ -702,7 +702,8 @@ A section after Checks and before environments introduces pull request
 reviews under a "Guided reviews" label with "Review pull requests chapter by
 chapter." The copy sits above a full-width preview. It explains how chapters and notes help reviewers follow changes across files
 and how reviewers can pick up where they left off. The feature index lists GitHub pull requests as shipped, replacing the
-"Git-forge integration" /soon entry.
+"Git-forge integration" /soon entry, and gives Guided reviews its own entry
+under Documents & review.
 
 The isolated `product-preview/pull-request` folder exports
 `PullRequestPreview`. The homepage section and `/playground/pull-request` are

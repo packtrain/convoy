@@ -46,3 +46,9 @@ test('Checks are available and link to the public docs route', () => {
   assert.notEqual(feature.soon, true);
   assert.ok(source.includes('`${site.docsUrl}docs/using/checks`'));
 });
+
+test('Guided reviews has its own entry under Documents & review', () => {
+  const group = featureGroups.find((group) => group.title === 'Documents & review');
+  assert.ok(group.features.some((feature) => feature.name === 'Guided reviews' && !feature.soon));
+  assert.doesNotMatch(features.find((feature) => feature.name === 'GitHub pull requests').body, /Guide/);
+});
