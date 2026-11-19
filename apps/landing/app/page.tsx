@@ -100,6 +100,7 @@ export default function Home() {
             <a href="#product" className="transition-colors hover:text-[#f2f3f5]">Product</a>
             <a href="#agents" className="transition-colors hover:text-[#f2f3f5]">Agents</a>
             <a href="#features" className="transition-colors hover:text-[#f2f3f5]">Features</a>
+            <a href={`${site.docsUrl}docs`} className="transition-colors hover:text-[#f2f3f5]">Docs</a>
           </div>
           <div className="ml-auto flex items-center gap-5">
             <a
