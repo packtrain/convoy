@@ -20,6 +20,7 @@ import type { DiffState } from "./github-patch";
 import { PullRequestChanges, PullRequestChangesSkeleton } from "./pull-request-changes";
 import { GuideMenu, GuideSkeleton, PullRequestGuideTab, usePullRequestGuides } from "./pull-request-guide";
 import { useGithubCommenting } from "./pull-request-comments";
+import { ReviewButton, usePullRequestReview } from "./pull-request-review";
 import { MergeStatus } from "./pull-request-merge-status";
 import { PullRequestOverviewSkeleton, PullRequestOverviewTab, type OverviewState } from "./pull-request-overview";
 import { StackBadge, useStackLayers } from "./pull-request-stack";
@@ -77,6 +78,12 @@ export function PullRequestReader({
   const marks = useReviewedMarks(repositoryId, number);
   const navigation = useNavigation();
   const [tab, setTab] = useState<PullRequestTab>(defaultTab);
+  const showTab = (next: PullRequestTab) => {
+    setTab(next);
+    onTabChange?.(next);
+  };
+  // The pending comment the review popover jumped to.
+  const [reveal, setReveal] = useState<{ path: string; id: string } | null>(null);
   // Bumped by Refresh/Retry; a held result for an older request reads as loading.
   const [request, setRequest] = useState(0);
   // `seen` is the stored revision when the diff arrived; it may lag the live diff.
@@ -109,6 +116,23 @@ export function PullRequestReader({
     archived: pr?.archived ?? false,
     onCommentsChange: (change) => updateOverview((overview) => ({ ...overview, comments: change(overview.comments) })),
   });
+  const review = usePullRequestReview({
+    projectId,
+    repositoryId,
+    number,
+    commenting,
+    draftKey: `convoy:github:review-draft:${organizationSlug}:${projectAlias}:${repositoryId}:${number}`,
+    headSha: current?.diff.kind === "loaded" ? current.diff.diff.headSha : null,
+    author: pr?.author ?? "",
+    // A submitted review fulfills its author's request, as GitHub drops them from the requested reviewers.
+    onSubmitted: ({ review, comments }) =>
+      updateOverview((overview) => ({
+        ...overview,
+        reviews: [...overview.reviews, review],
+        reviewComments: [...overview.reviewComments, ...comments],
+        requestedReviewers: overview.requestedReviewers.filter((login) => login !== review.author),
+      })),
+  });
   const repository = status?.connections.find((connection) => connection.repositoryId === repositoryId)?.repository;
   const attached = repository ? toAttachedPullRequest({ owner: repository.owner, name: repository.name, number }) : null;
   // Live only while the Guide tab shows.
@@ -118,7 +142,9 @@ export function PullRequestReader({
     stored ? { baseSha: stored.baseSha, headSha: stored.headSha } : null,
     guides.guides,
     // Null while a stacked PR's Layers load, so Generate guide waits for them.
-    pr?.stack && !stackLayers ? null : layers
+    pr?.stack && !stackLayers ? null : layers,
+    // Waits for the Overview too; one that failed to load leaves the threads out.
+    overviewState.kind === "loaded" ? overviewState.overview.settledThreads : overviewState.kind === "loading" ? null : []
   );
 
   useEffect(() => {
@@ -206,6 +232,13 @@ export function PullRequestReader({
             onBranchUpdated={() => updateOverview((overview) => ({ ...overview, behindBy: 0, mergeBlock: null, mergeable: "unknown" }))}
           />
         ) : null}
+        <ReviewButton
+          review={review}
+          onJump={({ path, id }) => {
+            showTab("diff");
+            setReveal({ path, id });
+          }}
+        />
         <PullRequestStateActions projectId={projectId} repositoryId={repositoryId} pr={pr} commenting={commenting} />
         <Button
           variant="ghost"
@@ -229,9 +262,7 @@ export function PullRequestReader({
         value={tab}
         onValueChange={(value) => {
           const next = PULL_REQUEST_TABS.find((name) => name === value);
-          if (!next) return;
-          setTab(next);
-          onTabChange?.(next);
+          if (next) showTab(next);
         }}
         className="min-h-0 flex-1 gap-0"
       >
@@ -278,6 +309,7 @@ export function PullRequestReader({
             repositoryId={repositoryId}
             commenting={commenting}
             onAssigneesChange={(assignees) => updateOverview((overview) => ({ ...overview, assignees }))}
+            onRequestedReviewersChange={(requestedReviewers) => updateOverview((overview) => ({ ...overview, requestedReviewers }))}
           />
         </TabsContent>
         <TabsContent value="guide" className="overflow-auto">
@@ -303,7 +335,18 @@ export function PullRequestReader({
               </Button>
             </div>
           ) : null}
-          {loadedDiff ? <PullRequestChanges diff={loadedDiff} projectId={projectId} repositoryId={repositoryId} number={number} marks={marks} /> : null}
+          {loadedDiff ? (
+            <PullRequestChanges
+              diff={loadedDiff}
+              projectId={projectId}
+              repositoryId={repositoryId}
+              number={number}
+              marks={marks}
+              review={review}
+              reviewComments={overviewState.kind === "loaded" ? overviewState.overview.reviewComments : []}
+              reveal={reveal}
+            />
+          ) : null}
         </TabsContent>
       </Tabs>
       {launch.dialog}

@@ -26,6 +26,8 @@ const listAssignable = vi.fn();
 const updateAssignee = vi.fn();
 const mergePullRequest = vi.fn();
 const updateBranch = vi.fn();
+const submitReview = vi.fn();
+const requestReviewer = vi.fn();
 const beginLink = vi.fn();
 const readOverview = vi.fn();
 const readFile = vi.fn();
@@ -70,6 +72,8 @@ vi.mock("convex/react", () => ({
       [name(api.integrations.github.assignees.clear)]: vi.fn(),
       [name(api.integrations.github.merges.merge)]: mergePullRequest,
       [name(api.integrations.github.merges.updateBranch)]: updateBranch,
+      [name(api.integrations.github.reviews.submit)]: submitReview,
+      [name(api.integrations.github.reviews.requestReviewer)]: requestReviewer,
     })[name(fn)],
   useConvex: () => ({}),
 }));
@@ -78,8 +82,54 @@ vi.mock("@/lib/navigation", async (importActual) => ({
   useNavigation: () => ({ location: { pathname: "/", search: "", hash: "" }, push }),
   useRouteParams: () => ({}),
 }));
+type GutterClick = (range: { start: number; end: number; side: string }) => void;
+type LineSelection = (range: { start: number; end: number; side: string } | null) => void;
+type Annotation = { side: string; lineNumber: number };
+// The gutter "+" comments on line 1 of the new side, or drags up from line 3 to 1; annotations render under the patch.
 vi.mock("@pierre/diffs/react", () => ({
-  PatchDiff: ({ patch }: { patch: string }) => <pre>{patch}</pre>,
+  PatchDiff: ({
+    patch,
+    options,
+    lineAnnotations,
+    renderAnnotation,
+    selectedLines,
+  }: {
+    patch: string;
+    options?: { onGutterUtilityClick?: GutterClick; onLineSelectionEnd?: LineSelection };
+    lineAnnotations?: Annotation[];
+    renderAnnotation?: (annotation: Annotation) => React.ReactNode;
+    selectedLines?: { start: number; end: number } | null;
+  }) => (
+    <div>
+      <pre>{patch}</pre>
+      {options?.onGutterUtilityClick ? (
+        <button type="button" onClick={() => options.onGutterUtilityClick?.({ start: 1, end: 1, side: "additions" })}>
+          Comment on line 1
+        </button>
+      ) : null}
+      {options?.onGutterUtilityClick ? (
+        <button type="button" onClick={() => options.onGutterUtilityClick?.({ start: 3, end: 1, side: "additions" })}>
+          Comment on lines 1–3
+        </button>
+      ) : null}
+      {options?.onLineSelectionEnd ? (
+        <>
+          <button type="button" onClick={() => options.onLineSelectionEnd?.({ start: 3, end: 3, side: "additions" })}>
+            Select line 3
+          </button>
+          <button type="button" onClick={() => options.onLineSelectionEnd?.(null)}>
+            Unselect lines
+          </button>
+        </>
+      ) : null}
+      {selectedLines ? <output aria-label="Selected lines">{`${selectedLines.start}-${selectedLines.end}`}</output> : null}
+      {lineAnnotations?.map((annotation) => (
+        <div key={`${annotation.side}:${annotation.lineNumber}`} data-testid={`annotation-${annotation.lineNumber}`}>
+          {renderAnnotation?.(annotation)}
+        </div>
+      ))}
+    </div>
+  ),
   File: ({ file }: { file: { contents: string } }) => <pre>whole: {file.contents}</pre>,
 }));
 vi.mock("@/lib/auth/hooks", () => ({ useAppUser: () => ({ user: null }) }));
@@ -188,6 +238,7 @@ const overview = {
   ],
   reviews: [{ id: 1, author: "maya", authorAvatarUrl: null, state: "approved", submittedAt: Date.now(), body: "" }],
   requestedReviewers: [],
+  requestedTeams: [],
   comments: [{ id: 2, author: "alex", authorId: 2, authorAvatarUrl: "https://avatars.githubusercontent.com/u/2", body: "Nice work", createdAt: Date.now(), url: "https://github.com/c/2" }],
   reviewComments: [],
   assignees: [],
@@ -1167,5 +1218,300 @@ describe("PullRequestReader GitHub comments (OS-2183)", () => {
     // GitHub rewrote the head, so mergeability is unknown until Refresh.
     expect(within(popover).getByText("Checking mergeability…")).toBeTruthy();
     expect(mergeButton("Squash and merge").disabled).toBe(true);
+  });
+});
+
+describe("PullRequestReader reviews (OS-2186)", () => {
+  const status = {
+    configured: true,
+    installUrl: null,
+    canManage: false,
+    setup: null,
+    connections: [{ repositoryId: "repo_1", status: "active", repository: { owner: "acme", name: "web", htmlUrl: "https://github.com/acme/web" } }],
+  };
+  const connected = () => (
+    <PullRequestReader
+      projectId={"project_1" as Id<"projects">}
+      repositoryId="repo_1"
+      number={7}
+      status={status as never}
+      hrefFor={(repositoryId, number) => appRoute.projectPullRequest("org", "WEB", repositoryId, number)}
+      organizationSlug="org"
+      projectAlias="WEB"
+    />
+  );
+  const linkedAs = (login: string) => {
+    linkedAccounts = {
+      configured: true,
+      organizations: [{ organizationId: "org_1", organizationSlug: "org", organizationName: "Org", account: { avatarUrl: null, login, githubUserId: 42, status: "active" } }],
+    };
+  };
+  const target = { projectId: "project_1", repositoryId: "repo_1", number: 7 };
+  const posted = (id: number, body: string) => ({
+    id,
+    author: "maya",
+    authorAvatarUrl: null,
+    body,
+    createdAt: Date.now(),
+    url: `https://github.com/rc/${id}`,
+    path: "src/search.ts",
+    line: 1,
+    side: "RIGHT",
+    outdated: false,
+    quote: [{ kind: "add", number: 1, text: "search()" }],
+  });
+  const review = (state: string, body = "") => ({ id: 70, author: "maya", authorAvatarUrl: null, state, submittedAt: Date.now(), body, url: "https://github.com/r/70" });
+
+  async function openDiffConnected() {
+    render(connected());
+    openTab("Diff");
+    return screen.findByRole("button", { name: "Comment on line 1" });
+  }
+
+  /** The header's button, which opens the review popover. */
+  const reviewButton = () => screen.getAllByRole("button", { name: /^Submit review/ })[0] as HTMLButtonElement;
+  const popover = () => screen.getByRole("dialog", { name: "Finish your review" });
+
+  function writeLineComment(text: string) {
+    fireEvent.change(screen.getByRole("textbox", { name: "Line comment" }), { target: { value: text } });
+  }
+
+  test("a line comment starts a review, which the Review popover submits with its verdict at the displayed head", async () => {
+    linkedAs("maya");
+    submitReview.mockResolvedValue({ review: review("approved", "Ship it"), comments: [posted(80, "Rename this")] });
+    fireEvent.click(await openDiffConnected());
+    writeLineComment("Rename this");
+    fireEvent.click(screen.getByRole("button", { name: "Start a review" }));
+    expect(screen.getByText("Pending")).toBeTruthy();
+    expect(screen.getByText("Rename this")).toBeTruthy();
+    // The draft outlives a reload, under the member's GitHub account.
+    expect(localStorage.getItem("convoy:github:review-draft:org:WEB:repo_1:7:42")).toContain("Rename this");
+
+    // The header names what its count counts.
+    expect(screen.getByRole("button", { name: "Submit review, 1 pending comment" })).toBeTruthy();
+    fireEvent.click(reviewButton());
+    fireEvent.change(await screen.findByRole("textbox", { name: "Review comment" }), { target: { value: "Ship it" } });
+    fireEvent.click(screen.getByRole("radio", { name: "Approve" }));
+    fireEvent.click(within(popover()).getByRole("button", { name: "Submit review" }));
+    await waitFor(() =>
+      expect(submitReview).toHaveBeenCalledWith({
+        ...target,
+        headSha: "head-1",
+        event: "approve",
+        body: "Ship it",
+        comments: [{ path: "src/search.ts", line: 1, side: "RIGHT", body: "Rename this" }],
+      })
+    );
+    // GitHub's comment replaces the pending one on its line, and the draft is gone.
+    await waitFor(() => expect(screen.queryByText("Pending")).toBeNull());
+    expect(screen.getByText("Rename this")).toBeTruthy();
+    expect(localStorage.getItem("convoy:github:review-draft:org:WEB:repo_1:7:42")).toBeNull();
+  });
+
+  test("Add single comment posts at once as a comment review", async () => {
+    linkedAs("maya");
+    submitReview.mockResolvedValue({ review: review("commented"), comments: [posted(81, "Typo")] });
+    fireEvent.click(await openDiffConnected());
+    writeLineComment("Typo");
+    fireEvent.click(screen.getByRole("button", { name: "Add single comment" }));
+    await waitFor(() =>
+      expect(submitReview).toHaveBeenCalledWith({ ...target, headSha: "head-1", event: "comment", body: "", comments: [{ path: "src/search.ts", line: 1, side: "RIGHT", body: "Typo" }] })
+    );
+    await waitFor(() => expect(screen.queryByRole("textbox", { name: "Line comment" })).toBeNull());
+    expect(screen.getByText("Typo")).toBeTruthy();
+    expect(screen.queryByText("Pending")).toBeNull();
+  });
+
+  test("the author can only comment: Approve and Request changes say why", async () => {
+    linkedAs("octocat");
+    render(connected());
+    await screen.findByText("Nice work");
+    fireEvent.click(reviewButton());
+    expect(((await screen.findByRole("radio", { name: "Approve" })) as HTMLInputElement).disabled).toBe(true);
+    expect(screen.getByText("You can't approve your own pull request.")).toBeTruthy();
+    expect(screen.getByText("You can't request changes on your own pull request.")).toBeTruthy();
+    // A comment review needs a body or a pending comment.
+    expect((within(popover()).getByRole("button", { name: "Submit review" }) as HTMLButtonElement).disabled).toBe(true);
+  });
+
+  test("without a Linked GitHub account, Submit review says to connect and lines take no comments", async () => {
+    render(connected());
+    openTab("Diff");
+    await waitFor(() => expect(screen.getByText(/\+search\(\)/)).toBeTruthy());
+    expect(screen.queryByRole("button", { name: "Comment on line 1" })).toBeNull();
+    const button = reviewButton();
+    expect(button.disabled).toBe(true);
+    expect(button.title).toBe("Connect GitHub first");
+  });
+
+  test("Review waits for the displayed revision: disabled while the changes load or after they fail", async () => {
+    linkedAs("maya");
+    readDiff.mockReturnValue(new Promise(() => {}));
+    const { unmount } = render(connected());
+    const button = reviewButton;
+    await waitFor(() => expect(button().title).toBe("The changes haven't loaded yet"));
+    expect(button().disabled).toBe(true);
+    unmount();
+
+    readDiff.mockRejectedValue(new Error("GitHub down"));
+    render(connected());
+    await waitFor(() => expect(button().title).toBe("The changes haven't loaded yet"));
+    expect(button().disabled).toBe(true);
+  });
+
+  test("text typed while a review submits stays in the draft", async () => {
+    linkedAs("maya");
+    let answer!: (value: unknown) => void;
+    submitReview.mockReturnValue(new Promise((resolve) => (answer = resolve)));
+    render(connected());
+    await screen.findByText("Nice work");
+    await waitFor(() => expect(reviewButton().disabled).toBe(false));
+    fireEvent.click(reviewButton());
+    const body = await screen.findByRole("textbox", { name: "Review comment" });
+    fireEvent.change(body, { target: { value: "Ship it" } });
+    fireEvent.click(within(popover()).getByRole("button", { name: "Submit review" }));
+    fireEvent.change(body, { target: { value: "Ship it, and one more thing" } });
+    await act(async () => answer({ review: review("commented", "Ship it"), comments: [] }));
+    expect(localStorage.getItem("convoy:github:review-draft:org:WEB:repo_1:7:42")).toContain("Ship it, and one more thing");
+  });
+
+  test("the line editor takes no edits while its single comment posts, so nothing typed is lost", async () => {
+    linkedAs("maya");
+    let answer!: (value: unknown) => void;
+    submitReview.mockReturnValue(new Promise((resolve) => (answer = resolve)));
+    fireEvent.click(await openDiffConnected());
+    writeLineComment("First version");
+    fireEvent.click(screen.getByRole("button", { name: "Add single comment" }));
+    expect((screen.getByRole("textbox", { name: "Line comment" }) as HTMLTextAreaElement).disabled).toBe(true);
+    await act(async () => answer({ review: review("commented"), comments: [posted(82, "First version")] }));
+  });
+
+  test("selecting lines by their numbers moves the editor there, so the highlight and the editor stay together", async () => {
+    linkedAs("maya");
+    fireEvent.click(await openDiffConnected());
+    expect(screen.getByRole("status", { name: "Selected lines" }).textContent).toBe("1-1");
+    fireEvent.click(screen.getByRole("button", { name: "Select line 3" }));
+    expect(screen.getByRole("status", { name: "Selected lines" }).textContent).toBe("3-3");
+    expect(within(screen.getByTestId("annotation-3")).getByRole("textbox", { name: "Line comment" })).toBeTruthy();
+    expect(screen.queryByTestId("annotation-1")).toBeNull();
+    // Unselecting closes the editor rather than leaving it without its line.
+    fireEvent.click(screen.getByRole("button", { name: "Unselect lines" }));
+    expect(screen.queryByRole("textbox", { name: "Line comment" })).toBeNull();
+  });
+
+  test("dragging the gutter + comments on a range, which posts with its first line", async () => {
+    linkedAs("maya");
+    submitReview.mockResolvedValue({ review: review("commented"), comments: [] });
+    await openDiffConnected();
+    fireEvent.click(screen.getByRole("button", { name: "Comment on lines 1–3" }));
+    expect(screen.getByText("Commenting on lines 1–3")).toBeTruthy();
+    writeLineComment("This loop reads twice");
+    fireEvent.click(screen.getByRole("button", { name: "Start a review" }));
+    fireEvent.click(reviewButton());
+    fireEvent.click(within(popover()).getByRole("button", { name: /^Pending comments/ }));
+    expect(within(popover()).getByText("Lines 1–3")).toBeTruthy();
+    fireEvent.click(within(popover()).getByRole("button", { name: "Submit review" }));
+    await waitFor(() =>
+      expect(submitReview).toHaveBeenCalledWith({
+        ...target,
+        headSha: "head-1",
+        event: "comment",
+        body: "",
+        comments: [{ path: "src/search.ts", startLine: 1, startSide: "RIGHT", line: 3, side: "RIGHT", body: "This loop reads twice" }],
+      })
+    );
+  });
+
+  test("the popover lists pending comments: each opens to its text and jumps to its line, and Discard review drops the draft", async () => {
+    linkedAs("maya");
+    Element.prototype.scrollIntoView = vi.fn();
+    fireEvent.click(await openDiffConnected());
+    writeLineComment("Rename this");
+    fireEvent.click(screen.getByRole("button", { name: "Start a review" }));
+    openTab("Overview");
+    fireEvent.click(reviewButton());
+    const list = within(popover()).getByRole("region", { name: "Pending comments" });
+    // The list starts folded, as on GitHub.
+    expect(within(list).queryByText("src/search.ts")).toBeNull();
+    fireEvent.click(within(list).getByRole("button", { name: /^Pending comments/ }));
+    expect(within(list).getByText("src/search.ts")).toBeTruthy();
+    expect(within(list).getByText("Line 1")).toBeTruthy();
+    expect(within(list).queryByText("Rename this")).toBeNull();
+    fireEvent.click(within(list).getByRole("button", { name: "Show comment on src/search.ts" }));
+    expect(within(list).getByText("Rename this")).toBeTruthy();
+
+    fireEvent.click(within(list).getByRole("button", { name: "Go to comment on src/search.ts" }));
+    await waitFor(() => expect(Element.prototype.scrollIntoView).toHaveBeenCalled());
+    expect(screen.getByRole("tab", { name: "Diff" }).getAttribute("aria-selected")).toBe("true");
+    expect(screen.queryByRole("dialog", { name: "Finish your review" })).toBeNull();
+
+    fireEvent.click(reviewButton());
+    fireEvent.change(within(popover()).getByRole("textbox", { name: "Review comment" }), { target: { value: "Overall fine" } });
+    fireEvent.click(within(popover()).getByRole("button", { name: "Discard review" }));
+    expect(screen.queryByText("Pending")).toBeNull();
+    expect(localStorage.getItem("convoy:github:review-draft:org:WEB:repo_1:7:42")).toBeNull();
+  });
+
+  test("Mod+Enter in the review comment submits, as the button's hint says", async () => {
+    linkedAs("maya");
+    submitReview.mockResolvedValue({ review: review("commented", "Ship it"), comments: [] });
+    render(connected());
+    await screen.findByText("Nice work");
+    await waitFor(() => expect(reviewButton().disabled).toBe(false));
+    fireEvent.click(reviewButton());
+    const body = await screen.findByRole("textbox", { name: "Review comment" });
+    fireEvent.change(body, { target: { value: "Ship it" } });
+    fireEvent.keyDown(body, { key: "Enter", ctrlKey: true });
+    await waitFor(() => expect(submitReview).toHaveBeenCalledWith({ ...target, headSha: "head-1", event: "comment", body: "Ship it", comments: [] }));
+  });
+
+  test("submitting a review fulfills the reviewer's request, as on GitHub", async () => {
+    linkedAs("maya");
+    readOverview.mockResolvedValue({ ...overview, reviews: [], requestedReviewers: ["maya"] });
+    submitReview.mockResolvedValue({ review: review("approved"), comments: [] });
+    render(connected());
+    const properties = await screen.findByRole("complementary", { name: "Pull request properties" });
+    expect(await within(properties).findByText("Requested")).toBeTruthy();
+    await waitFor(() => expect(reviewButton().disabled).toBe(false));
+    fireEvent.click(reviewButton());
+    fireEvent.click(await screen.findByRole("radio", { name: "Approve" }));
+    fireEvent.click(within(popover()).getByRole("button", { name: "Submit review" }));
+    expect(await within(properties).findByText("Approved")).toBeTruthy();
+    expect(within(properties).queryByText("Requested")).toBeNull();
+  });
+
+  test("a requested team shows as a reviewer but is no row in the picker", async () => {
+    linkedAs("maya");
+    readPermission.mockResolvedValue("triage");
+    readOverview.mockResolvedValue({ ...overview, requestedTeams: ["core"] });
+    listAssignable.mockResolvedValue([{ login: "sam", avatarUrl: null }]);
+    render(connected());
+    const properties = await screen.findByRole("complementary", { name: "Pull request properties" });
+    expect(await within(properties).findByText("core")).toBeTruthy();
+    const button = () => screen.getByRole("button", { name: "Request reviewers" }) as HTMLButtonElement;
+    await waitFor(() => expect(button().disabled).toBe(false));
+    fireEvent.click(button());
+    await screen.findByRole("button", { name: "sam, not requested" });
+    expect(screen.queryByRole("button", { name: /^core/ })).toBeNull();
+  });
+
+  test("Reviewers requests a review from GitHub's assignable people, leaving the author out", async () => {
+    linkedAs("maya");
+    readPermission.mockResolvedValue("triage");
+    listAssignable.mockResolvedValue([
+      { login: "octocat", avatarUrl: null },
+      { login: "sam", avatarUrl: null },
+    ]);
+    requestReviewer.mockResolvedValue(["sam"]);
+    render(connected());
+    await screen.findByText("Nice work");
+    const button = () => screen.getByRole("button", { name: "Request reviewers" }) as HTMLButtonElement;
+    await waitFor(() => expect(button().disabled).toBe(false));
+    fireEvent.click(button());
+    fireEvent.click(await screen.findByRole("button", { name: "sam, not requested" }));
+    expect(screen.queryByRole("button", { name: /^octocat/ })).toBeNull();
+    expect(requestReviewer).toHaveBeenCalledWith({ ...target, login: "sam", requested: true });
+    const properties = screen.getByRole("complementary", { name: "Pull request properties" });
+    expect(await within(properties).findByText("sam")).toBeTruthy();
   });
 });

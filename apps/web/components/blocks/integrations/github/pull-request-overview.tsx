@@ -40,6 +40,7 @@ import {
   type QuoteLine,
 } from "./pull-request-comments";
 import { AssigneesButton } from "./pull-request-assignees";
+import { ReviewersButton } from "./pull-request-review";
 import { reviewerStates, type ReviewerState } from "./pull-request-merge-status";
 import { layerBelow, StackMap } from "./pull-request-stack";
 import { PullRequestStatusSelect, writeBlocker } from "./pull-request-state-actions";
@@ -491,6 +492,7 @@ export function PullRequestOverviewTab({
   repositoryId,
   commenting,
   onAssigneesChange,
+  onRequestedReviewersChange,
 }: {
   pr: PullRequestView;
   summary: PullRequestView;
@@ -507,6 +509,7 @@ export function PullRequestOverviewTab({
   repositoryId: string;
   commenting: GithubCommenting;
   onAssigneesChange: (assignees: PullRequestOverview["assignees"]) => void;
+  onRequestedReviewersChange: (requested: string[]) => void;
 }) {
   const overview = state.kind === "loaded" ? state.overview : null;
   const threads = usePullRequestThreads(projectId, pullRequest);
@@ -800,7 +803,22 @@ export function PullRequestOverviewTab({
             <StackMap layers={layers} current={pr.number} hrefFor={hrefFor} />
           </Property>
         ) : null}
-        <Property label="Reviewers">
+        <Property
+          label="Reviewers"
+          action={
+            overview && pullRequest ? (
+              <ReviewersButton
+                projectId={projectId}
+                repositoryId={repositoryId}
+                number={pr.number}
+                author={pr.author}
+                requested={overview.requestedReviewers}
+                blocker={writeBlocker(commenting.account, commenting.role, "triage")}
+                onChange={onRequestedReviewersChange}
+              />
+            ) : null
+          }
+        >
           {reviewers?.length ? (
             reviewers.map((reviewer) => (
               <span key={reviewer.login} className="flex items-center gap-2">

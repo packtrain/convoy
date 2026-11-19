@@ -170,6 +170,7 @@ import type * as integrations_github_lib_permissions from "../integrations/githu
 import type * as integrations_github_lib_validators from "../integrations/github/lib/validators.js";
 import type * as integrations_github_merges from "../integrations/github/merges.js";
 import type * as integrations_github_pullRequests from "../integrations/github/pullRequests.js";
+import type * as integrations_github_reviews from "../integrations/github/reviews.js";
 import type * as integrations_github_setup from "../integrations/github/setup.js";
 import type * as integrations_github_states from "../integrations/github/states.js";
 import type * as integrations_github_sync from "../integrations/github/sync.js";
@@ -542,6 +543,7 @@ declare const fullApi: ApiFromModules<{
   "integrations/github/lib/validators": typeof integrations_github_lib_validators;
   "integrations/github/merges": typeof integrations_github_merges;
   "integrations/github/pullRequests": typeof integrations_github_pullRequests;
+  "integrations/github/reviews": typeof integrations_github_reviews;
   "integrations/github/setup": typeof integrations_github_setup;
   "integrations/github/states": typeof integrations_github_states;
   "integrations/github/sync": typeof integrations_github_sync;

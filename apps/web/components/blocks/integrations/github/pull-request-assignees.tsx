@@ -38,6 +38,8 @@ export function AssignPicker({
   assignments,
   onToggle,
   onClear,
+  labels = STATE_LABELS,
+  omit,
   children,
 }: {
   projectId: Id<"projects">;
@@ -45,7 +47,12 @@ export function AssignPicker({
   /** Each PR's assignee logins. */
   assignments: string[][];
   onToggle: (login: string, assign: boolean) => void;
-  onClear: () => void;
+  /** Assign to nobody; the row is left out without it. */
+  onClear?: () => void;
+  /** How each person's row reads to a screen reader. */
+  labels?: Record<MarkState, string>;
+  /** Someone GitHub would refuse (a PR's author as its reviewer). */
+  omit?: string;
   /** The trigger. */
   children: ReactNode;
 }) {
@@ -71,12 +78,12 @@ export function AssignPicker({
   }, [open, search, sourcesKey, projectId, listAssignable]);
   const assigned = new Set(assignments.flat());
   // Someone assigned but no longer assignable still shows, so they can be removed.
-  const known = people.kind === "loaded" ? people.people : [];
+  const known = people.kind === "loaded" ? people.people.filter((person) => person.login !== omit) : [];
   const listed = [...known, ...[...assigned].filter((login) => !known.some((person) => person.login === login)).map((login) => ({ login, avatarUrl: null }))];
   const matches = (text: string) => text.toLowerCase().includes(query.trim().toLowerCase());
   // GitHub already matched `known`; the rest match here.
   const shown = listed.filter((person, index) => index < known.length || matches(person.login));
-  const showNobody = matches("Assign to nobody");
+  const showNobody = onClear !== undefined && matches("Assign to nobody");
   const close = (action: () => void) => () => {
     action();
     setOpen(false);
@@ -92,7 +99,7 @@ export function AssignPicker({
       <PopoverTrigger asChild>{children}</PopoverTrigger>
       <PopoverContent align="end" className="w-72 p-0">
         <SearchablePicker query={query} onQueryChange={setQuery} placeholder="Search people..." clearLabel="Clear people search">
-          {showNobody ? (
+          {showNobody && onClear ? (
             <SearchablePickerItem onClick={close(onClear)}>
               <Mark state={assigned.size === 0 ? "all" : "none"} />
               Assign to nobody
@@ -105,7 +112,7 @@ export function AssignPicker({
               <SearchablePickerItem
                 key={person.login}
                 onClick={close(() => onToggle(person.login, state !== "all"))}
-                aria-label={`${person.login}, ${STATE_LABELS[state]}`}
+                aria-label={`${person.login}, ${labels[state]}`}
               >
                 <Mark state={state} />
                 <PersonAvatar person={person} />
@@ -126,7 +133,7 @@ export function AssignPicker({
   );
 }
 
-type MarkState = "all" | "some" | "none";
+export type MarkState = "all" | "some" | "none";
 
 const STATE_LABELS: Record<MarkState, string> = { all: "assigned", some: "assigned to some selected", none: "not assigned" };
 const MARK_ICONS: Record<MarkState, ReactNode> = { all: <Check className="size-3" />, some: <Minus className="size-3" />, none: null };

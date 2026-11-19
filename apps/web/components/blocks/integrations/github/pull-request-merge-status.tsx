@@ -26,7 +26,7 @@ export function reviewerStates(overview: PullRequestOverview, author: string): {
     else if (review.state !== "commented") states.set(review.author, review.state);
     else if (!states.has(review.author)) states.set(review.author, "commented");
   }
-  for (const login of overview.requestedReviewers) states.set(login, "requested");
+  for (const login of [...overview.requestedReviewers, ...overview.requestedTeams]) states.set(login, "requested");
   return [...states].map(([login, state]) => ({ login, state }));
 }
 

@@ -71,4 +71,17 @@ describe("guidePrompt", () => {
     for (const text of ["Backfill needed.", "The table", "Why a new table?", "Adds an index."]) expect(prompt).toContain(text);
     expect(prompt).not.toContain("blob-1");
   });
+
+  test("lists resolved and outdated review threads so the guide doesn't raise them again", () => {
+    const pullRequest = { owner: "acme", name: "web", number: 1, ref: "acme/web#1" } as never;
+    const settledThreads = [
+      { path: "src/a.ts", line: 3, resolved: true, outdated: false, author: "sam", body: "Rename\nthis" },
+      { path: "src/b.ts", line: null, resolved: true, outdated: true, author: "maya", body: "Drop it" },
+    ];
+    const prompt = guidePrompt({ pullRequest, baseSha: "b", headSha: "h", settledThreads });
+    expect(prompt).toContain("Reviewers already settled these review threads.");
+    expect(prompt).toContain("- src/a.ts:3 (resolved) @sam: Rename this");
+    expect(prompt).toContain("- src/b.ts (resolved, outdated) @maya: Drop it");
+    expect(guidePrompt({ pullRequest, baseSha: "b", headSha: "h" })).not.toContain("settled");
+  });
 });

@@ -1,6 +1,6 @@
 import type { NormalizedPullRequest, PullRequestStack } from "../../../lib/contracts/github";
 import { GithubError } from "./github";
-import type { PullRequestComment, PullRequestOverview, PullRequestSearchHit } from "./validators";
+import type { PullRequestComment, PullRequestOverview, PullRequestReview, PullRequestReviewComment, PullRequestSearchHit } from "./validators";
 
 /** Diff budget per request: provider file entries past these limits come back without patches. */
 export const DIFF_MAX_FILES = 100;
@@ -179,6 +179,79 @@ export function normalizeComment(value: unknown): PullRequestComment {
   };
 }
 
+/** The people (logins) and teams (names) a PR's review is requested from. */
+export function requestedReviewers(pr: Record<string, unknown>): { users: string[]; teams: string[] } {
+  return {
+    users: list(pr.requested_reviewers ?? []).map(login),
+    teams: list(pr.requested_teams ?? []).map((team) => text(record(team).name) || text(record(team).slug)),
+  };
+}
+
+/** A submitted review, or null for a pending one: the reviewer's unsubmitted draft, which GitHub never shows to others. */
+export function normalizeReview(value: unknown): PullRequestReview | null {
+  const review = record(value);
+  const state = REVIEW_STATES[text(review.state)];
+  if (!state) return null;
+  return {
+    id: num(review.id),
+    author: login(review.user),
+    authorAvatarUrl: avatarUrl(review.user),
+    state,
+    submittedAt: Date.parse(text(review.submitted_at)) || 0,
+    body: text(review.body),
+    url: text(review.html_url),
+  };
+}
+
+/** An inline review comment; GitHub nulls `line` once the head moves past it, which makes it outdated. */
+export function normalizeReviewComment(value: unknown): PullRequestReviewComment {
+  const comment = record(value);
+  const line = [comment.line, comment.original_line].find((candidate) => typeof candidate === "number");
+  const start = [comment.start_line, comment.original_start_line].find((candidate) => typeof candidate === "number");
+  const count = typeof line === "number" && typeof start === "number" ? line - start + 1 : 1;
+  const side = comment.side === "LEFT" ? "LEFT" : "RIGHT";
+  return {
+    id: num(comment.id),
+    author: login(comment.user),
+    authorAvatarUrl: avatarUrl(comment.user),
+    body: text(comment.body),
+    createdAt: Date.parse(str(comment.created_at)),
+    url: text(comment.html_url),
+    path: str(comment.path),
+    line: typeof line === "number" ? line : null,
+    side,
+    outdated: typeof comment.line !== "number",
+    quote: quoteLines(text(comment.diff_hunk), side === "LEFT" ? "old" : "new", count),
+  };
+}
+
+/** The Guide prompt quotes each thread's first comment, cut to this many characters. */
+const SETTLED_BODY_LENGTH = 500;
+
+/** Resolved or outdated review threads, from GraphQL's `reviewThreads`; anything else in the list is dropped. */
+function settledThreads(node: unknown): PullRequestOverview["settledThreads"] {
+  if (node === null) return [];
+  const threads = record(record(node).reviewThreads ?? { nodes: [] }).nodes;
+  return list(threads ?? []).flatMap((value) => {
+    const thread = record(value);
+    const resolved = thread.isResolved === true;
+    const outdated = thread.isOutdated === true;
+    if (!resolved && !outdated) return [];
+    const first = record(list(record(thread.comments ?? { nodes: [] }).nodes ?? [])[0] ?? {});
+    const line = [thread.line, thread.originalLine].find((candidate) => typeof candidate === "number");
+    return [
+      {
+        path: text(thread.path),
+        line: typeof line === "number" ? line : null,
+        resolved,
+        outdated,
+        author: login(first.author),
+        body: text(first.body).slice(0, SETTLED_BODY_LENGTH),
+      },
+    ];
+  });
+}
+
 function mergeSettings(repository: Record<string, unknown>): PullRequestOverview["mergeSettings"] {
   const methods = (["merge", "squash", "rebase"] as const).filter(
     (method) => repository[{ merge: "mergeCommitAllowed", squash: "squashMergeAllowed", rebase: "rebaseMergeAllowed" }[method]] === true
@@ -196,8 +269,8 @@ export function normalizeOverview(appId: string, raw: {
   checkRuns: unknown;
   status: unknown;
   compare: unknown;
-  /** GraphQL's PullRequest node with its `repository`; null when unread. */
-  repository: unknown;
+  /** GraphQL's PullRequest node with its `repository` and `reviewThreads`; null when unread. */
+  node: unknown;
 }): PullRequestOverview {
   const pr = record(raw.pr);
   const checkRuns = list(record(raw.checkRuns).check_runs ?? []).map((value) => {
@@ -230,7 +303,7 @@ export function normalizeOverview(appId: string, raw: {
     mergeable: pr.mergeable === true ? "clean" : pr.mergeable === false ? "conflicting" : "unknown",
     behindBy: raw.compare === null ? null : num(record(raw.compare).behind_by),
     mergeBlock: pr.mergeable_state === "blocked" || pr.mergeable_state === "behind" ? pr.mergeable_state : null,
-    mergeSettings: raw.repository === null ? null : mergeSettings(record(raw.repository)),
+    mergeSettings: raw.node === null ? null : mergeSettings(record(record(raw.node).repository)),
     commitCount: typeof pr.commits === "number" ? pr.commits : list(raw.commits).length,
     commits: list(raw.commits).map((value) => {
       const commit = record(value);
@@ -246,33 +319,12 @@ export function normalizeOverview(appId: string, raw: {
     }),
     checks: [...checkRuns, ...statuses],
     // A pending review is the reviewer's unsubmitted draft; GitHub never shows it to others.
-    reviews: list(raw.reviews).flatMap((value) => {
-      const review = record(value);
-      const state = REVIEW_STATES[text(review.state)];
-      return state ? [{ id: num(review.id), author: login(review.user), authorAvatarUrl: avatarUrl(review.user), state, submittedAt: Date.parse(text(review.submitted_at)) || 0, body: text(review.body), url: text(review.html_url) }] : [];
-    }),
-    requestedReviewers: [
-      ...list(pr.requested_reviewers ?? []).map(login),
-      ...list(pr.requested_teams ?? []).map((team) => text(record(team).name) || text(record(team).slug)),
-    ],
+    reviews: list(raw.reviews).flatMap((value) => normalizeReview(value) ?? []),
+    requestedReviewers: requestedReviewers(pr).users,
+    requestedTeams: requestedReviewers(pr).teams,
     comments: list(raw.comments).map(normalizeComment),
-    reviewComments: list(raw.reviewComments).map((value) => {
-      const comment = record(value);
-      const line = [comment.line, comment.original_line].find((candidate) => typeof candidate === "number");
-      const start = [comment.start_line, comment.original_start_line].find((candidate) => typeof candidate === "number");
-      const count = typeof line === "number" && typeof start === "number" ? line - start + 1 : 1;
-      return {
-        id: num(comment.id),
-        author: login(comment.user),
-        authorAvatarUrl: avatarUrl(comment.user),
-        body: text(comment.body),
-        createdAt: Date.parse(str(comment.created_at)),
-        url: text(comment.html_url),
-        path: str(comment.path),
-        line: typeof line === "number" ? line : null,
-        quote: quoteLines(text(comment.diff_hunk), comment.side === "LEFT" ? "old" : "new", count),
-      };
-    }),
+    reviewComments: list(raw.reviewComments).map(normalizeReviewComment),
+    settledThreads: settledThreads(raw.node),
     assignees: list(pr.assignees ?? []).map((user) => ({ login: login(user), avatarUrl: avatarUrl(user) })),
     milestone: pr.milestone ? { title: str(record(pr.milestone).title), url: text(record(pr.milestone).html_url) } : null,
   };

@@ -267,6 +267,37 @@ export const pullRequestCommentValidator = v.object({
 });
 export type PullRequestComment = Infer<typeof pullRequestCommentValidator>;
 
+/** A submitted review; GitHub never shows anyone else a pending one. */
+export const pullRequestReviewValidator = v.object({
+  id: v.number(),
+  author: v.string(),
+  authorAvatarUrl: v.union(v.string(), v.null()),
+  state: v.union(v.literal("approved"), v.literal("changes_requested"), v.literal("commented"), v.literal("dismissed")),
+  submittedAt: v.number(),
+  body: v.string(),
+  url: v.string(),
+});
+export type PullRequestReview = Infer<typeof pullRequestReviewValidator>;
+
+/** An inline comment on a diff line. `line` is on `side` (LEFT is the base), at the PR's head, or where it was left once `outdated`. */
+export const pullRequestReviewCommentValidator = v.object({
+  id: v.number(),
+  author: v.string(),
+  authorAvatarUrl: v.union(v.string(), v.null()),
+  body: v.string(),
+  createdAt: v.number(),
+  url: v.string(),
+  path: v.string(),
+  line: v.union(v.number(), v.null()),
+  side: v.union(v.literal("LEFT"), v.literal("RIGHT")),
+  outdated: v.boolean(),
+  /** The commented lines from GitHub's diff hunk, numbered on the commented side. */
+  quote: v.array(
+    v.object({ kind: v.union(v.literal("add"), v.literal("del"), v.literal("context")), number: v.union(v.number(), v.null()), text: v.string() })
+  ),
+});
+export type PullRequestReviewComment = Infer<typeof pullRequestReviewCommentValidator>;
+
 /** GitHub's merge methods, in its merge menu's order. */
 export const mergeMethodValidator = v.union(v.literal("merge"), v.literal("squash"), v.literal("rebase"));
 export type MergeMethod = Infer<typeof mergeMethodValidator>;
@@ -296,35 +327,17 @@ export const pullRequestOverviewValidator = v.object({
       fromConvoy: v.boolean(),
     })
   ),
-  reviews: v.array(
-    v.object({
-      id: v.number(),
-      author: v.string(),
-      authorAvatarUrl: v.union(v.string(), v.null()),
-      state: v.union(v.literal("approved"), v.literal("changes_requested"), v.literal("commented"), v.literal("dismissed")),
-      submittedAt: v.number(),
-      body: v.string(),
-      url: v.string(),
-    })
-  ),
+  reviews: v.array(pullRequestReviewValidator),
+  /** Logins; Convoy can request and withdraw these. */
   requestedReviewers: v.array(v.string()),
+  /** Team names, shown but not requested from Convoy. */
+  requestedTeams: v.array(v.string()),
   comments: v.array(pullRequestCommentValidator),
   /** Inline comments on the diff; `line` is where it was left, even once outdated. */
-  reviewComments: v.array(
-    v.object({
-      id: v.number(),
-      author: v.string(),
-      authorAvatarUrl: v.union(v.string(), v.null()),
-      body: v.string(),
-      createdAt: v.number(),
-      url: v.string(),
-      path: v.string(),
-      line: v.union(v.number(), v.null()),
-      /** The commented lines from GitHub's diff hunk, numbered on the commented side. */
-      quote: v.array(
-        v.object({ kind: v.union(v.literal("add"), v.literal("del"), v.literal("context")), number: v.union(v.number(), v.null()), text: v.string() })
-      ),
-    })
+  reviewComments: v.array(pullRequestReviewCommentValidator),
+  /** Resolved and outdated review threads, which the Guide prompt lists so a Guide doesn't raise them again. */
+  settledThreads: v.array(
+    v.object({ path: v.string(), line: v.union(v.number(), v.null()), resolved: v.boolean(), outdated: v.boolean(), author: v.string(), body: v.string() })
   ),
   assignees: v.array(assigneeValidator),
   milestone: v.union(v.object({ title: v.string(), url: v.string() }), v.null()),

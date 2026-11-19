@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useAction } from "convex/react";
 import { File as FileView } from "@pierre/diffs/react";
 import { ArrowUpRight, PanelRight, X } from "lucide-react";
@@ -17,6 +17,8 @@ import { useIsMobile } from "@/hooks/browser/use-mobile";
 import { getErrorMessage } from "@/lib/errors";
 import { toSectionFile, type PullRequestDiff, type PullRequestDiffFile } from "./github-patch";
 import { PullRequestFileSection } from "./pull-request-file-section";
+import { fileLineComments, toLineEditor, type LineEditor, type PullRequestReview } from "./pull-request-review";
+import type { PullRequestOverview } from "./types";
 import type { useReviewedMarks } from "./use-reviewed-marks";
 
 type FileState =
@@ -33,12 +35,20 @@ export function PullRequestChanges({
   repositoryId,
   number,
   marks,
+  review,
+  reviewComments,
+  reveal,
 }: {
   diff: PullRequestDiff;
   projectId: Id<"projects">;
   repositoryId: string;
   number: number;
   marks: ReturnType<typeof useReviewedMarks>;
+  review: PullRequestReview;
+  /** GitHub's inline comments at the diff's revision; empty until the Overview loads. */
+  reviewComments: PullRequestOverview["reviewComments"];
+  /** A pending comment to scroll to; each jump is a new object. */
+  reveal: { path: string; id: string } | null;
 }) {
   const readFile = useAction(api.integrations.github.pullRequests.readFile);
   const [diffStyle, setDiffStyle] = useState<"unified" | "split">("unified");
@@ -51,6 +61,13 @@ export function PullRequestChanges({
   const [openPaths, setOpenPaths] = useState<string[]>([]);
   const [contents, setContents] = useState<ReadonlyMap<string, FileState>>(new Map());
   const isMobile = useIsMobile();
+  // One line editor at a time across the files.
+  const [editor, setEditor] = useState<LineEditor | null>(null);
+  const openEditor = useCallback(
+    (path: string, range: Parameters<typeof toLineEditor>[1] | null) =>
+      setEditor((current) => (range ? toLineEditor(path, range) : current?.path === path ? null : current)),
+    []
+  );
   const options = usePatchDiffOptions(diffStyle, wordWrap);
   const sections = useRef(new Map<string, HTMLElement>());
   const registerSection = useCallback((path: string, element: HTMLElement | null) => {
@@ -63,6 +80,7 @@ export function PullRequestChanges({
     deletions: 0,
   });
   const reviewedCount = diff.files.filter(marks.isReviewed).length;
+  const scroller = useRef<HTMLDivElement>(null);
 
   const isCollapsed = (path: string) => allCollapsed !== toggled.has(path);
   const toggle = (path: string) =>
@@ -90,6 +108,23 @@ export function PullRequestChanges({
       .catch((error: unknown) => set({ kind: "error", message: getErrorMessage(error, "Could not load the file") }));
   };
   const activeFile = diff.files.find((file) => file.path === activeTab);
+
+  // A jump shows the diff with the comment's file unfolded, then scrolls to the comment once it renders.
+  const [revealed, setRevealed] = useState(reveal);
+  if (reveal !== revealed) {
+    setRevealed(reveal);
+    if (reveal) {
+      setActiveTab(null);
+      if (isCollapsed(reveal.path)) toggle(reveal.path);
+    }
+  }
+  useEffect(() => {
+    if (!reveal) return;
+    const frame = requestAnimationFrame(() =>
+      scroller.current?.querySelector(`[data-pending-comment="${reveal.id}"]`)?.scrollIntoView({ block: "center" })
+    );
+    return () => cancelAnimationFrame(frame);
+  }, [reveal]);
 
   return (
     <ThreadWorkspaceSplitPane
@@ -159,7 +194,7 @@ export function PullRequestChanges({
             if (activeTab === path) setActiveTab(null);
           }}
         />
-        <div className="min-h-0 flex-1 overflow-auto">
+        <div ref={scroller} className="min-h-0 flex-1 overflow-auto">
           {diff.partial ? (
             <p className="border-b px-4 py-2 text-xs text-muted-foreground">
               Some changes aren&apos;t shown here.{" "}
@@ -183,6 +218,10 @@ export function PullRequestChanges({
                 reviewed={marks.isReviewed(file)}
                 onReviewedChange={(reviewed) => setReviewed(file, reviewed)}
                 onOpen={() => openFile(file)}
+                lineComments={{
+                  ...fileLineComments({ path: file.path, posted: reviewComments, review, editor, onEditorChange: setEditor }),
+                  onComment: review.blocker ? undefined : openEditor,
+                }}
               />
             ))
           )}

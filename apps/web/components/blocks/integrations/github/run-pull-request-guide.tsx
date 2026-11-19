@@ -22,6 +22,7 @@ import { useCreateThreadSubmit } from "@/lib/threads/hooks/use-create-thread-sub
 import { useRememberedNewThreadCliModels } from "@/lib/threads/hooks/use-remembered-new-thread-cli-models";
 import { DEFAULT_FALLBACK_CLI_TYPE } from "@/lib/threads/types";
 import { guidePrompt } from "./guide-prompt";
+import type { PullRequestOverview } from "./types";
 
 type Target = { projectId: Id<"projects">; organizationSlug: string; projectAlias: string; pullRequest: AttachedPullRequest };
 /** The stored PR's revision; unset until Convoy has synced the PR. */
@@ -52,7 +53,9 @@ export function useGenerateGuide(
   revision: Revision,
   guides?: GuideSummary[] | null,
   /** The PR's Stack, bottom first; null while a stacked PR's Layers load. */
-  layers: { number: number; title: string }[] | null = []
+  layers: { number: number; title: string }[] | null = [],
+  /** Resolved and outdated review threads from the Overview; null while it loads. */
+  settledThreads: PullRequestOverview["settledThreads"] | null = []
 ) {
   // Open, for Retry the failed Guide the run writes again, whether to skip the composer, another member's run to warn about first, and Update guide's base.
   const [open, setOpen] = useState<Open | null>(null);
@@ -66,8 +69,8 @@ export function useGenerateGuide(
   // The popup's draft is per member, so its key waits for the viewer.
   const viewer = useQuery(api.users.core.current);
   const buildPrompt: BuildPrompt | null =
-    target && instructions !== undefined && layers
-      ? (at, base) => guidePrompt({ pullRequest: target.pullRequest, ...at, instructions: instructions ?? undefined, layers, base })
+    target && instructions !== undefined && layers && settledThreads
+      ? (at, base) => guidePrompt({ pullRequest: target.pullRequest, ...at, instructions: instructions ?? undefined, layers, base, settledThreads })
       : null;
   /** A follow-up builds on the newest ready Guide, whoever wrote it; its steps go in the prompt, read once. */
   const launch = (retryGuideId: Id<"integrationPullRequestGuides"> | undefined, followUp: boolean) => {

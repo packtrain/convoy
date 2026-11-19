@@ -1,5 +1,7 @@
 "use client";
 
+import { useMemo, type ReactNode } from "react";
+import type { DiffLineAnnotation, SelectedLineRange } from "@pierre/diffs";
 import { PatchDiff } from "@pierre/diffs/react";
 import { FileText } from "lucide-react";
 import { PatchFileSection, type usePatchDiffOptions } from "@/components/custom/diff/patch-file-sections";
@@ -28,8 +30,20 @@ function NoTextDiff({ file, htmlUrl }: { file: PullRequestDiffFile; htmlUrl: str
   );
 }
 
+/** A file's inline comments as diff annotations; `onComment` (stable, or the gutter re-renders) adds the "+" that opens an editor, and null closes it. */
+export type FileLineComments<T> = {
+  annotations: DiffLineAnnotation<T>[];
+  renderAnnotation: (annotation: DiffLineAnnotation<T>) => ReactNode;
+  /** The lines the open editor comments on. */
+  selectedLines?: SelectedLineRange | null;
+  onComment?: (path: string, range: SelectedLineRange | null) => void;
+};
+
+/** Pierre tints the row under a selection; the comment editor there keeps the page's background. */
+const EDITOR_ROW_CSS = "[data-line-annotation][data-selected-line] [data-annotation-content] { background-color: unset; }";
+
 /** One changed file as a collapsible section with its Reviewed mark; the Diff and Guide tabs share it. */
-export function PullRequestFileSection({
+export function PullRequestFileSection<T>({
   file,
   htmlUrl,
   options,
@@ -39,6 +53,7 @@ export function PullRequestFileSection({
   reviewed,
   onReviewedChange,
   onOpen,
+  lineComments,
 }: {
   file: PullRequestDiffFile;
   htmlUrl: string;
@@ -50,8 +65,27 @@ export function PullRequestFileSection({
   onReviewedChange: (reviewed: boolean) => void;
   /** Opens the whole file; the button is left out without it. */
   onOpen?: () => void;
+  /** The Diff tab's inline comments; the Guide tab has none. */
+  lineComments?: FileLineComments<T>;
 }) {
   const patch = toUnifiedPatch(file);
+  const onComment = lineComments?.onComment;
+  const path = file.path;
+  const diffOptions = useMemo(
+    () =>
+      onComment
+        ? {
+            ...options,
+            enableGutterUtility: true,
+            onGutterUtilityClick: (range: SelectedLineRange) => onComment(path, range),
+            // Line selection highlights a drag of the "+"; selecting by line numbers moves the editor too, so the two never part.
+            enableLineSelection: true,
+            onLineSelectionEnd: (range: SelectedLineRange | null) => onComment(path, range),
+            unsafeCSS: EDITOR_ROW_CSS,
+          }
+        : options,
+    [options, onComment, path]
+  );
   return (
     <PatchFileSection
       file={toSectionFile(file)}
@@ -85,7 +119,17 @@ export function PullRequestFileSection({
           Renamed from <code>{file.previousPath}</code>
         </p>
       ) : null}
-      {patch ? <PatchDiff patch={patch} options={options} /> : <NoTextDiff file={file} htmlUrl={htmlUrl} />}
+      {patch ? (
+        <PatchDiff<T>
+          patch={patch}
+          options={diffOptions}
+          lineAnnotations={lineComments?.annotations}
+          renderAnnotation={lineComments?.renderAnnotation}
+          selectedLines={lineComments?.selectedLines}
+        />
+      ) : (
+        <NoTextDiff file={file} htmlUrl={htmlUrl} />
+      )}
     </PatchFileSection>
   );
 }

@@ -35,6 +35,7 @@ export type FakePullRequest = {
   commits?: { sha: string; message: string; login: string | null; name: string; date: string }[];
   reviews?: { id: number; login: string; state: string; submitted_at: string; body?: string }[];
   requestedReviewers?: string[];
+  requestedTeams?: string[];
   comments?: { id: number; login: string; userId?: number; body: string; created_at: string }[];
   assignees?: string[];
   milestone?: { title: string; number: number };
@@ -50,7 +51,10 @@ export type FakePullRequest = {
     side?: "LEFT" | "RIGHT";
     created_at: string;
     diff_hunk?: string;
+    pull_request_review_id?: number;
   }[];
+  /** GraphQL review threads; each thread's first comment is enough for the Overview. */
+  reviewThreads?: { isResolved: boolean; isOutdated: boolean; path: string; line: number | null; originalLine: number; comments: { nodes: { author: { login: string }; body: string }[] } }[];
   checkRuns?: { id: number; name: string; status: string; conclusion: string | null; title?: string; app?: { id: number } }[];
   statuses?: { id: number; context: string; state: string; description: string }[];
   behindBy?: number;
@@ -152,6 +156,8 @@ export function createFakeGithub() {
     /** Every merge GitHub accepted, and the `merge-async` polls it answers "pending" before it settles. */
     merges: [] as { number: number; method: string; title?: string; message?: string; async: boolean }[],
     asyncMergePolls: 0,
+    /** Every review GitHub accepted, as it was sent. */
+    reviewRequests: [] as { number: number; commit_id: string; event: string; body: string; comments: { path: string; line: number; side: string; body: string }[] }[],
     /** Branches deleted through the Git refs API, as `<repositoryId>:<ref>`. */
     deletedBranches: [] as string[],
     /** Called between the two PR reads of a diff, to simulate a push mid-read. */
@@ -252,12 +258,12 @@ export function createFakeGithub() {
       mergeable_state: pr.mergeableState ?? "clean",
       commits: pr.commits?.length ?? 0,
       requested_reviewers: (pr.requestedReviewers ?? []).map((login) => ({ login })),
-      requested_teams: [],
+      requested_teams: (pr.requestedTeams ?? []).map((name) => ({ name, slug: name })),
       milestone: pr.milestone ? { ...pr.milestone, html_url: `https://github.com/milestone/${pr.milestone.number}` } : null,
     };
   }
 
-  function overviewJson(pr: FakePullRequest, part: string) {
+  function overviewJson(pr: FakePullRequest, part: string, direction: string | null) {
     if (part === "/commits") {
       return (pr.commits ?? []).map((commit) => ({
         sha: commit.sha,
@@ -267,7 +273,8 @@ export function createFakeGithub() {
       }));
     }
     if (part === "/comments") {
-      return (pr.reviewComments ?? []).map((comment) => ({ ...comment, user: githubUser(comment.login), html_url: `https://github.com/rc/${comment.id}` }));
+      const comments = (pr.reviewComments ?? []).map((comment) => ({ ...comment, user: githubUser(comment.login), html_url: `https://github.com/rc/${comment.id}` }));
+      return direction === "desc" ? comments.reverse() : comments;
     }
     return (pr.reviews ?? []).map((review) => ({ id: review.id, user: githubUser(review.login), state: review.state, submitted_at: review.submitted_at, body: review.body ?? "" }));
   }
@@ -366,8 +373,10 @@ export function createFakeGithub() {
     if (path === "/graphql" && method === "POST") {
       const { query, variables } = JSON.parse(String(init?.body)) as { query: string; variables: { id: string; owner: string; name: string; query: string | null } };
       if (query.includes("mergeCommitAllowed")) {
-        const found = [...state.pulls.values()].flat().some((candidate) => `PR_${candidate.id}` === variables.id);
-        return found ? json(200, { data: { node: { repository: state.mergeSettings } } }) : json(200, { data: { node: null }, errors: [{ type: "NOT_FOUND", message: "Could not resolve to a node" }] });
+        const pr = [...state.pulls.values()].flat().find((candidate) => `PR_${candidate.id}` === variables.id);
+        return pr
+          ? json(200, { data: { node: { repository: state.mergeSettings, reviewThreads: { nodes: pr.reviewThreads ?? [] } } } })
+          : json(200, { data: { node: null }, errors: [{ type: "NOT_FOUND", message: "Could not resolve to a node" }] });
       }
       if (!person) return json(401, {});
       if (query.includes("assignableUsers")) {
@@ -445,6 +454,47 @@ export function createFakeGithub() {
       state.deletedBranches.push(key);
       return new Response(null, { status: 204 });
     }
+    // Reviews and reviewer requests: anyone who can read reviews, triage requests, and nobody reviews their own PR but to comment.
+    match = /^\/repositories\/(\d+)\/pulls\/(\d+)\/(reviews|requested_reviewers)$/.exec(path);
+    if (match && method !== "GET") {
+      if (!person) return json(401, {});
+      const pr = state.pulls.get(Number(match[1]))?.find((candidate) => candidate.number === Number(match![2]));
+      if (!pr) return json(404, {});
+      const granted = state.userPermissions.get(person.id) ?? { pull: true };
+      if (match[3] === "reviews") {
+        if (!granted.pull) return json(404, {});
+        const body = JSON.parse(String(init?.body)) as { commit_id: string; event: string; body: string; comments: { path: string; start_line?: number; line: number; side: "LEFT" | "RIGHT"; body: string }[] };
+        if (body.commit_id !== pr.headSha) return json(422, { message: "commit_id is not part of the pull request" });
+        if (person.login === "octocat" && body.event !== "COMMENT") return json(422, { message: "Can not approve your own pull request" });
+        const states: Record<string, string> = { APPROVE: "APPROVED", REQUEST_CHANGES: "CHANGES_REQUESTED", COMMENT: "COMMENTED" };
+        const review = { id: 7000 + (pr.reviews ??= []).length, login: person.login, state: states[body.event], submitted_at: new Date().toISOString(), body: body.body };
+        pr.reviews.push(review);
+        for (const comment of body.comments) {
+          (pr.reviewComments ??= []).push({
+            id: 8000 + pr.reviewComments.length,
+            login: person.login,
+            body: comment.body,
+            path: comment.path,
+            start_line: comment.start_line,
+            line: comment.line,
+            side: comment.side,
+            created_at: new Date().toISOString(),
+            diff_hunk: `@@ -1,1 +1,${comment.line} @@\n+line ${comment.line}`,
+            pull_request_review_id: review.id,
+          });
+        }
+        state.reviewRequests.push({ number: pr.number, ...body });
+        return json(200, { ...review, user: githubUser(person.login), html_url: `https://github.com/review/${review.id}` });
+      }
+      if (!allowed("triage")) return json(403, { message: "Must have triage access" });
+      const { reviewers } = JSON.parse(String(init?.body)) as { reviewers: string[] };
+      if (reviewers.includes("octocat") || reviewers.some((login) => !state.assignable.includes(login))) {
+        return json(422, { message: "Reviews may only be requested from collaborators." });
+      }
+      const current = pr.requestedReviewers ?? [];
+      pr.requestedReviewers = method === "POST" ? [...new Set([...current, ...reviewers])] : current.filter((login) => !reviewers.includes(login));
+      return json(method === "POST" ? 201 : 200, pullDetailJson(pr, Number(match[1])));
+    }
     match = /^\/repositories\/(\d+)\/(issues|pulls)\/(\d+)(\/assignees)?$/.exec(path);
     if (match && method !== "GET") {
       if (!person) return json(401, {});
@@ -510,7 +560,7 @@ export function createFakeGithub() {
     if (match) {
       const [, repositoryId, number, part] = match;
       const pr = state.pulls.get(Number(repositoryId))?.find((candidate) => candidate.number === Number(number));
-      return pr ? json(200, overviewJson(pr, part)) : json(404, {});
+      return pr ? json(200, overviewJson(pr, part, url.searchParams.get("direction"))) : json(404, {});
     }
     match = /^\/repositories\/(\d+)\/issues\/(\d+)\/comments$/.exec(path);
     if (match) {

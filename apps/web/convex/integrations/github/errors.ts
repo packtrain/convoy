@@ -35,6 +35,8 @@ export const errors = {
   COMMENT_TOO_LONG: "A comment can be at most 65,536 characters",
   COMMENT_NOT_YOURS: "You can only edit or delete your own comments on this pull request",
   COMMENT_REFUSED: "GitHub refused this. Your GitHub account may not have access to the repository, or the conversation is locked.",
+  REVIEW_CHANGES_NEED_BODY: "Say what should change before requesting changes",
+  REVIEW_TOO_MANY_COMMENTS: "A review can hold at most 100 inline comments",
   PULL_REQUEST_WRITE_REFUSED: "GitHub refused this. Your GitHub account may not have the access it needs on this repository.",
   MERGE_FAILED: "GitHub could not merge this pull request.",
   MERGE_HEAD_CHANGED: "The pull request has new commits. Refresh and review them before merging.",

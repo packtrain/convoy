@@ -4,7 +4,7 @@ Planning specification for OS-1852 under OS-1371. Product decisions below
 are accepted from the planning interviews; the second one (2026-10-24 to
 2026-10-26) widened the scope from read-only browsing to the full feature set
 designed in the [playground prototype](playground-github-integration.md).
-Slices 1 (OS-2178), 2 (OS-2179), 3 (OS-2180), 4 (OS-2181), 6 (OS-2183), and 7 (OS-2184) are implemented; see
+Slices 1 (OS-2178), 2 (OS-2179), 3 (OS-2180), 4 (OS-2181), 6 (OS-2183), 7 (OS-2184), 8 (OS-2185), and 9 (OS-2186) are implemented; see
 [As built](#as-built). The other technical defaults are still proposals.
 
 ## Scope
@@ -333,7 +333,7 @@ repositories, disconnect) and the Guide prompt.
 | --- | --- |
 | No Linked GitHub account | Reading only |
 | Read | Comments, reviews, and the You filters |
-| Triage | Also close, reopen, archive, unarchive, assign, and the list's bulk actions |
+| Triage | Also close, reopen, archive, unarchive, assign, request reviewers, and the list's bulk actions |
 | Write | Also merge, update branch, draft, ready for review, and editing |
 
 Unavailable actions stay visible but disabled with the reason ("Connect
@@ -528,8 +528,9 @@ facts Convoy always adds (the PR and its revision, the remote and `gh`
 check, `gh pr checkout <n> --detach` and `git diff <base>...<head>`, the
 JSON shape, and the submit command with the thread ID from the attach
 footer or `CONVOY_THREAD_ID`) around the guide instructions (how to split,
-reading order, tone). Once Reviews ship, it also receives the already-resolved and
-outdated review threads so the Guide doesn't raise them again. On a Stack of
+reading order, tone). It also lists the resolved and outdated review threads, each with
+its file, line, and first comment, so the Guide doesn't raise them again (see
+[Reviews](#reviews)). On a Stack of
 two or more Layers, the run facts list the Layers from the base up, mark this
 PR, and say the Guide covers only its own Layer and may mention others in a
 phrase ("added in #12").
@@ -1216,7 +1217,7 @@ compact), and the reader's header, tab row, and Overview.
   arrow keys, and the width is kept in local storage.
 - **Header** (`h-14`): state icon, the title truncated with a tooltip, the
   Archived badge, the Stack button, the Merge status popover (open PRs
-  only), and Open on GitHub.
+  only), Review ([Reviews](#reviews)), the state actions, and Open on GitHub.
 - **Tab row**: Overview, Guide, and Diff, with the displayed revision
   ("main → 8a3e7d1", the held diff's head) on the right. Guide shows an
   empty state until slice 5. New changes available sits under the tab row;
@@ -1792,6 +1793,94 @@ Slice 8 (OS-2185).
   bottom first. While merging, Confirm reads Merging… and Cancel and the close
   button hide; GitHub's answer closes it with a toast.
 
+### Reviews
+
+Slice 9 (OS-2186).
+
+- **Writes.** `reviews.submit` posts one review through `accounts.writeAs`:
+  `POST /repositories/{id}/pulls/{number}/reviews` with `commit_id` (the
+  displayed head), `event` (`APPROVE`, `REQUEST_CHANGES`, or `COMMENT`),
+  `body`, and the inline `comments` (`path`, `line`, `side`, `body`; at most
+  100). Bodies are trimmed and hold at most 65,536 characters. A comment
+  review needs a body or an inline comment, Request changes needs a body, and
+  an empty inline comment is refused. GitHub's answer has no inline comments,
+  so the action reads the PR's 100 newest review comments and keeps this
+  review's (`pull_request_review_id`). The review is posted by then, so a
+  failed read returns no comments rather than an error, which would invite a
+  second post; Refresh shows them. The reader appends the review and its
+  comments to the held Overview and drops the reviewer from the requested
+  reviewers, as GitHub does once they review, so Activity, Reviewers, and the Diff update
+  without another read. A 403, 404, 410, or 422 reads as "GitHub refused
+  this…" (a head that is no longer in the PR, say, or approving your own).
+  `reviews.requestReviewer` requests or withdraws one person's review
+  (`POST`/`DELETE …/requested_reviewers`) and returns the people GitHub has
+  requested after, without teams; GitHub answering 200 without the change reads as refused,
+  as for assignees. Reviews and requests change nothing stored, so they
+  schedule no sync.
+- **Settled threads.** `readOverview`'s GraphQL read on the PR node (the one
+  that reads merge settings) adds `reviewThreads(first: 100)` with
+  `isResolved`, `isOutdated`, `path`, `line`, and each thread's first comment.
+  The Overview's `settledThreads` keeps the resolved or outdated ones, each
+  first comment cut to 500 characters, and the Guide prompt lists the newest
+  50. Generate guide waits for the Overview; one that failed to load leaves
+  them out. Overview review comments gain `side` and `outdated` (GitHub's
+  `line` is null).
+- **Draft.** Pending inline comments and the review's body are the member's
+  draft in local storage under
+  `convoy:github:review-draft:<org>:<project>:<repositoryId>:<number>:<githubUserId>`,
+  kept until the review is submitted, like the comment draft. Submitting
+  clears only what it sent, so text typed while GitHub answers stays. The draft
+  records the head its comments were left on. After Refresh to a newer head,
+  those comments no longer show on the diff's lines, the popover's Pending
+  comments end with "Written on 8a3e7d1, before the latest push. They post on
+  that commit." and lose their jump buttons, and the review is
+  submitted at that head, so GitHub keeps them on the lines they were written
+  for. New review comments wait until those are submitted or discarded;
+  Add single comment still works.
+- **Diff.** With a Linked GitHub account that may review, each diff line has
+  the gutter "+". A click comments on that line; dragging it across lines, either
+  way, comments on the range, which stays highlighted while the editor reads
+  "Commenting on lines 40–43". Selecting lines by their numbers (Shift-click
+  extends) moves the editor to them, and unselecting closes it, so the
+  highlight is always the editor's lines. The editor keeps the page's
+  background rather than the selection tint. A range posts as GitHub's `start_line` and
+  `start_side` with its last line, and shows under that line. The editor opens under the line with Cancel, Add single
+  comment (a comment review holding just that comment, posted at once), and
+  Start a review (Add review comment once one is started), which adds a
+  pending comment to the draft. The editor takes no edits while Add single
+  comment posts, so what shows is what was sent. Pending comments show under their line with a
+  Pending badge, Edit, and Delete. GitHub's inline comments that are not
+  outdated show under their lines too, with the author, a link to GitHub, and
+  the markdown body; outdated ones stay in Activity only. One editor is open
+  at a time. The Guide tab's diffs take no comments. Replies to a thread are
+  on GitHub only.
+- **Review popover.** The header's Submit review button, with the pending
+  count in a filled badge ("2 pending comments" as its tooltip), opens Finish
+  your review, laid out as on GitHub: the review comment, the verdict (Comment,
+  Approve, Request changes, each with GitHub's line on what it does), and a
+  Pending comments list, folded until opened. Each row shows the file and "Line 5" or
+  "Lines 40–43", opens to the comment's text, and has Go to comment, which
+  closes the popover, switches to the Diff, unfolds the file, and scrolls to the
+  comment. The footer has Discard review (drops the body and every pending
+  comment), Cancel, and Submit review with its ⌘↵ / Ctrl↵ hint, which the
+  review comment also takes; it shows a spinner until GitHub answers.
+  Submit is disabled until the verdict has what it needs. The PR's author can
+  only comment: Approve and Request changes are disabled with "You can't
+  approve your own pull request." and "You can't request changes on your own
+  pull request.". The button is disabled with its reason as the tooltip for
+  "Connect GitHub first", "Reconnect GitHub first", an Archived PR ("This
+  pull request is archived"), an account with no access on GitHub, and a diff
+  still loading or failed ("The changes haven't loaded yet"), since a review
+  is for the revision on screen.
+- **Reviewers.** The Overview's Reviewers property has a Request reviewers
+  button opening the Assignees picker over GitHub's assignable people, with
+  the author left out, since GitHub refuses them. A checked person has a
+  pending request; picking them withdraws it, and picking anyone else
+  requests them (again, after they reviewed). It needs triage access ("Needs
+  triage access") and takes one edit at a time. The Overview keeps requested
+  teams apart (`requestedTeams`): they show among the Reviewers but are no
+  row in the picker, and cannot be requested from Convoy.
+
 ### Error messages
 
 Defined in `apps/web/convex/integrations/github/errors.ts`; tests assert on them.
@@ -1823,15 +1912,17 @@ Defined in `apps/web/convex/integrations/github/errors.ts`; tests assert on them
 | Comment without a Linked GitHub account | Connect GitHub first |
 | Refused refresh token, 401, or revoked authorization | GitHub no longer accepts Convoy's access to your account. Reconnect GitHub and try again. |
 | Another write held the refresh past its wait | Convoy is renewing your GitHub access. Try again in a moment. |
-| Empty comment | Write a comment first |
+| Empty comment, empty inline comment, or a comment review with neither | Write a comment first |
 | Comment over GitHub's limit | A comment can be at most 65,536 characters |
-| GitHub refuses a state change or an assignee write | GitHub refused this. Your GitHub account may not have the access it needs on this repository. |
+| GitHub refuses a state change, an assignee write, or a reviewer request | GitHub refused this. Your GitHub account may not have the access it needs on this repository. |
 | Merge on a head that moved past the displayed one | The pull request has new commits. Refresh and review them before merging. |
 | GitHub refuses or fails a merge (405, `merge-async`'s 400, or `failed`) | GitHub could not merge this pull request. (followed by GitHub's reason) |
 | `merge-async` while GitHub already has a merge of the PR pending (409) | GitHub is already merging this pull request. It shows as merged here once it's done. |
 | GitHub refuses Update branch (422) | GitHub could not update the branch. (followed by GitHub's reason) |
 | Edit or delete of another author's comment, or one on another PR | You can only edit or delete your own comments on this pull request |
-| GitHub refuses a comment write | GitHub refused this. Your GitHub account may not have access to the repository, or the conversation is locked. |
+| GitHub refuses a comment write or a review | GitHub refused this. Your GitHub account may not have access to the repository, or the conversation is locked. |
+| Request changes without a body | Say what should change before requesting changes |
+| A review with more than 100 inline comments | A review can hold at most 100 inline comments |
 | Confirmed revocation (shown on the link) | GitHub access to this repository was removed |
 | Submit for a deleted Guide | The guide was deleted. |
 | Submit from a thread that is no Guide run, or someone else's | This thread is not writing a guide. Start one with Generate guide on the pull request's Guide tab. |
@@ -1947,8 +2038,9 @@ the agreed priority.
 8. **Merge** (built, OS-2185; see
    [Merge and update branch](#merge-and-update-branch)). Methods, the confirm popup, `merge-async` with Merging…,
    Update branch, Stack merges, and deleting the branch.
-9. **Reviews.** Inline comments, approve, request changes, and requesting
-   reviewers; settled review threads start feeding the Guide prompt.
+9. **Reviews** (built, OS-2186; see [Reviews](#reviews)). Inline comments,
+   approve, request changes, and requesting reviewers; settled review threads
+   feed the Guide prompt.
 10. **Edit title, description, and labels.**
 11. **Auto-merge, merge queue, and revert.**
 12. **Create a PR from Convoy.**
