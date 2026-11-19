@@ -3,7 +3,7 @@
  */
 import { beforeEach, describe, expect, test, vi } from "vitest";
 import { fireEvent, render, screen, waitFor } from "@testing-library/react";
-import { DEV_SETTINGS } from "@/lib/dev-mode/constants";
+import { DEV_SETTINGS, DEV_SETTING_ENABLED_VALUE } from "@/lib/dev-mode/constants";
 import { UserSettingsDialog } from "./user-settings-dialog";
 
 const useQueryMock = vi.fn();
@@ -11,6 +11,7 @@ const useQueryMock = vi.fn();
 vi.mock("convex/react", () => ({
   useQuery: (...args: unknown[]) => useQueryMock(...args),
   useMutation: () => ({ withOptimisticUpdate: () => vi.fn() }),
+  useAction: () => vi.fn(),
 }));
 
 vi.mock("./general-section", () => ({
@@ -40,6 +41,30 @@ describe("UserSettingsDialog", () => {
       gitRef: "main",
       vercelEnvironment: "production",
     });
+  });
+
+  test("Connected accounts lists each organization's GitHub account, behind the GitHub integration toggle", () => {
+    const dialog = (
+      <UserSettingsDialog open onOpenChange={vi.fn()} section="connected-accounts" onSectionChange={vi.fn()} />
+    );
+    const { unmount } = render(dialog);
+    expect(screen.queryByRole("button", { name: "Connected accounts" })).toBeNull();
+    unmount();
+
+    window.localStorage.setItem(DEV_SETTINGS.githubIntegration.storageKey, DEV_SETTING_ENABLED_VALUE);
+    useQueryMock.mockReturnValue({
+      configured: true,
+      organizations: [
+        { organizationId: "org_1", organizationSlug: "acme", organizationName: "Acme", account: { githubUserId: 42, login: "maya", avatarUrl: null, status: "active" } },
+        { organizationId: "org_2", organizationSlug: "globex", organizationName: "Globex", account: null },
+      ],
+    });
+    render(dialog);
+    expect(screen.getByRole("button", { name: "Connected accounts" })).toBeTruthy();
+    expect(screen.getByText("Connected as @maya")).toBeTruthy();
+    expect(screen.getByText("Not connected")).toBeTruthy();
+    expect(screen.getByRole("button", { name: "Disconnect" })).toBeTruthy();
+    expect(screen.getByRole("button", { name: "Connect" })).toBeTruthy();
   });
 
   test("shows the Developer section in the sidebar", () => {

@@ -4,7 +4,7 @@ Planning specification for OS-1852 under OS-1371. Product decisions below
 are accepted from the planning interviews; the second one (2026-10-24 to
 2026-10-26) widened the scope from read-only browsing to the full feature set
 designed in the [playground prototype](playground-github-integration.md).
-Slices 1 (OS-2178), 2 (OS-2179), 3 (OS-2180), and 4 (OS-2181) are implemented; see
+Slices 1 (OS-2178), 2 (OS-2179), 3 (OS-2180), 4 (OS-2181), and 6 (OS-2183) are implemented; see
 [As built](#as-built). The other technical defaults are still proposals.
 
 ## Scope
@@ -301,10 +301,28 @@ A Linked GitHub account belongs to one member in one Convoy organization;
 the same person may link different GitHub accounts in different
 organizations.
 
-The GitHub integration page shows a Your GitHub account row to every member,
-viewers included: Connected as @login with Disconnect, or Not connected with
-Connect. An expired or revoked authorization shows Reconnect GitHub.
-Disconnecting it never affects the project's installation.
+The profile settings dialog has a Connected accounts section listing one
+row per organization the member belongs to: Connected as @login with
+Disconnect, or Not connected with Connect. An expired or revoked
+authorization shows Reconnect GitHub. The project's GitHub integration page
+shows the same row for its organization to every member, viewers included.
+Disconnecting never affects the project's installation.
+
+Connect sends the member through GitHub's App authorization and back to
+the page they started on, so Connect GitHub to comment... returns to the
+PR with its draft kept. One GitHub account links to at most one member per
+Convoy organization; a second member linking it is refused.
+
+User-to-server tokens expire after 8 hours and come with a 6-month refresh
+token (the App opts in to token expiration). Convoy refreshes on use, not
+on a schedule: a write whose token is about to expire refreshes it first.
+The refresh rotates both tokens, so it is serialized per account; a
+caller that loses the race uses the stored new token rather than reading
+the failure as revocation. A failed refresh, a 401, or GitHub's
+`github_app_authorization` revoked event marks the account for Reconnect
+GitHub. Disconnect revokes that one token on GitHub, never the App grant,
+which the same person's links in other organizations share. Leaving the
+organization deletes the member's Linked GitHub account.
 
 GitHub's role for that account on the repository decides every PR action,
 exactly as on github.com; the Convoy role adds nothing and takes nothing
@@ -863,7 +881,8 @@ separate Convex component or generic plugin framework is required.
 | `integrations/github/lib/github.ts` | GitHub REST client and credentials: App JWT, installation tokens, setup token encryption, and the OAuth exchange |
 | `integrations/github/lib/parsers.ts` | Narrowing GitHub JSON into normalized PR and diff metadata |
 | `integrations/github/lib/lifecycle.ts` | Starting a reconciliation pass and disconnecting a link, shared by connect, disconnect, and the cron |
-| `integrations/github/accounts.ts` | Linked GitHub accounts and user-to-server tokens |
+| `integrations/github/accounts.ts` | Linked GitHub accounts and user-to-server tokens: Connect, Disconnect, revocation, refresh on use (`withUserToken`), and the repository permission |
+| `integrations/github/comments.ts` | Conversation comments written as the member: `create`, `update`, `remove` |
 | `integrations/github/guides.ts` | Guides: requests, submission, validation, and reads |
 | `integrations/github/httpHandlers.ts` | Callback and webhook entry points |
 | `integrations/github/lib/*Repo.ts` | One data-access contract per owned table |
@@ -907,6 +926,8 @@ Name the external wiring before implementation:
   navigation adds a "Pull Requests" item with a pull request icon (GitHub is
   only one possible source) right after the project's Watch Tower item,
   using the route helper.
+- The user settings dialog mounts `ConnectedAccountsSection` from the same
+  entry as its Connected accounts section.
 - Existing thread PR badges (`ThreadPrBadge`, so every thread surface),
   task-table PR icons, and task-detail PR links mount `PullRequestLink` from
   the same public entry. Its lookup is one `integrations.github.core.listLinkTargets`
@@ -1008,6 +1029,7 @@ provider turns each table into a union of complete discriminated objects.
 | `integrationRepositories` | Repository metadata and sync state (lease token, import page, last success, error, the running and last finished reconciliation pass, closed-history coverage and the page on its way), plus open and closed PR counts, shared by the links of one organization |
 | `integrationPullRequests` | Normalized PR metadata, one row per repository and number, with the REST `stack`, `archived`, and the last known `conflicts` |
 | `integrationSetups` | A 10-minute connect flow bound to one user and project |
+| `integrationLinkedAccounts` | A member's Linked GitHub account in one organization: GitHub user id, login, avatar, encrypted access and refresh tokens, the access token's expiry, a refresh lease, and status (`active` or `reconnect`) |
 | `integrationPullRequestGuides` | A project's Guide of one PR revision: requester, run thread, status (writing, ready, failed), base and head, runtime and model, a failed Guide's `failureReason`, and a follow-up's `base` and `changes` counts. Indexed by project, repository, number, and `createdAt` (the menu order, which a Retry restamps), and by thread |
 | `integrationPullRequestGuideSteps` | A ready Guide's steps (a follow-up's with their `change` and `whatChanged`) and a follow-up's `removedStepTitles`, up to 800 KB, one row per Guide, indexed by Guide. Kept apart so the Guide menu reads 20 small rows, not 20 sets of steps; deleted with the Guide |
 
@@ -1546,6 +1568,81 @@ OS-2193 attaches PRs to threads.
   uses a container query, not a viewport breakpoint, so in the sidebar its
   properties move to the row under the title.
 
+### Linked GitHub accounts and comments
+
+Slice 6 (OS-2183).
+
+- **Storage.** One `integrationLinkedAccounts` row per member and
+  organization. Tokens use the setup tokens' AES-GCM key. The
+  `by_provider_and_githubUserId_and_organizationId` index refuses a second
+  member linking the same GitHub account and finds every link for a revoked
+  event.
+- **Connect.** `accounts.beginLink` needs organization membership and signs
+  the state with HMAC-SHA256 under a key derived from the client secret:
+  `account.<payload>.<signature>`, the payload holding the member, the
+  organization, the return path, and a 10-minute expiry. There is no setup
+  row. The return path must be an app path (`/`, not followed by `/` or
+  `\`); anything else returns to `/`. The callback page sends `account.`
+  states to `accounts.completeLink`, which checks the signature, exchanges the
+  code, reads `GET /user`, and links the account in a mutation that rechecks
+  that the caller is the state's member and still belongs to the
+  organization. The page then replaces itself with the return path: the PR
+  reader's is its PR route, the GitHub page's is itself, and profile
+  settings' is the page under the dialog, which has no route of its own.
+- **Tokens on use.** `withUserToken` uses the stored token unless it expires
+  within 5 minutes. Then the caller takes a 30-second lease (`claimRefresh`),
+  refreshes, and stores the new pair. GitHub invalidates both old tokens the
+  moment a refresh succeeds, so a caller that finds the lease taken waits for
+  the stored new token (as long as a lease lasts) rather than using the old
+  one, and one whose token another refresh already replaced reads it again. A
+  401 while another caller holds the lease waits the same way and retries
+  once with the new token. GitHub refusing the refresh token, or a 401 with no
+  refresh in flight to explain it, marks the account `reconnect`. An outage releases the lease and
+  keeps the account. Without the App's token expiration, tokens have no
+  expiry and no refresh token and are used as they are.
+- **Disconnect.** `accounts.disconnect` deletes the row, then revokes that
+  access token with `DELETE /applications/{client_id}/token`, best effort.
+  Leaving or being removed from the organization
+  (`removeMembershipWithProjectCleanup`) deletes the row. The
+  `github_app_authorization` revoked webhook, signature-checked like every
+  delivery, marks every link to `sender.id` for Reconnect.
+- **Access.** `accounts.readRepositoryPermission` reads
+  `GET /repositories/{id}` with the member's token once per reader open:
+  `admin`, `maintain`, `write`, `triage`, `read`, or `none` (also for a 403
+  or 404), and null when unknown. Only `none` disables commenting; with null,
+  GitHub decides.
+- **Comments.** `comments.create`, `update`, and `remove` need project view
+  and the project's active link, then write as the member:
+  `POST /repositories/{id}/issues/{number}/comments`, and `PATCH` or `DELETE`
+  on `/repositories/{id}/issues/comments/{commentId}`. Bodies are trimmed,
+  must not be empty, and hold at most 65,536 characters. A 403, 404, 410, or
+  422 from GitHub reads as "GitHub refused this…". GitHub lets anyone with
+  write access edit or delete any comment, so `update` and `remove` first read
+  the comment and refuse one by another author, or on another PR or issue.
+  Each write returns
+  GitHub's comment, which the reader patches into its held Overview, so
+  Activity updates without another read. `authorId` (GitHub's user id) on
+  Overview comments marks the viewer's own conversation comments. Only those
+  get Edit and Delete; review comments and review bodies get neither.
+- **UI.** Profile settings → Connected accounts, behind the developer
+  toggle, lists one row per organization: its name over "Connected as
+  @login", "Not connected", or "@login needs reconnecting", with Disconnect,
+  Connect, or Reconnect GitHub. The GitHub page's Your GitHub account section
+  shows the same row for its organization to every member. Activity's
+  composer opens on the thread side, as in the task sidebar, with "Add
+  comment..." as its trigger for the comment side (`CommentInput` without its
+  attach button, "Leave a comment on GitHub..."); Fix and the Threads "+"
+  switch back to the thread side. Without a link
+  the trigger reads "Connect GitHub to comment...", with a revoked one
+  "Reconnect GitHub to comment...", and for an account with no access on
+  GitHub it is a disabled "@login has no access to this repository on
+  GitHub". Both drafts live in local storage, the comment's under
+  `convoy:github:comment-draft:<org>:<project>:<repositoryId>:<number>:<githubUserId>`
+  until it posts, so a draft survives Reconnect and the round trip to GitHub,
+  and another member signing in on the same browser never sees it. The
+  GitHub account id identifies the member, since one GitHub account links to
+  one member per organization.
+
 ### Error messages
 
 Defined in `apps/web/convex/integrations/github/errors.ts`; tests assert on them.
@@ -1570,6 +1667,17 @@ Defined in `apps/web/convex/integrations/github/errors.ts`; tests assert on them
 | Unknown PR number | GitHub has no pull request with this number in the connected repository |
 | Whole file missing at that revision | GitHub has no file at this path in this revision |
 | PR pushed during every read | The pull request changed while loading. Refresh to load the new revision. |
+| Connect state tampered with, or finished by another member | This GitHub connection request is no longer valid. Connect GitHub again. |
+| Connect state older than 10 minutes | This GitHub connection request expired. Connect GitHub again. |
+| GitHub account already linked by another member of the organization | This GitHub account is already linked to another member of this organization |
+| Connect or Disconnect outside the caller's organizations | You are not a member of this organization |
+| Comment without a Linked GitHub account | Connect GitHub first |
+| Refused refresh token, 401, or revoked authorization | GitHub no longer accepts Convoy's access to your account. Reconnect GitHub and try again. |
+| Another write held the refresh past its wait | Convoy is renewing your GitHub access. Try again in a moment. |
+| Empty comment | Write a comment first |
+| Comment over GitHub's limit | A comment can be at most 65,536 characters |
+| Edit or delete of another author's comment, or one on another PR | You can only edit or delete your own comments on this pull request |
+| GitHub refuses a comment write | GitHub refused this. Your GitHub account may not have access to the repository, or the conversation is locked. |
 | Confirmed revocation (shown on the link) | GitHub access to this repository was removed |
 | Submit for a deleted Guide | The guide was deleted. |
 | Submit from a thread that is no Guide run, or someone else's | This thread is not writing a guide. Start one with Generate guide on the pull request's Guide tab. |
@@ -1670,11 +1778,15 @@ the agreed priority.
      icons, the card's Fix, and publishing GitHub check runs. Pick a checklist, run it on
      #482, see the card and the check run on github.com, push, and see it
      outdated.
-6. **Linked GitHub account and comments.** The Your GitHub account row,
-   user-to-server authorization per organization, Reconnect, access-based
-   disabling, and conversation comments with edit and delete: the comment
-   side of the Activity composer, and "Connect GitHub to comment..." without
-   an account.
+6. **Linked GitHub account and comments** (built, OS-2183; see
+   [Linked GitHub accounts and comments](#linked-github-accounts-and-comments)). Connected accounts in profile
+   settings and the same row on the GitHub page, user-to-server
+   authorization per organization, Reconnect, access-based disabling, and
+   conversation comments with edit and delete: the comment side of the
+   Activity composer, and "Connect GitHub to comment..." without an
+   account. The comment side has no attach button and no @mention picker.
+   Follow-ups: attachments and @mentions (6.1, OS-2434), You filters (6.2,
+   OS-2435), and Convoy names for linked GitHub users (6.3, OS-2436).
 7. **State actions.** Close, reopen, draft, ready for review, assign, archive
    and unarchive, and the list's bulk actions.
 8. **Merge.** Methods, the confirm popup, `merge-async` with Merging…,

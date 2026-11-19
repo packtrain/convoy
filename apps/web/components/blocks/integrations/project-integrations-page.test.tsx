@@ -16,20 +16,34 @@ const replaceMock = vi.fn();
 const toastErrorMock = vi.fn();
 const deleteRetainedMock = vi.fn(() => Promise.resolve(null));
 const disconnectMock = vi.fn(() => Promise.resolve(null));
+const disconnectAccountMock = vi.fn(() => Promise.resolve(null));
+let linkedAccount: unknown = null;
+const beginLinkMock = vi.fn(() => Promise.resolve({ authorizeUrl: "https://github.com/login/oauth/authorize?state=x" }));
+const beginSetupMock = vi.fn(() => Promise.resolve({ authorizeUrl: "https://github.com/login/oauth/authorize?state=y" }));
 
 vi.mock("convex/react", () => ({
   useQuery: (fn: Parameters<typeof getFunctionName>[0], args: unknown) =>
     getFunctionName(fn) === getFunctionName(api.projects.core.getByAlias)
       ? { _id: "project_1" }
-      : queryMock(getFunctionName(fn), args),
+      : getFunctionName(fn) === getFunctionName(api.integrations.github.accounts.listMine)
+        ? { configured: true, organizations: [{ organizationId: "org_1", organizationSlug: "org", organizationName: "Org", account: linkedAccount }] }
+        : queryMock(getFunctionName(fn), args),
   useMutation: (fn: Parameters<typeof getFunctionName>[0]) =>
     getFunctionName(fn) === getFunctionName(api.integrations.github.core.deleteRetained)
       ? deleteRetainedMock
       : getFunctionName(fn) === getFunctionName(api.integrations.github.core.disconnect)
         ? disconnectMock
-        : vi.fn(),
+        : getFunctionName(fn) === getFunctionName(api.integrations.github.accounts.beginLink)
+          ? beginLinkMock
+          : getFunctionName(fn) === getFunctionName(api.integrations.github.setup.beginSetup)
+            ? beginSetupMock
+            : vi.fn(),
   useAction: (fn: Parameters<typeof getFunctionName>[0]) =>
-    getFunctionName(fn) === getFunctionName(api.integrations.github.setup.listSetupRepositories) ? listRepositoriesMock : vi.fn(),
+    getFunctionName(fn) === getFunctionName(api.integrations.github.setup.listSetupRepositories)
+      ? listRepositoriesMock
+      : getFunctionName(fn) === getFunctionName(api.integrations.github.accounts.disconnect)
+        ? disconnectAccountMock
+        : vi.fn(),
 }));
 
 vi.mock("@/lib/navigation", async (importActual) => ({
@@ -47,6 +61,7 @@ afterEach(() => {
   vi.clearAllMocks();
   vi.unstubAllGlobals();
   search = "";
+  linkedAccount = null;
 });
 
 const repository = {
@@ -78,6 +93,41 @@ beforeEach(() => {
 });
 
 describe("ProjectIntegrationsPage", () => {
+  test("coming back from GitHub without connecting (the browser's Back) enables Connect again", async () => {
+    vi.stubGlobal("location", { ...window.location, assign: vi.fn() });
+    renderPage(status());
+    const connectAccount = screen.getByRole("button", { name: "Connect" });
+    const connectGithub = screen.getByRole("button", { name: "Connect GitHub" });
+    fireEvent.click(connectAccount);
+    fireEvent.click(connectGithub);
+    await waitFor(() => expect((connectAccount as HTMLButtonElement).disabled).toBe(true));
+    expect((connectGithub as HTMLButtonElement).disabled).toBe(true);
+
+    // A page restored from the back-forward cache keeps its state; `pageshow` marks the return.
+    fireEvent(window, new Event("pageshow"));
+    await waitFor(() => expect((connectAccount as HTMLButtonElement).disabled).toBe(false));
+    expect((connectGithub as HTMLButtonElement).disabled).toBe(false);
+  });
+
+  test("every member sees their own GitHub account for the organization, and can disconnect it", async () => {
+    renderPage(status({ canManage: false, connections: [activeConnection] }));
+    const section = screen.getByRole("region", { name: "Your GitHub account" });
+    expect(section.textContent).toContain("Not connected");
+    expect(screen.getByRole("button", { name: "Connect" })).toBeTruthy();
+    cleanup();
+
+    linkedAccount = { githubUserId: 42, login: "maya", avatarUrl: null, status: "active" };
+    renderPage(status({ canManage: false, connections: [activeConnection] }));
+    expect(screen.getByRole("region", { name: "Your GitHub account" }).textContent).toContain("Connected as @maya");
+    fireEvent.click(screen.getByRole("button", { name: "Disconnect" }));
+    await waitFor(() => expect(disconnectAccountMock).toHaveBeenCalledWith({ organizationId: "org_1" }));
+    cleanup();
+
+    linkedAccount = { githubUserId: 42, login: "maya", avatarUrl: null, status: "reconnect" };
+    renderPage(status({ canManage: false, connections: [activeConnection] }));
+    expect(screen.getByRole("button", { name: "Reconnect GitHub" })).toBeTruthy();
+  });
+
   test("with the GitHub integration toggle off, the GitHub page says so and reads nothing", () => {
     window.localStorage.removeItem(DEV_SETTINGS.githubIntegration.storageKey);
     renderPage(status());

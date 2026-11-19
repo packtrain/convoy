@@ -3,7 +3,7 @@ title: GitHub Integration
 description: Register a GitHub App so projects can connect a repository and browse its pull requests.
 ---
 
-Projects connect one GitHub.com repository under **Project settings → Integrations**. Every project member, viewers included, can then read its open pull requests and their diffs on the project's **Pull Requests** page. Convoy reads with the App's installation credentials, so members need no GitHub token of their own.
+Projects connect one GitHub.com repository under **Project settings → Integrations**. Every project member, viewers included, can then read its open pull requests and their diffs on the project's **Pull Requests** page. Convoy reads with the App's installation credentials, so reading needs no GitHub account; commenting uses each member's own, linked under [Link your GitHub account](#link-your-github-account).
 
 Without the variables below, the GitHub integration page says GitHub isn't set up and the rest of Convoy works as usual. Local-demo deployments always show GitHub as unavailable: they have no signed-in user to bind a connection to.
 
@@ -19,6 +19,7 @@ Create the App under your GitHub organization: **Settings → Developer settings
 | Redirect on update | On |
 | Webhook URL | `https://<your-convex-site-host>/api/integrations/github/webhook` (the Convex **HTTP Actions** URL, ending in `.convex.site` on Convex Cloud) |
 | Webhook secret | A long random string; it becomes `GITHUB_APP_WEBHOOK_SECRET` |
+| User-to-server token expiration (**Optional features**) | Opt in. Members' tokens then last 8 hours and Convoy renews them as they're used |
 
 Grant these repository permissions from the start. Changing an App's permissions later makes every connected organization's owner approve again, and an organization that never approves stops syncing.
 
@@ -31,7 +32,7 @@ Grant these repository permissions from the start. Changing an App's permissions
 | Commit statuses | Read-only |
 | Metadata | Read-only |
 
-Subscribe to the **Pull request**, **Installation**, and **Installation repositories** events. Convoy uses only read access today; the write permissions are for later features, where every write acts as the member's own GitHub account.
+Subscribe to the **Pull request**, **Installation**, and **Installation repositories** events. GitHub also sends every App the **GitHub App authorization** event, with no subscription; Convoy uses it to ask a member who revoked the App to reconnect. Convoy reads with the App's installation credentials, and every write, such as a comment, acts as the member's own GitHub account.
 
 After creating the App, open its **Credentials** page. Generate a client secret under **Client secrets** and a private key under **Key pairs**; GitHub shows the secret only once and downloads the key as a `.pem` file. Note the App ID, the client ID, and the App's URL slug (`https://github.com/apps/<slug>`) from the **General** page.
 
@@ -72,3 +73,7 @@ Convoy imports the open pull requests in the background, and webhooks keep them 
 ## Test setup
 
 Use a separate App per deployment (dev, preview, production), each with its own callback and webhook URLs. For a dev deployment, a test organization with one throwaway repository where you are an admin is enough. GitHub must reach the webhook URL; Convex Cloud's `.convex.site` URL works without tunneling.
+
+## Link your GitHub account
+
+To comment on pull requests, each member links their own GitHub account once per Convoy organization: **Profile settings → Connected accounts → Connect**, the **Your GitHub account** row on the project's GitHub page, or **Connect GitHub to comment...** on a pull request. GitHub asks them to authorize the App, then returns them to where they started. Comments then post as that account, with whatever access GitHub gives it on the repository. **Disconnect** unlinks it and revokes Convoy's token. Leaving the organization unlinks it too.

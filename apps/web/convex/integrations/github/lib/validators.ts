@@ -247,6 +247,18 @@ export type VerifiedRepository = Infer<typeof verifiedRepositoryValidator>;
 export const githubCheckStateValidator = v.union(v.literal("success"), v.literal("failure"), v.literal("pending"));
 
 /** The Overview's live GitHub reads (docs/specs/github-integration.md → PR reader). */
+/** A conversation comment; `authorId` marks the viewer's own, which they may edit and delete. */
+export const pullRequestCommentValidator = v.object({
+  id: v.number(),
+  author: v.string(),
+  authorId: v.union(v.number(), v.null()),
+  authorAvatarUrl: v.union(v.string(), v.null()),
+  body: v.string(),
+  createdAt: v.number(),
+  url: v.string(),
+});
+export type PullRequestComment = Infer<typeof pullRequestCommentValidator>;
+
 export const pullRequestOverviewValidator = v.object({
   headSha: v.string(),
   baseRef: v.string(),
@@ -280,9 +292,7 @@ export const pullRequestOverviewValidator = v.object({
     })
   ),
   requestedReviewers: v.array(v.string()),
-  comments: v.array(
-    v.object({ id: v.number(), author: v.string(), authorAvatarUrl: v.union(v.string(), v.null()), body: v.string(), createdAt: v.number(), url: v.string() })
-  ),
+  comments: v.array(pullRequestCommentValidator),
   /** Inline comments on the diff; `line` is where it was left, even once outdated. */
   reviewComments: v.array(
     v.object({

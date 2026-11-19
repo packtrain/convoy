@@ -35,7 +35,7 @@ export type FakePullRequest = {
   commits?: { sha: string; message: string; login: string | null; name: string; date: string }[];
   reviews?: { id: number; login: string; state: string; submitted_at: string; body?: string }[];
   requestedReviewers?: string[];
-  comments?: { id: number; login: string; body: string; created_at: string }[];
+  comments?: { id: number; login: string; userId?: number; body: string; created_at: string }[];
   assignees?: string[];
   milestone?: { title: string; number: number };
   /** Inline review comments; GitHub nulls `line` once the diff moves past it. */
@@ -55,6 +55,8 @@ export type FakePullRequest = {
   statuses?: { id: number; context: string; state: string; description: string }[];
   behindBy?: number;
 };
+
+export type FakeGithubUser = { id: number; login: string };
 
 export type FakeRepository = { id: number; owner: string; name: string; private: boolean; admin: boolean; installationId: number };
 
@@ -127,6 +129,16 @@ export function createFakeGithub() {
     compares: new Map<string, FakePullRequest["files"]>(),
     /** Status codes to answer instead, consumed per matching request. */
     failures: [] as { match: RegExp; status: number; headers?: Record<string, string>; message?: string }[],
+    /** The GitHub person each OAuth code authorizes, for Connect GitHub; GOOD_CODE stays the setup admin. */
+    oauthCodes: new Map<string, FakeGithubUser>(),
+    /** When set, codes return 8-hour tokens with a refresh token, as with the App's token expiration on. */
+    expiringTokens: false,
+    /** Live user-to-server tokens and refresh tokens; a refresh rotates both. */
+    userTokens: new Map<string, FakeGithubUser>(),
+    refreshTokens: new Map<string, FakeGithubUser>(),
+    revokedTokens: [] as string[],
+    /** A person's `permissions` on every repository; the default reads only. */
+    userPermissions: new Map<number, Record<string, boolean>>(),
     /** Called between the two PR reads of a diff, to simulate a push mid-read. */
     onFilesRead: null as (() => void) | null,
     requests: [] as string[],
@@ -250,6 +262,16 @@ export function createFakeGithub() {
   }
 
   const tokens = new Map<string, Record<string, string>>();
+  let issued = 0;
+
+  function issueTokens(user: FakeGithubUser) {
+    const accessToken = `ghu-${user.login}-${++issued}`;
+    state.userTokens.set(accessToken, user);
+    if (!state.expiringTokens) return { access_token: accessToken };
+    const refreshToken = `ghr-${user.login}-${issued}`;
+    state.refreshTokens.set(refreshToken, user);
+    return { access_token: accessToken, expires_in: 28_800, refresh_token: refreshToken, refresh_token_expires_in: 15_897_600 };
+  }
 
   async function handle(url: URL, init: RequestInit | undefined): Promise<Response> {
     const method = init?.method ?? "GET";
@@ -264,13 +286,60 @@ export function createFakeGithub() {
       });
     }
     if (url.hostname === "github.com" && path === "/login/oauth/access_token") {
-      const body = JSON.parse(String(init?.body)) as { code: string };
-      return json(200, body.code === GOOD_CODE ? { access_token: "user-token" } : { error: "bad_verification_code" });
+      const body = JSON.parse(String(init?.body)) as { code?: string; grant_type?: string; refresh_token?: string };
+      if (body.grant_type === "refresh_token") {
+        const user = state.refreshTokens.get(body.refresh_token ?? "");
+        if (!user) return json(200, { error: "bad_refresh_token" });
+        state.refreshTokens.delete(body.refresh_token!);
+        for (const [token, holder] of state.userTokens) if (holder === user) state.userTokens.delete(token);
+        return json(200, issueTokens(user));
+      }
+      if (body.code === GOOD_CODE) return json(200, { access_token: "user-token" });
+      const user = state.oauthCodes.get(body.code ?? "");
+      return json(200, user ? issueTokens(user) : { error: "bad_verification_code" });
+    }
+    if (url.hostname === "api.github.com" && path === "/applications/client-id/token" && method === "DELETE") {
+      const { access_token } = JSON.parse(String(init?.body)) as { access_token: string };
+      state.revokedTokens.push(access_token);
+      state.userTokens.delete(access_token);
+      return new Response(null, { status: 204 });
+    }
+    const bearer = new Headers(init?.headers).get("Authorization")?.replace("Bearer ", "") ?? "";
+    const person = state.userTokens.get(bearer);
+    if (path === "/user") {
+      return person ? json(200, { id: person.id, login: person.login, avatar_url: `https://avatars.githubusercontent.com/u/${person.id}` }) : json(401, {});
+    }
+    let match = /^\/repositories\/(\d+)\/issues\/(?:(\d+)\/comments|comments\/(\d+))$/.exec(path);
+    if (match && (method !== "GET" || match[3])) {
+      if (!person) return json(401, {});
+      const [, repositoryId, number, commentId] = match;
+      const pulls = state.pulls.get(Number(repositoryId)) ?? [];
+      const pr = number ? pulls.find((candidate) => candidate.number === Number(number)) : pulls.find((candidate) => candidate.comments?.some((comment) => comment.id === Number(commentId)));
+      if (!pr) return json(404, {});
+      const comments = (pr.comments ??= []);
+      const toJson = (comment: (typeof comments)[number]) => ({ ...comment, user: { ...githubUser(comment.login), id: comment.userId }, html_url: `https://github.com/c/${comment.id}` });
+      if (method === "GET") {
+        const comment = comments.find((candidate) => candidate.id === Number(commentId))!;
+        return json(200, { ...toJson(comment), issue_url: `https://api.github.com/repos/acme/repo-${repositoryId}/issues/${pr.number}` });
+      }
+      if (method === "POST") {
+        const comment = { id: 5000 + comments.length, login: person.login, userId: person.id, body: (JSON.parse(String(init?.body)) as { body: string }).body, created_at: new Date().toISOString() };
+        comments.push(comment);
+        return json(201, toJson(comment));
+      }
+      // Like GitHub, anyone with write access may edit or delete any comment.
+      const index = comments.findIndex((comment) => comment.id === Number(commentId));
+      if (method === "DELETE") {
+        comments.splice(index, 1);
+        return new Response(null, { status: 204 });
+      }
+      comments[index] = { ...comments[index], body: (JSON.parse(String(init?.body)) as { body: string }).body };
+      return json(200, toJson(comments[index]));
     }
     if (path === "/user/installations") {
       return json(200, { installations: [...state.installations.keys()].map((id) => ({ id })) });
     }
-    let match = /^\/user\/installations\/(\d+)\/repositories$/.exec(path);
+    match = /^\/user\/installations\/(\d+)\/repositories$/.exec(path);
     if (match) {
       const installation = state.installations.get(Number(match[1]));
       const all = [...(installation?.repositoryIds ?? [])].map((id) => repoJson(state.repositories.get(id)!));
@@ -281,6 +350,7 @@ export function createFakeGithub() {
     match = /^\/repositories\/(\d+)$/.exec(path);
     if (match) {
       const repo = state.repositories.get(Number(match[1]));
+      if (repo && person) return json(200, { ...repoJson(repo), permissions: state.userPermissions.get(person.id) ?? { pull: true } });
       return repo ? json(200, repoJson(repo)) : json(404, {});
     }
     match = /^\/repos\/([^/]+)\/([^/]+)\/installation$/.exec(path);
@@ -315,7 +385,7 @@ export function createFakeGithub() {
       const [, repositoryId, number] = match;
       const pr = state.pulls.get(Number(repositoryId))?.find((candidate) => candidate.number === Number(number));
       return pr
-        ? json(200, (pr.comments ?? []).map((comment) => ({ ...comment, user: githubUser(comment.login), html_url: `https://github.com/c/${comment.id}` })))
+        ? json(200, (pr.comments ?? []).map((comment) => ({ ...comment, user: { ...githubUser(comment.login), id: comment.userId }, html_url: `https://github.com/c/${comment.id}` })))
         : json(404, {});
     }
     match = /^\/repositories\/(\d+)\/check-runs$/.exec(path);

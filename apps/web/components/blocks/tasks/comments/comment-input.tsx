@@ -41,11 +41,15 @@ export interface CommentPendingAttachment {
 
 interface CommentInputProps {
   onSubmit: (content: string) => Promise<void>;
-  pendingAttachments: CommentPendingAttachment[];
-  onAddFiles: (files: File[]) => void;
-  onRemoveAttachment: (id: string) => void;
+  pendingAttachments?: CommentPendingAttachment[];
+  /** Absent: no attach button, and pasted images are ignored (GitHub comments, OS-2434). */
+  onAddFiles?: (files: File[]) => void;
+  onRemoveAttachment?: (id: string) => void;
   disabled?: boolean;
   placeholder?: string;
+  /** Controls the text, for a host that keeps the draft itself; otherwise the input holds it. */
+  value?: string;
+  onValueChange?: (value: string) => void;
 }
 
 /** Plain helper (not a component) so the icon lookup stays out of a render body. */
@@ -100,12 +104,16 @@ export function CommentInput({
   onSubmit,
   pendingAttachments = EMPTY_ATTACHMENTS,
   onAddFiles,
-  onRemoveAttachment,
+  onRemoveAttachment = () => {},
   disabled,
   placeholder = "Add a comment...",
+  value,
+  onValueChange,
 }: CommentInputProps) {
   const { user } = useAppUser();
-  const [content, setContent] = useState("");
+  const [ownContent, setOwnContent] = useState("");
+  const content = value ?? ownContent;
+  const setContent = (next: string) => (onValueChange ? onValueChange(next) : setOwnContent(next));
   const [isSubmitting, setIsSubmitting] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
@@ -138,14 +146,14 @@ export function CommentInput({
   const handleFileSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
     const files = e.target.files;
     if (files && files.length > 0) {
-      onAddFiles(Array.from(files));
+      onAddFiles?.(Array.from(files));
       // Reset the input
       e.target.value = "";
     }
   };
 
   const handlePaste = (e: React.ClipboardEvent<HTMLTextAreaElement>) => {
-    if (disabled || isSubmitting) {
+    if (disabled || isSubmitting || !onAddFiles) {
       return;
     }
 
@@ -251,26 +259,30 @@ export function CommentInput({
               )}
             </div>
 
-            <TooltipExt content="Attach file">
-              <Button
-                type="button"
-                variant="ghost"
-                size="icon-sm"
-                aria-label="Attach file"
-                className="shrink-0 opacity-50 hover:opacity-100"
-                disabled={disabled || isSubmitting}
-                onClick={() => fileInputRef.current?.click()}
-              >
-                <Paperclip />
-              </Button>
-            </TooltipExt>
-            <input
-              ref={fileInputRef}
-              type="file"
-              multiple
-              className="hidden"
-              onChange={handleFileSelect}
-            />
+            {onAddFiles ? (
+              <>
+                <TooltipExt content="Attach file">
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    size="icon-sm"
+                    aria-label="Attach file"
+                    className="shrink-0 opacity-50 hover:opacity-100"
+                    disabled={disabled || isSubmitting}
+                    onClick={() => fileInputRef.current?.click()}
+                  >
+                    <Paperclip />
+                  </Button>
+                </TooltipExt>
+                <input
+                  ref={fileInputRef}
+                  type="file"
+                  multiple
+                  className="hidden"
+                  onChange={handleFileSelect}
+                />
+              </>
+            ) : null}
 
             {/* Send button — same control as ThreadComposer's PromptInputSubmit. */}
             <InputGroupButton

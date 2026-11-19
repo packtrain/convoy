@@ -80,6 +80,7 @@ import {
   guideStepValidator,
   normalizedPullRequestValidator,
   repositoryLinkStatusValidator,
+  linkedAccountStatusValidator,
   repositorySyncStatusValidator,
 } from "./lib/contracts/github";
 import {
@@ -1585,6 +1586,29 @@ export default defineSchema({
     updatedBy: v.id("users"),
     updatedAt: v.number(),
   }).index("by_projectId", ["projectId"]),
+
+  // A member's Linked GitHub account in one organization: the user-to-server
+  // tokens Convoy writes with, encrypted (docs/specs/github-integration.md → GitHub accounts and permissions).
+  integrationLinkedAccounts: defineTable({
+    organizationId: v.id("organizations"),
+    userId: v.id("users"),
+    provider: integrationProviderValidator,
+    status: linkedAccountStatusValidator,
+    github: v.object({
+      userId: v.number(),
+      login: v.string(),
+      avatarUrl: v.optional(v.string()),
+      encryptedAccessToken: v.string(),
+      // Absent when the App doesn't expire tokens; then there is no refresh token either.
+      accessTokenExpiresAt: v.optional(v.number()),
+      encryptedRefreshToken: v.optional(v.string()),
+      // Held while one caller refreshes, since a refresh rotates both tokens.
+      refreshLeaseUntil: v.optional(v.number()),
+    }),
+    linkedAt: v.number(),
+  })
+    .index("by_userId_and_organizationId_and_provider", ["userId", "organizationId", "provider"])
+    .index("by_provider_and_githubUserId_and_organizationId", ["provider", "github.userId", "organizationId"]),
 
   // A 10-minute connect flow bound to one user and project. The encrypted
   // user token lets repository selection recheck GitHub admin permission.

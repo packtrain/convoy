@@ -2,9 +2,10 @@
 
 import { Dialog, DialogContent, DialogDescription, DialogTitle } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
-import { Settings, Bell, Bot, Shield, AlertTriangle, Key, Wrench, Server, Palette } from "lucide-react";
+import { Settings, Bell, Bot, Shield, AlertTriangle, Key, Wrench, Server, Palette, Github } from "lucide-react";
+import { ConnectedAccountsSection } from "@/components/blocks/integrations";
 import { cn } from "@/lib/utils";
-import { useShowUnfinishedItems } from "@/lib/dev-mode/use-dev-mode";
+import { useGithubIntegrationEnabled, useShowUnfinishedItems } from "@/lib/dev-mode/use-dev-mode";
 import { GeneralSection } from "./general-section";
 import { AppearanceSection } from "./appearance-section";
 import { AgentAutomationSection } from "./agent-automation-section";
@@ -13,7 +14,7 @@ import { DeveloperSection } from "./developer-section";
 import { ProfilesSection } from "./profiles-section";
 import { NotificationsSection } from "./notifications-section";
 
-export type UserSettingsSectionId = "general" | "appearance" | "agents" | "profiles" | "developer" | "api-keys" | "notifications" | "account" | "danger";
+export type UserSettingsSectionId = "general" | "appearance" | "agents" | "profiles" | "developer" | "api-keys" | "notifications" | "connected-accounts" | "account" | "danger";
 
 interface UserSettingsDialogProps {
   open: boolean;
@@ -34,6 +35,8 @@ const sections = [
     icon: Bell,
     disabled: false,
   },
+  // Behind the GitHub integration developer toggle until it ships.
+  { id: "connected-accounts" as const, label: "Connected accounts", icon: Github, disabled: false },
   { id: "account" as const, label: "Account", icon: Shield, disabled: true },
   {
     id: "danger" as const,
@@ -46,6 +49,7 @@ const sections = [
 
 export function UserSettingsDialog({ open, onOpenChange, section, onSectionChange }: UserSettingsDialogProps) {
   const showUnfinishedItems = useShowUnfinishedItems();
+  const githubIntegration = useGithubIntegrationEnabled();
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="max-w-3xl sm:max-w-3xl p-0 gap-0 overflow-hidden">
@@ -53,8 +57,8 @@ export function UserSettingsDialog({ open, onOpenChange, section, onSectionChang
         <DialogDescription className="sr-only">Manage your account, CLI profiles, API keys, and local developer settings.</DialogDescription>
         <div className="flex h-[500px] min-w-0">
           {/* Sidebar */}
-          <nav className="w-44 shrink-0 bg-muted/30 p-2 flex flex-col gap-1">
-            {sections.filter((s) => showUnfinishedItems || !s.disabled).map((s) => (
+          <nav className="w-52 shrink-0 bg-muted/30 p-2 flex flex-col gap-1">
+            {sections.filter((s) => (showUnfinishedItems || !s.disabled) && (githubIntegration || s.id !== "connected-accounts")).map((s) => (
               <Button
                 key={s.id}
                 variant="ghost"
@@ -81,6 +85,7 @@ export function UserSettingsDialog({ open, onOpenChange, section, onSectionChang
             {section === "developer" && <DeveloperSection />}
             {section === "api-keys" && <ApiKeysSection />}
             {section === "notifications" && <NotificationsSection />}
+            {section === "connected-accounts" && <ConnectedAccountsSection />}
           </div>
         </div>
       </DialogContent>

@@ -5,6 +5,13 @@ import { v, type Infer } from "convex/values";
 export const repositoryLinkStatusValidator = v.union(v.literal("active"), v.literal("disconnected"));
 export type RepositoryLinkStatus = Infer<typeof repositoryLinkStatusValidator>;
 
+/** Marks a Connect GitHub OAuth state, so the shared callback page can tell it from a repository setup's. */
+export const ACCOUNT_STATE_PREFIX = "account.";
+
+/** `reconnect`: GitHub refused the tokens or revoked the authorization; writes wait for Reconnect GitHub. */
+export const linkedAccountStatusValidator = v.union(v.literal("active"), v.literal("reconnect"));
+export type LinkedAccountStatus = Infer<typeof linkedAccountStatusValidator>;
+
 export const repositorySyncStatusValidator = v.union(v.literal("importing"), v.literal("synced"), v.literal("error"));
 export type RepositorySyncStatus = Infer<typeof repositorySyncStatusValidator>;
 

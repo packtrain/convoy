@@ -18,7 +18,7 @@ import {
 import { PullRequestChecksCard, TaskEvidenceCard } from "@/components/blocks/checks";
 import { EmptyValue } from "@/components/blocks/tasks/task-table/badges";
 import { TaskRefWithType } from "@/components/blocks/tasks/task-ref-with-type";
-import { TimelineHeader, TimelineThreadRowCard } from "@/components/blocks/tasks/task-timeline";
+import { TimelineHeader, TimelineThreadRowCard, type TimelineComposerMode } from "@/components/blocks/tasks/task-timeline";
 import { TaskThreadComposer } from "@/components/blocks/tasks/task-thread-composer";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Badge } from "@/components/ui/badge";
@@ -33,6 +33,14 @@ import type { TimelineSortDirection, TimelineThreadRow } from "@/lib/tasks/timel
 import { cn } from "@/lib/utils";
 import { checksRollup, GithubCheckList, ROLLUP_ICONS } from "./github-checks";
 import { GithubMarkdown } from "./github-markdown";
+import {
+  ActivityComment,
+  PullRequestActivityComposer,
+  useGithubCommenting,
+  type CommentsChange,
+  type GithubCommenting,
+  type QuoteLine,
+} from "./pull-request-comments";
 import { reviewerStates, type ReviewerState } from "./pull-request-merge-status";
 import { layerBelow, StackMap } from "./pull-request-stack";
 import { displayState, PullRequestStateIcon } from "./pull-request-state-icon";
@@ -245,55 +253,17 @@ type Entry =
       action?: string;
       /** An inline review comment's file and quoted lines. */
       quote?: { path: string; line: number | null; lines: QuoteLine[] };
+      /** The viewer's own conversation comment, which they may edit and delete. */
+      ownId?: number;
     };
 
-type QuoteLine = PullRequestOverview["reviewComments"][number]["quote"][number];
-const QUOTE_ROWS: Record<QuoteLine["kind"], { sign: string; className: string }> = {
-  add: { sign: "+", className: "bg-success/10" },
-  del: { sign: "-", className: "bg-destructive/10" },
-  context: { sign: " ", className: "" },
-};
-
-function quoteLabel({ line, lines }: { line: number | null; lines: QuoteLine[] }) {
-  const numbers = lines.flatMap((quoted) => (quoted.number === null ? [] : [quoted.number]));
-  const [first, last] = [numbers[0] ?? line, numbers.at(-1) ?? line];
-  if (first === null || last === null) return "";
-  return first === last ? `Line ${last}` : `Lines ${first}–${last}`;
-}
-
-/** GitHub's inline-comment header: the file, its lines, and the quoted code. */
-function CommentQuote({ quote }: { quote: NonNullable<Extract<Entry, { kind: "comment" }>["quote"]> }) {
-  return (
-    <figure className="my-2 overflow-hidden rounded-lg border">
-      <header className="flex min-w-0 items-center gap-2 border-b bg-muted/40 px-3 py-1.5 text-xs">
-        <span className="min-w-0 truncate font-mono">{quote.path}</span>
-        <span className="shrink-0 text-muted-foreground">{quoteLabel(quote)}</span>
-      </header>
-      {quote.lines.length ? (
-        <table className="w-full font-mono text-xs">
-          <tbody>
-            {quote.lines.map((quoted, index) => (
-              <tr key={index} className={QUOTE_ROWS[quoted.kind].className}>
-                <td className="w-10 px-2 py-0.5 text-right align-top text-muted-foreground select-none">{quoted.number ?? ""}</td>
-                <td className="px-2 py-0.5 break-all whitespace-pre-wrap">
-                  <span className="select-none">{QUOTE_ROWS[quoted.kind].sign}</span>
-                  {quoted.text}
-                </td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
-      ) : null}
-    </figure>
-  );
-}
-
-/** The task timeline's header over GitHub's conversation, read-only: commits, reviews, and comments. */
+/** The task timeline's header over GitHub's conversation: commits, reviews, comments, and threads. */
 function Activity({
   pr,
   overview,
   threads,
   composer,
+  commenting,
   organizationSlug,
   projectAlias,
 }: {
@@ -301,7 +271,9 @@ function Activity({
   overview: PullRequestOverview;
   /** Absent without a connected repository: no Threads source, no composer. */
   threads?: TimelineThreadRow[];
-  composer?: ReactNode;
+  /** Faces the stream: below it reading oldest first, above it newest first. */
+  composer?: (sort: TimelineSortDirection) => ReactNode;
+  commenting?: GithubCommenting;
   organizationSlug: string;
   projectAlias: string;
 }) {
@@ -356,6 +328,7 @@ function Activity({
             key: `comment:${comment.id}`,
             ...comment,
             at: comment.createdAt,
+            ownId: comment.authorId !== null && comment.authorId === commenting?.viewerId && !commenting.noAccess ? comment.id : undefined,
           })),
           ...overview.reviewComments.map(({ path, line, quote, ...comment }) => ({
             kind: "comment" as const,
@@ -391,7 +364,7 @@ function Activity({
           hasThreadSource={threads !== undefined}
         />
       </div>
-      {sort === "desc" ? composer : null}
+      {sort === "desc" ? composer?.(sort) : null}
       {!sources.activity && !sources.comments && !(threads && sources.threads) ? (
         <p className="py-4 text-sm text-muted-foreground">Every source is hidden. Turn one on to see this pull request&apos;s activity.</p>
       ) : null}
@@ -401,24 +374,17 @@ function Activity({
           return <TimelineThreadRowCard key={first.key} thread={first.thread} organizationSlug={organizationSlug} projectAlias={projectAlias} />;
         }
         if (first.kind === "comment") {
+          const { ownId } = first;
           return (
-            <article key={first.key} className="flex gap-3 py-3">
-              <Avatar className="size-8 shrink-0">
-                <AvatarImage src={first.authorAvatarUrl ?? undefined} />
-                <AvatarFallback className="text-xs">{first.author.slice(0, 2).toUpperCase()}</AvatarFallback>
-              </Avatar>
-              <div className="min-w-0 flex-1">
-                <p className="mb-1 text-xs text-muted-foreground">
-                  <span className="text-sm font-medium text-foreground">{first.author}</span>
-                  {first.action ? ` ${first.action}` : null} ·{" "}
-                  <a href={first.url} target="_blank" rel="noreferrer" className="hover:underline">
-                    {ago(first.at)}
-                  </a>
-                </p>
-                {first.quote ? <CommentQuote quote={first.quote} /> : null}
-                <GithubMarkdown>{first.body}</GithubMarkdown>
-              </div>
-            </article>
+            <ActivityComment
+              key={first.key}
+              comment={first}
+              own={
+                ownId !== undefined && commenting
+                  ? { onSave: (body) => commenting.edit(ownId, body), onDelete: () => commenting.remove(ownId) }
+                  : undefined
+              }
+            />
           );
         }
         return (
@@ -440,7 +406,7 @@ function Activity({
           </div>
         );
       })}
-      {sort === "asc" ? composer : null}
+      {sort === "asc" ? composer?.(sort) : null}
     </section>
   );
 }
@@ -525,6 +491,8 @@ export function PullRequestOverviewTab({
   projectId,
   projectAlias,
   pullRequest,
+  repositoryId,
+  onCommentsChange,
 }: {
   pr: PullRequestView;
   summary: PullRequestView;
@@ -538,34 +506,54 @@ export function PullRequestOverviewTab({
   projectAlias: string;
   /** Null when the repository is not connected here: no Threads, composer, or Fix. */
   pullRequest: AttachedPullRequest | null;
+  repositoryId: string;
+  onCommentsChange: CommentsChange;
 }) {
   const overview = state.kind === "loaded" ? state.overview : null;
   const threads = usePullRequestThreads(projectId, pullRequest);
+  const commenting = useGithubCommenting({ projectId, repositoryId, number: pr.number, organizationSlug, onCommentsChange });
   const composerRef = useRef<HTMLDivElement>(null);
+  // Threads first, as in the task sidebar; "Add comment..." swaps in the GitHub comment.
+  const [mode, setMode] = useState<TimelineComposerMode>("thread");
   const [focusKey, setFocusKey] = useState(0);
   const [seed, setSeed] = useState<string>();
-  const reveal = () => composerRef.current?.scrollIntoView({ behavior: "smooth", block: "center" });
+  const reveal = () => {
+    setMode("thread");
+    composerRef.current?.scrollIntoView({ behavior: "smooth", block: "center" });
+  };
   const compose = () => {
     setFocusKey((key) => key + 1);
     reveal();
   };
   // Fix drafts a thread in Activity's composer; the member edits and sends it.
   const canFix = pullRequest !== null;
-  const composer = pullRequest ? (
-    <div ref={composerRef} className="py-3">
-      <TaskThreadComposer
-        projectId={projectId}
-        organizationSlug={organizationSlug}
-        projectAlias={projectAlias}
-        pullRequest={pullRequest}
-        seed={seed}
-        onSeeded={() => setSeed(undefined)}
-        focusRequestKey={focusKey}
-        composerContainerClassName="p-0"
-        composerTextareaClassName="min-h-[88px] p-3"
-      />
-    </div>
-  ) : null;
+  const composer = pullRequest
+    ? (sort: TimelineSortDirection) => (
+        <div ref={composerRef}>
+          <PullRequestActivityComposer
+            commenting={commenting}
+            mode={mode}
+            onModeChange={setMode}
+            sort={sort}
+            returnTo={hrefFor(pr.number)}
+            draftKey={`convoy:github:comment-draft:${organizationSlug}:${projectAlias}:${repositoryId}:${pr.number}`}
+            threadComposer={
+              <TaskThreadComposer
+                projectId={projectId}
+                organizationSlug={organizationSlug}
+                projectAlias={projectAlias}
+                pullRequest={pullRequest}
+                seed={seed}
+                onSeeded={() => setSeed(undefined)}
+                focusRequestKey={focusKey}
+                composerContainerClassName="p-0"
+                composerTextareaClassName="min-h-[88px] p-3"
+              />
+            }
+          />
+        </div>
+      )
+    : undefined;
   const fix = (text: string) => {
     setSeed(text);
     reveal();
@@ -773,12 +761,13 @@ export function PullRequestOverviewTab({
             projectAlias={projectAlias}
             threads={pullRequest ? (threads ?? []).map(toTimelineThreadRow) : undefined}
             composer={composer}
+            commenting={commenting}
           />
         ) : state.kind === "loading" ? (
           // Evidence's Fix and the Threads "+" need the composer before GitHub's overview arrives.
-          <ActivitySkeleton composer={composer} />
+          <ActivitySkeleton composer={composer?.("desc")} />
         ) : (
-          composer
+          composer?.("desc")
         )}
       </div>
       <aside aria-label="Pull request properties" className="hidden space-y-6 text-sm @4xl:block">

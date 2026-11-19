@@ -1,6 +1,6 @@
 import type { NormalizedPullRequest, PullRequestStack } from "../../../lib/contracts/github";
 import { GithubError } from "./github";
-import type { PullRequestOverview, PullRequestSearchHit } from "./validators";
+import type { PullRequestComment, PullRequestOverview, PullRequestSearchHit } from "./validators";
 
 /** Diff budget per request: provider file entries past these limits come back without patches. */
 export const DIFF_MAX_FILES = 100;
@@ -163,6 +163,21 @@ function quoteLines(hunk: string, side: "old" | "new", count: number): QuoteLine
   return lines.slice(-Math.max(1, count));
 }
 
+/** An issue comment on the PR's conversation. */
+export function normalizeComment(value: unknown): PullRequestComment {
+  const comment = record(value);
+  const userId = comment.user ? record(comment.user).id : null;
+  return {
+    id: num(comment.id),
+    author: login(comment.user),
+    authorId: typeof userId === "number" ? userId : null,
+    authorAvatarUrl: avatarUrl(comment.user),
+    body: text(comment.body),
+    createdAt: Date.parse(str(comment.created_at)),
+    url: text(comment.html_url),
+  };
+}
+
 /** GitHub's PR, commits, reviews, comments, check runs, combined status, and compare, narrowed for the Overview. `appId` marks Convoy's own runs. */
 export function normalizeOverview(appId: string, raw: {
   pr: unknown;
@@ -228,10 +243,7 @@ export function normalizeOverview(appId: string, raw: {
       ...list(pr.requested_reviewers ?? []).map(login),
       ...list(pr.requested_teams ?? []).map((team) => text(record(team).name) || text(record(team).slug)),
     ],
-    comments: list(raw.comments).map((value) => {
-      const comment = record(value);
-      return { id: num(comment.id), author: login(comment.user), authorAvatarUrl: avatarUrl(comment.user), body: text(comment.body), createdAt: Date.parse(str(comment.created_at)), url: text(comment.html_url) };
-    }),
+    comments: list(raw.comments).map(normalizeComment),
     reviewComments: list(raw.reviewComments).map((value) => {
       const comment = record(value);
       const line = [comment.line, comment.original_line].find((candidate) => typeof candidate === "number");

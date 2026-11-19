@@ -4,7 +4,7 @@ import { GITHUB_API_URL, GITHUB_WEB_URL, githubCallbackUrl, readGithubAppConfig,
 import { record, str } from "./parsers";
 import type { SyncContext } from "./validators";
 
-// GitHub REST client and credentials: App JWT, installation tokens, setup token encryption, and the OAuth exchange.
+// GitHub REST client and credentials: App JWT, installation tokens, token encryption, and user-to-server tokens.
 
 const FETCH_TIMEOUT_MS = 15_000;
 
@@ -126,7 +126,7 @@ export function requireConfig(): GithubAppConfig {
   return config;
 }
 
-// --- Setup token encryption (AES-GCM, key derived from the App's client secret) ---
+// --- Token encryption (AES-GCM, key derived from the App's client secret) ---
 
 async function setupKey(config: GithubAppConfig): Promise<CryptoKey> {
   const material = await crypto.subtle.digest("SHA-256", new TextEncoder().encode(`convoy-github-setup:${config.clientSecret}`));
@@ -145,25 +145,52 @@ export async function decryptToken(config: GithubAppConfig, encrypted: string): 
   return new TextDecoder().decode(plain);
 }
 
-/** OAuth code → user-to-server token. Only proves setup authority; never stored past setup. */
-export async function exchangeCode(config: GithubAppConfig, code: string): Promise<string> {
+/** A user-to-server token; `expiresAt` and `refreshToken` only when the App expires tokens (8 hours, refreshable for 6 months). */
+export type UserTokens = { accessToken: string; expiresAt?: number; refreshToken?: string };
+
+async function requestUserTokens(config: GithubAppConfig, grant: Record<string, string>): Promise<UserTokens | null> {
   const response = await fetch(`${GITHUB_WEB_URL}/login/oauth/access_token`, {
     method: "POST",
     signal: AbortSignal.timeout(FETCH_TIMEOUT_MS),
     headers: { Accept: "application/json", "Content-Type": "application/json", "User-Agent": "Convoy" },
-    body: JSON.stringify({
-      client_id: config.clientId,
-      client_secret: config.clientSecret,
-      code,
-      redirect_uri: githubCallbackUrl(),
-    }),
+    body: JSON.stringify({ client_id: config.clientId, client_secret: config.clientSecret, ...grant }),
   }).catch(() => null);
-  const body: unknown = response?.ok ? await response.json().catch(() => null) : null;
-  const token = typeof body === "object" && body !== null && "access_token" in body ? body.access_token : null;
-  if (typeof token !== "string") {
-    throw new ConvexError(errors.GITHUB_AUTHORIZATION_FAILED);
-  }
-  return token;
+  if (!response?.ok) throw new GithubError(response?.status ?? null, errors.GITHUB_UNAVAILABLE);
+  // GitHub answers 200 with an `error` field for a bad code or refresh token.
+  const body = record(await response.json().catch(() => null));
+  if (typeof body.access_token !== "string") return null;
+  return {
+    accessToken: body.access_token,
+    ...(typeof body.expires_in === "number" ? { expiresAt: Date.now() + body.expires_in * 1000 } : {}),
+    ...(typeof body.refresh_token === "string" ? { refreshToken: body.refresh_token } : {}),
+  };
+}
+
+/** OAuth code → user-to-server tokens. */
+export async function exchangeCode(config: GithubAppConfig, code: string): Promise<UserTokens> {
+  const tokens = await requestUserTokens(config, { code, redirect_uri: githubCallbackUrl() }).catch(() => null);
+  if (!tokens) throw new ConvexError(errors.GITHUB_AUTHORIZATION_FAILED);
+  return tokens;
+}
+
+/** A new token pair, or null when GitHub refuses the refresh token (expired or revoked). Rotates both tokens. */
+export async function refreshUserTokens(config: GithubAppConfig, refreshToken: string): Promise<UserTokens | null> {
+  return requestUserTokens(config, { grant_type: "refresh_token", refresh_token: refreshToken });
+}
+
+/** Revokes one token, never the App grant the person's other organizations share. Best effort. */
+export async function revokeUserToken(config: GithubAppConfig, accessToken: string): Promise<void> {
+  await fetch(`${GITHUB_API_URL}/applications/${encodeURIComponent(config.clientId)}/token`, {
+    method: "DELETE",
+    signal: AbortSignal.timeout(FETCH_TIMEOUT_MS),
+    headers: {
+      Accept: "application/vnd.github+json",
+      Authorization: `Basic ${btoa(`${config.clientId}:${config.clientSecret}`)}`,
+      "Content-Type": "application/json",
+      "User-Agent": "Convoy",
+    },
+    body: JSON.stringify({ access_token: accessToken }),
+  }).catch(() => null);
 }
 
 /** By id, so a rename or a reused name never points sync at another repository. */

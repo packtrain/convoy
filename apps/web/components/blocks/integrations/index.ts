@@ -6,3 +6,4 @@ export { PullRequestLink } from "./github/pull-request-link";
 export { AttachedPullRequestPill } from "./github/attached-pull-request-pill";
 export { PullRequestSelectorDialog } from "./github/pull-request-selector-dialog";
 export { AttachedPullRequestReader } from "./github/attached-pull-request-reader";
+export { ConnectedAccountsSection } from "./github/linked-github-account";

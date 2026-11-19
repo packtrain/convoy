@@ -254,6 +254,14 @@ export function PullRequestReader({
             projectId={projectId}
             projectAlias={projectAlias}
             pullRequest={attached}
+            repositoryId={repositoryId}
+            onCommentsChange={(change) =>
+              setHeld((previous) =>
+                previous?.overview.kind === "loaded"
+                  ? { ...previous, overview: { kind: "loaded", overview: { ...previous.overview.overview, comments: change(previous.overview.overview.comments) } } }
+                  : previous
+              )
+            }
           />
         </TabsContent>
         <TabsContent value="guide" className="overflow-auto">

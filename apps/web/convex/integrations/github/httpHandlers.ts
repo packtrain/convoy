@@ -63,7 +63,14 @@ export async function handleGithubWebhook(ctx: ActionCtx, request: Request): Pro
   } catch {
     return new Response("Invalid JSON", { status: 400 });
   }
-  const event = parseGithubEvent(request.headers.get("X-GitHub-Event"), payload);
+  const eventName = request.headers.get("X-GitHub-Event");
+  // Sent to every App when a person revokes its authorization; it has no installation.
+  const revokedUserId = field(field(payload, "sender"), "id");
+  if (eventName === "github_app_authorization" && field(payload, "action") === "revoked" && typeof revokedUserId === "number") {
+    await ctx.runMutation(internal.integrations.github.accounts.markRevoked, { githubUserId: revokedUserId });
+    return new Response(null, { status: 202 });
+  }
+  const event = parseGithubEvent(eventName, payload);
   if (event) {
     await ctx.scheduler.runAfter(0, internal.integrations.github.sync.fanOutWebhook, { event });
   }

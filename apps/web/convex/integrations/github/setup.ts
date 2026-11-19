@@ -244,7 +244,7 @@ export const completeSetup = action({
   handler: async (ctx, args): Promise<{ setupId: Id<"integrationSetups">; organizationSlug: string; projectAlias: string }> => {
     const config = requireConfig();
     const claimed = await ctx.runMutation(internal.integrations.github.setup.claimSetup, { state: args.state });
-    const accessToken = await exchangeCode(config, args.code);
+    const { accessToken } = await exchangeCode(config, args.code);
     await ctx.runMutation(internal.integrations.github.setup.authorizeSetup, {
       setupId: claimed.setupId,
       encryptedToken: await encryptToken(config, accessToken),

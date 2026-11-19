@@ -2,6 +2,7 @@ import type { MutationCtx, QueryCtx } from "../../_generated/server";
 import type { Doc, Id } from "../../_generated/dataModel";
 import { OrgRole } from "../../../lib/authz/roles";
 import { getOrgMembership } from "../../lib/accessRepo";
+import { deleteLinkedAccount, findLinkedAccount } from "../../integrations/github/lib/integrationLinkedAccountsRepo";
 
 type Ctx = QueryCtx | MutationCtx;
 
@@ -100,13 +101,17 @@ export async function updateMembershipRole(
 
 /**
  * Delete an org membership and cascade-delete the user's memberships in all
- * active projects of that organization.
+ * active projects of that organization, and their Linked GitHub account there.
  */
 export async function removeMembershipWithProjectCleanup(
   ctx: MutationCtx,
   membership: Doc<"organizationMembers">
 ): Promise<void> {
   await ctx.db.delete("organizationMembers", membership._id);
+  const linkedAccount = await findLinkedAccount(ctx, membership.organizationId, membership.userId);
+  if (linkedAccount) {
+    await deleteLinkedAccount(ctx, linkedAccount._id);
+  }
 
   const orgProjects = await ctx.db
     .query("projects")

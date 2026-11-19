@@ -10,7 +10,8 @@ import { EmptyState } from "@/components/custom/empty-state";
 import { useAppConvexAuth } from "@/lib/auth/hooks";
 import { getErrorMessage } from "@/lib/errors";
 import { Button } from "@/components/ui/button";
-import { AppLink, appRoute, useNavigation } from "@/lib/navigation";
+import { ACCOUNT_STATE_PREFIX } from "@/convex/lib/contracts/github";
+import { AppLink, appRoute, targetFromHref, useNavigation } from "@/lib/navigation";
 
 /**
  * GitHub's OAuth redirect lands here under the signed-in Convoy session. The
@@ -21,6 +22,7 @@ export function GithubCallbackPage() {
   const navigation = useNavigation();
   const { isAuthenticated } = useAppConvexAuth();
   const completeSetup = useAction(api.integrations.github.setup.completeSetup);
+  const completeLink = useAction(api.integrations.github.accounts.completeLink);
   const params = new URLSearchParams(navigation.location.search);
   const state = params.get("state");
   const code = params.get("code");
@@ -38,12 +40,14 @@ export function GithubCallbackPage() {
   useEffect(() => {
     if (!isAuthenticated || !state || !code || started.current) return;
     started.current = true;
-    completeSetup({ state, code })
-      .then(({ setupId, organizationSlug, projectAlias }) =>
-        navigation.replace(appRoute.projectGithubIntegration(organizationSlug, projectAlias, setupId))
-      )
-      .catch((caught: unknown) => setFailure(getErrorMessage(caught, "Could not finish connecting GitHub")));
-  }, [code, completeSetup, isAuthenticated, navigation, state]);
+    // Connect GitHub (a Linked GitHub account) returns to where it started; a repository setup opens the picker.
+    const finished = state.startsWith(ACCOUNT_STATE_PREFIX)
+      ? completeLink({ state, code }).then(({ returnTo }) => navigation.replace(targetFromHref(returnTo)))
+      : completeSetup({ state, code }).then(({ setupId, organizationSlug, projectAlias }) =>
+          navigation.replace(appRoute.projectGithubIntegration(organizationSlug, projectAlias, setupId))
+        );
+    finished.catch((caught: unknown) => setFailure(getErrorMessage(caught, "Could not finish connecting GitHub")));
+  }, [code, completeLink, completeSetup, isAuthenticated, navigation, state]);
 
   if (installed) {
     return (

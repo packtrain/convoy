@@ -203,6 +203,7 @@ export const referencedTasks = query({
 });
 
 const readableContextValidator = v.object({
+  organizationId: v.id("organizations"),
   repositoryId: v.id("integrationRepositories"),
   repositoryLinkId: v.id("integrationRepositoryLinks"),
   generation: v.number(),
@@ -224,6 +225,7 @@ export const getReadableContext = internalQuery({
     }
     const row = await getPullRequestByNumber(ctx, link.repositoryId, args.number);
     return {
+      organizationId: link.organizationId,
       repositoryId: link.repositoryId,
       repositoryLinkId: link._id,
       generation: link.generation,

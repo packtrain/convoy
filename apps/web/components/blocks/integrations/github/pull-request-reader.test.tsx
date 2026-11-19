@@ -15,7 +15,13 @@ let layers: unknown[] = [];
 let taskChecks: unknown = null;
 let pullRequestChecks: unknown = null;
 let prThreads: unknown[] = [];
+let linkedAccounts: unknown = { configured: true, organizations: [] };
 const readDiff = vi.fn();
+const readPermission = vi.fn();
+const createComment = vi.fn();
+const updateComment = vi.fn();
+const removeComment = vi.fn();
+const beginLink = vi.fn();
 const readOverview = vi.fn();
 const readFile = vi.fn();
 const push = vi.fn();
@@ -32,13 +38,20 @@ vi.mock("convex/react", () => ({
       [name(api.checks.checklists.getForTask)]: taskChecks,
       [name(api.checks.checklists.getForPullRequest)]: pullRequestChecks,
       [name(api.cli.threads.lists.listByAttachedPullRequest)]: prThreads,
+      [name(api.integrations.github.accounts.listMine)]: linkedAccounts,
     }[name(fn)];
   },
+  useMutation: (fn: Parameters<typeof getFunctionName>[0]) => (name(fn) === name(api.integrations.github.accounts.beginLink) ? beginLink : vi.fn()),
   useAction: (fn: Parameters<typeof getFunctionName>[0]) =>
     ({
       [name(api.integrations.github.pullRequests.readDiff)]: readDiff,
       [name(api.integrations.github.pullRequests.readOverview)]: readOverview,
       [name(api.integrations.github.pullRequests.readFile)]: readFile,
+      [name(api.integrations.github.accounts.readRepositoryPermission)]: readPermission,
+      [name(api.integrations.github.accounts.disconnect)]: vi.fn(),
+      [name(api.integrations.github.comments.create)]: createComment,
+      [name(api.integrations.github.comments.update)]: updateComment,
+      [name(api.integrations.github.comments.remove)]: removeComment,
     })[name(fn)],
   useConvex: () => ({}),
 }));
@@ -51,6 +64,7 @@ vi.mock("@pierre/diffs/react", () => ({
   PatchDiff: ({ patch }: { patch: string }) => <pre>{patch}</pre>,
   File: ({ file }: { file: { contents: string } }) => <pre>whole: {file.contents}</pre>,
 }));
+vi.mock("@/lib/auth/hooks", () => ({ useAppUser: () => ({ user: null }) }));
 vi.mock("@/lib/threads/hooks/use-diff-theme", () => ({ useDiffTheme: () => ({}) }));
 // Radix shows the image only after it loads, which jsdom never does.
 vi.mock("@/components/ui/avatar", () => ({
@@ -97,6 +111,8 @@ beforeEach(() => {
   pullRequestChecks = null;
   readDiff.mockResolvedValue(diff);
   readOverview.mockResolvedValue(overview);
+  readPermission.mockResolvedValue("read");
+  linkedAccounts = { configured: true, organizations: [] };
 });
 
 afterEach(() => {
@@ -152,7 +168,7 @@ const overview = {
   ],
   reviews: [{ id: 1, author: "maya", authorAvatarUrl: null, state: "approved", submittedAt: Date.now(), body: "" }],
   requestedReviewers: [],
-  comments: [{ id: 2, author: "alex", authorAvatarUrl: "https://avatars.githubusercontent.com/u/2", body: "Nice work", createdAt: Date.now(), url: "https://github.com/c/2" }],
+  comments: [{ id: 2, author: "alex", authorId: 2, authorAvatarUrl: "https://avatars.githubusercontent.com/u/2", body: "Nice work", createdAt: Date.now(), url: "https://github.com/c/2" }],
   reviewComments: [],
   assignees: [],
   milestone: null,
@@ -671,5 +687,178 @@ describe("PullRequestReader threads (OS-2193)", () => {
 
     expect(screen.getByLabelText("Thread composer")).toBeTruthy();
     expect(seeded).toHaveLength(1);
+  });
+});
+
+describe("PullRequestReader GitHub comments (OS-2183)", () => {
+  const status = {
+    configured: true,
+    installUrl: null,
+    canManage: false,
+    setup: null,
+    connections: [{ repositoryId: "repo_1", status: "active", repository: { owner: "acme", name: "web", htmlUrl: "https://github.com/acme/web" } }],
+  };
+  const connected = () => (
+    <PullRequestReader
+      projectId={"project_1" as Id<"projects">}
+      repositoryId="repo_1"
+      number={7}
+      status={status as never}
+      hrefFor={(repositoryId, number) => appRoute.projectPullRequest("org", "WEB", repositoryId, number)}
+      organizationSlug="org"
+      projectAlias="WEB"
+    />
+  );
+  const linkedAs = (account: { login: string; githubUserId: number; status: "active" | "reconnect" } | null) => {
+    linkedAccounts = {
+      configured: true,
+      organizations: [{ organizationId: "org_1", organizationSlug: "org", organizationName: "Org", account: account && { avatarUrl: null, ...account } }],
+    };
+  };
+
+  beforeEach(() => {
+    Element.prototype.scrollIntoView = vi.fn();
+    prThreads = [];
+  });
+
+  test("without a Linked GitHub account, the trigger connects one and comes back to this PR", async () => {
+    linkedAs(null);
+    beginLink.mockResolvedValue({ authorizeUrl: "https://github.com/login/oauth/authorize?state=x" });
+    const assign = vi.fn();
+    vi.stubGlobal("location", { ...window.location, assign });
+    render(connected());
+    await screen.findByText("Nice work");
+
+    expect(screen.getByLabelText("Thread composer")).toBeTruthy();
+    expect(screen.queryByPlaceholderText("Leave a comment on GitHub...")).toBeNull();
+    fireEvent.click(screen.getByRole("button", { name: "Connect GitHub to comment..." }));
+    await waitFor(() => expect(assign).toHaveBeenCalledWith("https://github.com/login/oauth/authorize?state=x"));
+    expect(beginLink).toHaveBeenCalledWith({ organizationId: "org_1", returnTo: "/o/org/WEB/pull-requests?repo=repo_1&pr=7" });
+    expect(readPermission).not.toHaveBeenCalled();
+    vi.unstubAllGlobals();
+  });
+
+  test("a revoked account asks to reconnect", async () => {
+    linkedAs({ login: "maya", githubUserId: 42, status: "reconnect" });
+    render(connected());
+    expect(await screen.findByRole("button", { name: "Reconnect GitHub to comment..." })).toBeTruthy();
+  });
+
+  test("a linked member comments, and the comment joins Activity from GitHub's answer", async () => {
+    linkedAs({ login: "maya", githubUserId: 42, status: "active" });
+    createComment.mockResolvedValue({ id: 9, author: "maya", authorId: 42, authorAvatarUrl: null, body: "Ship it", createdAt: Date.now(), url: "https://github.com/c/9" });
+    render(connected());
+    await screen.findByText("Nice work");
+
+    // The comment side is a trigger away, without an attach button.
+    fireEvent.click(screen.getByRole("button", { name: "Add comment..." }));
+    const input = screen.getByPlaceholderText("Leave a comment on GitHub...");
+    expect(screen.queryByRole("button", { name: "Attach file" })).toBeNull();
+    fireEvent.change(input, { target: { value: "Ship it" } });
+    fireEvent.click(screen.getByRole("button", { name: "Send comment" }));
+
+    expect(await screen.findByText("Ship it")).toBeTruthy();
+    expect(createComment).toHaveBeenCalledWith({ projectId: "project_1", repositoryId: "repo_1", number: 7, body: "Ship it" });
+    expect(readPermission).toHaveBeenCalledTimes(1);
+    // Only the viewer's own comment can be edited or deleted.
+    expect(screen.getAllByRole("button", { name: "Comment actions" })).toHaveLength(1);
+  });
+
+  test("the author edits and deletes their own comment on GitHub", async () => {
+    linkedAs({ login: "alex", githubUserId: 2, status: "active" });
+    updateComment.mockResolvedValue({ ...overview.comments[0], body: "Nicer work" });
+    removeComment.mockResolvedValue(null);
+    render(connected());
+    await screen.findByText("Nice work");
+
+    fireEvent.pointerDown(screen.getByRole("button", { name: "Comment actions" }), { button: 0, pointerType: "mouse" });
+    fireEvent.click(await screen.findByRole("menuitem", { name: "Edit" }));
+    fireEvent.change(screen.getByLabelText("Edit comment"), { target: { value: "Nicer work" } });
+    fireEvent.click(screen.getByRole("button", { name: "Save" }));
+    expect(await screen.findByText("Nicer work")).toBeTruthy();
+    expect(updateComment).toHaveBeenCalledWith({ projectId: "project_1", repositoryId: "repo_1", number: 7, commentId: 2, body: "Nicer work" });
+
+    fireEvent.pointerDown(screen.getByRole("button", { name: "Comment actions" }), { button: 0, pointerType: "mouse" });
+    fireEvent.click(await screen.findByRole("menuitem", { name: "Delete" }));
+    fireEvent.click(await screen.findByRole("button", { name: "Delete" }));
+    await waitFor(() => expect(screen.queryByText("Nicer work")).toBeNull());
+    expect(removeComment).toHaveBeenCalledWith({ projectId: "project_1", repositoryId: "repo_1", number: 7, commentId: 2 });
+  });
+
+  test("an account GitHub gives no access to the repository can't comment", async () => {
+    linkedAs({ login: "maya", githubUserId: 42, status: "active" });
+    readPermission.mockResolvedValue("none");
+    render(connected());
+    const trigger = await screen.findByRole("button", { name: "@maya has no access to this repository on GitHub" });
+    expect((trigger as HTMLButtonElement).disabled).toBe(true);
+    expect(screen.queryByPlaceholderText("Leave a comment on GitHub...")).toBeNull();
+  });
+
+  test("a comment draft survives Reconnect and the round trip to GitHub", async () => {
+    linkedAs({ login: "maya", githubUserId: 42, status: "active" });
+    const { rerender } = render(connected());
+    await screen.findByText("Nice work");
+    fireEvent.change(screen.getByPlaceholderText("Leave a comment on GitHub..."), { target: { value: "Half a thought" } });
+
+    linkedAs({ login: "maya", githubUserId: 42, status: "reconnect" });
+    rerender(connected());
+    expect(await screen.findByRole("button", { name: "Reconnect GitHub to comment..." })).toBeTruthy();
+    cleanup();
+
+    // Back from GitHub: a fresh page load.
+    linkedAs({ login: "maya", githubUserId: 42, status: "active" });
+    render(connected());
+    expect(((await screen.findByPlaceholderText("Leave a comment on GitHub...")) as HTMLTextAreaElement).value).toBe("Half a thought");
+  });
+
+  test("a comment draft belongs to its member: another member on the same browser starts empty", async () => {
+    linkedAs({ login: "maya", githubUserId: 42, status: "active" });
+    render(connected());
+    await screen.findByText("Nice work");
+    fireEvent.change(screen.getByPlaceholderText("Leave a comment on GitHub..."), { target: { value: "Maya's draft" } });
+    cleanup();
+
+    linkedAs({ login: "sam", githubUserId: 7, status: "active" });
+    render(connected());
+    await screen.findByText("Nice work");
+    expect((screen.getByPlaceholderText("Leave a comment on GitHub...") as HTMLTextAreaElement).value).toBe("");
+    cleanup();
+
+    linkedAs({ login: "maya", githubUserId: 42, status: "active" });
+    render(connected());
+    await screen.findByText("Nice work");
+    expect((screen.getByPlaceholderText("Leave a comment on GitHub...") as HTMLTextAreaElement).value).toBe("Maya's draft");
+  });
+
+  test("a posted comment clears its draft", async () => {
+    linkedAs({ login: "maya", githubUserId: 42, status: "active" });
+    createComment.mockResolvedValue({ id: 9, author: "maya", authorId: 42, authorAvatarUrl: null, body: "Done", createdAt: Date.now(), url: "https://github.com/c/9" });
+    render(connected());
+    await screen.findByText("Nice work");
+    fireEvent.change(screen.getByPlaceholderText("Leave a comment on GitHub..."), { target: { value: "Done" } });
+    fireEvent.click(screen.getByRole("button", { name: "Send comment" }));
+    await screen.findByText("Done");
+    cleanup();
+    render(connected());
+    expect(((await screen.findByPlaceholderText("Leave a comment on GitHub...")) as HTMLTextAreaElement).value).toBe("");
+  });
+
+  test("Activity opens on the thread side, as in the task sidebar, with Add comment... as the trigger", async () => {
+    linkedAs({ login: "maya", githubUserId: 42, status: "active" });
+    render(connected());
+    await screen.findByText("Nice work");
+    expect(screen.getByLabelText("Thread composer").parentElement?.className).toContain("block");
+    expect(screen.getByPlaceholderText("Leave a comment on GitHub...").closest(".hidden")).toBeTruthy();
+    fireEvent.click(screen.getByRole("button", { name: "Add comment..." }));
+    expect(screen.getByPlaceholderText("Leave a comment on GitHub...").closest(".hidden")).toBeNull();
+    expect(screen.getByRole("button", { name: "Start a thread..." })).toBeTruthy();
+  });
+
+  test("Fix switches Activity to the thread side", async () => {
+    linkedAs({ login: "maya", githubUserId: 42, status: "active" });
+    render(connected());
+    fireEvent.click(await screen.findByRole("button", { name: "Fix" }));
+    expect(screen.getByLabelText("Thread composer").parentElement?.className).toContain("block");
+    expect(screen.getByRole("button", { name: "Add comment..." })).toBeTruthy();
   });
 });

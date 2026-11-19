@@ -28,6 +28,7 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { showConvexErrorToast } from "@/lib/errors";
 import { appRoute, useNavigation } from "@/lib/navigation";
 import { cn } from "@/lib/utils";
+import { useLeavingForGithub, YourGithubAccountSection } from "./linked-github-account";
 import { RepositoryPickerDialog } from "./repository-picker-dialog";
 import { repositoryCount, syncErrorText, useIntegrationStatus, type IntegrationStatus } from "./use-integration-status";
 
@@ -51,7 +52,7 @@ export function GithubConnection({ projectId, organizationSlug, projectAlias }: 
   const status = useIntegrationStatus(projectId, setupId ?? undefined);
   const beginSetup = useMutation(api.integrations.github.setup.beginSetup);
   const disconnect = useMutation(api.integrations.github.core.disconnect);
-  const [connecting, setConnecting] = useState(false);
+  const [connecting, setConnecting] = useLeavingForGithub();
   const [confirmDisconnect, setConfirmDisconnect] = useState<string | null>(null);
 
   // Set once the picker closes on purpose, so its own setup deletion is not reported as expiry.
@@ -153,6 +154,8 @@ export function GithubConnection({ projectId, organizationSlug, projectAlias }: 
         Connected repositories are readable by every project member, including viewers.
         {status.canManage ? " Only project admins can manage this connection." : " Ask a project admin to manage this connection."}
       </p>
+
+      <YourGithubAccountSection organizationSlug={organizationSlug} returnTo={appRoute.projectGithubIntegration(organizationSlug, projectAlias)} />
 
       {status.setup?.status === "authorized" ? (
         <RepositoryPickerDialog
