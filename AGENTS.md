@@ -117,6 +117,13 @@ These apply to every task, no exceptions.
     card rows, and a page's header, tab row, and panes keep their places. A
     single block standing in for a panel or tab is wrong. See
     [Frontend development → Loading states](docs/guidelines/frontend-development.md#loading-states).
+19. **Build new functionality CLI first.** Every feature an agent or user can
+    act on gets a `convoy` CLI command, unless there is a good reason not to
+    (a purely visual change, say). If you skip the command, state the reason
+    in the spec. MCP tools come second. Add one when an agent needs the action
+    and has no shell, but don't treat it as a full replacement: MCP can't
+    upload local files or read the working tree, and every tool adds to the
+    agent's context.
 
 ## Working on Convoy tasks
 
