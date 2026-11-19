@@ -129,6 +129,8 @@ export function usePullRequestReview({
   const blocker = reviewBlocker(commenting, headSha);
   return {
     blocker,
+    /** Opens the connect popup when Submit review needs an active Linked GitHub account; lines still take no comments. */
+    connect: commenting.connect.needed ? commenting.connect.prompt : null,
     headSha,
     /** GitHub lets an author only comment on their own PR. */
     isAuthor: account?.login.toLowerCase() === author.toLowerCase(),
@@ -184,7 +186,14 @@ export function ReviewButton({ review, onJump }: { review: PullRequestReview; on
   const titleId = useId();
   const count = review.comments.length;
   const trigger = (
-    <Button variant="outline" size="sm" className="gap-1.5" disabled={review.blocker !== null} title={review.blocker ?? (count ? pendingLabel(count) : undefined)}>
+    <Button
+      variant="outline"
+      size="sm"
+      className="gap-1.5"
+      disabled={review.blocker !== null && !review.connect}
+      title={review.connect ? undefined : (review.blocker ?? (count ? pendingLabel(count) : undefined))}
+      onClick={review.connect ?? undefined}
+    >
       Submit review
       {count ? (
         <>
@@ -196,7 +205,7 @@ export function ReviewButton({ review, onJump }: { review: PullRequestReview; on
       ) : null}
     </Button>
   );
-  if (review.blocker) return trigger;
+  if (review.blocker || review.connect) return trigger;
   const picked = review.isAuthor ? "comment" : event;
   const body = review.body.trim();
   const ready = picked === "approve" || (picked === "request_changes" ? body : body || count);

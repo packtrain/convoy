@@ -8,6 +8,8 @@ import { api } from "@/convex/_generated/api";
 import type { Id } from "@/convex/_generated/dataModel";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Button } from "@/components/ui/button";
+import { Dialog, DialogClose, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import { Spinner } from "@/components/custom/spinner";
 import { Skeleton } from "@/components/ui/skeleton";
 import { showConvexErrorToast } from "@/lib/errors";
 import { href, useNavigation, type RouteTarget } from "@/lib/navigation";
@@ -142,5 +144,50 @@ export function YourGithubAccountSection({ organizationSlug, returnTo }: { organ
         <Skeleton className="h-[58px] w-full rounded-lg" aria-label="Loading your GitHub account" />
       )}
     </section>
+  );
+}
+
+/**
+ * For actions that run as the member: `needed` when they can link an account in `organization`
+ * but have no active one; `prompt` opens the popup, and `dialog` is mounted once outside any popover.
+ */
+export function useConnectGithubPrompt(organization: OrganizationAccount | undefined, returnTo: RouteTarget) {
+  const [open, setOpen] = useState(false);
+  const needed = organization !== undefined && organization.account?.status !== "active";
+  return {
+    needed,
+    prompt: () => setOpen(true),
+    dialog: organization && needed && open ? <ConnectGithubDialog organization={organization} returnTo={returnTo} onClose={() => setOpen(false)} /> : null,
+  };
+}
+
+/** Explains why an action needs the member's own GitHub account, with Connect (or Reconnect) right there. */
+function ConnectGithubDialog({ organization, returnTo, onClose }: { organization: OrganizationAccount; returnTo: RouteTarget; onClose: () => void }) {
+  const { connect, connecting } = useConnectGithubAccount();
+  const reconnect = organization.account !== null;
+  return (
+    <Dialog open onOpenChange={(next) => !next && onClose()}>
+      <DialogContent className="sm:max-w-md">
+        <DialogHeader>
+          <DialogTitle>{reconnect ? "Reconnect your GitHub account" : "Connect your GitHub account"}</DialogTitle>
+          <DialogDescription>
+            Convoy merges, reviews, and comments on GitHub as you, so each member connects their personal GitHub account in{" "}
+            {organization.organizationName}.
+            {reconnect ? ` Convoy lost access to @${organization.account?.login}; reconnect it to continue.` : null}
+          </DialogDescription>
+        </DialogHeader>
+        <DialogFooter>
+          <DialogClose asChild>
+            <Button variant="outline" size="sm">
+              Cancel
+            </Button>
+          </DialogClose>
+          <Button size="sm" disabled={connecting} onClick={() => connect(organization.organizationId, returnTo)}>
+            {connecting ? <Spinner /> : null}
+            {reconnect ? "Reconnect" : "Connect"}
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
   );
 }

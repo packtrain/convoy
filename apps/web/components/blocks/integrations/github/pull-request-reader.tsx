@@ -114,6 +114,7 @@ export function PullRequestReader({
     number,
     organizationSlug,
     archived: pr?.archived ?? false,
+    returnTo: hrefFor(repositoryId, number),
     onCommentsChange: (change) => updateOverview((overview) => ({ ...overview, comments: change(overview.comments) })),
   });
   const review = usePullRequestReview({
@@ -258,6 +259,7 @@ export function PullRequestReader({
           </Button>
         ) : null}
       </header>
+      {commenting.connect.dialog}
       <Tabs
         value={tab}
         onValueChange={(value) => {

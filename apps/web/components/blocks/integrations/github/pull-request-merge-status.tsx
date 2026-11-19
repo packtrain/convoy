@@ -165,7 +165,8 @@ export function MergeStatus({
             onPick={setPicked}
             onMerge={() => {
               setOpen(false);
-              setConfirming(true);
+              if (plan.connect) commenting.connect.prompt();
+              else setConfirming(true);
             }}
           />
         </PopoverContent>

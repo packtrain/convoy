@@ -904,13 +904,31 @@ describe("PullRequestReader GitHub comments (OS-2183)", () => {
     expect(closeItem.getAttribute("aria-disabled")).toBe("true");
   });
 
-  test("without a Linked GitHub account the actions ask to connect first", async () => {
+  test("without a Linked GitHub account the actions and Submit review open the connect popup", async () => {
     linkedAs(null);
     stored = { pullRequest: { ...pullRequest, state: "closed" } };
-    render(connected());
-    const reopen = await screen.findByRole("button", { name: "Reopen" });
-    expect((reopen as HTMLButtonElement).disabled).toBe(true);
-    expect(reopen.parentElement?.title).toBe("Connect GitHub first");
+    const view = render(connected());
+    const connectDialog = () => screen.findByRole("dialog", { name: "Connect your GitHub account" });
+    const closeDialog = async () => {
+      fireEvent.click(within(await connectDialog()).getByRole("button", { name: "Cancel" }));
+      await waitFor(() => expect(screen.queryByRole("dialog", { name: "Connect your GitHub account" })).toBeNull());
+    };
+    const reopen = (await screen.findByRole("button", { name: "Reopen" })) as HTMLButtonElement;
+    expect(reopen.disabled).toBe(false);
+    fireEvent.click(reopen);
+    await closeDialog();
+
+    const item = within(await openMenu("More actions")).getByRole("menuitem", { name: "Archive" });
+    expect(item.getAttribute("aria-disabled")).toBeNull();
+    fireEvent.click(item);
+    await closeDialog();
+
+    const submit = screen.getAllByRole("button", { name: /^Submit review/ })[0] as HTMLButtonElement;
+    expect(submit.disabled).toBe(false);
+    fireEvent.click(submit);
+    await closeDialog();
+    expect(updateState).not.toHaveBeenCalled();
+    void view;
   });
 
   test("an Archived PR offers only Unarchive and locks its conversation", async () => {
@@ -1193,6 +1211,26 @@ describe("PullRequestReader GitHub comments (OS-2183)", () => {
     const blocked = await screen.findByRole("dialog", { name: "Merge status" });
     expect(within(blocked).getAllByText("#6 is a draft")).toHaveLength(2);
     expect(mergeButton("Squash and merge 2 pull requests").disabled).toBe(true);
+  });
+
+  test("without a Linked GitHub account, Merge explains why and connects one, coming back to this PR", async () => {
+    linkedAs(null);
+    beginLink.mockResolvedValue({ authorizeUrl: "https://github.com/login/oauth/authorize?state=x" });
+    const assign = vi.fn();
+    vi.stubGlobal("location", { ...window.location, assign });
+    render(connected());
+    const popover = await openMergeStatus();
+    expect(within(popover).queryByText("Connect GitHub first")).toBeNull();
+    expect(mergeButton("Squash and merge").disabled).toBe(false);
+    fireEvent.click(mergeButton("Squash and merge"));
+
+    const dialog = await screen.findByRole("dialog", { name: "Connect your GitHub account" });
+    expect(within(dialog).getByText(/personal GitHub account/)).toBeTruthy();
+    fireEvent.click(within(dialog).getByRole("button", { name: "Connect" }));
+    await waitFor(() => expect(assign).toHaveBeenCalledWith("https://github.com/login/oauth/authorize?state=x"));
+    expect(beginLink).toHaveBeenCalledWith({ organizationId: "org_1", returnTo: "/o/org/WEB/pull-requests?repo=repo_1&pr=7" });
+    expect(mergePullRequest).not.toHaveBeenCalled();
+    vi.unstubAllGlobals();
   });
 
   test("Merge needs write access; Update branch runs as the member and clears the behind row", async () => {

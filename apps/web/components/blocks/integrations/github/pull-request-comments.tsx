@@ -29,7 +29,7 @@ import { showConvexErrorToast } from "@/lib/errors";
 import type { RouteTarget } from "@/lib/navigation";
 import type { TimelineSortDirection } from "@/lib/tasks/timeline/rows";
 import { GithubMarkdown } from "./github-markdown";
-import { useConnectGithubAccount, useLinkedGithubAccounts } from "./linked-github-account";
+import { useConnectGithubAccount, useConnectGithubPrompt, useLinkedGithubAccounts } from "./linked-github-account";
 import type { PullRequestOverview } from "./types";
 
 // Conversation comments written as the member's Linked GitHub account (docs/specs/github-integration.md → GitHub accounts and permissions).
@@ -48,6 +48,7 @@ export function useGithubCommenting({
   number,
   organizationSlug,
   archived,
+  returnTo,
   onCommentsChange,
 }: {
   projectId: Id<"projects">;
@@ -56,11 +57,14 @@ export function useGithubCommenting({
   organizationSlug: string;
   /** Archiving locks the conversation: no new comments, edits, or deletes. */
   archived: boolean;
+  /** The PR, so Connect comes back to it. */
+  returnTo: RouteTarget;
   onCommentsChange: CommentsChange;
 }) {
   const accounts = useLinkedGithubAccounts();
   const organization = accounts?.configured ? accounts.organizations.find((candidate) => candidate.organizationSlug === organizationSlug) : undefined;
   const account = organization?.account ?? null;
+  const connect = useConnectGithubPrompt(organization, returnTo);
   const active = account?.status === "active";
   const readPermission = useAction(api.integrations.github.accounts.readRepositoryPermission);
   const createComment = useAction(api.integrations.github.comments.create);
@@ -90,6 +94,8 @@ export function useGithubCommenting({
   return {
     organization,
     account,
+    /** The connect popup, for actions that run as the member without an active account. */
+    connect,
     /** The account's role on the repository; null while unknown, which still allows writing: GitHub has the last word. */
     role,
     /** Null (unknown) still allows writing: GitHub has the last word. */

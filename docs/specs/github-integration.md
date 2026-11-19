@@ -1671,9 +1671,14 @@ Slice 7 (OS-2184).
   search result) is stored by that sync: a write is an explicit action, like
   requesting a Guide. Stored PRs gain `assignees` (logins) from every sync;
   rows synced before this slice have none until their next sync.
-- **Role.** The UI disables an action with its reason from the member's
-  Linked GitHub account and `readRepositoryPermission`: "Connect GitHub
-  first", "Reconnect GitHub first", "Needs triage access" (close, reopen,
+- **Role.** Without an active Linked GitHub account, the state actions,
+  Update branch, Merge, and Submit review stay enabled and open the connect
+  popup ("Connect your GitHub account" or "Reconnect your GitHub account"):
+  it explains that Convoy acts on GitHub as each member's personal account,
+  and its Connect (or Reconnect) starts the link and returns to the PR.
+  Assignees, Reviewers, and bulk actions are disabled with "Connect GitHub
+  first" or "Reconnect GitHub first". Otherwise the UI disables an action
+  with its reason from `readRepositoryPermission`: "Needs triage access" (close, reopen,
   archive, unarchive, assign), "Needs write access" (draft, ready for
   review). GitHub's role table lets triage assign, but its REST assignee
   endpoints note push access; Convoy follows the role table, and a change
@@ -1769,8 +1774,9 @@ Slice 8 (OS-2185).
   allowed. The button reads "Squash and merge 2 pull
   requests" when Layers below merge with it, and a Stack row says "Merges #482
   first", or "#482 is a draft" / "#482 has conflicts" when one blocks it. Merge
-  is disabled, with the reason under it, for "Connect GitHub first",
-  "Reconnect GitHub first", "Needs write access", a draft, the stack still
+  stays enabled without an active Linked GitHub account and opens the
+  connect popup instead ([Role](#state-actions-and-bulk-actions)). Merge is disabled, with the reason under it, for "Needs write
+  access", a draft, the stack still
   loading, conflicts, mergeability being checked, branch rules, and a blocking
   Layer below. The behind-base row (blocking when the rules require an
   up-to-date branch) carries Update branch, disabled without write access. A
@@ -1858,8 +1864,9 @@ Slice 9 (OS-2186).
   Submit is disabled until the verdict has what it needs. The PR's author can
   only comment: Approve and Request changes are disabled with "You can't
   approve your own pull request." and "You can't request changes on your own
-  pull request.". The button is disabled with its reason as the tooltip for
-  "Connect GitHub first", "Reconnect GitHub first", an Archived PR ("This
+  pull request.". Without an active Linked GitHub account the button opens
+  the connect popup, and lines take no comments. It is disabled with its
+  reason as the tooltip for an Archived PR ("This
   pull request is archived"), an account with no access on GitHub, and a diff
   still loading or failed ("The changes haven't loaded yet"), since a review
   is for the revision on screen.

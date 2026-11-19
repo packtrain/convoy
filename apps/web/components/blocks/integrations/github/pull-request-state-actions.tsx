@@ -63,8 +63,10 @@ type Props = { projectId: Id<"projects">; repositoryId: string; pr: PullRequestV
 function useStateChange({ projectId, repositoryId, pr, commenting }: Props) {
   const update = useAction(api.integrations.github.states.update);
   const [pending, setPending] = useState<StateChange | null>(null);
-  const blocker = (change: StateChange) => writeBlocker(commenting.account, commenting.role, STATE_CHANGES[change].needs);
+  // Without an active Linked GitHub account, every change opens the connect popup instead.
+  const blocker = (change: StateChange) => (commenting.connect.needed ? null : writeBlocker(commenting.account, commenting.role, STATE_CHANGES[change].needs));
   const run = (change: StateChange) => {
+    if (commenting.connect.needed) return commenting.connect.prompt();
     setPending(change);
     update({ projectId, repositoryId, number: pr.number, change })
       .catch((error: unknown) => showConvexErrorToast(error, `Could not ${STATE_CHANGES[change].label.toLowerCase()}`))

@@ -127,13 +127,16 @@ export function mergePlan(target: Target, layers: PullRequestSummary[], picked: 
   const below = layersMergedWith(layers, pr);
   const count = (below?.length ?? 0) + 1;
   const { label } = METHODS[method];
+  // Without an active Linked GitHub account, Merge opens the connect popup instead.
+  const connect = target.commenting.connect.needed;
   return {
     allowed,
     method,
     below: below ?? [],
     count,
     label: count > 1 ? `${method === "merge" ? "Merge" : label} ${count} pull requests` : label,
-    blocker: mergeBlocker(target, below),
+    connect,
+    blocker: connect ? null : mergeBlocker(target, below),
   };
 }
 export type MergePlan = ReturnType<typeof mergePlan>;
@@ -320,8 +323,9 @@ export function MergeConfirmDialog({ plan, onClose, ...target }: Target & { plan
 export function UpdateBranchButton({ projectId, repositoryId, pr, commenting, overview, onUpdated }: Target & { onUpdated: () => void }) {
   const update = useAction(api.integrations.github.merges.updateBranch);
   const [pending, setPending] = useState(false);
-  const blocker = writeBlocker(commenting.account, commenting.role, "write");
+  const blocker = commenting.connect.needed ? null : writeBlocker(commenting.account, commenting.role, "write");
   const run = () => {
+    if (commenting.connect.needed) return commenting.connect.prompt();
     setPending(true);
     update({ projectId, repositoryId, number: pr.number, headSha: overview.headSha })
       .then(() => {
