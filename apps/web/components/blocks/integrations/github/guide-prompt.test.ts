@@ -36,40 +36,17 @@ describe("guidePrompt", () => {
     expect(guidePrompt({ pullRequest, baseSha: "b", headSha: "h", layers: [layers[1]] })).not.toContain("Stack");
   });
 
-  test("a follow-up gets its base's steps and the rules for Unchanged, Updated, New, and Removed steps", () => {
+  test("a follow-up has the agent read its base guide's steps, and gets the rules for Unchanged, Updated, New, and Removed steps (OS-2431)", () => {
     const pullRequest = { owner: "acme", name: "web", number: 1, ref: "acme/web#1" } as never;
-    const base = {
-      headSha: "8a3e7d1c",
-      steps: [{ title: "Add the schema", explanation: "Adds a table.", files: [{ path: "convex/schema.ts" }, { path: "convex/a.ts" }], questions: [] }],
-    };
-    const prompt = guidePrompt({ pullRequest, baseSha: "b", headSha: "c91f02a9", base });
+    const prompt = guidePrompt({ pullRequest, baseSha: "b", headSha: "c91f02a9", base: { headSha: "8a3e7d1c" } });
     expect(prompt).toContain("This guide follows up the guide written for 8a3e7d1c.");
-    expect(prompt).toContain("Base step 1: Add the schema\n```json");
-    expect(prompt).toContain('"explanation": "Adds a table."');
-    expect(prompt).toContain('"path": "convex/a.ts"');
+    expect(prompt).toContain("`convoy threads read-guide <threadId> --base`");
+    expect(prompt).not.toContain("Base step 1");
     expect(prompt).toContain("`git diff --stat 8a3e7d1c c91f02a9`");
     expect(prompt).toContain('{ "unchangedFrom": <its number> }');
     expect(prompt).toContain('"updatedFrom": <its number>');
     expect(prompt).toContain('"unchangedFrom": 1');
     expect(guidePrompt({ pullRequest, baseSha: "b", headSha: "h" })).not.toContain("unchangedFrom");
-  });
-
-  test("a follow-up's base steps keep their notes, questions, attention, and what changed", () => {
-    const pullRequest = { owner: "acme", name: "web", number: 1, ref: "acme/web#1" } as never;
-    const steps = [
-      {
-        title: "Add the schema",
-        explanation: "Adds a table.",
-        attention: { kind: "risk" as const, note: "Backfill needed." },
-        files: [{ path: "convex/schema.ts", note: "The table", sha: "blob-1" }],
-        questions: ["Why a new table?"],
-        change: "updated" as const,
-        whatChanged: "Adds an index.",
-      },
-    ];
-    const prompt = guidePrompt({ pullRequest, baseSha: "b", headSha: "h", base: { headSha: "8a3e7d1c", steps } });
-    for (const text of ["Backfill needed.", "The table", "Why a new table?", "Adds an index."]) expect(prompt).toContain(text);
-    expect(prompt).not.toContain("blob-1");
   });
 
   test("lists resolved and outdated review threads so the guide doesn't raise them again", () => {

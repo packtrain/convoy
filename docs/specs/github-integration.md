@@ -615,7 +615,7 @@ shows it without a reload.
 ### Follow-up guides
 
 Update guide writes a Follow-up guide based on the newest ready Guide on the PR,
-whoever requested it. The agent receives the base Guide's steps and diffs
+whoever requested it. The agent reads the base Guide's steps and gets diffs
 for the whole PR and for base revision to head; after a force-push it
 compares the two trees. Each step is Unchanged, Updated, New, or Removed:
 
@@ -640,11 +640,18 @@ spinner in place of its runtime icon, in its menu row and in the trigger.
 
 As built (OS-2417):
 
-- The base is the newest ready Guide in the list. The browser reads its
-  steps once (`guides.get`) and puts them in the prompt as run facts, each
-  whole as JSON (notes, attention, questions, and a base follow-up's
-  `whatChanged`, without blob SHAs), with `git diff --stat <base head>
-  <head>` and the rules below. `cli.threads.core.create` takes
+- The base is the newest ready Guide in the list. The prompt names its head
+  SHA, `git diff --stat <base head> <head>`, and the rules below, and tells
+  the agent to run `convoy threads read-guide <threadId> --base` first
+  (OS-2431). The steps stay out of the prompt, since a base can be up to
+  800 KB, so Update guide opens the composer without reading the base.
+  `read-guide` calls `guides.readForRun`, gated like the submit: the caller
+  owns the thread and it is a Guide run. It prints the base's steps as JSON,
+  numbered from 1 for `unchangedFrom` and `updatedFrom`, each whole (notes,
+  attention, questions, and a base follow-up's `whatChanged`) without blob
+  SHAs. If the base was deleted, it tells the agent to write a plain Guide.
+  The MCP tool `read_pull_request_guide` reads by PR instead (`guides.read`);
+  both return the same Guide detail. `cli.threads.core.create` takes
   `pullRequestGuide.baseGuideId`, which must be a ready Guide of the same PR
   in the project ("A follow-up builds on a ready guide of this pull request.
   Open the guide tab again and pick Update guide."). The Guide row copies

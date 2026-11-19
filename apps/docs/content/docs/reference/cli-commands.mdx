@@ -906,6 +906,19 @@ exits nonzero. The Guide prompt spells out the format.
 When the agent cannot write the Guide, `--failed --note <why>` marks it Failed
 with that reason, and the requester can retry it from the Guide tab.
 
+### `convoy threads read-guide <threadId>`
+
+```bash
+convoy threads read-guide <threadId> --base
+```
+
+Prints the Guide a Guide run is writing as JSON:
+`{ "guideId", "status", "headSha", "steps" }`. With `--base`, it prints the
+Guide that an Update guide run follows up instead. Its steps are numbered from 1,
+the numbers `unchangedFrom` and `updatedFrom` take, and each keeps its notes,
+attention, questions, and `whatChanged`. If the base Guide was deleted, the
+command says so; write a plain Guide then. Only the run's owner can read it.
+
 ## See also
 
 - [`One-shot commands`](/docs/cli/one-shot-commands) — usage patterns and

@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useRef, useState } from "react";
-import { useConvex, useMutation, useQuery } from "convex/react";
+import { useMutation, useQuery } from "convex/react";
 import { toast } from "sonner";
 import { TaskThreadComposer } from "@/components/blocks/tasks/task-thread-composer";
 import { AutoStartPreferenceSelector } from "@/components/blocks/thread/auto-start-preference-selector";
@@ -9,7 +9,7 @@ import { ThreadDraftProvider, useThreadDraft } from "@/components/blocks/thread/
 import { ConfirmDialog, Dialog, DialogContent, DialogDescription, DialogTitle, DialogTitleBar } from "@/components/ui/dialog";
 import { api } from "@/convex/_generated/api";
 import type { Id } from "@/convex/_generated/dataModel";
-import type { GuideDetail, GuideSummary } from "@/convex/integrations/github/lib/validators";
+import type { GuideSummary } from "@/convex/integrations/github/lib/validators";
 import { attachedPullRequestUrl, type AttachedPullRequest } from "@/convex/lib/contracts/github";
 import { useProjectPermissions } from "@/lib/authz/use-project-permissions";
 import { getMutationErrorMessage } from "@/lib/errors";
@@ -28,17 +28,17 @@ type Target = { projectId: Id<"projects">; organizationSlug: string; projectAlia
 /** The stored PR's revision; unset until Convoy has synced the PR. */
 type Revision = { baseSha: string; headSha: string } | null;
 /** The run's prompt for a revision; with `base`, a Follow-up guide's. */
-type BuildPrompt = (revision: NonNullable<Revision>, base?: GuideDetail) => string;
+type BuildPrompt = (revision: NonNullable<Revision>, base?: GuideSummary) => string;
 /** `guidePrompt` is the project's instructions the prompt is built with; unset is the default. `base` is Update guide's. */
 type LaunchProps = Target & {
   viewerId: Id<"users">;
   revision: NonNullable<Revision>;
   buildPrompt: BuildPrompt;
   guidePrompt?: string;
-  base?: GuideDetail;
+  base?: GuideSummary;
   onClose: () => void;
 };
-type Open = { retryGuideId?: Id<"integrationPullRequestGuides">; auto?: boolean; duplicate?: GuideSummary; base?: GuideDetail };
+type Open = { retryGuideId?: Id<"integrationPullRequestGuides">; auto?: boolean; duplicate?: GuideSummary; base?: GuideSummary };
 
 const draftKey = (viewerId: Id<"users">) => `pull-request-guide:${viewerId}`;
 const noop = () => {};
@@ -59,7 +59,6 @@ export function useGenerateGuide(
 ) {
   // Open, for Retry the failed Guide the run writes again, whether to skip the composer, another member's run to warn about first, and Update guide's base.
   const [open, setOpen] = useState<Open | null>(null);
-  const convex = useConvex();
   const projectId = target?.projectId;
   const autoStart = useQuery(api.users.projectPreferences.get, projectId ? { projectId } : "skip")?.guideAutoStart ?? false;
   // The project's Guide prompt; null is the built-in instructions.
@@ -72,20 +71,14 @@ export function useGenerateGuide(
     target && instructions !== undefined && layers && settledThreads
       ? (at, base) => guidePrompt({ pullRequest: target.pullRequest, ...at, instructions: instructions ?? undefined, layers, base, settledThreads })
       : null;
-  /** A follow-up builds on the newest ready Guide, whoever wrote it; its steps go in the prompt, read once. */
-  const launch = (retryGuideId: Id<"integrationPullRequestGuides"> | undefined, followUp: boolean) => {
-    const show = (base?: GuideDetail) =>
-      setOpen({
-        retryGuideId,
-        auto: !retryGuideId && autoStart,
-        duplicate: guides?.find((guide) => guide.status === "writing" && !guide.requester.isViewer && guide.headSha === revision?.headSha),
-        base,
-      });
-    const baseId = followUp ? guides?.find((guide) => guide.status === "ready")?._id : undefined;
-    if (!baseId) return show();
-    const failed = () => toast.error("Could not load the guide to update");
-    convex.query(api.integrations.github.guides.get, { guideId: baseId }).then((base) => (base ? show(base) : failed()), failed);
-  };
+  /** A follow-up builds on the newest ready Guide, whoever wrote it; the run's agent reads its steps with `read-guide`. */
+  const launch = (retryGuideId: Id<"integrationPullRequestGuides"> | undefined, followUp: boolean) =>
+    setOpen({
+      retryGuideId,
+      auto: !retryGuideId && autoStart,
+      duplicate: guides?.find((guide) => guide.status === "writing" && !guide.requester.isViewer && guide.headSha === revision?.headSha),
+      base: followUp ? guides?.find((guide) => guide.status === "ready") : undefined,
+    });
   const reason = !target || !revision
     ? "Convoy has not synced this pull request yet"
     : !isLoading && !profiles.some((profile) => profile.isOnline)

@@ -40,6 +40,7 @@ import { attachTaskToThreadCommand } from "./attach-task.js";
 import { attachPullRequestToThreadCommand } from "./attach-pr.js";
 import { listThreadChecksCommand } from "./checks.js";
 import { submitGuideCommand } from "./submit-guide.js";
+import { readGuideCommand } from "./read-guide.js";
 
 const threadRow = {
   threadId: "thr_1",
@@ -95,6 +96,7 @@ describe("threads write commands", () => {
     resetCommandOptions(attachTaskToThreadCommand);
     resetCommandOptions(listThreadChecksCommand);
     resetCommandOptions(submitGuideCommand);
+    resetCommandOptions(readGuideCommand);
 
     spinner.start.mockReturnValue(spinner);
     oraMock.mockReturnValue(spinner);
@@ -633,6 +635,45 @@ describe("threads write commands", () => {
       readFileMock.mockResolvedValueOnce(JSON.stringify({ steps: [] }));
       await expect(invoke(submitGuideCommand, ["thr_1", "guide.json"])).rejects.toThrow('"headSha"');
       expect(action).not.toHaveBeenCalled();
+    });
+  });
+
+  describe("threads read-guide", () => {
+    const base = {
+      _id: "guide_0",
+      status: "ready",
+      headSha: "head-1",
+      steps: [
+        {
+          title: "Schema",
+          explanation: "Adds the table.",
+          attention: { kind: "risk", note: "Backfill needed." },
+          files: [{ path: "convex/schema.ts", note: "The table", sha: "blob-1" }],
+          questions: ["Why a new table?"],
+          whatChanged: "Adds an index.",
+        },
+      ],
+    };
+
+    it("prints the base guide's steps numbered, without blob SHAs (OS-2431)", async () => {
+      query.mockResolvedValueOnce(base);
+      readGuideCommand.setOptionValue("base", true);
+      await invoke(readGuideCommand, ["thr_1"]);
+      expect(query).toHaveBeenCalledWith(api.integrations.github.guides.readForRun, { threadId: "thr_1", base: true });
+      const printed = JSON.parse(vi.mocked(console.log).mock.calls[0][0] as string);
+      expect(printed).toEqual({
+        guideId: "guide_0",
+        status: "ready",
+        headSha: "head-1",
+        steps: [{ number: 1, ...base.steps[0], files: [{ path: "convex/schema.ts", note: "The table" }] }],
+      });
+    });
+
+    it("says to write a plain guide when the base is gone", async () => {
+      query.mockResolvedValueOnce(null);
+      readGuideCommand.setOptionValue("base", true);
+      await invoke(readGuideCommand, ["thr_1"]);
+      expect(console.log).toHaveBeenCalledWith(expect.stringContaining("Write a plain guide"));
     });
   });
 

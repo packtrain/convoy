@@ -418,6 +418,31 @@ describe("guides", () => {
     ]);
   });
 
+  test("readForRun gives a follow-up run its base guide's steps, and nothing once the base is deleted (OS-2431)", async () => {
+    const { t, apiKey, threadId, submit, push, list, asUser, requestFollowUp, member, project, repositoryLinkId } = await setupGuideRun();
+    const readForRun = (thread: Id<"cliThreads">, base?: boolean) => t.query(api.integrations.github.guides.readForRun, { threadId: thread, base, apiKey });
+    const [base] = (await list())!;
+    expect(await readForRun(threadId, true)).toBeNull();
+    await submit([step("All", ["convex/schema.ts", "src/reader.tsx"])]);
+    await push("head-2");
+    const followUpThread = await requestFollowUp(base._id);
+    const [followUp] = (await list())!;
+
+    expect(await readForRun(followUpThread, true)).toMatchObject({ _id: base._id, headSha: "head-1", steps: [{ title: "All" }] });
+    expect(await readForRun(followUpThread)).toMatchObject({ _id: followUp._id, status: "writing", steps: [] });
+
+    // Only the run's owner reads through its thread.
+    const other = await member();
+    await expect(other.query(api.integrations.github.guides.readForRun, { threadId: followUpThread, base: true })).rejects.toThrow("This thread is not writing a guide.");
+
+    await asUser.mutation(api.integrations.github.guides.remove, { guideId: base._id });
+    expect(await readForRun(followUpThread, true)).toBeNull();
+
+    // A disconnected repository's Guides are hidden, as on the Guide tab.
+    await asUser.mutation(api.integrations.github.core.disconnect, { projectId: project._id, repositoryLinkId });
+    await expect(readForRun(followUpThread)).rejects.toThrow(/connect/i);
+  });
+
   test("a follow-up's base is a ready guide of the same pull request", async () => {
     const { list, requestFollowUp } = await setupGuideRun();
     const [writing] = (await list())!;

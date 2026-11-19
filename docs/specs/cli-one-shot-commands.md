@@ -56,6 +56,7 @@ Commands covered:
 - `convoy threads attach-task <threadId> <task>`
 - `convoy threads attach-pr <threadId> <pullRequest>`
 - `convoy threads submit-guide <threadId> <file|->` or `--failed --note <why>`
+- `convoy threads read-guide <threadId> [--base]`
 - `convoy threads checks <threadId>`
 - `convoy profiles list`
 
@@ -773,6 +774,16 @@ nonzero, so the agent can fix and resubmit. JSON output is
 --failed --note <why>` takes no file: it sends `failure` and the Guide shows
 as Failed with the note. `--failed` without a note, or neither a file nor
 `--failed`, fails before calling Convoy. Rules: `github-integration.md` → Guides.
+
+### `threads read-guide`
+
+`convoy threads read-guide <threadId> [--base]` prints a Guide run's Guide, or
+with `--base` its Follow-up base, as JSON `{ guideId, status, headSha, steps }`,
+via `api.integrations.github.guides.readForRun`. Steps carry `number` (from 1,
+as `unchangedFrom` and `updatedFrom` count) and drop file blob SHAs. When
+`--base` finds no base (a plain Guide, or the base was deleted), it prints a
+sentence telling the agent to write a plain Guide and exits zero. Rules:
+`github-integration.md` → Follow-up guides.
 
 ## Project creation onboarding
 

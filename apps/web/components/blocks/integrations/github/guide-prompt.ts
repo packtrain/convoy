@@ -1,5 +1,5 @@
 import type { PullRequestOverview } from "./types";
-import { GUIDE_ATTENTION_KINDS, GUIDE_MAX_QUESTIONS, GUIDE_MAX_STEPS, type AttachedPullRequest, type GuideStep } from "@/convex/lib/contracts/github";
+import { GUIDE_ATTENTION_KINDS, GUIDE_MAX_QUESTIONS, GUIDE_MAX_STEPS, type AttachedPullRequest } from "@/convex/lib/contracts/github";
 
 /** How to split and write a Guide; a project's Guide prompt replaces it (docs/specs/github-integration.md → Prompt). */
 export const DEFAULT_GUIDE_INSTRUCTIONS = [
@@ -30,21 +30,14 @@ function settledFacts(threads: PullRequestOverview["settledThreads"]): string[] 
 }
 
 /** A Follow-up guide's base: the Guide it updates (docs/specs/github-integration.md → Follow-up guides). */
-export type GuidePromptBase = { headSha: string; steps: GuideStep[] };
+export type GuidePromptBase = { headSha: string };
 
-/** The base's steps and the rules Convoy checks on a follow-up's submit; built in, whatever a project's instructions say. */
+/** How to read the base and the rules Convoy checks on a follow-up's submit; built in, whatever a project's instructions say. */
 function followUpFacts(base: GuidePromptBase, headSha: string): string[] {
   return [
-    `This guide follows up the guide written for ${base.headSha}. Its steps:`,
-    "",
-    // Whole, so an Updated step can carry its notes and questions forward; blob SHAs are Convoy's.
-    ...base.steps.flatMap((step, at) => [
-      `Base step ${at + 1}: ${step.title}`,
-      "```json",
-      JSON.stringify({ ...step, files: step.files.map(({ path, note }) => ({ path, ...(note ? { note } : {}) })) }, null, 2),
-      "```",
-      "",
-    ]),
+    `This guide follows up the guide written for ${base.headSha}.`,
+    // Read by the agent, not pasted here: a base Guide can be up to 800 KB.
+    "First run `convoy threads read-guide <threadId> --base` with this thread's ID (see the submit step below). It prints the base guide's steps as JSON, numbered as `unchangedFrom` and `updatedFrom` expect. If it says the base guide was deleted, write a plain guide: no `unchangedFrom` or `updatedFrom`.",
     `See what changed since then with \`git fetch origin ${base.headSha}\` and \`git diff --stat ${base.headSha} ${headSha}\`. After a force-push this compares the two trees.`,
     "Write each step of the new guide as one of:",
     `- Unchanged: a base step none of whose files changed since ${base.headSha}. Write only \`{ "unchangedFrom": <its number> }\`. Convoy copies the step word for word and checks that its files did not change.`,

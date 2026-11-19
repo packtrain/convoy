@@ -50,6 +50,11 @@ async function readUsers(ctx: QueryCtx, rows: Doc<"integrationPullRequestGuides"
   return new Map(ids.map((id, at) => [id, users[at]]));
 }
 
+/** `row` with its steps, as `viewer` sees it. */
+async function readDetail(ctx: QueryCtx, row: Doc<"integrationPullRequestGuides">, viewer: { userId: Id<"users">; canManage: boolean }) {
+  return { ...toGuideSummary(row, await readUsers(ctx, [row]), viewer), ...(await getGuideSteps(ctx, row._id)) };
+}
+
 /** One Guide with its steps. A ready Guide never changes, so the reader reads it once. */
 export const get = query({
   args: { guideId: v.id("integrationPullRequestGuides") },
@@ -61,7 +66,7 @@ export const get = query({
       return null;
     }
     const viewer = { userId: readable.access.userId, canManage: hasAuthorizedProjectPermission(readable.access, ProjectPermission.PROJECT_UPDATE) };
-    return { ...toGuideSummary(row, await readUsers(ctx, [row]), viewer), ...(await getGuideSteps(ctx, row._id)) };
+    return readDetail(ctx, row, viewer);
   },
 });
 
@@ -157,18 +162,45 @@ const submitContextValidator = v.object({
   baseSteps: v.union(v.null(), v.array(guideStepValidator)),
 });
 
+/** The Guide that the caller's thread `threadId` was started to write. */
+async function requireGuideRun(ctx: QueryCtx, threadId: Id<"cliThreads">, apiKey: string | undefined) {
+  const { user, principal } = await getAuthenticatedAccess(ctx, apiKey);
+  const thread = await getThreadById(ctx, threadId);
+  if (!thread || thread.isDeleted || thread.userId !== user._id || !thread.pullRequestGuide) {
+    throw new ConvexError(errors.GUIDE_NOT_FOR_THREAD);
+  }
+  const guide = await ensure(getGuideByThreadId(ctx, thread._id)).notNull(errors.GUIDE_NOT_FOUND);
+  const access = await requireAuthorizedProject(ctx, principal, guide.projectId, ProjectPermission.CLI_THREAD);
+  return { user, access, thread, guide };
+}
+
+/**
+ * `convoy threads read-guide`: the run's own Guide with its steps, or with
+ * `base` its Follow-up base's, while the repository is connected. Null for
+ * `base` on a plain Guide or a deleted base.
+ */
+export const readForRun = query({
+  args: { threadId: v.id("cliThreads"), base: v.optional(v.boolean()), apiKey: v.optional(v.string()) },
+  returns: v.union(v.null(), guideDetailValidator),
+  handler: async (ctx, args) => {
+    const { user, access, guide } = await requireGuideRun(ctx, args.threadId, args.apiKey);
+    const link = await findRepositoryLinkForProjectAndRepository(ctx, guide.projectId, guide.repositoryId);
+    ensure(link?.status === "active").isTrue(errors.NOT_CONNECTED);
+    const row = args.base ? guide.base && (await getGuideById(ctx, guide.base.guideId)) : guide;
+    if (!row) {
+      return null;
+    }
+    const viewer = { userId: user._id, canManage: hasAuthorizedProjectPermission(access, ProjectPermission.PROJECT_UPDATE) };
+    return readDetail(ctx, row, viewer);
+  },
+});
+
 /** The caller's Guide run on `threadId`, not yet ready, in a repository the project still connects. A failed one still takes a late submit. */
 export const getSubmitContext = internalQuery({
   args: { threadId: v.id("cliThreads"), apiKey: v.optional(v.string()) },
   returns: submitContextValidator,
   handler: async (ctx, args) => {
-    const { user, principal } = await getAuthenticatedAccess(ctx, args.apiKey);
-    const thread = await getThreadById(ctx, args.threadId);
-    if (!thread || thread.isDeleted || thread.userId !== user._id || !thread.pullRequestGuide) {
-      throw new ConvexError(errors.GUIDE_NOT_FOR_THREAD);
-    }
-    const guide = await ensure(getGuideByThreadId(ctx, thread._id)).notNull(errors.GUIDE_NOT_FOUND);
-    await requireAuthorizedProject(ctx, principal, guide.projectId, ProjectPermission.CLI_THREAD);
+    const { thread, guide } = await requireGuideRun(ctx, args.threadId, args.apiKey);
     ensure(guide.status !== "ready").isTrue(errors.GUIDE_ALREADY_SUBMITTED);
     const link = await findRepositoryLinkForProjectAndRepository(ctx, guide.projectId, guide.repositoryId);
     const repository = await getRepositoryById(ctx, guide.repositoryId);
