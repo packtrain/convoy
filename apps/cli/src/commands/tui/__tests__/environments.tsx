@@ -47,7 +47,7 @@ const browser = new Browser([{ id: "fixture", name: "Managed fixture", transport
   },
 }]);
 browser.refreshEnvironment = async result => { assert.equal(result.serviceVersion, "0.103.0"); refreshes++; };
-browser.prepareEnvironment = async form => ({ ...form, version: "0.103.0", install: true });
+browser.prepareEnvironment = async form => ({ ...form, version: "0.103.0", install: true, ...(scenario === "create-local" ? { localPackage: "/tmp/cli.tgz" } : {}) });
 browser.createEnvironment = async (form, progress) => { creations++; assert.equal(form.name, "new-env"); progress("Building image"); };
 const instance = render(<App browser={browser} onboardingLoad={async () => ({ projects: [{ _id: "existing", name: "Existing", alias: "EX", organizationId: "org", organizationName: "Org" }], organizations: [] })} />,
   { stdout: stdout as unknown as NodeJS.WriteStream, stdin: stdin as unknown as NodeJS.ReadStream, stderr: stderr as unknown as NodeJS.WriteStream, debug: true, exitOnCtrlC: false, patchConsole: false });
@@ -59,11 +59,12 @@ async function wait(check: () => boolean) {
 async function key(value: string) { for (let i = 0; i < 5; i++) await new Promise<void>(resolve => setImmediate(resolve)); const before = output; stdin.write(value); await wait(() => output !== before || !browser.getSnapshot().environment && !browser.getSnapshot().onboarding); await new Promise<void>(resolve => setImmediate(resolve)); }
 try {
   await wait(() => frame.includes("ENVIRONMENTS"));
-  if (scenario === "create") {
+  if (scenario === "create" || scenario === "create-local") {
     await key("E"); await wait(() => frame.includes("Environment name"));
     await key("new-env");
     for (let i = 0; i < 5; i++) await key("\t");
     await key("\r"); await wait(() => frame.includes("Create / resume"));
+    assert(frame.includes(scenario === "create-local" ? "install /tmp/cli.tgz" : "install from npm"), frame);
     assert.equal(creations, 0); await key("\t"); await key("\r");
     await wait(() => frame.includes("is ready")); assert.equal(creations, 1);
   } else if (["retained", "probe-retry", "probe-start"].includes(scenario)) {

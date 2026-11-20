@@ -1,4 +1,7 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
+import { mkdtempSync, rmSync, writeFileSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { join, relative } from "node:path";
 
 const { offerUpdate, checkForNewerVersion, run } = vi.hoisted(() => ({ offerUpdate: vi.fn(), checkForNewerVersion: vi.fn(), run: vi.fn() }));
 vi.mock("../update/prompts.js", async (importOriginal) => ({ ...(await importOriginal<typeof import("../update/prompts.js")>()), offerUpdate }));
@@ -44,6 +47,29 @@ describe("update prompt", () => {
     expect(offerUpdate).toHaveBeenCalledWith("999.0.0");
     expect(run).not.toHaveBeenCalled();
     expect(vi.mocked(console.log).mock.calls.flat().join("\n")).toContain("Updated. Run convoy tui again.");
+  });
+
+  it("rejects a --package path that is not a file", async () => {
+    terminal();
+    const write = vi.spyOn(process.stderr, "write").mockImplementation(() => true);
+    const previous = process.exitCode;
+    try {
+      await tuiCommand.parseAsync(["--package", "/nonexistent/cli.tgz"], { from: "user" });
+      expect(process.exitCode).toBe(1);
+      expect(write.mock.calls.flat().join("")).toContain("--package must name a local package file");
+      expect(run).not.toHaveBeenCalled();
+    } finally { process.exitCode = previous; }
+  });
+
+  it("passes the resolved --package path to the TUI", async () => {
+    terminal();
+    offerUpdate.mockResolvedValue(false);
+    const dir = mkdtempSync(join(tmpdir(), "convoy-tui-package-")), file = join(dir, "cli.tgz");
+    writeFileSync(file, "");
+    try {
+      await tuiCommand.parseAsync(["--package", relative(process.cwd(), file)], { from: "user" });
+      expect(run).toHaveBeenCalledWith([], undefined, file);
+    } finally { rmSync(dir, { recursive: true, force: true }); }
   });
 
   it("renders after a skip", async () => {

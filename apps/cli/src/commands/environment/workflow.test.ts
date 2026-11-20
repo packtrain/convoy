@@ -354,9 +354,26 @@ it("does not save a new environment when npm preflight fails", async () => {
   vi.spyOn(globalThis, "fetch").mockResolvedValue(new Response("", { status: 404 }));
   const start = vi.spyOn(EnvironmentController.prototype, "start").mockResolvedValue();
   try {
-    await expect(provisionEnvironment({ name: "test", deployment: "", domains: "" }, () => {})).rejects.toThrow(/published/);
+    await expect(provisionEnvironment({ name: "test", deployment: "", domains: "" }, () => {})).rejects.toThrow(/not published on npm.*convoy tui --package/s);
     expect(readEnvironment(directory)).toBeUndefined();
     expect(start).not.toHaveBeenCalled();
+  } finally { rmSync(home, { recursive: true, force: true }); }
+});
+it("creates from a local package without asking npm", async () => {
+  const home = mkdtempSync(join(tmpdir(), "convoy-local-"));
+  const original = paths.environmentDirectory;
+  vi.spyOn(paths, "environmentDirectory").mockImplementation(name => original(name, home, name === "fresh"));
+  vi.spyOn(EnvironmentController.prototype, "daemon").mockResolvedValue("engine");
+  const request = vi.spyOn(globalThis, "fetch").mockResolvedValue(new Response("", { status: 404 }));
+  const start = vi.spyOn(EnvironmentController.prototype, "start").mockResolvedValue();
+  vi.spyOn(EnvironmentController.prototype, "operation").mockResolvedValue({ state: "running" });
+  try {
+    const form = { name: "fresh", deployment: "", domains: "" };
+    const proposal = await prepareEnvironment(form, undefined, "/tmp/cli.tgz");
+    expect(proposal).toMatchObject({ install: true, localPackage: "/tmp/cli.tgz" });
+    await provisionEnvironment(form, () => {}, proposal);
+    expect(request).not.toHaveBeenCalled();
+    expect(start).toHaveBeenCalledWith(expect.objectContaining({ name: "fresh" }), "/tmp/cli.tgz");
   } finally { rmSync(home, { recursive: true, force: true }); }
 });
 it("stopping an absent container is already stopped without creating anything", async () => {

@@ -367,6 +367,10 @@ For an unpublished build, pack the CLI and pass its absolute archive path:
 convoy run --environment acceptance --package /path/to/useconvoy-cli-0.76.1.tgz --no-attach
 ```
 
+To create the environment from the TUI instead, start it with
+`convoy tui --package /path/to/useconvoy-cli-0.76.1.tgz` (CLI 0.149.0) and use
+Add environment. Review shows the archive in place of `install from npm`.
+
 The archive is only used when building a new image. It does not replace an existing
 installation volume. Use a fresh environment name for an unpublished candidate.
 

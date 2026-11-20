@@ -1391,3 +1391,16 @@ isolated accounts". Resume keeps the saved mode and refuses a different one.
 While Shared is selected, a Mount folders field sits below the radio and takes
 comma-separated host folders; Review lists them. Rules:
 [shared Docker environments](cli-shared-environments.md#host-folder-mounts).
+
+## Local package creation, CLI 0.149.0
+
+`convoy tui --package <tgz>` lets Add environment create from a packed CLI
+instead of the npm release, so an unpublished host version can be tested. The
+host resolves the path and exits before rendering if it is not a file. The
+package applies only when a container gets built: a new environment, or a saved
+one whose container does not exist. Resuming an existing container ignores it.
+Review shows `CLI: <version> · install <path>` in place of `install from npm`,
+and confirmation skips the npm lookup. The package's version is not checked
+against the host, so start the TUI from the same build that was packed. Without
+the flag, an unpublished release fails with a hint naming `convoy tui --package`.
+The flag adds no backend requests.

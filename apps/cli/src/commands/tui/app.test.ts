@@ -65,7 +65,7 @@ it.each(["sidebar-names", "target-incompatible", "creation-form", "form-visibili
   expect(result.stdout).toContain("Onboarding review checks passed: " + scenario);
 });
 
-it.each(["update", "cancel", "narrow", "failure", "unpublished", "transport", "create", "retained", "probe-retry", "probe-start", "diagnostics", "installed"])("environment renderer: %s", async scenario => {
+it.each(["update", "cancel", "narrow", "failure", "unpublished", "transport", "create", "create-local", "retained", "probe-retry", "probe-start", "diagnostics", "installed"])("environment renderer: %s", async scenario => {
   const result = await tsx("environments.tsx", [scenario]);
   expect(result.stdout).toContain("Environment renderer checks passed: " + scenario);
 });

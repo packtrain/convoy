@@ -3,7 +3,7 @@ import { App } from "./app.js";
 import type { Connection } from "./resolution.js";
 import { Browser } from "./workflow.js";
 
-export async function run(targets: Connection[], selected = 0) {
+export async function run(targets: Connection[], selected = 0, localPackage?: string) {
   let handoff: { operation: (signal: AbortSignal) => Promise<void>; resolve(): void; reject(error: unknown): void } | undefined;
   let stopped = false;
   const abort = new AbortController();
@@ -15,6 +15,7 @@ export async function run(targets: Connection[], selected = 0) {
     handoff = { operation, resolve, reject };
     instance.unmount();
   }));
+  browser.localPackage = localPackage;
   const mount = () => { enterScreen(); return render(<App browser={browser} />, { exitOnCtrlC: false, patchConsole: false }); };
   let instance = mount();
   const stop = () => { stopped = true; abort.abort(); browser.dispose(); instance.unmount(); };

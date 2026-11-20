@@ -122,7 +122,9 @@ export class Browser {
     }
   }
   closeEnvironment() { this.set({ environment: undefined }); this.schedule(0); }
-  prepareEnvironment = prepareEnvironment;
+  /** Packed CLI that new environments install instead of the npm release (`convoy tui --package`). */
+  localPackage?: string;
+  prepareEnvironment = (form: EnvironmentForm) => prepareEnvironment(form, undefined, this.localPackage);
   async createEnvironment(form: EnvironmentForm, progress: EnvironmentProgress, proposal?: EnvironmentProposal) {
     let target: Connection;
     try { target = await createConnection(form, progress, proposal); }

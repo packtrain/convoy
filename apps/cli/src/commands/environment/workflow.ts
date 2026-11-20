@@ -301,14 +301,15 @@ export function environmentMaintenance(expected: Environment, home?: string): En
   };
 }
 
-export async function prepareEnvironment(form: EnvironmentForm, controller = new EnvironmentController()): Promise<EnvironmentProposal> {
+/** `localPackage` installs a packed CLI instead of the npm release when the container is built. */
+export async function prepareEnvironment(form: EnvironmentForm, controller = new EnvironmentController(), localPackage?: string): Promise<EnvironmentProposal> {
   environmentFormSchema.parse(form);
   let saved: Environment | undefined;
   try { saved = readEnvironment(environmentDirectory(form.name, undefined, false)); }
   catch (error) { if (!(error instanceof Error && "code" in error && error.code === "ENOENT")) throw error; }
   if (!saved) {
     const mode = form.mode ?? "shared", mounts = checkedMounts(mode, form.mounts);
-    return { ...form, mode, ...(mounts.length ? { mounts } : { mounts: undefined }), version: getCliVersion(), install: true };
+    return { ...form, mode, ...(mounts.length ? { mounts } : { mounts: undefined }), version: getCliVersion(), install: true, ...(localPackage ? { localPackage } : {}) };
   }
   if (form.mode !== undefined && form.mode !== (saved.mode ?? "isolated")) throw new Error(`Environment ${form.name} is ${saved.mode ?? "isolated"}. Choose a new name for a ${form.mode} one.`);
   if (form.mounts?.length && JSON.stringify(checkedMounts(saved.mode, form.mounts)) !== JSON.stringify(saved.mounts ?? [])) {
@@ -319,13 +320,13 @@ export async function prepareEnvironment(form: EnvironmentForm, controller = new
   }
   const status = await controller.operation(saved, "status");
   return { name: form.name, ...(saved.networkMode ? { networkMode: saved.networkMode } : {}), mode: saved.mode ?? "isolated", ...(saved.mounts ? { mounts: saved.mounts } : {}), deployment: saved.deployment, domains: saved.domains, owner: saved.owner, daemon: saved.daemon,
-    version: packageVersion.parse(status.serviceVersion ?? saved.version), install: status.state === "not-created" };
+    version: packageVersion.parse(status.serviceVersion ?? saved.version), install: status.state === "not-created", ...(localPackage && status.state === "not-created" ? { localPackage } : {}) };
 }
 
 export async function provisionEnvironment(form: EnvironmentForm, progress: EnvironmentProgress, proposal?: EnvironmentProposal) {
   const controller = new EnvironmentController((args, options) => docker(args, { ...options, onProgress: progress }), progress);
   const confirmed = proposal ?? await prepareEnvironment(form, controller);
-  return runEnvironment(form.name, { networkMode: form.networkMode, mode: form.mode, mounts: form.mounts?.length ? form.mounts : undefined, deployment: form.deployment || undefined, domains: form.domains || undefined,
+  return runEnvironment(form.name, { networkMode: form.networkMode, mode: form.mode, mounts: form.mounts?.length ? form.mounts : undefined, deployment: form.deployment || undefined, domains: form.domains || undefined, localPackage: confirmed.localPackage,
     beforeStart: async (environment, created) => {
       if (created !== !confirmed.owner || (confirmed.owner && (environment.owner !== confirmed.owner || environment.daemon !== confirmed.daemon)) || (environment.networkMode ?? "strict") !== (confirmed.networkMode ?? "strict") || environment.deployment !== confirmed.deployment || environment.domains !== confirmed.domains
         || (environment.mode ?? "isolated") !== (confirmed.mode ?? "isolated") || JSON.stringify(environment.mounts ?? []) !== JSON.stringify(confirmed.mounts ?? [])) throw new Error("Environment changed. Review the target again.");
@@ -334,7 +335,9 @@ export async function provisionEnvironment(form: EnvironmentForm, progress: Envi
       const install = created || status?.state === "not-created";
       if (version !== confirmed.version || install !== confirmed.install) throw new Error("Environment version or container changed. Review the target again.");
       environment.version = version;
-      if (install) await publishedVersion(version);
+      if (install && !confirmed.localPackage) await publishedVersion(version).catch((error: Error) => {
+        throw new Error(`${error.message} To test a local build, pack the CLI (pnpm pack in apps/cli) and start convoy tui --package <tgz>.`);
+      });
     },
   }, controller);
 }

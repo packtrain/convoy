@@ -68,7 +68,7 @@ export const environmentFormSchema = environmentSchema.pick({ name: true, deploy
 export type EnvironmentForm = z.infer<typeof environmentFormSchema>;
 export type EnvironmentOperation = "delete" | "status" | "start" | "stop" | "restart" | "update";
 export type EnvironmentProgress = (message: string) => void;
-export type EnvironmentProposal = EnvironmentForm & { version: string; owner?: string; daemon?: string; install: boolean };
+export type EnvironmentProposal = EnvironmentForm & { version: string; owner?: string; daemon?: string; install: boolean; localPackage?: string };
 export interface UpdateProposal { installed: string; proposed: string }
 /** "unknown": the offered version could not be resolved, so nothing can be installed. */
 export type RuntimeState = "missing" | "update" | "current" | "newer" | "unknown";
