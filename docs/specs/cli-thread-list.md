@@ -399,6 +399,14 @@ freshness** below for the rule that guarantees it.
   [cli-worktrees.md](cli-worktrees.md#worktree-changes-view-os-1980-componentsblocksworktrees)).
   Expanded profiles persist in
   localStorage (`convoy.worktree-list-expanded-profiles`).
+- Worktree rows (never main checkouts) end in a trash button, shown on
+  hover, keyboard focus, and on the selected row (OS-2459). It opens a confirm
+  dialog: the worktree's path is deleted from disk, its branch is kept, and a
+  worktree with uncommitted changes can't be removed. While the op runs the
+  button spins and the row dims. On success the row disappears with the CLI's
+  re-sync, and if its changes view was open the page goes to the threads
+  page. A refusal toasts the CLI's error with a "View changes" action. See
+  [cli-worktrees.md](cli-worktrees.md#remove).
 - With no connected CLIs it shows a copyable command: `connect` when the
   project has profiles, the interactive `setup` command when it has none.
 - Collapsible like Pinned, collapsed by default, persisted in localStorage

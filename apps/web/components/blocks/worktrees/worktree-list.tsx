@@ -1,14 +1,16 @@
 "use client";
 
 import { useState, type ReactNode } from "react";
-import { ChevronRight, GitBranch, Laptop } from "lucide-react";
+import { ChevronRight, GitBranch, Laptop, Loader2, Trash2 } from "lucide-react";
 import type { Id } from "@/convex/_generated/dataModel";
 import type { CliProfilePathEntry } from "@/convex/lib/contracts/validators";
 import { Button } from "@/components/ui/button";
 import { truncateRepoPath } from "@/components/blocks/project/agent-list-item";
 import { AppLink, appRoute, href, parseWorktreeChangesTarget, useNavigation } from "@/lib/navigation";
 import { readExpandedProfileIds, writeExpandedProfileIds } from "@/lib/worktrees/storage";
+import { useWorktreeRemoval } from "@/lib/worktrees/hooks/use-worktree-removal";
 import { cn } from "@/lib/utils";
+import { RemoveWorktreeDialog } from "./worktree-remove-dialog";
 
 interface WorktreeListProps {
   profileId: Id<"cliProfiles">;
@@ -37,6 +39,22 @@ export function WorktreeList({ profileId, paths, organizationSlug, projectAlias,
     const others = readExpandedProfileIds().filter((id) => id !== profileId);
     writeExpandedProfileIds(next ? [...others, profileId] : others);
   };
+
+  // The checkout whose changes view is open.
+  const { location, push } = useNavigation();
+  const target = parseWorktreeChangesTarget(location.search);
+  const selectedPathId = target?.profileId === String(profileId) ? target.pathId : null;
+  // Lives here, not in the rows, so collapsing mid-op still reports the outcome.
+  const [confirmWorktree, setConfirmWorktree] = useState<CliProfilePathEntry | null>(null);
+  const removal = useWorktreeRemoval(profileId, {
+    onRemoved: (pathId) => {
+      if (pathId === selectedPathId) {
+        push(appRoute.projectThreads(organizationSlug, projectAlias));
+      }
+    },
+    onViewChanges: (pathId) =>
+      push(appRoute.projectThreadsWithPreselection(organizationSlug, projectAlias, { profileId: String(profileId), pathId, view: "changes" })),
+  });
 
   // A 2px gap keeps hovered and selected rows from merging into one block.
   return (
@@ -78,17 +96,34 @@ export function WorktreeList({ profileId, paths, organizationSlug, projectAlias,
           organizationSlug={organizationSlug}
           projectAlias={projectAlias}
           compactLayout={compactLayout}
+          selectedPathId={selectedPathId}
+          removingPathId={removal.removingPathId}
+          onRemove={setConfirmWorktree}
         />
       )}
+      <RemoveWorktreeDialog
+        worktree={confirmWorktree}
+        onClose={() => setConfirmWorktree(null)}
+        onConfirm={(worktree) => void removal.remove(worktree.id)}
+      />
     </div>
   );
 }
 
-function CheckoutRows({ profileId, paths, organizationSlug, projectAlias, compactLayout }: Omit<WorktreeListProps, "children" | "avatar">) {
-  // The checkout whose changes view is open.
-  const target = parseWorktreeChangesTarget(useNavigation().location.search);
-  const selectedPathId = target?.profileId === String(profileId) ? target.pathId : null;
-
+function CheckoutRows({
+  profileId,
+  paths,
+  organizationSlug,
+  projectAlias,
+  compactLayout,
+  selectedPathId,
+  removingPathId,
+  onRemove,
+}: Omit<WorktreeListProps, "children" | "avatar"> & {
+  selectedPathId: string | null;
+  removingPathId: string | null;
+  onRemove: (worktree: CliProfilePathEntry) => void;
+}) {
   // Alphabetical (OS-2038): checkouts by label, worktrees by branch.
   const byName = (a: CliProfilePathEntry, b: CliProfilePathEntry) =>
     (a.kind === "worktree" ? (a.branch ?? a.label) : a.label).localeCompare(b.kind === "worktree" ? (b.branch ?? b.label) : b.label);
@@ -99,37 +134,64 @@ function CheckoutRows({ profileId, paths, organizationSlug, projectAlias, compac
     .filter((entry) => entry.kind === "worktree" && !checkouts.some((checkout) => checkout.id === entry.parentPathId))
     .sort(byName);
 
-  const renderRow = (entry: CliProfilePathEntry, nested: boolean) => (
-    <AppLink
-      key={entry.id}
-      aria-current={entry.id === selectedPathId ? "page" : undefined}
-      href={href(
-        appRoute.projectThreadsWithPreselection(organizationSlug, projectAlias, {
-          profileId: String(profileId),
-          pathId: entry.id,
-          view: "changes",
-        })
-      )}
-      // Same type and height as the compact thread row (px-3 py-2, text-sm leading-5).
-      className={cn(
-        "flex items-center gap-2 py-2 pr-3 text-sm font-medium leading-5 transition-colors hover:bg-accent",
-        !compactLayout && "rounded-lg",
-        // Content sits under the CLI name: toggle margin (8/12) + 24px toggle +
-        // the row's 6px lead-in; worktrees indent one icon column further.
-        compactLayout ? (nested ? "pl-[62px]" : "pl-[38px]") : nested ? "pl-[66px]" : "pl-[42px]",
-        entry.id === selectedPathId && "bg-primary/10 hover:bg-primary/10"
-      )}
-      title={entry.path}
-    >
-      {entry.kind === "worktree" ? (
-        <GitBranch className="size-4 shrink-0 text-muted-foreground" />
-      ) : (
-        <Laptop className="size-4 shrink-0 text-muted-foreground" />
-      )}
-      <span className="truncate">{entry.kind === "worktree" ? entry.branch : entry.label}</span>
-      <span className="truncate text-xs font-normal text-muted-foreground/70">{truncateRepoPath(entry.path)}</span>
-    </AppLink>
-  );
+  const renderRow = (entry: CliProfilePathEntry, nested: boolean) => {
+    const selected = entry.id === selectedPathId;
+    const removing = entry.id === removingPathId;
+    const removable = entry.kind === "worktree";
+    const name = entry.kind === "worktree" ? entry.branch : entry.label;
+    return (
+      <div key={entry.id} className={cn("group/checkout relative", removing && "opacity-60")}>
+        <AppLink
+          aria-current={selected ? "page" : undefined}
+          href={href(
+            appRoute.projectThreadsWithPreselection(organizationSlug, projectAlias, {
+              profileId: String(profileId),
+              pathId: entry.id,
+              view: "changes",
+            })
+          )}
+          // Same type and height as the compact thread row (px-3 py-2, text-sm leading-5).
+          className={cn(
+            "flex items-center gap-2 py-2 pr-3 text-sm font-medium leading-5 transition-colors group-hover/checkout:bg-accent",
+            !compactLayout && "rounded-lg",
+            // Content sits under the CLI name: toggle margin (8/12) + 24px toggle +
+            // the row's 6px lead-in; worktrees indent one icon column further.
+            compactLayout ? (nested ? "pl-[62px]" : "pl-[38px]") : nested ? "pl-[66px]" : "pl-[42px]",
+            // Room for the remove button while it shows.
+            removable && (selected || removing ? "pr-9" : "group-hover/checkout:pr-9 group-focus-within/checkout:pr-9"),
+            selected && "bg-primary/10 group-hover/checkout:bg-primary/10"
+          )}
+          title={entry.path}
+        >
+          {entry.kind === "worktree" ? (
+            <GitBranch className="size-4 shrink-0 text-muted-foreground" />
+          ) : (
+            <Laptop className="size-4 shrink-0 text-muted-foreground" />
+          )}
+          <span className="truncate">{name}</span>
+          <span className="truncate text-xs font-normal text-muted-foreground/70">{truncateRepoPath(entry.path)}</span>
+        </AppLink>
+        {removable && (
+          <Button
+            type="button"
+            variant="ghost"
+            size="icon-xs"
+            aria-label={`Remove worktree ${name}`}
+            disabled={removing}
+            className={cn(
+              "absolute top-1/2 right-1.5 -translate-y-1/2 cursor-pointer text-muted-foreground hover:text-destructive",
+              selected || removing
+                ? "opacity-100"
+                : "opacity-0 focus-visible:opacity-100 group-hover/checkout:opacity-100 group-focus-within/checkout:opacity-100"
+            )}
+            onClick={() => onRemove(entry)}
+          >
+            {removing ? <Loader2 className="size-3.5 animate-spin" /> : <Trash2 className="size-3.5" />}
+          </Button>
+        )}
+      </div>
+    );
+  };
 
   return (
     <div className="grid grid-cols-[minmax(0,1fr)] gap-0.5 pb-1">

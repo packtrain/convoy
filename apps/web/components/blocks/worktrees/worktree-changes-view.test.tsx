@@ -4,6 +4,7 @@
 import { afterEach, beforeEach, describe, expect, test, vi } from "vitest";
 import { act, cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import type { Id } from "@/convex/_generated/dataModel";
+import { appRoute } from "@/lib/navigation/routes";
 import { WorktreeChangesView } from "./worktree-changes-view";
 
 const state = vi.hoisted(() => ({
@@ -26,8 +27,12 @@ vi.mock("convex/react", () => ({
 
 vi.mock("sonner", () => ({ toast: state.toast }));
 
-vi.mock("@/lib/navigation", () => ({
+const navigate = vi.hoisted(() => vi.fn());
+
+vi.mock("@/lib/navigation", async () => ({
+  appRoute: (await vi.importActual<typeof import("@/lib/navigation/routes")>("@/lib/navigation/routes")).appRoute,
   useRouteParams: () => ({ organizationSlug: "org", projectAlias: "ABC" }),
+  useNavigation: () => ({ push: navigate }),
 }));
 
 vi.mock("@/lib/worktrees/hooks/use-worktree-op", () => ({
@@ -48,7 +53,7 @@ vi.mock("@pierre/diffs/react", () => ({
 }));
 
 vi.mock("@/components/blocks/thread/thread-header", () => ({
-  ThreadHeader: () => <header>Header</header>,
+  ThreadHeader: ({ actions }: { actions?: React.ReactNode }) => <header>Header{actions}</header>,
 }));
 
 vi.mock("@/components/blocks/thread/thread-mobile-back-button", () => ({
@@ -64,6 +69,16 @@ const ONE_FILE_PATCH = JSON.stringify({
   truncated: false,
 });
 
+const WORKTREE_PATHS = [
+  { id: "repo", path: "/tmp/repo", label: "repo" },
+  { id: "path_1", path: "/tmp/x", label: "x", kind: "worktree", parentPathId: "repo", branch: "feat/x" },
+];
+
+function onlineWorktree(patch: string) {
+  state.profile = { paths: WORKTREE_PATHS, isOnline: true, appVersion: "0.83.0" };
+  state.changes = { resultJson: JSON.stringify({ patch, truncated: false }), loading: false, error: null, refresh: vi.fn() };
+}
+
 function onlineWithOneFile() {
   state.profile = { paths: [{ id: "path_1", path: "/tmp/x" }], isOnline: true, appVersion: "0.83.0" };
   state.changes = { resultJson: ONE_FILE_PATCH, loading: false, error: null, refresh: vi.fn() };
@@ -77,6 +92,7 @@ describe("WorktreeChangesView", () => {
     state.enqueue.mockReset();
     state.toast.error.mockReset();
     state.toast.success.mockReset();
+    navigate.mockReset();
   });
 
   afterEach(() => {
@@ -171,5 +187,42 @@ describe("WorktreeChangesView", () => {
     // An implicit grid column is auto-sized: the longest diff line would set the width
     // of every row, header included, and the phone viewport clips them.
     expect(container.querySelector("main")?.className).toContain("grid-cols-[minmax(0,1fr)]");
+  });
+
+  test("the header menu removes a clean worktree, then leaves its view (OS-2459)", async () => {
+    onlineWorktree("");
+    state.enqueue.mockResolvedValue("op_1");
+    const view = render(<WorktreeChangesView profileId={"profile_1" as Id<"cliProfiles">} pathId="path_1" />);
+
+    fireEvent.pointerDown(screen.getByRole("button", { name: "More actions" }), { button: 0, ctrlKey: false });
+    fireEvent.click(screen.getByRole("menuitem", { name: "Remove worktree" }));
+    fireEvent.click(screen.getByRole("button", { name: "Remove worktree" }));
+
+    await waitFor(() => expect(state.enqueue).toHaveBeenCalledWith({ profileId: "profile_1", kind: "remove", pathId: "path_1" }));
+    state.op = { _id: "op_1", status: "done" };
+    await act(async () => {
+      view.rerender(<WorktreeChangesView profileId={"profile_1" as Id<"cliProfiles">} pathId="path_1" />);
+    });
+
+    expect(state.toast.success).toHaveBeenCalledWith("Worktree removed");
+    expect(navigate).toHaveBeenCalledWith(appRoute.projectThreads("org", "ABC"));
+  });
+
+  test("uncommitted changes disable Remove worktree in the header menu (OS-2459)", () => {
+    onlineWorktree(JSON.parse(ONE_FILE_PATCH).patch);
+    render(<WorktreeChangesView profileId={"profile_1" as Id<"cliProfiles">} pathId="path_1" />);
+
+    fireEvent.pointerDown(screen.getByRole("button", { name: "More actions" }), { button: 0, ctrlKey: false });
+
+    const item = screen.getByRole("menuitem", { name: /Remove worktree/ });
+    expect(item.getAttribute("aria-disabled")).toBe("true");
+    expect(item.textContent).toContain("Commit or revert changes first");
+  });
+
+  test("a main checkout has no header menu (OS-2459)", () => {
+    onlineWithOneFile();
+    render(<WorktreeChangesView profileId={"profile_1" as Id<"cliProfiles">} pathId="path_1" />);
+
+    expect(screen.queryByRole("button", { name: "More actions" })).toBeNull();
   });
 });

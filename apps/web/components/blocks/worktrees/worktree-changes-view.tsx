@@ -1,9 +1,10 @@
 "use client";
 
 import { useCallback, useRef, useState } from "react";
-import { PanelRight, RefreshCw } from "lucide-react";
+import { MoreHorizontal, PanelRight, RefreshCw, Trash2 } from "lucide-react";
 import type { Id } from "@/convex/_generated/dataModel";
 import { Button } from "@/components/ui/button";
+import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 import { ThreadHeader } from "@/components/blocks/thread/thread-header";
 import { ThreadMobileBackButton } from "@/components/blocks/thread/thread-mobile-back-button";
 import { ThreadWorkspaceSplitPane } from "@/components/blocks/thread/thread-workspace-split-pane";
@@ -12,7 +13,7 @@ import { FileTabStrip } from "@/components/custom/diff/file-tab-strip";
 import { usePatchDiffOptions } from "@/components/custom/diff/patch-file-sections";
 import { WorktreeFileTree } from "@/components/custom/diff/worktree-file-tree";
 import { useIsMobile } from "@/hooks/browser/use-mobile";
-import { useRouteParams } from "@/lib/navigation";
+import { appRoute, useNavigation, useRouteParams } from "@/lib/navigation";
 import {
   type ChangesDiffStyle,
   readChangesDiffStyle,
@@ -21,8 +22,10 @@ import {
   writeChangesWordWrap,
 } from "@/lib/threads/changes-view-prefs";
 import { useWorktreeChanges } from "@/lib/worktrees/hooks/use-worktree-changes";
+import { useWorktreeRemoval } from "@/lib/worktrees/hooks/use-worktree-removal";
 import { cn } from "@/lib/utils";
 import { ChangesSummary, RevertAllButton, WorktreeChangesBody, useSectionCollapse } from "./worktree-changes-body";
+import { RemoveWorktreeDialog } from "./worktree-remove-dialog";
 import { RevertAllDialog, RevertFileDialog } from "./worktree-revert-dialogs";
 
 interface WorktreeChangesViewProps {
@@ -47,6 +50,11 @@ export function WorktreeChangesView({ profileId, pathId }: WorktreeChangesViewPr
   const isMobile = useIsMobile();
   const sectionRefs = useRef(new Map<string, HTMLElement>());
   const diffOptions = usePatchDiffOptions(diffStyle, wordWrap);
+  const { push } = useNavigation();
+  const [confirmRemove, setConfirmRemove] = useState(false);
+  const removal = useWorktreeRemoval(profileId, {
+    onRemoved: () => push(appRoute.projectThreads(params.organizationSlug, params.projectAlias)),
+  });
 
   const toggleDiffStyle = useCallback(() => {
     setDiffStyle((value) => {
@@ -122,6 +130,29 @@ export function WorktreeChangesView({ profileId, pathId }: WorktreeChangesViewPr
                   <RefreshCw className={cn("size-3.5", changes.loading && "animate-spin")} />
                   Refresh
                 </Button>
+                {entry.kind === "worktree" && (
+                  <DropdownMenu>
+                    <DropdownMenuTrigger asChild>
+                      <Button type="button" variant="ghost" size="icon-sm" className="cursor-pointer" aria-label="More actions">
+                        <MoreHorizontal className="size-4" />
+                      </Button>
+                    </DropdownMenuTrigger>
+                    <DropdownMenuContent align="end" className="w-56">
+                      {/* The CLI refuses a dirty worktree; the patch on screen says so up front. */}
+                      <DropdownMenuItem
+                        variant="destructive"
+                        disabled={hasFiles || removal.removingPathId !== null}
+                        onSelect={() => setConfirmRemove(true)}
+                      >
+                        <Trash2 />
+                        <span className="flex flex-col">
+                          Remove worktree
+                          {hasFiles && <span className="text-xs text-muted-foreground">Commit or revert changes first</span>}
+                        </span>
+                      </DropdownMenuItem>
+                    </DropdownMenuContent>
+                  </DropdownMenu>
+                )}
                 {hasFiles && !sidebarOpen && !isMobile && (
                   <Button
                     type="button"
@@ -178,6 +209,11 @@ export function WorktreeChangesView({ profileId, pathId }: WorktreeChangesViewPr
         </div>
         <RevertFileDialog state={state} />
         <RevertAllDialog state={state} />
+        <RemoveWorktreeDialog
+          worktree={confirmRemove && entry ? entry : null}
+          onClose={() => setConfirmRemove(false)}
+          onConfirm={(worktree) => void removal.remove(worktree.id)}
+        />
       </main>
     </ThreadWorkspaceSplitPane>
   );

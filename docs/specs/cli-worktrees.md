@@ -158,6 +158,15 @@ disappears from the profile), and completes the op. The local branch is not
 deleted. Threads keep their path snapshot until the next run validates and,
 when necessary, repairs their execution target.
 
+The web removes a worktree from three places (OS-2459): the composer's
+environment dropdown (two-step inline confirm), the Connected CLIs worktree
+row, and the worktree changes view header. The last two sit inside the
+worktrees module and share `useWorktreeRemoval` (`lib/worktrees/hooks/`) and
+a confirm dialog; each toasts "Worktree removed" or the CLI's error. There is
+no `convoy` command for it: the CLI runs on the machine that owns the
+worktree, where `git worktree remove` already does the job and the next
+rescan prunes the entry.
+
 ### Worktree changes (OS-2036)
 
 `{ kind: "worktreeChanges", pathId }` for any path entry, main checkout or
@@ -477,6 +486,12 @@ every row, header included, past a phone viewport. The right pane is the file tr
   (`components/custom/diff/changes-view-toggles.tsx`, shared with
   `ThreadChangesToolbar`). Diff style and
   wrap read and write the same localStorage preferences as the thread tab.
+- Remove worktree (OS-2459): for a worktree entry, a `⋯` menu after Refresh
+  holds "Remove worktree". It is disabled with the hint "Commit or revert
+  changes first" while the patch on screen has files; while the patch loads
+  or after a failed fetch the CLI's own dirty check decides. The item opens
+  the confirm dialog (path deleted from disk, branch kept). On success the
+  page goes to the threads page. A main checkout has no menu.
 - Body: one `PatchFileSection` per file (OS-2040,
   `components/custom/diff/patch-file-sections.tsx`, shared with the thread
   Changes tab, see `cli-thread-run-diffs.md` → UI): sticky header with
@@ -570,6 +585,10 @@ remote-command channel). See OS-1106's Plan artifact for the full sketch.
   and at CLI reconnect.
 - Removing a dirty worktree fails with a toast; a clean one disappears from
   the selector.
+- Removing a clean worktree from its Connected CLIs row or its changes view
+  menu removes the row; with its changes view open, the page returns to the
+  threads page. A dirty one is refused with a toast whose "View changes" opens
+  its changes view (row) or is disabled up front (changes view menu).
 - Selecting a worktree, then switching the working directory, resets the
   selection to the current checkout.
 - Non-git paths show no base-ref selector.

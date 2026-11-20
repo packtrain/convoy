@@ -13,6 +13,7 @@ const toastSuccessMock = vi.fn();
 
 vi.mock("convex/react", () => ({
   useQuery: (...args: unknown[]) => useQueryMock(...args),
+  useMutation: () => vi.fn(),
 }));
 
 vi.mock("sonner", () => ({
