@@ -1,7 +1,7 @@
 import { Dialog, Spinner } from "./dialog/index.js";
 import { Environments } from "./environments/index.js";
 import { useEffect, useState, useSyncExternalStore, type ComponentProps } from "react";
-import { Box, Text, useApp, useInput, useStdout } from "ink";
+import { Box, Text, useApp, useInput, useWindowSize } from "ink";
 import { getCliVersion } from "../../lib/version.js";
 import { detailLines, environmentTone, healthTones, palette, plain, rowCells, rowId, warningLines, warningGroups, wrapLines } from "./formatters.js";
 import type { Browser } from "./workflow.js";
@@ -25,8 +25,8 @@ type SidebarRow = { scope: Scope; view?: "actions" | "credentials"; text: string
 export function App({ browser, onboardingLoad }: { browser: Browser; onboardingLoad?: ComponentProps<typeof Onboarding>["load"] }) {
   const state = useSyncExternalStore(browser.subscribe, browser.getSnapshot);
   const { exit } = useApp();
-  const { stdout } = useStdout();
-  const [size, setSize] = useState({ width: stdout.columns ?? 80, height: stdout.rows ?? 24 });
+  const { columns, rows } = useWindowSize();
+  const size = { width: columns, height: rows };
   const [pane, setPane] = useState<"sidebar" | "content">(state.actions ? "content" : "sidebar");
   const [expanded, setExpanded] = useState(() => new Set([state.scope.connection]));
   const [addEnvironmentSelected, setAddEnvironmentSelected] = useState(false);
@@ -39,11 +39,6 @@ export function App({ browser, onboardingLoad }: { browser: Browser; onboardingL
     setAddEnvironmentSelected(false);
     if (state.environment === "create") setExpanded(old => new Set([...old, state.scope.connection]));
   }, [state.scope.connection]);
-  useEffect(() => {
-    const resize = () => setSize({ width: stdout.columns ?? 80, height: stdout.rows ?? 24 });
-    stdout.on("resize", resize);
-    return () => { stdout.off("resize", resize); };
-  }, [stdout]);
   const observation = state.observations[state.scope.connection];
   const target = browser.targets[state.scope.connection];
   const sidebar = browser.targets.flatMap((connection, index) => {
