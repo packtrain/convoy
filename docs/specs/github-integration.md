@@ -21,8 +21,7 @@ writing to GitHub as each member's own account (comments, reviews, state
 changes, merge, and editing). It ships in the priority order under
 [Delivery as vertical slices](#delivery-as-vertical-slices).
 
-Outside this plan: GitHub Enterprise Server (OS-2025), comment attachments
-through Convoy-hosted links (OS-2172), GitHub events in Watch Tower
+Outside this plan: GitHub Enterprise Server (OS-2025), GitHub events in Watch Tower
 (OS-2173), and asking about a Guide step, which waits for shared remote
 environments. Future CLI-driven priority and review layers still motivate
 persistent PR records; do not add their schemas or execution flows.
@@ -1643,10 +1642,8 @@ Slice 6 (OS-2183).
   and another member signing in on the same browser never sees it. The
   GitHub account id identifies the member, since one GitHub account links to
   one member per organization.
-- **Attachments and @mentions** (OS-2434). GitHub's API can't upload comment
-  attachments, so the comment side has no attach button and a pasted image
-  does nothing, until Convoy hosts the file and links it (OS-2172). A button
-  that only explains it can't attach is a dead end. Typing `@` at the start of a
+- **Attachments and @mentions** (OS-2434). The comment side attaches files
+  through [Comment attachments](#comment-attachments) (OS-2172). Typing `@` at the start of a
   word opens a picker over the PR's people, from the Overview the reader
   already holds: the author, reviewers, assignees, then commenters, the
   viewer among them (on a PR nobody else touched, they are the only one).
@@ -1660,6 +1657,46 @@ Slice 6 (OS-2183).
   its text, so its text goes transparent over a copy that draws each `@login`
   with a text stroke, which keeps letter widths, and with them the caret, in
   place.
+
+### Comment attachments
+
+OS-2172. GitHub's API can't upload comment attachments, so Convoy hosts the
+file and the comment links it. The link is the blob's Convex storage URL:
+public and unguessable, as GitHub's own attachment links are. Anyone who
+can see the comment can open the file, and on a public repository that is
+anyone at all.
+
+- **Composer.** The comment side has the task composer's attach button,
+  paste, and drop onto the input box, which alone highlights. Pills show each file while it uploads; Send waits for
+  them. While a file is attached the composer says "Files get a public
+  link. Anyone who can see this comment can open them, on a public
+  repository anyone at all." A file alone makes a comment. Files aren't
+  kept with the draft, so Reconnect or a reload drops them. Editing a
+  comment attaches nothing.
+- **Upload.** `comments.generateUploadUrl` (project view) → `POST` the bytes
+  → `comments.registerUpload({ storageId, fileName, contentType })`, which
+  inserts an `integrationCommentFiles` row owned by the caller, under the
+  [storage ownership](task-attachments.md#storage-ownership-os-1901) rules:
+  a missing, claimed, or oversized (over 50 MB) blob gets no row, and the
+  file name must be a single path segment.
+- **Post.** `comments.create` takes `files` (storage ids, at most 10). Each
+  must be the caller's row in the project, else "An attached file is gone".
+  Each becomes one line under the body: `![name](url)` for an image, so
+  GitHub shows it inline, `[name](url)` otherwise, with Markdown in the name
+  escaped. The rows get `postedAt` before the GitHub request, for good: a
+  discard while it runs, or after GitHub refused it, can't break a link
+  GitHub may hold, even one an overlapping send posted. A refused file stays
+  in the composer for Send to retry; removing it then keeps the blob.
+  A successful send clears only the files it sent; one added while it ran
+  stays for the next comment.
+- **Lifetime.** Removing a pill or leaving the composer runs
+  `comments.discardUpload`, which deletes the caller's row and blob while
+  unposted. A posted (or once-sent) file is never deleted: editing or deleting the comment
+  on GitHub doesn't reach Convoy, and other comments may quote the link.
+  `integrationCommentFiles` is a reference table in `lib/storageRepo.ts`,
+  so no other family deletes or claims its blobs. An upload abandoned by a
+  closed tab stays unposted with no sweep, as task uploads do.
+- **CLI.** None: the CLI has no PR comment command to extend.
 
 ### State actions and bulk actions
 
@@ -2049,8 +2086,9 @@ the agreed priority.
    authorization per organization, Reconnect, access-based disabling, and
    conversation comments with edit and delete: the comment side of the
    Activity composer, and "Connect GitHub to comment..." without an
-   account. Follow-ups: @mentions (6.1, built, OS-2434; attachments wait for OS-2172; see
-   [Linked GitHub accounts and comments](#linked-github-accounts-and-comments)), You filters (6.2,
+   account. Follow-ups: @mentions (6.1, built, OS-2434; see
+   [Linked GitHub accounts and comments](#linked-github-accounts-and-comments)), attachments (built, OS-2172; see
+   [Comment attachments](#comment-attachments)), You filters (6.2,
    OS-2435), and Convoy names for linked GitHub users (6.3, OS-2436).
 7. **State actions** (built, OS-2184; see
    [State actions and bulk actions](#state-actions-and-bulk-actions)). Close, reopen, draft, ready for review, assign, archive

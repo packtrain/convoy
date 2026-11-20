@@ -3,6 +3,7 @@
 import { useId, useRef, useState } from "react";
 import { useAppUser } from "@/lib/auth/hooks";
 import { CornerDownLeft, Paperclip, X } from "lucide-react";
+import { AttachmentDropZone } from "@/components/blocks/attachment-drop-zone";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Button } from "@/components/ui/button";
 import { InputGroupButton } from "@/components/ui/input-group";
@@ -252,205 +253,207 @@ export function CommentInput({
 
   return (
     <div>
-      {/* Same surface as ThreadComposer's input group so both composers match. */}
-      <div className="flex gap-2 rounded-lg border border-input bg-thread-composer-input p-2.5 focus-within:border-ring transition-colors">
-        <Avatar className="size-8 shrink-0">
-          <AvatarImage src={user?.imageUrl} />
-          <AvatarFallback className="text-xs">{userInitials}</AvatarFallback>
-        </Avatar>
+      {/* Same surface as ThreadComposer's input group so both composers match. The box alone takes drops. */}
+      <AttachmentDropZone onDrop={(files) => onAddFiles?.(files)} disabled={!onAddFiles || disabled} className="rounded-lg">
+        <div className="flex gap-2 rounded-lg border border-input bg-thread-composer-input p-2.5 focus-within:border-ring transition-colors">
+          <Avatar className="size-8 shrink-0">
+            <AvatarImage src={user?.imageUrl} />
+            <AvatarFallback className="text-xs">{userInitials}</AvatarFallback>
+          </Avatar>
 
-        <div className="relative min-w-0 flex-1">
-          <div className="relative">
-            {/* A textarea can't style its text: it goes see-through over a copy that bolds each @login. */}
-            {mentions ? (
-              <div
-                ref={highlightRef}
-                aria-hidden
+          <div className="relative min-w-0 flex-1">
+            <div className="relative">
+              {/* A textarea can't style its text: it goes see-through over a copy that bolds each @login. */}
+              {mentions ? (
+                <div
+                  ref={highlightRef}
+                  aria-hidden
+                  className={cn(
+                    "pointer-events-none absolute inset-0 overflow-hidden px-1 py-1.5 text-sm break-words whitespace-pre-wrap text-foreground",
+                    (disabled || isSubmitting) && "opacity-50"
+                  )}
+                >
+                  {content.split(MENTION_TOKEN).map((part, index) =>
+                    index % 3 === 2 ? (
+                      // A stroke, not font-weight, so the copy keeps the textarea's letter widths and caret.
+                      <span key={index} data-mention className="[-webkit-text-stroke:0.4px_currentColor]">
+                        {part}
+                      </span>
+                    ) : (
+                      part
+                    )
+                  )}{" "}
+                </div>
+              ) : null}
+              <textarea
+                ref={textareaRef}
+                data-task-comment-input="true"
+                value={content}
+                onChange={(e) => {
+                  setContent(e.target.value);
+                  trackCaret(e.target);
+                  setActiveMention(0);
+                  // Escape holds for the token it closed; a bare `@` is a new one.
+                  const next = mentionAt(e.target.value, e.target.selectionStart);
+                  if (!next || !next.query) setDismissedMention(null);
+                }}
+                onSelect={(e) => trackCaret(e.currentTarget)}
+                onScroll={(e) => {
+                  if (highlightRef.current) highlightRef.current.scrollTop = e.currentTarget.scrollTop;
+                }}
+                onBlur={() => setCaret(null)}
+                onKeyDown={handleKeyDown}
+                onPaste={handlePaste}
+                aria-autocomplete={mentions ? "list" : undefined}
+                aria-controls={mentionMatches.length ? mentionListId : undefined}
+                aria-activedescendant={mentionMatches.length ? `${mentionListId}-${highlighted}` : undefined}
+                placeholder={placeholder}
+                disabled={disabled || isSubmitting}
+                rows={1}
                 className={cn(
-                  "pointer-events-none absolute inset-0 overflow-hidden px-1 py-1.5 text-sm break-words whitespace-pre-wrap text-foreground",
-                  (disabled || isSubmitting) && "opacity-50"
+                  "relative w-full resize-none bg-transparent px-1 py-1.5 text-sm text-foreground outline-none placeholder:text-muted-foreground disabled:cursor-not-allowed disabled:opacity-50",
+                  mentions && "text-transparent caret-foreground"
                 )}
+                style={{ minHeight: "36px", maxHeight: "120px" }}
+                onInput={(e) => {
+                  const target = e.target as HTMLTextAreaElement;
+                  target.style.height = "36px";
+                  target.style.height = `${Math.min(target.scrollHeight, 120)}px`;
+                }}
+              />
+            </div>
+
+            {mentionOpen ? (
+              <div
+                id={mentionListId}
+                role="listbox"
+                aria-label="Mention"
+                className="absolute top-10 left-0 z-50 w-56 rounded-md border bg-popover p-1 text-popover-foreground shadow-md"
               >
-                {content.split(MENTION_TOKEN).map((part, index) =>
-                  index % 3 === 2 ? (
-                    // A stroke, not font-weight, so the copy keeps the textarea's letter widths and caret.
-                    <span key={index} data-mention className="[-webkit-text-stroke:0.4px_currentColor]">
-                      {part}
-                    </span>
-                  ) : (
-                    part
-                  )
-                )}{" "}
+                {mentionMatches.length ? null : (
+                  <div className="px-2 py-1.5 text-sm text-muted-foreground">
+                    {mention.query ? `No matches for @${mention.query}` : "No one to mention"}
+                  </div>
+                )}
+                {mentionMatches.map(({ login, avatarUrl }, index) => (
+                  <div
+                    key={login}
+                    id={`${mentionListId}-${index}`}
+                    role="option"
+                    aria-selected={index === highlighted}
+                    // Keeps focus, and the caret, in the textarea.
+                    onMouseDown={(e) => e.preventDefault()}
+                    onClick={() => insertMention(login)}
+                    onMouseEnter={() => setActiveMention(index)}
+                    className="flex cursor-pointer items-center gap-2 rounded-sm px-2 py-1.5 text-sm aria-selected:bg-accent"
+                  >
+                    <Avatar aria-hidden className="size-5 shrink-0">
+                      <AvatarImage src={avatarUrl ?? undefined} />
+                      <AvatarFallback className="text-[10px]">{login.slice(0, 2).toUpperCase()}</AvatarFallback>
+                    </Avatar>
+                    <span className="truncate">{login}</span>
+                  </div>
+                ))}
               </div>
             ) : null}
-            <textarea
-              ref={textareaRef}
-              data-task-comment-input="true"
-              value={content}
-              onChange={(e) => {
-                setContent(e.target.value);
-                trackCaret(e.target);
-                setActiveMention(0);
-                // Escape holds for the token it closed; a bare `@` is a new one.
-                const next = mentionAt(e.target.value, e.target.selectionStart);
-                if (!next || !next.query) setDismissedMention(null);
-              }}
-              onSelect={(e) => trackCaret(e.currentTarget)}
-              onScroll={(e) => {
-                if (highlightRef.current) highlightRef.current.scrollTop = e.currentTarget.scrollTop;
-              }}
-              onBlur={() => setCaret(null)}
-              onKeyDown={handleKeyDown}
-              onPaste={handlePaste}
-              aria-autocomplete={mentions ? "list" : undefined}
-              aria-controls={mentionMatches.length ? mentionListId : undefined}
-              aria-activedescendant={mentionMatches.length ? `${mentionListId}-${highlighted}` : undefined}
-              placeholder={placeholder}
-              disabled={disabled || isSubmitting}
-              rows={1}
-              className={cn(
-                "relative w-full resize-none bg-transparent px-1 py-1.5 text-sm text-foreground outline-none placeholder:text-muted-foreground disabled:cursor-not-allowed disabled:opacity-50",
-                mentions && "text-transparent caret-foreground"
-              )}
-              style={{ minHeight: "36px", maxHeight: "120px" }}
-              onInput={(e) => {
-                const target = e.target as HTMLTextAreaElement;
-                target.style.height = "36px";
-                target.style.height = `${Math.min(target.scrollHeight, 120)}px`;
-              }}
-            />
-          </div>
 
-          {mentionOpen ? (
-            <div
-              id={mentionListId}
-              role="listbox"
-              aria-label="Mention"
-              className="absolute top-10 left-0 z-50 w-56 rounded-md border bg-popover p-1 text-popover-foreground shadow-md"
-            >
-              {mentionMatches.length ? null : (
-                <div className="px-2 py-1.5 text-sm text-muted-foreground">
-                  {mention.query ? `No matches for @${mention.query}` : "No one to mention"}
-                </div>
-              )}
-              {mentionMatches.map(({ login, avatarUrl }, index) => (
-                <div
-                  key={login}
-                  id={`${mentionListId}-${index}`}
-                  role="option"
-                  aria-selected={index === highlighted}
-                  // Keeps focus, and the caret, in the textarea.
-                  onMouseDown={(e) => e.preventDefault()}
-                  onClick={() => insertMention(login)}
-                  onMouseEnter={() => setActiveMention(index)}
-                  className="flex cursor-pointer items-center gap-2 rounded-sm px-2 py-1.5 text-sm aria-selected:bg-accent"
-                >
-                  <Avatar aria-hidden className="size-5 shrink-0">
-                    <AvatarImage src={avatarUrl ?? undefined} />
-                    <AvatarFallback className="text-[10px]">{login.slice(0, 2).toUpperCase()}</AvatarFallback>
-                  </Avatar>
-                  <span className="truncate">{login}</span>
-                </div>
-              ))}
-            </div>
-          ) : null}
+            {/* Actions bar */}
+            <div className="flex items-center gap-1">
+              {/* Attachments stay on one line; the rest collapse into a dropdown. */}
+              <div className="flex min-w-0 flex-1 items-center gap-1.5 overflow-hidden">
+                {visibleAttachments.map((attachment) => (
+                  <AttachmentPill
+                    key={attachment.id}
+                    attachment={attachment}
+                    onRemove={onRemoveAttachment}
+                  />
+                ))}
 
-          {/* Actions bar */}
-          <div className="flex items-center gap-1">
-            {/* Attachments stay on one line; the rest collapse into a dropdown. */}
-            <div className="flex min-w-0 flex-1 items-center gap-1.5 overflow-hidden">
-              {visibleAttachments.map((attachment) => (
-                <AttachmentPill
-                  key={attachment.id}
-                  attachment={attachment}
-                  onRemove={onRemoveAttachment}
-                />
-              ))}
+                {overflowAttachments.length > 0 && (
+                  <DropdownMenu>
+                    <DropdownMenuTrigger asChild>
+                      <Button
+                        type="button"
+                        variant="ghost"
+                        size="sm"
+                        className="h-6 shrink-0 cursor-pointer px-1.5 text-xs text-muted-foreground"
+                      >
+                        {overflowAttachments.length} more
+                      </Button>
+                    </DropdownMenuTrigger>
+                    <DropdownMenuContent align="start" className="w-64">
+                      {overflowAttachments.map((attachment) => (
+                          <div
+                            key={attachment.id}
+                            className="group flex items-center gap-2 rounded-sm px-2 py-1.5 text-sm hover:bg-accent"
+                          >
+                            {renderAttachmentIcon(attachment, "size-3.5")}
+                            <span
+                              className={cn(
+                                "min-w-0 flex-1 truncate",
+                                attachment.status === "error" && "text-destructive"
+                              )}
+                            >
+                              {attachment.fileName}
+                            </span>
+                            <button
+                              type="button"
+                              aria-label={`Remove ${attachment.fileName}`}
+                              onClick={() => onRemoveAttachment(attachment.id)}
+                              className="shrink-0 cursor-pointer text-muted-foreground opacity-0 transition-opacity hover:text-foreground group-hover:opacity-100 group-focus-within:opacity-100"
+                            >
+                              <X className="size-3.5" />
+                            </button>
+                          </div>
+                      ))}
+                    </DropdownMenuContent>
+                  </DropdownMenu>
+                )}
+              </div>
 
-              {overflowAttachments.length > 0 && (
-                <DropdownMenu>
-                  <DropdownMenuTrigger asChild>
+              {onAddFiles ? (
+                <>
+                  <TooltipExt content="Attach file">
                     <Button
                       type="button"
                       variant="ghost"
-                      size="sm"
-                      className="h-6 shrink-0 cursor-pointer px-1.5 text-xs text-muted-foreground"
+                      size="icon-sm"
+                      aria-label="Attach file"
+                      className="shrink-0 opacity-50 hover:opacity-100"
+                      disabled={disabled || isSubmitting}
+                      onClick={() => fileInputRef.current?.click()}
                     >
-                      {overflowAttachments.length} more
+                      <Paperclip />
                     </Button>
-                  </DropdownMenuTrigger>
-                  <DropdownMenuContent align="start" className="w-64">
-                    {overflowAttachments.map((attachment) => (
-                        <div
-                          key={attachment.id}
-                          className="group flex items-center gap-2 rounded-sm px-2 py-1.5 text-sm hover:bg-accent"
-                        >
-                          {renderAttachmentIcon(attachment, "size-3.5")}
-                          <span
-                            className={cn(
-                              "min-w-0 flex-1 truncate",
-                              attachment.status === "error" && "text-destructive"
-                            )}
-                          >
-                            {attachment.fileName}
-                          </span>
-                          <button
-                            type="button"
-                            aria-label={`Remove ${attachment.fileName}`}
-                            onClick={() => onRemoveAttachment(attachment.id)}
-                            className="shrink-0 cursor-pointer text-muted-foreground opacity-0 transition-opacity hover:text-foreground group-hover:opacity-100 group-focus-within:opacity-100"
-                          >
-                            <X className="size-3.5" />
-                          </button>
-                        </div>
-                    ))}
-                  </DropdownMenuContent>
-                </DropdownMenu>
-              )}
+                  </TooltipExt>
+                  <input
+                    ref={fileInputRef}
+                    type="file"
+                    multiple
+                    className="hidden"
+                    onChange={handleFileSelect}
+                  />
+                </>
+              ) : null}
+
+              {/* Send button — same control as ThreadComposer's PromptInputSubmit. */}
+              <InputGroupButton
+                type="button"
+                variant="default"
+                size="icon-sm"
+                aria-label="Send comment"
+                disabled={
+                  !hasContent || hasBlockingPendingAttachments || isSubmitting || disabled
+                }
+                onClick={handleSubmit}
+                className="shrink-0 cursor-pointer"
+              >
+                {isSubmitting ? <Spinner /> : <CornerDownLeft className="size-4" />}
+              </InputGroupButton>
             </div>
-
-            {onAddFiles ? (
-              <>
-                <TooltipExt content="Attach file">
-                  <Button
-                    type="button"
-                    variant="ghost"
-                    size="icon-sm"
-                    aria-label="Attach file"
-                    className="shrink-0 opacity-50 hover:opacity-100"
-                    disabled={disabled || isSubmitting}
-                    onClick={() => fileInputRef.current?.click()}
-                  >
-                    <Paperclip />
-                  </Button>
-                </TooltipExt>
-                <input
-                  ref={fileInputRef}
-                  type="file"
-                  multiple
-                  className="hidden"
-                  onChange={handleFileSelect}
-                />
-              </>
-            ) : null}
-
-            {/* Send button — same control as ThreadComposer's PromptInputSubmit. */}
-            <InputGroupButton
-              type="button"
-              variant="default"
-              size="icon-sm"
-              aria-label="Send comment"
-              disabled={
-                !hasContent || hasBlockingPendingAttachments || isSubmitting || disabled
-              }
-              onClick={handleSubmit}
-              className="shrink-0 cursor-pointer"
-            >
-              {isSubmitting ? <Spinner /> : <CornerDownLeft className="size-4" />}
-            </InputGroupButton>
           </div>
         </div>
-      </div>
+      </AttachmentDropZone>
       {/*
         `pl-[7px]` lines the hint up with the composer's own text rather than
         its border: the input group pads 2.5 (10px) and the textarea another

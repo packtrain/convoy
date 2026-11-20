@@ -25,6 +25,22 @@ describe("CommentInput", () => {
     cleanup();
   });
 
+  test("dropping files highlights the rounded input box, not the hint under it", () => {
+    const onAddFiles = vi.fn();
+    render(<CommentInput onSubmit={vi.fn()} onAddFiles={onAddFiles} />);
+    const input = screen.getByPlaceholderText("Add a comment...");
+    fireEvent.dragEnter(input, { dataTransfer: { types: ["Files"], files: [] } });
+
+    const overlay = screen.getByText("Drop files to attach").parentElement!;
+    expect(overlay.className).toContain("rounded-[inherit]");
+    expect(overlay.parentElement!.contains(input)).toBe(true);
+    expect(overlay.parentElement!.contains(screen.getByText(/Press Enter to send/))).toBe(false);
+
+    const file = new File(["x"], "x.txt");
+    fireEvent.drop(input, { dataTransfer: { types: ["Files"], files: [file] } });
+    expect(onAddFiles).toHaveBeenCalledWith([file]);
+  });
+
   test("the attach button is named", () => {
     render(
       <CommentInput

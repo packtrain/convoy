@@ -29,6 +29,9 @@ const updateBranch = vi.fn();
 const submitReview = vi.fn();
 const requestReviewer = vi.fn();
 const beginLink = vi.fn();
+const generateUploadUrl = vi.fn();
+const registerUpload = vi.fn();
+const discardUpload = vi.fn();
 const readOverview = vi.fn();
 const readMergeability = vi.fn();
 const readFile = vi.fn();
@@ -56,7 +59,13 @@ vi.mock("convex/react", () => ({
       [name(api.integrations.github.accounts.listMine)]: linkedAccounts,
     }[name(fn)];
   },
-  useMutation: (fn: Parameters<typeof getFunctionName>[0]) => (name(fn) === name(api.integrations.github.accounts.beginLink) ? beginLink : vi.fn()),
+  useMutation: (fn: Parameters<typeof getFunctionName>[0]) =>
+    ({
+      [name(api.integrations.github.accounts.beginLink)]: beginLink,
+      [name(api.integrations.github.comments.generateUploadUrl)]: generateUploadUrl,
+      [name(api.integrations.github.comments.registerUpload)]: registerUpload,
+      [name(api.integrations.github.comments.discardUpload)]: discardUpload,
+    })[name(fn)] ?? vi.fn(),
   useAction: (fn: Parameters<typeof getFunctionName>[0]) =>
     ({
       [name(api.integrations.github.pullRequests.readDiff)]: readDiff,
@@ -831,13 +840,13 @@ describe("PullRequestReader GitHub comments (OS-2183)", () => {
     fireEvent.click(screen.getByRole("button", { name: "Send comment" }));
 
     expect(await screen.findByText("Ship it")).toBeTruthy();
-    expect(createComment).toHaveBeenCalledWith({ projectId: "project_1", repositoryId: "repo_1", number: 7, body: "Ship it" });
+    expect(createComment).toHaveBeenCalledWith({ projectId: "project_1", repositoryId: "repo_1", number: 7, body: "Ship it", files: [] });
     expect(readPermission).toHaveBeenCalledTimes(1);
     // Only the viewer's own comment can be edited or deleted.
     expect(screen.getAllByRole("button", { name: "Comment actions" })).toHaveLength(1);
   });
 
-  test("@ offers the PR's people, and there's no attach button until Convoy can host the file", async () => {
+  test("@ offers the PR's people", async () => {
     linkedAs({ login: "maya", githubUserId: 42, status: "active" });
     readOverview.mockResolvedValue({
       ...overview,
@@ -845,7 +854,7 @@ describe("PullRequestReader GitHub comments (OS-2183)", () => {
       assignees: [{ login: "jo", avatarUrl: null }],
       comments: [...overview.comments, { ...overview.comments[0], id: 3, author: "vercel[bot]", authorId: 5, body: "Deployed" }],
     });
-    const { container } = render(connected());
+    render(connected());
     await screen.findByText("Nice work");
     fireEvent.click(screen.getByRole("button", { name: "Add comment..." }));
     const input = screen.getByPlaceholderText("Leave a comment on GitHub...") as HTMLTextAreaElement;
@@ -862,9 +871,53 @@ describe("PullRequestReader GitHub comments (OS-2183)", () => {
     ]);
     fireEvent.click(screen.getByRole("option", { name: "alex" }));
     expect(input.value).toBe("@alex ");
+  });
 
-    expect(screen.queryByRole("button", { name: "Attach file" })).toBeNull();
-    expect(container.querySelector('input[type="file"]')).toBeNull();
+  test("an attached file uploads as the member's, the composer says its link is public, and the comment links it", async () => {
+    linkedAs({ login: "maya", githubUserId: 42, status: "active" });
+    generateUploadUrl.mockResolvedValue("https://upload.example");
+    registerUpload.mockResolvedValue(null);
+    vi.stubGlobal("fetch", vi.fn().mockResolvedValue(new Response(JSON.stringify({ storageId: "storage_1" }))));
+    createComment.mockResolvedValue({ id: 9, author: "maya", authorId: 42, authorAvatarUrl: null, body: "[shot.png](u)", createdAt: Date.now(), url: "https://github.com/c/9" });
+    const { container } = render(connected());
+    await screen.findByText("Nice work");
+    fireEvent.click(screen.getByRole("button", { name: "Add comment..." }));
+
+    const file = new File(["png"], "shot.png", { type: "image/png" });
+    fireEvent.change(container.querySelector('input[type="file"]')!, { target: { files: [file] } });
+    await waitFor(() => expect(registerUpload).toHaveBeenCalledWith({ projectId: "project_1", storageId: "storage_1", fileName: "shot.png", contentType: "image/png" }));
+    expect(screen.getByText(/Files get a public link/)).toBeTruthy();
+
+    await waitFor(() => expect((screen.getByRole("button", { name: "Send comment" }) as HTMLButtonElement).disabled).toBe(false));
+    fireEvent.click(screen.getByRole("button", { name: "Send comment" }));
+    await waitFor(() => expect(createComment).toHaveBeenCalledWith({ projectId: "project_1", repositoryId: "repo_1", number: 7, body: "", files: ["storage_1"] }));
+    await waitFor(() => expect(screen.queryByText(/Files get a public link/)).toBeNull());
+    expect(discardUpload).not.toHaveBeenCalled();
+    vi.unstubAllGlobals();
+  });
+
+  test("a file dropped while a comment posts stays for the next one", async () => {
+    linkedAs({ login: "maya", githubUserId: 42, status: "active" });
+    generateUploadUrl.mockResolvedValue("https://upload.example");
+    registerUpload.mockResolvedValue(null);
+    discardUpload.mockResolvedValue(null);
+    vi.stubGlobal("fetch", vi.fn().mockResolvedValue(new Response(JSON.stringify({ storageId: "storage_2" }))));
+    let respond!: (comment: unknown) => void;
+    createComment.mockReturnValue(new Promise((resolve) => (respond = resolve)));
+    render(connected());
+    await screen.findByText("Nice work");
+    fireEvent.click(screen.getByRole("button", { name: "Add comment..." }));
+    const input = screen.getByPlaceholderText("Leave a comment on GitHub...");
+    fireEvent.change(input, { target: { value: "First" } });
+    fireEvent.click(screen.getByRole("button", { name: "Send comment" }));
+
+    fireEvent.drop(input, { dataTransfer: { files: [new File(["txt"], "next.txt", { type: "text/plain" })], types: ["Files"] } });
+    await waitFor(() => expect(registerUpload).toHaveBeenCalled());
+    await screen.findByText("next.txt");
+    await act(async () => respond({ id: 9, author: "maya", authorId: 42, authorAvatarUrl: null, body: "First", createdAt: Date.now(), url: "https://github.com/c/9" }));
+    await screen.findByText("First");
+    expect(screen.getByText("next.txt")).toBeTruthy();
+    vi.unstubAllGlobals();
   });
 
   test("@ offers someone whose review was dismissed, and a requested team's name never hides a user", async () => {

@@ -83,7 +83,7 @@ export function AttachmentDropZone({
     >
       {children}
       {isDragging && (
-        <div className="pointer-events-none absolute inset-0 z-10 flex items-center justify-center bg-blue-500/10">
+        <div className="pointer-events-none absolute inset-0 z-10 flex items-center justify-center rounded-[inherit] bg-blue-500/10">
           <span className="rounded-lg bg-background/80 px-4 py-2 font-medium text-blue-500">
             Drop files to attach
           </span>

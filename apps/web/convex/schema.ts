@@ -1587,6 +1587,18 @@ export default defineSchema({
     updatedAt: v.number(),
   }).index("by_projectId", ["projectId"]),
 
+  // A file a member attached to a GitHub comment (OS-2172). Its storage URL is the comment's public link,
+  // so a posted row keeps the blob forever; an unposted one is the uploader's to discard.
+  integrationCommentFiles: defineTable({
+    projectId: v.id("projects"),
+    userId: v.id("users"),
+    storageId: v.id("_storage"),
+    fileName: v.string(),
+    contentType: v.string(),
+    createdAt: v.number(),
+    postedAt: v.optional(v.number()),
+  }).index("by_storageId", ["storageId"]),
+
   // A member's Linked GitHub account in one organization: the user-to-server
   // tokens Convoy writes with, encrypted (docs/specs/github-integration.md → GitHub accounts and permissions).
   integrationLinkedAccounts: defineTable({

@@ -13,12 +13,14 @@ type Ctx = QueryCtx | MutationCtx;
 
 // cliWorktreeOps: a worktree download's blob while its op row lives (OS-2050).
 // checkResultFiles: check evidence outlives its thread (docs/specs/task-checks.md).
+// integrationCommentFiles: a GitHub comment's public link, pending or posted (OS-2172).
 const REFERENCE_TABLES = [
   "taskAttachments",
   "taskCommentAttachments",
   "cliMessageAttachmentRefs",
   "cliWorktreeOps",
   "checkResultFiles",
+  "integrationCommentFiles",
 ] as const;
 const PENDING_TABLES = ["taskAttachmentPendingUploads", "cliMessagePendingUploads"] as const;
 

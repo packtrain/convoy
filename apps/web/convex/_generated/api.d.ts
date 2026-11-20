@@ -156,6 +156,7 @@ import type * as integrations_github_guides from "../integrations/github/guides.
 import type * as integrations_github_httpHandlers from "../integrations/github/httpHandlers.js";
 import type * as integrations_github_lib_constants from "../integrations/github/lib/constants.js";
 import type * as integrations_github_lib_github from "../integrations/github/lib/github.js";
+import type * as integrations_github_lib_integrationCommentFilesRepo from "../integrations/github/lib/integrationCommentFilesRepo.js";
 import type * as integrations_github_lib_integrationGuidePromptsRepo from "../integrations/github/lib/integrationGuidePromptsRepo.js";
 import type * as integrations_github_lib_integrationLinkedAccountsRepo from "../integrations/github/lib/integrationLinkedAccountsRepo.js";
 import type * as integrations_github_lib_integrationPullRequestGuidesRepo from "../integrations/github/lib/integrationPullRequestGuidesRepo.js";
@@ -529,6 +530,7 @@ declare const fullApi: ApiFromModules<{
   "integrations/github/httpHandlers": typeof integrations_github_httpHandlers;
   "integrations/github/lib/constants": typeof integrations_github_lib_constants;
   "integrations/github/lib/github": typeof integrations_github_lib_github;
+  "integrations/github/lib/integrationCommentFilesRepo": typeof integrations_github_lib_integrationCommentFilesRepo;
   "integrations/github/lib/integrationGuidePromptsRepo": typeof integrations_github_lib_integrationGuidePromptsRepo;
   "integrations/github/lib/integrationLinkedAccountsRepo": typeof integrations_github_lib_integrationLinkedAccountsRepo;
   "integrations/github/lib/integrationPullRequestGuidesRepo": typeof integrations_github_lib_integrationPullRequestGuidesRepo;

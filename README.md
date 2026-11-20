@@ -57,7 +57,7 @@ welcome.
 
 | Feature | What it does | Status |
 | --- | --- | --- |
-| GitHub integration for PRs | Connect GitHub repositories and read their pull requests in Convoy: commits, checks, merge status, stacks, referenced tasks, and diffs with Reviewed marks. PR links in tasks and threads open the reader. Comments, reviews with inline comments, reviewer requests, state changes, and merging run as each member's GitHub account. | In progress |
+| GitHub integration for PRs | Connect GitHub repositories and read their pull requests in Convoy: commits, checks, merge status, stacks, referenced tasks, and diffs with Reviewed marks. PR links in tasks and threads open the reader. Comments with attached files, reviews with inline comments, reviewer requests, state changes, and merging run as each member's GitHub account. | In progress |
 | PR guided reviews | Review pull requests with a guided review flow. | In progress |
 | Remove environments | Remove configured environments. | Next |
 | Recurring tasks | Create tasks on a repeating schedule. | Next |

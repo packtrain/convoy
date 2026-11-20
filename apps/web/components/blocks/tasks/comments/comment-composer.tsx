@@ -2,7 +2,6 @@
 
 import { useCallback } from "react";
 import { toast } from "sonner";
-import { AttachmentDropZone } from "@/components/blocks/attachment-drop-zone";
 import { CommentInput } from "./comment-input";
 import { useTaskComments } from "@/lib/tasks/hooks/comments/use-task-comments";
 import { useCommentAttachmentUpload } from "@/lib/tasks/hooks/use-comment-attachment-upload";
@@ -105,16 +104,14 @@ export function CommentComposer({
   );
 
   return (
-    <AttachmentDropZone onDrop={handleAddFiles} disabled={disabled}>
-      <div className={cn("border-t border-border p-4", className)}>
-        <CommentInput
-          onSubmit={handleSubmit}
-          pendingAttachments={pendingAttachments}
-          onAddFiles={handleAddFiles}
-          onRemoveAttachment={handleRemoveAttachment}
-          disabled={disabled}
-        />
-      </div>
-    </AttachmentDropZone>
+    <div className={cn("border-t border-border p-4", className)}>
+      <CommentInput
+        onSubmit={handleSubmit}
+        pendingAttachments={pendingAttachments}
+        onAddFiles={handleAddFiles}
+        onRemoveAttachment={handleRemoveAttachment}
+        disabled={disabled}
+      />
+    </div>
   );
 }

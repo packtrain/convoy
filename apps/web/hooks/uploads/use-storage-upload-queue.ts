@@ -43,7 +43,7 @@ interface AbandonedUploadContext {
 export interface UseStorageUploadQueueOptions {
   getUploadUrl: (file: File) => Promise<string>;
   /** Claims the blob right after the POST, before any abandon branch (OS-1901). */
-  registerUpload?: (storageId: Id<"_storage">) => Promise<unknown>;
+  registerUpload?: (storageId: Id<"_storage">, file: File) => Promise<unknown>;
   onUploadComplete?: (context: UploadCompleteContext) => Promise<void>;
   onUploadError?: (context: UploadErrorContext) => void;
   onValidationError?: (context: ValidationErrorContext) => void;
@@ -262,7 +262,7 @@ export function useStorageUploadQueue(options: UseStorageUploadQueueOptions) {
         try {
           const storageId = await uploadToStorage(await getUploadUrlRef.current(file), file, contentType);
           // Before the abandon check: an unregistered blob has no owner to clean it up.
-          await registerUploadRef.current?.(storageId);
+          await registerUploadRef.current?.(storageId, file);
 
           const currentItem =
             uploadsRef.current.find((item) => item.id === uploadId) ?? initialItem;

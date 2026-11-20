@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState, type ReactNode } from "react";
-import { useAction } from "convex/react";
+import { useAction, useMutation } from "convex/react";
 import type { FunctionReturnType } from "convex/server";
 import { formatDistanceToNow } from "date-fns";
 import { Github, MessageSquare, MessageSquareMore, MoreHorizontal, Pencil, Trash2 } from "lucide-react";
@@ -24,9 +24,11 @@ import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigge
 import { InputGroup, InputGroupAddon, InputGroupButton, InputGroupTextarea } from "@/components/ui/input-group";
 import { api } from "@/convex/_generated/api";
 import type { Id } from "@/convex/_generated/dataModel";
+import { useStorageUploadQueue } from "@/hooks/uploads/use-storage-upload-queue";
 import { readLocalString, removeLocalValue, writeLocalString } from "@/lib/browser/local-storage";
 import { showConvexErrorToast } from "@/lib/errors";
 import type { RouteTarget } from "@/lib/navigation";
+import { getContentType } from "@/lib/tasks/files";
 import type { TimelineSortDirection } from "@/lib/tasks/timeline/rows";
 import { GithubMarkdown } from "./github-markdown";
 import { useConnectGithubAccount, useConnectGithubPrompt, useLinkedGithubAccounts } from "./linked-github-account";
@@ -92,6 +94,7 @@ export function useGithubCommenting({
   };
   const role = active && permission?.key === key ? permission.value : null;
   return {
+    projectId,
     organization,
     account,
     /** The connect popup, for actions that run as the member without an active account. */
@@ -102,8 +105,9 @@ export function useGithubCommenting({
     noAccess: role === "none",
     archived,
     viewerId: active && !archived ? account.githubUserId : null,
-    post: (body: string) =>
-      createComment({ ...target, body })
+    /** `files`: uploads registered with `useCommentFiles`; the comment links them. */
+    post: (body: string, files: Id<"_storage">[] = []) =>
+      createComment({ ...target, body, files })
         .then((comment) => onCommentsChange((comments) => [...comments, comment]))
         .catch(report("Could not post the comment")),
     edit: (commentId: number, body: string) =>
@@ -190,7 +194,13 @@ export function PullRequestActivityComposer({
       {canComment ? (
         <div className={resolved === "comment" ? "block" : "hidden"}>
           {/* Keyed by member, so another member signing in on this browser never sees the draft. */}
-          <CommentDraft key={account.githubUserId} storageKey={`${draftKey}:${account.githubUserId}`} onSubmit={commenting.post} mentions={mentions} />
+          <CommentDraft
+            key={account.githubUserId}
+            projectId={commenting.projectId}
+            storageKey={`${draftKey}:${account.githubUserId}`}
+            onSubmit={commenting.post}
+            mentions={mentions}
+          />
         </div>
       ) : null}
       <div className={resolved === "thread" ? "block" : "hidden"}>{threadComposer}</div>
@@ -199,22 +209,90 @@ export function PullRequestActivityComposer({
   return <div className="space-y-2 py-3">{sort === "asc" ? [trigger, composers] : [composers, trigger]}</div>;
 }
 
-/** The comment input over a draft kept in local storage, so it outlives Reconnect and the trip to GitHub. */
-function CommentDraft({ storageKey, onSubmit, mentions }: { storageKey: string; onSubmit: (body: string) => Promise<void>; mentions: CommentMention[] }) {
+/** A draft's files: uploaded, registered as the member's, and discarded when removed or left unsent. */
+function useCommentFiles(projectId: Id<"projects">) {
+  const generateUploadUrl = useMutation(api.integrations.github.comments.generateUploadUrl);
+  const registerUpload = useMutation(api.integrations.github.comments.registerUpload);
+  const discardUpload = useMutation(api.integrations.github.comments.discardUpload);
+  // Best effort: a blob left behind costs storage, not correctness.
+  const discard = (storageId: Id<"_storage">) => void discardUpload({ projectId, storageId }).catch(() => null);
+  const { uploads, uploadFiles, removeUpload, getUploadsSnapshot } = useStorageUploadQueue({
+    getUploadUrl: () => generateUploadUrl({ projectId }),
+    registerUpload: (storageId, file) => registerUpload({ projectId, storageId, fileName: file.name, contentType: getContentType(file) }),
+    onAbandonedUpload: ({ storageId }) => discard(storageId),
+    autoRemoveDelay: 0,
+    errorRemoveDelay: 0,
+  });
+
+  useEffect(
+    () => () => {
+      for (const { storageId } of getUploadsSnapshot()) if (storageId) void discardUpload({ projectId, storageId }).catch(() => null);
+    },
+    [discardUpload, getUploadsSnapshot, projectId]
+  );
+
+  return {
+    pending: uploads.map(({ id, fileName, fileSize, contentType, status, error }) => ({
+      id,
+      fileName,
+      fileSize,
+      contentType,
+      status: status === "done" ? ("uploaded" as const) : status === "error" ? ("error" as const) : ("uploading" as const),
+      error,
+    })),
+    add: (files: File[]) => void uploadFiles(files),
+    remove: (id: string) => {
+      const storageId = getUploadsSnapshot().find((item) => item.id === id)?.storageId;
+      if (storageId) discard(storageId);
+      removeUpload(id);
+    },
+    /** The finished uploads, for a send. */
+    uploaded: () => getUploadsSnapshot().flatMap(({ id, status, storageId }) => (status === "done" && storageId ? [{ id, storageId }] : [])),
+    /** Drops what a comment now links, keeping files added while it posted. */
+    sent: (files: { id: string }[]) => files.forEach(({ id }) => removeUpload(id)),
+  };
+}
+
+/** The comment input over a draft kept in local storage, so it outlives Reconnect and the trip to GitHub. Files aren't kept. */
+function CommentDraft({
+  projectId,
+  storageKey,
+  onSubmit,
+  mentions,
+}: {
+  projectId: Id<"projects">;
+  storageKey: string;
+  onSubmit: (body: string, files: Id<"_storage">[]) => Promise<void>;
+  mentions: CommentMention[];
+}) {
   const [draft, setDraft] = useState(() => readLocalString(storageKey) ?? "");
+  const files = useCommentFiles(projectId);
   const save = (value: string) => {
     setDraft(value);
     if (value) writeLocalString(storageKey, value);
     else removeLocalValue(storageKey);
   };
   return (
-    <CommentInput
-      placeholder="Leave a comment on GitHub..."
-      value={draft}
-      onValueChange={save}
-      onSubmit={onSubmit}
-      mentions={mentions}
-    />
+    <>
+      <CommentInput
+        placeholder="Leave a comment on GitHub..."
+        value={draft}
+        onValueChange={save}
+        onSubmit={(body) => {
+          const sending = files.uploaded();
+          return onSubmit(body, sending.map(({ storageId }) => storageId)).then(() => files.sent(sending));
+        }}
+        mentions={mentions}
+        pendingAttachments={files.pending}
+        onAddFiles={files.add}
+        onRemoveAttachment={files.remove}
+      />
+      {files.pending.length ? (
+        <p className="mt-1 pl-[7px] text-xs text-muted-foreground">
+          Files get a public link. Anyone who can see this comment can open them, on a public repository anyone at all.
+        </p>
+      ) : null}
+    </>
   );
 }
 

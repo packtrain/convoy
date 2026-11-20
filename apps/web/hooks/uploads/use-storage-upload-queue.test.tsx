@@ -229,7 +229,7 @@ describe("useStorageUploadQueue", () => {
       await uploadPromise;
     });
 
-    expect(registerUpload).toHaveBeenCalledWith("storage_1");
+    expect(registerUpload).toHaveBeenCalledWith("storage_1", expect.any(File));
     expect(onAbandonedUpload).toHaveBeenCalledTimes(1);
     expect(registerUpload.mock.invocationCallOrder[0]).toBeLessThan(
       onAbandonedUpload.mock.invocationCallOrder[0]

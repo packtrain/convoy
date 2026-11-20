@@ -203,6 +203,121 @@ describe("integrations.github.comments", () => {
   });
 });
 
+describe("integrations.github.comments files", () => {
+  type Setup = Awaited<ReturnType<typeof linkedProject>>;
+
+  /** Uploads and registers a file the way the composer does. */
+  async function attach({ t, asUser, project }: Pick<Setup, "t" | "asUser" | "project">, fileName: string, type = "application/pdf") {
+    const storageId = await t.run((run) => run.storage.store(new Blob(["bytes"])));
+    await asUser.mutation(api.integrations.github.comments.registerUpload, { projectId: project._id, storageId, fileName, contentType: type });
+    return storageId;
+  }
+
+  const rows = (t: Setup["t"]) => t.run((run) => run.db.query("integrationCommentFiles").collect());
+
+  test("posts attached files as public links to their stored blobs, images inline", async () => {
+    const setup = await linkedProject();
+    const shot = await attach(setup, "shot [1].png", "image/png");
+    const notes = await attach(setup, "notes.pdf");
+    const [shotUrl, notesUrl] = await setup.t.run((run) => Promise.all([run.storage.getUrl(shot), run.storage.getUrl(notes)]));
+
+    const created = await setup.asUser.action(api.integrations.github.comments.create, { ...setup.target, body: " See these ", files: [shot, notes] });
+    expect(created.body).toBe(`See these\n\n![shot \\[1\\].png](${shotUrl})\n[notes.pdf](${notesUrl})`);
+    expect((await rows(setup.t)).map((row) => row.postedAt)).toEqual([expect.any(Number), expect.any(Number)]);
+  });
+
+  test("files alone make a comment", async () => {
+    const setup = await linkedProject();
+    const notes = await attach(setup, "notes.pdf");
+    const created = await setup.asUser.action(api.integrations.github.comments.create, { ...setup.target, body: "", files: [notes] });
+    expect(created.body).toMatch(/^\[notes\.pdf\]\(.+\)$/);
+  });
+
+  test("a posted file can't be discarded, so its link keeps working", async () => {
+    const setup = await linkedProject();
+    const notes = await attach(setup, "notes.pdf");
+    await setup.asUser.action(api.integrations.github.comments.create, { ...setup.target, body: "Hi", files: [notes] });
+    await setup.asUser.mutation(api.integrations.github.comments.discardUpload, { projectId: setup.project._id, storageId: notes });
+    expect(await setup.t.run((run) => run.db.system.get("_storage", notes))).not.toBeNull();
+  });
+
+  test("a file discarded while GitHub takes the comment stays, so the posted link works", async () => {
+    const setup = await linkedProject();
+    const notes = await attach(setup, "notes.pdf");
+    const respond = setup.github.fetchMock.getMockImplementation()!;
+    setup.github.fetchMock.mockImplementation(async (input, init) => {
+      if (init?.method === "POST" && String(input).endsWith("/comments")) {
+        // The composer unmounts mid-post and discards what it still holds.
+        await setup.asUser.mutation(api.integrations.github.comments.discardUpload, { projectId: setup.project._id, storageId: notes });
+      }
+      return respond(input, init);
+    });
+    await setup.asUser.action(api.integrations.github.comments.create, { ...setup.target, body: "Hi", files: [notes] });
+    expect(await setup.t.run((run) => run.db.system.get("_storage", notes))).not.toBeNull();
+    expect((await rows(setup.t))[0].postedAt).toEqual(expect.any(Number));
+  });
+
+  test("a refused send never frees a file an overlapping send posted", async () => {
+    const setup = await linkedProject();
+    const notes = await attach(setup, "notes.pdf");
+    const respond = setup.github.fetchMock.getMockImplementation()!;
+    let first = true;
+    setup.github.fetchMock.mockImplementation(async (input, init) => {
+      if (init?.method === "POST" && String(input).endsWith("/comments") && first) {
+        first = false;
+        await setup.asUser.action(api.integrations.github.comments.create, { ...setup.target, body: "Second succeeds", files: [notes] });
+        return new Response("refused", { status: 403 });
+      }
+      return respond(input, init);
+    });
+    await expect(setup.asUser.action(api.integrations.github.comments.create, { ...setup.target, body: "First refused", files: [notes] })).rejects.toThrow(
+      errors.COMMENT_REFUSED
+    );
+    await setup.asUser.mutation(api.integrations.github.comments.discardUpload, { projectId: setup.project._id, storageId: notes });
+    expect(await setup.t.run((run) => run.db.system.get("_storage", notes))).not.toBeNull();
+  });
+
+  test("an unposted file is the uploader's to discard, and only theirs", async () => {
+    const setup = await linkedProject();
+    const notes = await attach(setup, "notes.pdf");
+    const other = await setup.ctx.user();
+    await setup.ctx.orgMember(setup.org._id, other._id, "member");
+    await setup.ctx.projectMember(setup.project._id, other._id, "member");
+    await setup.ctx.asUser(other).mutation(api.integrations.github.comments.discardUpload, { projectId: setup.project._id, storageId: notes });
+    expect(await rows(setup.t)).toHaveLength(1);
+
+    await setup.asUser.mutation(api.integrations.github.comments.discardUpload, { projectId: setup.project._id, storageId: notes });
+    expect(await rows(setup.t)).toEqual([]);
+    expect(await setup.t.run((run) => run.db.system.get("_storage", notes))).toBeNull();
+  });
+
+  test("another member's upload is refused, and one GitHub didn't take is kept for a retry", async () => {
+    const setup = await linkedProject();
+    const notes = await attach(setup, "notes.pdf");
+    // Someone else registering the same blob gets no claim.
+    const other = await setup.ctx.user();
+    await setup.ctx.orgMember(setup.org._id, other._id, "member");
+    await setup.ctx.projectMember(setup.project._id, other._id, "member");
+    await setup.ctx.asUser(other).mutation(api.integrations.github.comments.registerUpload, { projectId: setup.project._id, storageId: notes, fileName: "mine.pdf", contentType: "application/pdf" });
+    expect((await rows(setup.t)).map((row) => row.fileName)).toEqual(["notes.pdf"]);
+
+    // A refused send keeps the file for Send to retry.
+    setup.github.state.failures.push({ match: /POST .*\/comments$/, status: 403 });
+    await expect(setup.asUser.action(api.integrations.github.comments.create, { ...setup.target, body: "Hi", files: [notes] })).rejects.toThrow(errors.COMMENT_REFUSED);
+    expect((await setup.asUser.action(api.integrations.github.comments.create, { ...setup.target, body: "Hi", files: [notes] })).body).toContain("notes.pdf");
+
+    const stranger = await setup.t.run((run) => run.storage.store(new Blob(["x"])));
+    await expect(setup.asUser.action(api.integrations.github.comments.create, { ...setup.target, body: "Hi", files: [stranger] })).rejects.toThrow(
+      errors.COMMENT_FILE_NOT_FOUND
+    );
+  });
+
+  test("a file name that isn't a single path segment is refused", async () => {
+    const setup = await linkedProject();
+    await expect(attach(setup, "../etc/passwd")).rejects.toThrow(errors.COMMENT_FILE_NAME_INVALID);
+  });
+});
+
 describe("integrations.github.accounts refresh races", () => {
   /** Another action holds the refresh lease and GitHub already rotated the pair; it hasn't stored the new one yet. */
   async function refreshInFlight(setup: Awaited<ReturnType<typeof linkedProject>>) {
