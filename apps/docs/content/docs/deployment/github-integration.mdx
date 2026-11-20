@@ -18,7 +18,7 @@ Create the App under your GitHub organization: **Settings → Developer settings
 | Setup URL | The Callback URL again: `https://<your-app-host>/integrations/github/callback` |
 | Redirect on update | On |
 | Webhook URL | `https://<your-convex-site-host>/api/integrations/github/webhook` (the Convex **HTTP Actions** URL, ending in `.convex.site` on Convex Cloud) |
-| Webhook secret | A long random string; it becomes `GITHUB_APP_WEBHOOK_SECRET` |
+| Webhook secret | Output of `openssl rand -hex 32`; it becomes `GITHUB_APP_WEBHOOK_SECRET`. Save it now: GitHub never shows it again, and **Change secret** is the only way to replace a lost one |
 | User-to-server token expiration (**Optional features**) | Opt in. Members' tokens then last 8 hours and Convoy renews them as they're used |
 
 Grant these repository permissions from the start. Changing an App's permissions later makes every connected organization's owner approve again, and an organization that never approves stops syncing.
@@ -32,7 +32,7 @@ Grant these repository permissions from the start. Changing an App's permissions
 | Commit statuses | Read-only |
 | Metadata | Read-only |
 
-Subscribe to the **Pull request**, **Installation**, and **Installation repositories** events. GitHub also sends every App the **GitHub App authorization** event, with no subscription; Convoy uses it to ask a member who revoked the App to reconnect. Convoy reads with the App's installation credentials, and every write, such as a comment, acts as the member's own GitHub account.
+Under **Subscribe to events**, tick **Pull request**. GitHub sends every App the **Installation**, **Installation repositories**, and **GitHub App authorization** events without a subscription, so they have no checkbox. Convoy uses the first two to notice an uninstall or a removed repository, and the third to ask a member who revoked the App to reconnect. Convoy reads with the App's installation credentials, and every write, such as a comment, acts as the member's own GitHub account.
 
 After creating the App, open its **Credentials** page. Generate a client secret under **Client secrets** and a private key under **Key pairs**; GitHub shows the secret only once and downloads the key as a `.pem` file. Note the App ID, the client ID, and the App's URL slug (`https://github.com/apps/<slug>`) from the **General** page.
 
@@ -48,18 +48,27 @@ If you set the unconverted key, Convoy treats GitHub as not set up and logs a wa
 
 ## Set the variables
 
-Set these on the Convex deployment, never as `NEXT_PUBLIC_*` variables:
+Set these on the Convex deployment. The Next.js app reads none of them, so nothing goes in its environment, and none may be a `NEXT_PUBLIC_*` variable.
+
+Name the target deployment on every command. Without `--deployment`, the Convex CLI uses `CONVEX_DEPLOYMENT`, and a value exported in your shell wins over `.env.local`, so a bare command can write to production. Pass a deployment name (`--deployment adorable-coyote-123`), `--deployment dev` for your own dev deployment, or `--prod`:
 
 ```bash
-npx convex env set GITHUB_APP_ID 123456
-npx convex env set GITHUB_APP_SLUG convoy-acme
-npx convex env set GITHUB_APP_CLIENT_ID Iv23li...
-npx convex env set GITHUB_APP_CLIENT_SECRET ...
-npx convex env set GITHUB_APP_WEBHOOK_SECRET ...
-npx convex env set GITHUB_APP_PRIVATE_KEY -- "$(cat convoy.pkcs8.pem)"
+npx convex env set --deployment <name> GITHUB_APP_ID 123456
+npx convex env set --deployment <name> GITHUB_APP_SLUG convoy-acme
+npx convex env set --deployment <name> GITHUB_APP_CLIENT_ID Iv23li...
+npx convex env set --deployment <name> GITHUB_APP_CLIENT_SECRET
+npx convex env set --deployment <name> GITHUB_APP_WEBHOOK_SECRET
+npx convex env set --deployment <name> GITHUB_APP_PRIVATE_KEY -- "$(cat convoy.pkcs8.pem)"
 ```
 
-`NEXT_PUBLIC_APP_URL` on the Convex deployment must match the Callback URL's host, since Convoy sends it as the OAuth `redirect_uri`.
+Leaving out the value makes the CLI prompt for it, which keeps both secrets out of your shell history. Check the result:
+
+```bash
+npx convex env list --deployment <name> | grep GITHUB_APP
+npx convex env get --deployment <name> NEXT_PUBLIC_APP_URL
+```
+
+All six variables must be listed. `NEXT_PUBLIC_APP_URL` must match the Callback URL's host, since Convoy sends it as the OAuth `redirect_uri`; when it is unset, Convoy falls back to the local dev URL `https://app.convoy.localhost`. Convex reads the variables at runtime, so nothing needs a restart.
 
 ## Connect a repository
 
@@ -73,6 +82,14 @@ Convoy imports the open pull requests in the background, and webhooks keep them 
 ## Test setup
 
 Use a separate App per deployment (dev, preview, production), each with its own callback and webhook URLs. For a dev deployment, a test organization with one throwaway repository where you are an admin is enough. GitHub must reach the webhook URL; Convex Cloud's `.convex.site` URL works without tunneling.
+
+## Troubleshooting
+
+| Symptom | Cause |
+| --- | --- |
+| The GitHub integration page says GitHub isn't set up | A `GITHUB_APP_*` variable is missing on this deployment, or the private key is still PKCS#1. The Convex logs name the key variable when that is the cause |
+| GitHub shows "The redirect_uri is not associated with this application" | The App's Callback URL does not match `NEXT_PUBLIC_APP_URL` on the Convex deployment |
+| Pull request edits on GitHub never reach Convoy | Open the App's **Advanced → Recent Deliveries**. A delivery should answer 202. A 401 means `GITHUB_APP_WEBHOOK_SECRET` differs from the App's webhook secret, and a 404 means the deployment has no complete App configuration; no delivery at all means the Webhook URL is wrong or the webhook is inactive |
 
 ## Link your GitHub account
 
