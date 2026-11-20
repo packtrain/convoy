@@ -575,8 +575,10 @@ URLs are available, the popup keeps the two manual inputs. Unvisited or
 unavailable connections may have no inspected URLs. Long lists scroll with the
 selection and narrow terminals retain the focused field.
 
-Enter an HTTPS deployment URL and masked API key, then load the actual accessible
-projects and organizations. Choose Link existing or Create new. Creation uses the
+Enter an HTTPS deployment URL and masked Convoy API key, then load the actual accessible
+projects and organizations. Since CLI 0.147.2 a muted line under the inputs says where
+the web app shows both: Profile settings → API keys, which lists the keys and the
+"CLI / Convex URL" block. Choose Link existing or Create new. Creation uses the
 existing generated alias; linking derives a profile key from the project's alias.
 Edit the profile display name, key and workspace child path in the target, then
 choose empty, reuse or clone. The guided clone field accepts credential-free HTTPS
@@ -1225,9 +1227,12 @@ Until the selected environment's first service snapshot arrives, the sidebar sho
 a spinner and "Loading projects…" where its projects go. The row cannot be selected.
 It goes away when the snapshot arrives or the attach fails, and the attach failure
 shows its error instead.
+It stays gone through the 3-second retries: a retry keeps the environment
+`reconnecting` and keeps the error until an attach succeeds (CLI 0.147.2).
 It reuses the busy spinner and the existing snapshot, so it adds no reads.
 `navigation.tsx sidebar-loading` checks the loading row before the first snapshot,
 that arrow keys skip it, and that it is gone after a failed attach or a snapshot.
+`workflow.test.ts` checks that retries never return to `connecting` or clear the error.
 
 ### Environment row layout, CLI 0.132.0
 

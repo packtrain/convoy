@@ -50,7 +50,7 @@ try:
     send("https://example.convex.cloud")
     wait("https://example.convex.cloud")
     send("\t")
-    wait("> API key")
+    wait("> Convoy API key")
     send("PRIVATE_TERMINAL_KEY")
     wait("****************")
     send("\t")

@@ -19,6 +19,8 @@ const workspaceModes = [
   { label: "Clone repository", description: "Download a Git repository into a new target directory. Enter its HTTPS URL next." },
 ];
 const names = new Intl.Collator(undefined, { sensitivity: "base", numeric: true });
+/** Both auth values live on one web settings page (CLI / Convex URL block plus the keys). */
+const AUTH_HINT = "Find both in Convoy under Profile settings → API keys.";
 
 type Field = { label: string; value: string; secret?: boolean; select?: boolean; set(value: string): void };
 export function Onboarding({ browser, width: columns, height: rows, load = loadChoices }: { browser: Browser; width: number; height: number; load?: typeof loadChoices }) {
@@ -70,7 +72,7 @@ export function Onboarding({ browser, width: columns, height: rows, load = loadC
   const fields: Field[] = step === "auth" ? [
     ...(deployments.length ? [{ label: "Saved deployment", value: deployments.includes(url) ? url : "Choose a saved deployment", select: true, set: () => {} }] : []),
     { label: "Deployment HTTPS URL", value: url, set: changeUrl },
-    { label: "API key (masked)", value: secret, set: setSecret, secret: true },
+    { label: "Convoy API key (masked)", value: secret, set: setSecret, secret: true },
   ] : [
     ...(options.create ? [
       { label: "Project name", value: options.projectName ?? "", set: (value: string) => {
@@ -91,8 +93,9 @@ export function Onboarding({ browser, width: columns, height: rows, load = loadC
   ];
   const width = Math.max(24, columns);
   const height = Math.max(1, Math.min(rows, dropdown !== undefined ? step === "auth" ? Math.min(22, deployments.length + 11) : 19 : step === "auth" ? (message ? 18 : 16) + (deployments.length ? 3 : 0) : step === "details" ? fields.length * 3 + 10 + (message ? 2 : 0) : 26));
-  const fieldRows = height < fields.length * 3 + 7 + (message ? 2 : 0) ? 2 : 3;
-  const count = Math.max(1, Math.floor((height - 8 - (width < 50 ? 1 : 0) - (message ? 2 : 0)) / fieldRows));
+  const hint = step === "auth" ? 1 : 0;
+  const fieldRows = height < fields.length * 3 + 7 + hint + (message ? 2 : 0) ? 2 : 3;
+  const count = Math.max(1, Math.floor((height - 8 - hint - (width < 50 ? 1 : 0) - (message ? 2 : 0)) / fieldRows));
   const payload = () => ({ ...options, url, apiKey: secret, reuse: mode === 1, clone: mode === 2 ? options.clone : undefined });
   const move = (next: typeof step) => { setStep(next); setIndex(0); setCursor(undefined); setMessage(""); };
   const finish = () => { setSecret(""); browser.closeOnboarding(done && applied ? options.profileKey : undefined, done && !applied); };
@@ -282,12 +285,13 @@ export function Onboarding({ browser, width: columns, height: rows, load = loadC
               const position = field.secret ? value.length : Math.min(cursor ?? [...value].length, [...value].length);
               const before = wrapLines([...value].slice(0, position).join(""), width - 12).at(-1) ?? "";
               const after = [...value].slice(position);
-              const placeholder = step === "auth" ? field.secret ? "Paste your API key" : "https://your-deployment.convex.cloud" : field.label.startsWith("Git repository") ? "https://github.com/owner/repo.git" : "Enter a value";
+              const placeholder = step === "auth" ? field.secret ? "Paste your Convoy API key" : "https://your-deployment.convex.cloud" : field.label.startsWith("Git repository") ? "https://github.com/owner/repo.git" : "Enter a value";
               return <Box key={field.label} flexDirection="column" marginBottom={fieldRows - 2}>
                 <Text color={active ? palette.accent : palette.text ?? "white"} wrap="truncate">{active ? "> " : "  "}{field.label}</Text>
                 <Text wrap="truncate" backgroundColor={rich ? active ? palette.idle : palette.surface : active ? "gray" : "black"} color={palette.text ?? "white"}>[ {field.select ? `${value} ▾` : active ? <>{before}<Text inverse>{after[0] || " "}</Text>{after.slice(1).join("") || (!value ? <Text color={palette.muted}>{placeholder}</Text> : "")}</> : value || <Text color={palette.muted}>{placeholder}</Text>} ]</Text>
               </Box>;
             })}
+            {hint > 0 && <Text color={palette.muted} wrap="truncate">{AUTH_HINT}</Text>}
             {fields.length > count && <Text color={palette.muted}>Inputs {first + 1}-{Math.min(fields.length, first + count)} of {fields.length} · PgUp/PgDn scroll</Text>}
           </> : (lists.length ? lists.slice(Math.max(0, index - height + 11), Math.max(0, index - height + 11) + height - 10).map((line, i) => <Text key={line} wrap="truncate">{i + Math.max(0, index - height + 11) === index ? ">" : " "} {plain(line)}</Text>) : <Text>No accessible entries. Esc to go back.</Text>)}
       </Box>

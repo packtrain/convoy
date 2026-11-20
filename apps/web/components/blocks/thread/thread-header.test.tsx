@@ -124,6 +124,17 @@ describe("ThreadHeader", () => {
     ).toBe("Release planning");
   });
 
+  test("title input has no horizontal padding beyond its sizer", () => {
+    // The sizer sets the input's width, so any extra padding clips the text: "hi" vanished.
+    render(<ThreadHeader title="hi" onTitleCommit={vi.fn().mockResolvedValue(undefined)} />);
+
+    const titleInput = screen.getByRole("textbox", { name: "Thread title" });
+    const sizer = titleInput.parentElement?.querySelector('[aria-hidden="true"]');
+    const inlinePadding = (className = "") => className.split(/\s+/).filter((c) => /^p[xrl]-/.test(c));
+
+    expect(inlinePadding(titleInput.className)).toEqual(inlinePadding(sizer?.className));
+  });
+
   test("editable title shows the plain slash command display text", () => {
     render(
       <ThreadHeader

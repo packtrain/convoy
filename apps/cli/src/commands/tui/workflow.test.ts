@@ -507,3 +507,16 @@ it("pauses run paging while a project's credential editor covers it", async () =
   browser.showCredentials(false);
   await vi.waitFor(() => expect(f.requests.length).toBeGreaterThan(pages));
 });
+
+it("keeps a failing attach reconnecting across retries instead of flashing connecting", async () => {
+  vi.useFakeTimers({ toFake: ["setTimeout", "clearTimeout"] });
+  cleanups.push(() => { vi.useRealTimers(); });
+  const browser = new Browser([{ id: "local", name: "Local", transport: "unix", endpoint: "local", open: async () => { throw new Error("ENOENT"); } }]);
+  cleanups.push(() => browser.dispose()); browser.start();
+  await vi.waitFor(() => expect(browser.getSnapshot().observations[0].health).toBe("reconnecting"));
+  const seen: [string, string | undefined][] = [];
+  browser.subscribe(() => { const s = browser.getSnapshot(); seen.push([s.observations[0].health, s.error]); });
+  await vi.advanceTimersByTimeAsync(3000);
+  expect(seen.length).toBeGreaterThan(0);
+  expect(seen.filter(([health, error]) => health !== "reconnecting" || !error?.includes("Cannot attach"))).toEqual([]);
+});

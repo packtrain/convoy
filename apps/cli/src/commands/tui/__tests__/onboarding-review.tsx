@@ -136,6 +136,8 @@ try {
     if (scenario === "popup") {
       assert(!frame.includes("╭") && frame.includes("[ Cancel ]"), "Form must use the main panel with explicit buttons");
       assert(frame.includes("https://your-deployment.convex.cloud"), "Empty input needs a placeholder");
+      assert(frame.includes("Convoy API key (masked)") && frame.includes("Paste your Convoy API key"), "Key input names the Convoy API key");
+      assert(frame.includes("Find both in Convoy under Profile settings → API keys."), "Auth form says where the web UI shows both values");
       console.log(rawFrame);
     } else {
       stdin.write("\r"); await settle();

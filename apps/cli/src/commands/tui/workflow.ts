@@ -302,8 +302,11 @@ export class Browser {
     clearTimeout(this.retry); clearTimeout(this.refresh);
     this.abort?.abort(); this.client?.close(); this.client = undefined;
     const abort = this.abort = new AbortController();
-    this.observe({ health: this.state.observations[this.state.scope.connection].snapshot ? "reconnecting" : "connecting" });
-    this.set({ stale: true, loading: true, error: undefined });
+    // A retry keeps "reconnecting" and its error, so the sidebar's loading row does not flash every attempt.
+    const { snapshot, health } = this.state.observations[this.state.scope.connection];
+    const retrying = health === "reconnecting";
+    this.observe({ health: snapshot || retrying ? "reconnecting" : "connecting" });
+    this.set({ stale: true, loading: true, ...(retrying ? {} : { error: undefined }) });
     try {
       const client = await this.targets[this.state.scope.connection].open(abort.signal);
       if (this.disposed || generation !== this.generation) { client.close(); return; }

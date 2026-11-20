@@ -10,7 +10,8 @@ Defines title editing in the web thread header (`ThreadHeader`).
   swaps to an input on click. Clicking puts the caret where the click lands, and
   drag-select and double-click word select work without extra code.
 - An invisible copy of the title sizes the block, so the title hugs its text and
-  `titleTrailing` stays beside it. The input sits over that footprint.
+  `titleTrailing` stays beside it. The input sits over that footprint and adds
+  no horizontal padding, which would clip the text (a short title vanished).
 - Unfocused, a long title truncates with an ellipsis. On blur the input scrolls
   back to its start.
 - A read-only title (no `onTitleCommit`) is a plain `h1`.

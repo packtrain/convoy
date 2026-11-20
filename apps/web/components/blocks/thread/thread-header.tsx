@@ -187,7 +187,7 @@ export function ThreadHeader({
 
   const titleInputClasses = cn(
     "absolute inset-0 block h-5 w-full cursor-text border-0 bg-transparent p-0 align-middle",
-    "truncate pr-4 text-sm font-medium leading-5 text-foreground",
+    "truncate text-sm font-medium leading-5 text-foreground",
     "focus-visible:outline-none focus-visible:ring-0"
   );
 
