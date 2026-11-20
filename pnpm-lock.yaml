@@ -50,10 +50,10 @@ importers:
         version: 6.0.0
       ink:
         specifier: ^8.0.0
-        version: 8.0.0(@types/react@19.3.0)(react@19.3.1)
+        version: 8.0.0(@types/react@19.2.14)(react@19.3.1)
       ink-spinner:
         specifier: ^5.0.0
-        version: 5.0.0(ink@8.0.0(@types/react@19.3.0)(react@19.3.1))(react@19.3.1)
+        version: 5.0.0(ink@8.0.0(@types/react@19.2.14)(react@19.3.1))(react@19.3.1)
       open:
         specifier: ^11.0.0
         version: 11.0.0
@@ -83,8 +83,8 @@ importers:
         specifier: ^25.0.10
         version: 25.0.10
       '@types/react':
-        specifier: 19.3.0
-        version: 19.3.0
+        specifier: 19.2.14
+        version: 19.2.14
       '@vitest/coverage-v8':
         specifier: 4.0.16
         version: 4.0.16(vitest@4.0.18(@edge-runtime/vm@5.0.0)(@opentelemetry/api@1.9.0)(@types/node@25.0.10)(jiti@2.6.1)(jsdom@27.4.0)(lightningcss@1.32.0)(msw@2.12.4(@types/node@25.0.10)(typescript@5.9.3))(sass@1.97.2)(tsx@4.21.0))
@@ -4977,9 +4977,6 @@ packages:
 
   '@types/react@19.2.14':
     resolution: {integrity: sha512-ilcTH/UniCkMdtexkoCN0bI7pMcJDvmQFPvuPvmEaYA/NSfFTAgdUSLAoVjaRJm7+6PvcM+q1zYOwS4wTYMF9w==}
-
-  '@types/react@19.3.0':
-    resolution: {integrity: sha512-N0rFCuH9YoxG9/m61l9MfpJKfmLOVU0em7ipIz6TRgSSkvReLB9vL85GB+yr8Bs5leqpvg96JSwF4ZS1s4viQg==}
 
   '@types/statuses@2.0.6':
     resolution: {integrity: sha512-xMAgYwceFhRA2zY+XbEA7mxYbA093wdiW8Vu6gZPGWy9cmOyU9XesH1tNcEWsKFd5Vzrqx5T3D38PWx1FIIXkA==}
@@ -15408,10 +15405,6 @@ snapshots:
     dependencies:
       csstype: 3.2.3
 
-  '@types/react@19.3.0':
-    dependencies:
-      csstype: 3.2.3
-
   '@types/statuses@2.0.6': {}
 
   '@types/trusted-types@2.0.7':
@@ -18044,10 +18037,10 @@ snapshots:
       ink: 5.2.1(@types/react@19.2.14)(react@18.3.1)
       react: 18.3.1
 
-  ink-spinner@5.0.0(ink@8.0.0(@types/react@19.3.0)(react@19.3.1))(react@19.3.1):
+  ink-spinner@5.0.0(ink@8.0.0(@types/react@19.2.14)(react@19.3.1))(react@19.3.1):
     dependencies:
       cli-spinners: 2.9.2
-      ink: 8.0.0(@types/react@19.3.0)(react@19.3.1)
+      ink: 8.0.0(@types/react@19.2.14)(react@19.3.1)
       react: 19.3.1
 
   ink-text-input@6.0.0(ink@5.2.1(@types/react@19.2.14)(react@18.3.1))(react@18.3.1):
@@ -18090,7 +18083,7 @@ snapshots:
       - bufferutil
       - utf-8-validate
 
-  ink@8.0.0(@types/react@19.3.0)(react@19.3.1):
+  ink@8.0.0(@types/react@19.2.14)(react@19.3.1):
     dependencies:
       '@alcalzone/ansi-tokenize': 0.3.2
       ansi-escapes: 7.3.0
@@ -18117,7 +18110,7 @@ snapshots:
       wrap-ansi: 10.0.2
       yoga-layout: 3.2.1
     optionalDependencies:
-      '@types/react': 19.3.0
+      '@types/react': 19.2.14
 
   inline-style-parser@0.2.7: {}
 

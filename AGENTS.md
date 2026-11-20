@@ -28,7 +28,11 @@ Root folders outside `apps/`, and what each is for:
 pnpm web:lint
 cd apps/web && npx tsc --noEmit
 pnpm web:test:once     # required if you touched apps/web/convex/
+pnpm install --frozen-lockfile --lockfile-only  # required if you touched any package.json
 ```
+
+The root `package.json` `pnpm.overrides` pins some versions (e.g. `@types/react`)
+for every app; a different version in one app's `package.json` breaks Vercel's install.
 
 ## Hard rules
 
