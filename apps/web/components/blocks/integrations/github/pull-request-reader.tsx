@@ -34,6 +34,9 @@ import type { IntegrationStatus } from "./use-integration-status";
 type Revision = { baseSha: string; headSha: string };
 type Held = { request: number; diff: DiffState; overview: OverviewState; seen?: Revision };
 
+/** Waits between mergeability re-reads; after the last, Refresh is left. */
+const MERGEABILITY_RETRIES_MS = [2_000, 4_000, 8_000, 16_000, 30_000];
+
 function sameRevision(a: Revision, b: Revision): boolean {
   return a.baseSha === b.baseSha && a.headSha === b.headSha;
 }
@@ -73,6 +76,7 @@ export function PullRequestReader({
   const tasks = useQuery(api.integrations.github.pullRequests.referencedTasks, args);
   const readDiff = useAction(api.integrations.github.pullRequests.readDiff);
   const readOverview = useAction(api.integrations.github.pullRequests.readOverview);
+  const readMergeability = useAction(api.integrations.github.pullRequests.readMergeability);
   const readable = Boolean(result);
   const stored = result?.pullRequest ?? null;
   const marks = useReviewedMarks(repositoryId, number);
@@ -177,6 +181,41 @@ export function PullRequestReader({
       live = false;
     };
   }, [number, projectId, readDiff, readOverview, readable, repositoryId, request]);
+
+  // GitHub computes mergeability after a push and sends no event, so an unknown answer is re-read alone until it settles.
+  const settling =
+    current?.overview.kind === "loaded" && current.overview.overview.mergeable === "unknown" && current.diff.kind === "loaded"
+      ? { baseSha: current.diff.diff.baseSha, headSha: current.diff.diff.headSha }
+      : null;
+  const { baseSha: settlingBase, headSha: settlingHead } = settling ?? {};
+  useEffect(() => {
+    if (!settlingBase || !settlingHead) return;
+    let attempt = 0;
+    let timer: ReturnType<typeof setTimeout>;
+    let live = true;
+    const next = () => {
+      timer = setTimeout(() => {
+        readMergeability({ projectId, repositoryId, number, baseSha: settlingBase, headSha: settlingHead })
+          .then((answer) => {
+            if (!live || !answer) return;
+            if (answer.mergeable !== "unknown") {
+              setHeld((previous) =>
+                previous?.request === request && previous.overview.kind === "loaded"
+                  ? { ...previous, overview: { kind: "loaded", overview: { ...previous.overview.overview, ...answer } } }
+                  : previous
+              );
+            } else if (++attempt < MERGEABILITY_RETRIES_MS.length) next();
+          })
+          // A failed re-read leaves Refresh.
+          .catch(() => {});
+      }, MERGEABILITY_RETRIES_MS[attempt]);
+    };
+    next();
+    return () => {
+      live = false;
+      clearTimeout(timer);
+    };
+  }, [number, projectId, readMergeability, repositoryId, request, settlingBase, settlingHead]);
 
   // GitHub's stack shortcuts: Shift+K opens the Layer above, Shift+J the one below.
   const at = layers.findIndex((layer) => layer.number === number);

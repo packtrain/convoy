@@ -30,6 +30,7 @@ const submitReview = vi.fn();
 const requestReviewer = vi.fn();
 const beginLink = vi.fn();
 const readOverview = vi.fn();
+const readMergeability = vi.fn();
 const readFile = vi.fn();
 const push = vi.fn();
 
@@ -60,6 +61,7 @@ vi.mock("convex/react", () => ({
     ({
       [name(api.integrations.github.pullRequests.readDiff)]: readDiff,
       [name(api.integrations.github.pullRequests.readOverview)]: readOverview,
+      [name(api.integrations.github.pullRequests.readMergeability)]: readMergeability,
       [name(api.integrations.github.pullRequests.readFile)]: readFile,
       [name(api.integrations.github.accounts.readRepositoryPermission)]: readPermission,
       [name(api.integrations.github.accounts.disconnect)]: vi.fn(),
@@ -1250,8 +1252,10 @@ describe("PullRequestReader GitHub comments (OS-2183)", () => {
     view.rerender(connected());
     fireEvent.click(screen.getByRole("button", { name: "Merge status" }));
     const blocked = await screen.findByRole("dialog", { name: "Merge status" });
-    expect(within(blocked).getAllByText("#6 is a draft")).toHaveLength(2);
+    // The stack row says why; the disabled button's tooltip repeats it.
+    expect(within(blocked).getAllByText("#6 is a draft")).toHaveLength(1);
     expect(mergeButton("Squash and merge 2 pull requests").disabled).toBe(true);
+    expect(mergeButton("Squash and merge 2 pull requests").closest("[title]")?.getAttribute("title")).toBe("#6 is a draft");
   });
 
   test("without a Linked GitHub account, Merge explains why and connects one, coming back to this PR", async () => {
@@ -1280,7 +1284,8 @@ describe("PullRequestReader GitHub comments (OS-2183)", () => {
     readOverview.mockResolvedValue({ ...overview, behindBy: 2 });
     const view = render(connected());
     let popover = await openMergeStatus();
-    await waitFor(() => expect(within(popover).getByText("Needs write access")).toBeTruthy());
+    await waitFor(() => expect(mergeButton("Squash and merge").closest("[title]")?.getAttribute("title")).toBe("Needs write access"));
+    expect(within(popover).queryByText("Needs write access")).toBeNull();
     expect(mergeButton("Squash and merge").disabled).toBe(true);
     expect((within(popover).getByRole("button", { name: "Update branch" }) as HTMLButtonElement).disabled).toBe(true);
     cleanup();
@@ -1297,6 +1302,25 @@ describe("PullRequestReader GitHub comments (OS-2183)", () => {
     // GitHub rewrote the head, so mergeability is unknown until Refresh.
     expect(within(popover).getByText("Checking mergeability…")).toBeTruthy();
     expect(mergeButton("Squash and merge").disabled).toBe(true);
+  });
+
+  test("Checking mergeability… re-reads GitHub's answer until it settles, without a Refresh", async () => {
+    vi.useFakeTimers({ shouldAdvanceTime: true });
+    linkedAs({ login: "maya", githubUserId: 42, status: "active" });
+    readPermission.mockResolvedValue("write");
+    readOverview.mockResolvedValue({ ...overview, mergeable: "unknown" });
+    readMergeability.mockResolvedValueOnce({ mergeable: "unknown", mergeBlock: null }).mockResolvedValueOnce({ mergeable: "clean", mergeBlock: null });
+    render(connected());
+    const popover = await openMergeStatus();
+    expect(within(popover).getByText("Checking mergeability…")).toBeTruthy();
+    expect(mergeButton("Squash and merge").closest("[title]")?.getAttribute("title")).toBe("GitHub is checking mergeability");
+    await act(() => vi.advanceTimersByTimeAsync(10_000));
+    expect(within(popover).getByText("No conflicts with base branch")).toBeTruthy();
+    expect(mergeButton("Squash and merge").disabled).toBe(false);
+    expect(readMergeability).toHaveBeenCalledTimes(2);
+    expect(readMergeability).toHaveBeenCalledWith({ projectId: "project_1", repositoryId: "repo_1", number: 7, baseSha: diff.baseSha, headSha: diff.headSha });
+    expect(readOverview).toHaveBeenCalledTimes(1);
+    vi.useRealTimers();
   });
 });
 

@@ -344,6 +344,13 @@ export const pullRequestOverviewValidator = v.object({
 });
 export type PullRequestOverview = Infer<typeof pullRequestOverviewValidator>;
 
+/** The Overview's mergeability, re-read alone while GitHub computes it. */
+export const mergeabilityValidator = v.object({
+  mergeable: pullRequestOverviewValidator.fields.mergeable,
+  mergeBlock: pullRequestOverviewValidator.fields.mergeBlock,
+});
+export type Mergeability = Infer<typeof mergeabilityValidator>;
+
 /** A Guide in the PR's Guide menu; the steps come from `guides.get`. */
 export const guideSummaryValidator = v.object({
   _id: v.id("integrationPullRequestGuides"),

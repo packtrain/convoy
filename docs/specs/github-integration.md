@@ -1267,7 +1267,12 @@ compact), and the reader's header, tab row, and Overview.
   under the rollup, behind-base, mergeability ("Checking mergeability…"
   while GitHub reports `null`), and conflicts with Resolve on GitHub. Its
   button's icon is red for conflicts or failing checks, the pending circle
-  while either is unsettled, and green otherwise.
+  while either is unsettled, and green otherwise. GitHub sends no event
+  when mergeability settles, so while it reads `null` the reader re-reads it
+  alone with `readMergeability`: one PR read at the displayed revision,
+  after 2, 4, 8, 16, and 30 seconds, stopping once it settles, the PR moves
+  past that revision (`null`), or a read fails. Refresh still re-reads
+  everything. No CLI command: this only keeps the popover current.
 - **Diff.** The file tree in the split pane (closable), a bar with "4 files
   +14 -0 · 1 / 4 reviewed", collapse-all, split/unified, and wrap. Each file
   has a Reviewed checkbox; reviewing folds the file and un-reviewing unfolds
@@ -1792,7 +1797,7 @@ Slice 8 (OS-2185).
   requests" when Layers below merge with it, and a Stack row says "Merges #482
   first", or "#482 is a draft" / "#482 has conflicts" when one blocks it. Merge
   stays enabled without an active Linked GitHub account and opens the
-  connect popup instead ([Role](#state-actions-and-bulk-actions)). Merge is disabled, with the reason under it, for "Needs write
+  connect popup instead ([Role](#state-actions-and-bulk-actions)). Merge is disabled, with the reason as its tooltip, for "Needs write
   access", a draft, the stack still
   loading, conflicts, mergeability being checked, branch rules, and a blocking
   Layer below. The behind-base row (blocking when the rules require an

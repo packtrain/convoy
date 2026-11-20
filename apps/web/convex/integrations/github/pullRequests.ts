@@ -16,6 +16,7 @@ import {
   DIFF_MAX_FILES,
   list as asList,
   normalizeDiffFiles,
+  normalizeMergeability,
   normalizeOverview,
   normalizePullRequest,
   normalizeSearchHit,
@@ -28,11 +29,13 @@ import { getRepositoryById, updateRepositorySync } from "./lib/integrationReposi
 import { getReadableRepositoryLink, getReadableRepositoryLinks } from "./lib/permissions";
 import {
   livePullRequestValidator,
+  mergeabilityValidator,
   pullRequestDetailValidator,
   pullRequestOverviewValidator,
   pullRequestSearchHitValidator,
   pullRequestSummaryValidator,
   syncContextValidator,
+  type Mergeability,
   type PullRequestOverview,
   type PullRequestSearchHit,
   type SyncContext,
@@ -372,14 +375,34 @@ export const readOverview = action({
       (token, context) => readOverviewFrom(token, context, args.number, { baseSha, headSha }, requireConfig().appId),
       errors.PULL_REQUEST_NOT_FOUND
     );
-    // The list's Conflicts mark comes from the stored row; GitHub sends no event when mergeability settles.
-    const conflicts = overview.mergeable === "unknown" ? undefined : overview.mergeable === "conflicting";
-    if (live.stored && conflicts !== undefined && live.stored.conflicts !== conflicts) {
-      await scheduleRefresh(ctx, live, args.number);
-    }
+    await repairConflictsMark(ctx, live, args.number, overview);
     return overview;
   },
 });
+
+/** The displayed revision's mergeability, from one PR read; null once the PR moved past that revision. */
+export const readMergeability = action({
+  args: { projectId: v.id("projects"), repositoryId: v.string(), number: v.number(), baseSha: v.string(), headSha: v.string() },
+  returns: v.union(mergeabilityValidator, v.null()),
+  handler: async (ctx, { baseSha, headSha, ...args }): Promise<Mergeability | null> => {
+    const { result: pr, live } = await readLive(
+      ctx,
+      args,
+      async (token, context) => record(await githubFetch(`${repoPath(context)}/pulls/${args.number}`, { token })),
+      errors.PULL_REQUEST_NOT_FOUND
+    );
+    if (str(record(pr.head).sha) !== headSha || str(record(pr.base).sha) !== baseSha) return null;
+    const mergeability = normalizeMergeability(pr);
+    await repairConflictsMark(ctx, live, args.number, mergeability);
+    return mergeability;
+  },
+});
+
+/** The list's Conflicts mark comes from the stored row; GitHub sends no event when mergeability settles. */
+async function repairConflictsMark(ctx: ActionCtx, live: ReadableContext, number: number, { mergeable }: Mergeability) {
+  const conflicts = mergeable === "unknown" ? undefined : mergeable === "conflicting";
+  if (live.stored && conflicts !== undefined && live.stored.conflicts !== conflicts) await scheduleRefresh(ctx, live, number);
+}
 
 /** A compare GitHub can't answer (the base branch was deleted) leaves behind-by unknown. */
 async function compareOrNull(path: string, auth: { token: string }): Promise<unknown> {

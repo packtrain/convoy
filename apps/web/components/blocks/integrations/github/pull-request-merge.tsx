@@ -74,7 +74,7 @@ export function stuckLayer(below: PullRequestSummary[]): { layer: PullRequestSum
   return layer ? { layer, reason: `#${layer.number} ${layer.draft ? "is a draft" : "has conflicts"}` } : null;
 }
 
-/** Why Merge is disabled, or null. Blocking problems each have their own Merge status row too. */
+/** Why Merge is disabled (its tooltip), or null. Blocking problems each have their own Merge status row too. */
 function mergeBlocker({ pr, commenting, overview }: Target, below: PullRequestSummary[] | null): string | null {
   const access = writeBlocker(commenting.account, commenting.role, "write");
   if (access) return access;
@@ -154,8 +154,9 @@ export function MergeButton({
   onMerge: () => void;
 }) {
   return (
-    <div className="space-y-2 p-4">
-      <ButtonGroup>
+    <div className="p-4">
+      {/* The group, not the disabled buttons, carries the reason's tooltip. */}
+      <ButtonGroup title={plan.blocker ?? undefined}>
         <Button size="sm" disabled={plan.blocker !== null} onClick={onMerge}>
           {plan.label}
         </Button>
@@ -192,7 +193,6 @@ export function MergeButton({
           </DropdownMenuContent>
         </DropdownMenu>
       </ButtonGroup>
-      {plan.blocker ? <p className="text-xs text-muted-foreground">{plan.blocker}</p> : null}
     </div>
   );
 }

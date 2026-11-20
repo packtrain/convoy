@@ -1,6 +1,6 @@
 import type { NormalizedPullRequest, PullRequestStack } from "../../../lib/contracts/github";
 import { GithubError } from "./github";
-import type { PullRequestComment, PullRequestOverview, PullRequestReview, PullRequestReviewComment, PullRequestSearchHit } from "./validators";
+import type { Mergeability, PullRequestComment, PullRequestOverview, PullRequestReview, PullRequestReviewComment, PullRequestSearchHit } from "./validators";
 
 /** Diff budget per request: provider file entries past these limits come back without patches. */
 export const DIFF_MAX_FILES = 100;
@@ -259,6 +259,14 @@ function mergeSettings(repository: Record<string, unknown>): PullRequestOverview
   return { methods, deleteBranchOnMerge: repository.deleteBranchOnMerge === true };
 }
 
+/** A single-PR read's `mergeable` and `mergeable_state`. */
+export function normalizeMergeability(pr: Record<string, unknown>): Mergeability {
+  return {
+    mergeable: pr.mergeable === true ? "clean" : pr.mergeable === false ? "conflicting" : "unknown",
+    mergeBlock: pr.mergeable_state === "blocked" || pr.mergeable_state === "behind" ? pr.mergeable_state : null,
+  };
+}
+
 /** GitHub's PR, commits, reviews, comments, check runs, combined status, and compare, narrowed for the Overview. `appId` marks Convoy's own runs. */
 export function normalizeOverview(appId: string, raw: {
   pr: unknown;
@@ -300,9 +308,8 @@ export function normalizeOverview(appId: string, raw: {
     headSha: str(record(pr.head).sha),
     baseRef: str(record(pr.base).ref),
     htmlUrl: str(pr.html_url),
-    mergeable: pr.mergeable === true ? "clean" : pr.mergeable === false ? "conflicting" : "unknown",
+    ...normalizeMergeability(pr),
     behindBy: raw.compare === null ? null : num(record(raw.compare).behind_by),
-    mergeBlock: pr.mergeable_state === "blocked" || pr.mergeable_state === "behind" ? pr.mergeable_state : null,
     mergeSettings: raw.node === null ? null : mergeSettings(record(record(raw.node).repository)),
     commitCount: typeof pr.commits === "number" ? pr.commits : list(raw.commits).length,
     commits: list(raw.commits).map((value) => {
