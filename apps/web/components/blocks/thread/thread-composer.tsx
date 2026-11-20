@@ -672,13 +672,21 @@ function ThreadComposerWorkspaceSummary({
         </TooltipExt>
       ) : summary}
       {branch ? (
-        <div
-          className={chipClassName}
-          title={kind === "worktree" ? `Worktree branch: ${branch}` : `Branch checked out locally: ${branch}`}
+        <button
+          type="button"
+          className={cn(chipClassName, "cursor-pointer hover:bg-muted hover:text-foreground")}
+          title={`${kind === "worktree" ? "Worktree branch" : "Branch checked out locally"}: ${branch} · Click to copy`}
+          aria-label={`Copy branch name ${branch}`}
+          onClick={() => {
+            navigator.clipboard.writeText(branch).then(
+              () => toast.success("Branch name copied to clipboard"),
+              () => toast.error("Failed to copy branch name"),
+            );
+          }}
         >
           <GitBranch className="size-3.5 shrink-0 opacity-70" />
           <MiddleTruncate text={branch} />
-        </div>
+        </button>
       ) : null}
     </>
   );

@@ -120,6 +120,7 @@ new-thread composer, no agent selector on follow-ups).
   (OS-1988). Local checkouts retain the laptop icon and `Work locally` label;
   worktrees show the branch icon and `Worktree` label. The branch chip uses
   the detail query's canonical execution branch and updates when it changes.
+  Clicking the branch chip copies the branch name to the clipboard.
   Creation seeds the local thread's branch from the draft scan, so sending
   the first message does not hide an already-known branch while the CLI starts.
   The first execution report replaces or clears that snapshot.

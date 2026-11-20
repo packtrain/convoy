@@ -760,6 +760,14 @@ describe("ThreadComposer", () => {
       expect(screen.getByText("Work locally")).toBeDefined();
     });
 
+    test("copies the branch name when the branch chip is clicked", () => {
+      const writeText = vi.fn().mockResolvedValue(undefined);
+      Object.assign(navigator, { clipboard: { writeText } });
+      render(<ThreadComposer {...props} readOnlyWorkspace={{ kind: "worktree", branch: "feat/copy-me" }} />);
+      fireEvent.click(screen.getByRole("button", { name: "Copy branch name feat/copy-me" }));
+      expect(writeText).toHaveBeenCalledWith("feat/copy-me");
+    });
+
     test("middle-truncates a long branch so its end stays visible", () => {
       render(<ThreadComposer {...props} readOnlyWorkspace={{ kind: "worktree", branch: "feat/os-2289-evidence-tab-with-agent-attached" }} />);
       expect(screen.getByText("-agent-attached").classList.contains("shrink-0")).toBe(true);
