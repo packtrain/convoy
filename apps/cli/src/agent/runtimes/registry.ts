@@ -14,6 +14,7 @@ import { claudeCodeRuntime } from "./claudeCode/runtime.js";
 import { codexRuntime } from "./codex/runtime.js";
 import { cursorRuntime } from "./cursor/runtime.js";
 import { opencodeRuntime } from "./opencode/runtime.js";
+import { antigravityRuntime } from "./antigravity/runtime.js";
 import { RunnerExecutionError } from "./contracts.js";
 import { MANAGED_RUNTIME_LABELS } from "../../lib/config/credentials/validators.js";
 
@@ -22,6 +23,7 @@ const runtimeDefinitions: Record<string, CliRuntimeDefinition> = {
   opencode: opencodeRuntime,
   cursor: cursorRuntime,
   codex: codexRuntime,
+  antigravity: antigravityRuntime,
 };
 
 /** The project launcher lists the tested runtimes it found root-owned at launch. */

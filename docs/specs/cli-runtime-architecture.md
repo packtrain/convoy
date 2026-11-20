@@ -17,6 +17,9 @@ This document defines how CLI-specific behavior is organized in `apps/web` so pr
   - `apps/web/convex/cli/lib/runtimes/contracts.ts` for shared backend runtime types/constants
   - `apps/web/convex/cli/lib/runtimes/shared/` for generic backend helpers/factories
   - one backend runtime folder per specialized runtime (`claudeCode/`, `codex/`, etc.)
+  - `acp/` for protocol-only Agent Client Protocol code that ACP runtimes compose
+    (`antigravity/` adds agy's quirks over it). The CLI mirrors this with
+    `apps/cli/src/agent/runtimes/acp/` and the shared `runtimes/json-rpc.ts` client
   - `apps/web/lib/cli-runtime-ui/registry.ts` for frontend runtime UI composition
 - Claude-specific backend behavior must live under `apps/web/convex/cli/lib/runtimes/claudeCode/`, not in top-level Convex files such as `convex/http.ts` or shared contract files outside the runtime subtree.
 - Frontend-specific icons, labels, selector metadata, and mode definitions must live under `apps/web/lib/cli-runtime-ui/`, not under `convex/`.
@@ -140,6 +143,7 @@ This document defines how CLI-specific behavior is organized in `apps/web` so pr
 - Execution/runtime behavior in `apps/cli`: `docs/specs/cli-sdk-integration.md`
 - Codex runtime behavior (exec --json mapping, modes, models): `docs/specs/cli-codex-runtime.md`
 - Cursor runtime behavior (stream-json mapping, modes, models): `docs/specs/cli-cursor-runtime.md`
+- Antigravity runtime behavior (ACP mapping, modes, continuation): `docs/specs/cli-antigravity-runtime.md`
 - Claude model selection behavior: `docs/specs/cli-thread-model-selection.md`
 - Context-window footer meter behavior: `docs/specs/cli-thread-context-window-meter.md`
 - Plan/steps pill behavior: `docs/specs/cli-thread-plan-progress.md`

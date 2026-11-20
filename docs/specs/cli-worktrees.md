@@ -270,6 +270,7 @@ worktrees removed through a shell command.
   the process-start boundary. Claude observes the SDK spawn callback; Codex and
   Cursor preserve native spawn errors. The processor never matches SDK error
   wording. Cursor emits command inventory only after successful spawn.
+  Antigravity sets `launchFailed` when `agy acp` never got a pid, before any chunk.
   OpenCode uses a shared HTTP server and retains preflight recovery; ambiguous
   server/request failures are not replayed. A new checkpoint ref suffix keeps
   the recovered checkout's baseline separate. Other runtime failures are not

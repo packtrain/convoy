@@ -10,6 +10,7 @@ export type ProviderId =
   | "factory"
   | "coderabbit"
   | "gemini"
+  | "antigravity"
   | "generic";
 
 export type TransportMode = "json-stream" | "line-text" | "pty";

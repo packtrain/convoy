@@ -1,7 +1,7 @@
 import AmpIcon from "@/components/icons/amp";
-import AntigravityColorIcon from "@/components/icons/antigravity-color";
 import CodeRabbitIcon from "@/components/icons/coderabbit";
 import DroidIcon from "@/components/icons/droid";
+import GeminiColorIcon from "@/components/icons/gemini-color";
 import GithubCopilotIcon from "@/components/icons/github-copilot";
 import { createElement, type ReactNode } from "react";
 import {
@@ -30,6 +30,7 @@ import type {
   CliRuntimeUiDefinition,
   CliTypeSlug,
 } from "./contracts";
+import { antigravityRuntimeUi } from "./antigravity";
 import { codexRuntimeUi } from "./codex";
 import { cursorRuntimeUi } from "./cursor";
 import { opencodeRuntimeUi } from "./opencode";
@@ -45,9 +46,10 @@ const CLI_RUNTIME_UI_DEFINITIONS: Partial<
   cursor: cursorRuntimeUi,
   gemini: {
     type: "gemini",
-    icon: AntigravityColorIcon,
+    icon: GeminiColorIcon,
     availableInSelector: false,
   },
+  antigravity: antigravityRuntimeUi,
   coderabbit: {
     type: "coderabbit",
     icon: CodeRabbitIcon,
@@ -66,6 +68,7 @@ export const CLI_TYPE_SELECTOR_ORDER: CliTypeSlug[] = [
   "codex",
   "opencode",
   "cursor",
+  "antigravity",
 ];
 
 export const CLI_TYPE_MAP: Record<CliTypeSlug, string> = Object.fromEntries(

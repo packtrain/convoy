@@ -27,6 +27,7 @@ export const DEFAULT_PROVIDER_COMMANDS: Record<string, string[]> = {
   factory: ["factory"],
   coderabbit: ["coderabbit", "code-rabbit"],
   gemini: ["gemini"],
+  antigravity: ["agy", "antigravity"],
   generic: [],
 };
 

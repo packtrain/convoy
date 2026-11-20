@@ -13,6 +13,7 @@ describe("agentPromptDelivery", () => {
     expect(getAgentPromptDelivery("codex")).toBe("system-append");
     expect(getAgentPromptDelivery("opencode")).toBe("first-message");
     expect(getAgentPromptDelivery("cursor")).toBe("first-message");
+    expect(getAgentPromptDelivery("antigravity")).toBe("system-append");
   });
 
   it("returns undefined for unknown cli types", () => {
@@ -22,7 +23,7 @@ describe("agentPromptDelivery", () => {
 
 describe("sandbox support (OS-1242)", () => {
   it("fails runs fast on runtimes without OS sandbox support", async () => {
-    for (const cliType of ["cursor", "opencode"]) {
+    for (const cliType of ["cursor", "opencode", "antigravity"]) {
       const runner = createRunnerForCliType(cliType, {
         sandbox: { writableRoots: ["/repos/a"] },
       });

@@ -23,7 +23,7 @@ import {
 } from "../contracts.js";
 import { getDebugLevel } from "../debug.js";
 import { threadIdentityInstruction } from "../agent-instructions.js";
-import { createAppServerRpc, type AppServerRpc } from "./app-server-rpc.js";
+import { createJsonRpc, type JsonRpc, type JsonRpcOptions } from "../json-rpc.js";
 import { createCodexInteractions } from "./interactions.js";
 import { createCodexChildDrain, createCodexChildRouter, createCodexJobTracker } from "./lifecycle.js";
 import { createCodexUsage } from "./usage/index.js";
@@ -121,6 +121,14 @@ export function collaborationModeForRun(options: {
   };
 }
 
+/** Codex scopes server request ids per thread and withdraws them with `serverRequest/resolved`. */
+const CODEX_RPC_OPTIONS: JsonRpcOptions = {
+  label: "Codex app-server",
+  serverRequestKey: (id, params) => JSON.stringify([params.threadId, id]),
+  withdrawnRequestKey: (method, params) =>
+    method === "serverRequest/resolved" ? JSON.stringify([params.threadId, params.requestId]) : undefined,
+};
+
 function getString(value: unknown): string | undefined {
   return typeof value === "string" ? value : undefined;
 }
@@ -205,7 +213,7 @@ interface OpenedThread {
 }
 
 async function openThread(
-  rpc: AppServerRpc,
+  rpc: JsonRpc,
   options: {
     workingDirectory: string;
     permissions: CodexThreadPermissions;
@@ -258,7 +266,7 @@ async function openThread(
  * authority on its own command surface.
  */
 async function startCodexRuntimeCommand(
-  rpc: AppServerRpc,
+  rpc: JsonRpc,
   threadId: string,
   runtimeCommand: { command: string; arguments?: string }
 ): Promise<void> {
@@ -573,7 +581,7 @@ export function createCodexAppServerRunner(factoryOptions?: {
         }
       };
 
-      const rpc = createAppServerRpc(
+      const rpc = createJsonRpc(
         { stdin: child.stdin!, stdout: child.stdout! },
         {
           onNotification,
@@ -587,7 +595,8 @@ export function createCodexAppServerRunner(factoryOptions?: {
               itemId ? fileChangesByItemId.get(cacheKey) : undefined
             );
           },
-        }
+        },
+        CODEX_RPC_OPTIONS
       );
 
       const goals = createCodexGoals(rpc, (chunk) => queue.push(chunk));

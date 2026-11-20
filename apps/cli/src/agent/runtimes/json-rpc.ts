@@ -1,15 +1,13 @@
 import { createInterface, type Interface } from "node:readline";
 import type { Readable, Writable } from "node:stream";
-import { isRecord } from "../../sdk/adapters/adapter-interface.js";
+import { isRecord } from "../sdk/adapters/adapter-interface.js";
 
 /**
- * Minimal JSON-RPC client for `codex app-server`: newline-delimited JSON over
- * stdio, bare `{ id, method, params }` messages (no `jsonrpc` envelope).
- * Server→client requests (approvals, user input) must be answered through
- * `onRequest`; unhandled methods get a method-not-found error reply.
+ * Minimal JSON-RPC client over newline-delimited stdio, shared by `codex app-server`
+ * and ACP agents. Server→client requests are answered through `onRequest`.
  */
 
-export interface AppServerRpcHandlers {
+export interface JsonRpcHandlers {
   onNotification?: (method: string, params: Record<string, unknown>) => void;
   /** Resolve with the `result` payload; throw to reply with an error. */
   onRequest?: (
@@ -19,27 +17,41 @@ export interface AppServerRpcHandlers {
   ) => Promise<unknown>;
 }
 
-export interface AppServerRpc {
+export interface JsonRpcOptions {
+  /** Names the peer in connection errors, e.g. "Codex app-server". */
+  label: string;
+  /** Stamp `jsonrpc: "2.0"` on every message; Codex sends bare messages. */
+  envelope?: boolean;
+  /** Dedupe key of a server request; Codex scopes request ids per thread. */
+  serverRequestKey?: (id: unknown, params: Record<string, unknown>) => string;
+  /** Key of the server request a notification withdraws, so its late reply is dropped. */
+  withdrawnRequestKey?: (method: string, params: Record<string, unknown>) => string | undefined;
+}
+
+export interface JsonRpc {
   request(method: string, params?: unknown): Promise<unknown>;
   notify(method: string, params?: unknown): void;
   /** Reject all pending requests and stop reading. Idempotent. */
   close(reason?: string): void;
 }
 
-export class AppServerRpcError extends Error {
+export class JsonRpcError extends Error {
   constructor(
     message: string,
-    public readonly method?: string
+    public readonly method?: string,
+    /** The peer's JSON-RPC error code, when it replied with one. */
+    public readonly code?: number
   ) {
     super(message);
-    this.name = "AppServerRpcError";
+    this.name = "JsonRpcError";
   }
 }
 
-export function createAppServerRpc(
+export function createJsonRpc(
   io: { stdin: Writable; stdout: Readable },
-  handlers: AppServerRpcHandlers
-): AppServerRpc {
+  handlers: JsonRpcHandlers,
+  options: JsonRpcOptions
+): JsonRpc {
   let nextId = 1;
   let closed = false;
   const pending = new Map<
@@ -48,13 +60,13 @@ export function createAppServerRpc(
   >();
 
   const serverRequests = new Set<string>();
-  const serverKey = (threadId: unknown, id: unknown) => JSON.stringify([threadId, id]);
+  const serverKey = options.serverRequestKey ?? ((id: unknown) => JSON.stringify(id));
 
   const write = (message: Record<string, unknown>): void => {
     if (closed || !io.stdin.writable) {
       return;
     }
-    io.stdin.write(`${JSON.stringify(message)}\n`);
+    io.stdin.write(`${JSON.stringify(options.envelope ? { jsonrpc: "2.0", ...message } : message)}\n`);
   };
 
   const handleServerRequest = (
@@ -62,7 +74,7 @@ export function createAppServerRpc(
     method: string,
     params: Record<string, unknown>
   ): void => {
-    const key = serverKey(params.threadId, id);
+    const key = serverKey(id, params);
     if (serverRequests.has(key)) return;
     serverRequests.add(key);
     const respond = handlers.onRequest
@@ -107,9 +119,8 @@ export function createAppServerRpc(
       return;
     }
     if (method) {
-      if (method === "serverRequest/resolved") {
-        serverRequests.delete(serverKey(params.threadId, params.requestId));
-      }
+      const withdrawn = options.withdrawnRequestKey?.(method, params);
+      if (withdrawn !== undefined) serverRequests.delete(withdrawn);
       handlers.onNotification?.(method, params);
       return;
     }
@@ -127,7 +138,8 @@ export function createAppServerRpc(
         typeof message.error.message === "string"
           ? message.error.message
           : JSON.stringify(message.error);
-      entry.reject(new AppServerRpcError(`${entry.method}: ${errorMessage}`, entry.method));
+      const code = typeof message.error.code === "number" ? message.error.code : undefined;
+      entry.reject(new JsonRpcError(`${entry.method}: ${errorMessage}`, entry.method, code));
       return;
     }
     entry.resolve(message.result);
@@ -139,7 +151,7 @@ export function createAppServerRpc(
   return {
     request(method, params) {
       if (closed) {
-        return Promise.reject(new AppServerRpcError("Codex app-server connection is closed", method));
+        return Promise.reject(new JsonRpcError(`${options.label} connection is closed`, method));
       }
       const id = nextId++;
       return new Promise((resolve, reject) => {
@@ -158,7 +170,7 @@ export function createAppServerRpc(
       }
       closed = true;
       reader.close();
-      const error = new AppServerRpcError(reason ?? "Codex app-server connection closed");
+      const error = new JsonRpcError(reason ?? `${options.label} connection closed`);
       for (const entry of pending.values()) {
         entry.reject(error);
       }

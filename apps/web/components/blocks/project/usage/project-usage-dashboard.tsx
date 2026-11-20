@@ -40,6 +40,7 @@ const CLI_COLORS: Record<string, string> = {
   opencode: "var(--chart-2)",
   cursor: "var(--chart-3)",
   codex: "var(--chart-4)",
+  antigravity: "var(--chart-5)",
 };
 
 function formatDay(dayStartMs: number): string {

@@ -414,6 +414,7 @@ describe("AssistantCliMessage", () => {
     ["amp", "custom-model", "high", "custom-model", "high"],
     ["droid", "custom-model", "high", "custom-model", "high"],
     ["gemini", "custom-model", "high", "custom-model", "high"],
+    ["antigravity", "custom-model", "high", "custom-model", "high"],
     ["coderabbit", "custom-model", "high", "custom-model", "high"],
     ["github-copilot", "custom-model", "high", "custom-model", "high"],
     ["other", "custom-model", "custom-effort", "custom-model", "custom-effort"],

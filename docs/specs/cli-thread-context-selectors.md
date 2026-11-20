@@ -163,6 +163,7 @@ new-thread composer, no agent selector on follow-ups).
 - When runtime model metadata is missing, the submenu falls back to generic slot labels.
 - The `Default` Claude submenu item shows an adjacent info affordance with tooltip copy explaining that it uses the user's Claude Code CLI default.
 - Cursor rules match the shared trigger interaction requirements.
+- A runtime the selected machine does not advertise in `availableClis` is disabled. A CLI build that doesn't know a runtime leaves its thread pending with no error, so this matters most for a new runtime such as Antigravity. An empty list means the runtimes are unknown, and every runtime stays enabled.
 - In locked thread-detail contexts, the CLI selector remains interactive so model/effort options stay reachable.
 - In locked thread-detail contexts, the selector does not list CLI types at all: started threads cannot switch CLI, so opening the selector shows the active runtime's model/effort options directly as the top-level menu.
 - If the locked runtime exposes no model or effort options, the selector does not open.
@@ -174,6 +175,7 @@ new-thread composer, no agent selector on follow-ups).
 - Disabled working directory trigger has default cursor.
 - Enabled CLI type trigger has pointer cursor.
 - Disabled CLI type trigger has default cursor.
+- A runtime the selected machine doesn't advertise is disabled in the CLI type list.
 - Claude trigger shows the selected model label when non-default.
 - Claude submenu can render provider-aware labels like `Sonnet 4.6 (1M)` when the selected online profile reports them.
 - Locked thread-detail selector opens the active runtime's model/effort menu directly and lists no other CLI types.

@@ -161,6 +161,9 @@ export function CliTypeSelector({
 
   const isAllowedCliType = (slug: CliTypeSlug) =>
     !allowedCliTypes || allowedCliTypes.includes(slug);
+  // An older CLI leaves a runtime it doesn't know pending forever; an empty list means unknown.
+  const isAdvertised = (slug: CliTypeSlug) =>
+    !availableClis?.length || availableClis.some((cli) => cli.type === slug);
 
   // Started threads cannot switch CLI, so the selector skips the CLI-type
   // list and opens the active runtime's model/effort menu directly.
@@ -695,7 +698,7 @@ export function CliTypeSelector({
                 availableClis,
               });
               const isLocked = !isAllowedCliType(slug);
-              const isDisabled = !isCliSelectable(slug) || isLocked;
+              const isDisabled = !isCliSelectable(slug) || isLocked || !isAdvertised(slug);
 
               if (modelOptions.length > 0 || effortOptions.length > 0) {
                 return (

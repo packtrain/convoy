@@ -134,6 +134,11 @@ Codex mode settings select the mode instructions; thread-level instructions
 carry Convoy's persona. Compatibility evidence and plan approval behavior live
 in [Codex runtime](cli-codex-runtime.md#proposed-plans-os-1481).
 
+- **Antigravity**: `_meta.antigravity.systemPrompt.append` on `session/new` and
+  `session/resume`, every run, with the agent prompt, the thread identity line and
+  any workspace notice. When `initialize` does not advertise the capability, the
+  runner prepends the same text to the prompt instead.
+
 ### first-message runtimes
 
 Runtimes with no per-invocation append mechanism deliver the prompt by
@@ -183,7 +188,7 @@ the agent can reference its own thread when calling MCP thread tools:
   it). Unlike the agent prompt, it is injected even when the thread has no
   bound agent.
 - **Environment variable**: `CONVOY_THREAD_ID` is set on the spawned
-  subprocess for Claude Code, Codex (both transports), and Cursor.
+  subprocess for Claude Code, Codex (both transports), Cursor, and Antigravity.
   **Exception — opencode**: the opencode server is a shared long-lived
   process serving multiple threads, so no per-thread env var is possible;
   opencode threads get identity via prompt context only.

@@ -21,6 +21,7 @@ import {
 import type { ClaudeCodeAvailableCli } from "./claudeCode/contracts";
 import type { CodexAvailableCli } from "./codex/validators";
 import type { RuntimeSlashCommand } from "./validators";
+import { antigravityRuntime } from "./antigravity/runtime";
 import { claudeCodeRuntime } from "./claudeCode/runtime";
 import { codexRuntime } from "./codex/runtime";
 import { cursorRuntime } from "./cursor/runtime";
@@ -160,7 +161,9 @@ const RUNTIME_DEFINITIONS: Record<CliRuntimeSlug, CliRuntimeDefinition> = {
   opencode: opencodeRuntime,
   droid: createGenericCliRuntime({ type: "droid", label: "Droid" }),
   cursor: cursorRuntime,
-  gemini: createGenericCliRuntime({ type: "gemini", label: "Antigravity CLI" }),
+  // Hidden placeholder; kept because stored rows may hold it (OS-2464).
+  gemini: createGenericCliRuntime({ type: "gemini", label: "Gemini CLI" }),
+  antigravity: antigravityRuntime,
   coderabbit: createGenericCliRuntime({
     type: "coderabbit",
     label: "CodeRabbit",

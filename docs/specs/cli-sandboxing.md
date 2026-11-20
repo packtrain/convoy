@@ -91,7 +91,7 @@ either way.
 |---|---|
 | Claude Code | Agent SDK `sandbox: { enabled: true, allowUnsandboxedCommands: false, filesystem: { allowWrite: paths } }` (Seatbelt on macOS, bubblewrap on Linux) plus `additionalDirectories: paths` so file tools may cross between profile paths. `failIfUnavailable` stays at its SDK default (true): the user opted in, so a machine that cannot sandbox fails the run loudly instead of silently running open. |
 | Codex (exec + app-server) | Never `--dangerously-bypass-approvals-and-sandbox` / `danger-full-access`, even in `agent` mode — isolated agent mode maps to `workspace-write` with `approvalPolicy: never`. Profile paths become `-c sandbox_workspace_write.writable_roots=[...]` (process-level config; correct for app-server too because writable roots are profile-scoped, not thread-scoped), plus `-c approvals_reviewer="user"` (see apply_patch guard below). Verified empirically on codex-cli 0.144.4 (macOS, both transports): shell and apply_patch /tmp+$HOME writes blocked, cwd + writable-root writes allowed. The overrides only take effect through the legacy `--sandbox` flag / RPC `sandbox` param path — explicitly selecting a codex permissions profile (`-P :workspace` or `default_permissions` in `~/.codex/config.toml` requirements) makes codex ignore `sandbox_workspace_write.*` entirely, so never migrate these args to the profile syntax without re-verifying. |
-| Cursor, OpenCode | No OS sandbox support. Runs **fail fast** with a clear error instead of silently running unsandboxed — a security opt-in must not degrade quietly. |
+| Cursor, OpenCode, Antigravity | No OS sandbox support. Antigravity stays here until someone checks that `agy acp --sandbox` honors the writable roots. Runs **fail fast** with a clear error instead of silently running unsandboxed — a security opt-in must not degrade quietly. |
 
 ## Non-goals (tier 1)
 
@@ -116,7 +116,7 @@ either way.
   (flag → profile → off), mirrors `resolvePartialStreaming`.
 - Runtime mappings: `runtimes/claudeCode/runner.ts` (query options),
   `runtimes/codex/runner.ts` (exec args), `runtimes/codex/app-server-runner.ts`
-  (spawn config + thread permissions), `runtimes/cursor|opencode/runtime.ts`
+  (spawn config + thread permissions), `runtimes/cursor|opencode|antigravity/runtime.ts`
   (fail-fast guard).
 
 ## User docs

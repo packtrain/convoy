@@ -1,6 +1,9 @@
 import { describe, expect, test } from "vitest";
 import {
+  CLI_TYPE_MAP,
+  CLI_TYPE_SELECTOR_ORDER,
   DEFAULT_CLAUDE_CODE_MODEL,
+  isCliSelectable,
   getCliEffortOptions,
   getCliModelOption,
   getCliModelOptions,
@@ -18,6 +21,17 @@ describe("cli runtime ui registry", () => {
   test("prefers agent as default for claude-code and codex", () => {
     expect(getDefaultMode("claude-code")).toBe("agent");
     expect(getDefaultMode("codex")).toBe("agent");
+  });
+
+  test("offers Antigravity in the selector with Act only and no model catalog", () => {
+    expect(CLI_TYPE_SELECTOR_ORDER).toContain("antigravity");
+    expect(isCliSelectable("antigravity")).toBe(true);
+    expect(isCliSelectable("gemini")).toBe(false);
+    expect(getCliModes("antigravity").map((mode) => mode.label)).toEqual(["Act"]);
+    expect(getDefaultMode("antigravity")).toBe("agent");
+    expect(getDefaultCliModel("antigravity")).toBeUndefined();
+    expect(CLI_TYPE_MAP.antigravity).toBe("Antigravity");
+    expect(CLI_TYPE_MAP.gemini).toBe("Gemini CLI");
   });
 
   test("returns undefined when cli type has no configured modes", () => {

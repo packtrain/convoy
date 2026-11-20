@@ -746,10 +746,31 @@ describe("CliTypeSelector", () => {
     expect(onToggleFavoriteCombo).toHaveBeenCalledWith(combo);
   });
 
+  test("disables a runtime the selected machine does not advertise", () => {
+    const onChange = vi.fn();
+    render(
+      <CliTypeSelector
+        value="claude-code"
+        onChange={onChange}
+        availableClis={[{ type: "claude-code", version: "2.1.329" }]}
+      />
+    );
+
+    const antigravity = screen.getByRole("button", { name: /Antigravity/ });
+    expect(antigravity.hasAttribute("disabled")).toBe(true);
+    fireEvent.click(antigravity);
+    expect(onChange).not.toHaveBeenCalled();
+  });
+
+  test("keeps every runtime enabled while the machine's runtimes are unknown", () => {
+    render(<CliTypeSelector value="claude-code" onChange={vi.fn()} availableClis={[]} />);
+    expect(screen.getByRole("button", { name: /Antigravity/ }).hasAttribute("disabled")).toBe(false);
+  });
+
   test("omits not-yet-selectable runtimes from the selector list", () => {
     render(<CliTypeSelector value="claude-code" onChange={vi.fn()} />);
 
-    for (const name of ["Antigravity CLI", "Amp", "Droid", "Copilot", "CodeRabbit"]) {
+    for (const name of ["Gemini CLI", "Amp", "Droid", "Copilot", "CodeRabbit"]) {
       expect(screen.queryByText(name)).toBeNull();
     }
     expect(screen.queryByText("Soon")).toBeNull();

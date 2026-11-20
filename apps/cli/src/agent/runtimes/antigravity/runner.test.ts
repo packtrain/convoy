@@ -1,0 +1,252 @@
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { chmodSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { join } from "node:path";
+import { tmpdir } from "node:os";
+import { RunnerExecutionError, type ContentChunk } from "../contracts.js";
+import { threadIdentityInstruction } from "../agent-instructions.js";
+import { ANTIGRAVITY_EXECUTABLE_ENV, detectAntigravity } from "./detect.js";
+import { ANTIGRAVITY_SIGN_IN_MESSAGE, answerPermissionRequest, createAntigravityRunner } from "./runner.js";
+
+// Replays agy 1.5.13 ACP shapes recorded for OS-2468 (docs/specs/cli-antigravity-runtime.md).
+const FAKE_AGY = String.raw`
+const fs = require("node:fs");
+const readline = require("node:readline");
+const behavior = process.env.FAKE_BEHAVIOR ?? "happy";
+if (process.argv.includes("--version")) { process.stdout.write((process.env.FAKE_VERSION ?? "1.5.13") + "\n"); process.exit(0); }
+const record = (entry) => fs.appendFileSync(process.env.FAKE_RECORD, JSON.stringify(entry) + "\n");
+record({ argv: process.argv.slice(2), env: { thread: process.env.CONVOY_THREAD_ID ?? null, key: process.env.CONVOY_API_KEY ?? null, update: process.env.AGY_CLI_DISABLE_AUTO_UPDATE ?? null } });
+const send = (msg) => process.stdout.write(JSON.stringify({ jsonrpc: "2.0", ...msg }) + "\n");
+const update = (sessionId, u) => send({ method: "session/update", params: { sessionId, update: u } });
+let promptId = null;
+let session = null;
+const tool = { toolCallId: "call_1", name: "run_command", args: { CommandLine: "ls" }, kind: "execute", title: "ls", rawInput: { CommandLine: "ls" } };
+readline.createInterface({ input: process.stdin }).on("line", (line) => {
+  const msg = JSON.parse(line);
+  record({ in: msg });
+  if (msg.result !== undefined) return;
+  if (msg.method === "initialize") {
+    const meta = behavior === "no-append" ? {} : { _meta: { antigravity: { systemPrompt: { append: true } } } };
+    return send({ id: msg.id, result: { protocolVersion: 1, agentCapabilities: { loadSession: true, ...meta }, agentInfo: { name: "Antigravity ACP Server", version: "1.5.13" } } });
+  }
+  if (msg.method === "session/new") {
+    if (behavior === "signed-out") return send({ id: msg.id, error: { code: -32000, message: "Authentication required" } });
+    session = "sess-1";
+    return send({ id: msg.id, result: { sessionId: session } });
+  }
+  if (msg.method === "authenticate") return send({ id: msg.id, error: { code: -32603, message: "No browser is available here" } });
+  if (msg.method === "session/resume") { session = msg.params.sessionId; return send({ id: msg.id, result: {} }); }
+  if (msg.method === "session/cancel") {
+    update(session, { sessionUpdate: "tool_call_update", ...tool, status: "failed", rawOutput: { output: "" } });
+    return send({ id: promptId, result: { stopReason: "cancelled" } });
+  }
+  if (msg.method === "session/prompt") {
+    promptId = msg.id;
+    update(session, { sessionUpdate: "available_commands_update", availableCommands: [] });
+    if (behavior === "crash") { process.stderr.write("panic: boom\n"); process.exit(3); }
+    if (behavior === "permission") send({ id: "perm-1", method: "session/request_permission", params: { sessionId: session, toolCall: { toolCallId: "call_9" }, options: [{ optionId: "deny", kind: "reject_once" }, { optionId: "yes", kind: "allow_once" }] } });
+    update(session, { sessionUpdate: "agent_thought_chunk", content: { type: "text", text: "Thinking " } });
+    update(session, { sessionUpdate: "usage_update", used: 10, size: 100 });
+    update(session, { sessionUpdate: "agent_thought_chunk", content: { type: "text", text: "hard." } });
+    update(session, { sessionUpdate: "tool_call", ...tool, status: "in_progress" });
+    if (behavior === "cancel") return;
+    const output = "Command exited with code 0.\n\nCommand output:\n" + "x".repeat(9000);
+    update(session, { sessionUpdate: "tool_call_update", ...tool, status: "completed", rawOutput: { output, exit_code: 0 }, content: [{ type: "content", content: { type: "text", text: output } }] });
+    update(session, { sessionUpdate: "agent_message_chunk", content: { type: "text", text: "Done " } });
+    update(session, { sessionUpdate: "agent_message_chunk", content: { type: "text", text: "here." } });
+    setTimeout(() => send({ id: msg.id, result: { stopReason: "end_turn", usage: { inputTokens: 5, outputTokens: 2 } } }), 20);
+  }
+});
+`;
+
+async function collect(gen: AsyncGenerator<ContentChunk, unknown, unknown>): Promise<{ chunks: ContentChunk[]; result: unknown }> {
+  const chunks: ContentChunk[] = [];
+  let step = await gen.next();
+  while (!step.done) {
+    chunks.push(step.value);
+    step = await gen.next();
+  }
+  return { chunks, result: step.value };
+}
+
+type SentMessage = {
+  jsonrpc?: string;
+  id?: unknown;
+  method?: string;
+  result?: unknown;
+  params: {
+    _meta?: { antigravity: { systemPrompt: { append: string } } };
+    prompt: Array<{ type: string; text: string }>;
+    [key: string]: unknown;
+  };
+};
+type RecordedEntry = { argv?: string[]; env?: Record<string, string | null>; in?: SentMessage };
+
+function parse(chunk: ContentChunk): Record<string, unknown> {
+  return JSON.parse(chunk.data) as Record<string, unknown>;
+}
+
+describe("createAntigravityRunner (fake agy)", () => {
+  let tmpDir: string;
+  let recordFile: string;
+
+  const recorded = () =>
+    readFileSync(recordFile, "utf8").trim().split("\n").map((line) => JSON.parse(line) as RecordedEntry);
+  const sent = (method: string) =>
+    recorded().flatMap((entry) => (entry.in?.method === method ? [entry.in] : []));
+
+  beforeEach(() => {
+    tmpDir = mkdtempSync(join(tmpdir(), "agy-runner-test-"));
+    recordFile = join(tmpDir, "record.jsonl");
+    const file = join(tmpDir, "agy");
+    writeFileSync(file, `#!/usr/bin/env node\n${FAKE_AGY}`);
+    chmodSync(file, 0o755);
+    vi.stubEnv(ANTIGRAVITY_EXECUTABLE_ENV, file);
+    vi.stubEnv("FAKE_RECORD", recordFile);
+    vi.stubEnv("CONVOY_API_KEY", "secret");
+  });
+
+  afterEach(() => {
+    vi.unstubAllEnvs();
+    rmSync(tmpDir, { recursive: true, force: true });
+  });
+
+  it("streams a turn: session marker, closed segments, compacted tool updates and the prompt result", async () => {
+    const runner = createAntigravityRunner({ partialStreaming: false });
+    const { chunks, result } = await collect(
+      runner.execute(tmpDir, "hello", { threadId: "thread_1", cliType: "antigravity", agentPrompt: "Be terse." })
+    );
+
+    expect(result).toEqual({ continuationId: "sess-1" });
+    expect(chunks.map((chunk) => chunk.type)).toEqual([
+      "convoy/acp_session",
+      "convoy/acp_reasoning",
+      "session/update",
+      "session/update",
+      "convoy/acp_text",
+      "convoy/acp_prompt_result",
+    ]);
+    expect(parse(chunks[0]!)).toEqual({ sessionId: "sess-1", agentVersion: "1.5.13" });
+    expect(parse(chunks[1]!)).toEqual({ sessionId: "sess-1", text: "Thinking hard." });
+    expect(parse(chunks[4]!)).toEqual({ sessionId: "sess-1", text: "Done here." });
+    expect(parse(chunks[5]!)).toMatchObject({ stopReason: "end_turn", usage: { inputTokens: 5 } });
+
+    const completed = (parse(chunks[3]!).update ?? {}) as { args?: unknown; content?: unknown; rawOutput: { output: string } };
+    expect(completed.args).toBeUndefined();
+    expect(completed.content).toEqual([]);
+    expect(completed.rawOutput.output).toMatch(/^\[\d+ characters omitted\]\nx{8000}$/);
+
+    const [launch] = recorded();
+    expect(launch!.argv).toEqual(["acp", "--dangerously-skip-permissions"]);
+    expect(launch!.env).toEqual({ thread: "thread_1", key: null, update: "1" });
+    const [init] = sent("initialize");
+    expect(init!.params.clientCapabilities).toEqual({ fs: { readTextFile: false, writeTextFile: false }, terminal: false });
+    const [opened] = sent("session/new");
+    expect(opened!.jsonrpc).toBe("2.0");
+    expect(opened!.params).toMatchObject({ cwd: tmpDir, mcpServers: [] });
+    expect(opened!.params._meta?.antigravity.systemPrompt.append).toBe(`Be terse.\n\n${threadIdentityInstruction("thread_1")}`);
+    expect(sent("session/prompt")[0]!.params.prompt).toEqual([{ type: "text", text: "hello" }]);
+  });
+
+  it("forwards message and thought chunks only with partial streaming", async () => {
+    const runner = createAntigravityRunner({ partialStreaming: true });
+    const { chunks } = await collect(runner.execute(tmpDir, "hello", { threadId: "thread_1", cliType: "antigravity" }));
+    const deltas = chunks.filter((chunk) => chunk.type === "session/update" && chunk.data.includes("_chunk"));
+    expect(deltas).toHaveLength(4);
+  });
+
+  it("resumes the stored session and resends the system append", async () => {
+    const runner = createAntigravityRunner({});
+    const { result } = await collect(
+      runner.execute(tmpDir, "again", { threadId: "thread_1", cliType: "antigravity", continuationId: "sess-old" })
+    );
+    expect(result).toEqual({ continuationId: "sess-old" });
+    expect(sent("session/new")).toEqual([]);
+    const [resumed] = sent("session/resume");
+    expect(resumed!.params).toMatchObject({ sessionId: "sess-old", cwd: tmpDir });
+    expect(resumed!.params._meta?.antigravity.systemPrompt.append).toContain("thread_1");
+  });
+
+  it("prepends the instructions to the prompt when agy cannot append a system prompt", async () => {
+    vi.stubEnv("FAKE_BEHAVIOR", "no-append");
+    const runner = createAntigravityRunner({});
+    await collect(runner.execute(tmpDir, "hello", { threadId: "thread_1", cliType: "antigravity" }));
+    expect(sent("session/new")[0]!.params._meta).toBeUndefined();
+    expect(sent("session/prompt")[0]!.params.prompt[0].text).toBe(`${threadIdentityInstruction("thread_1")}\n\nhello`);
+  });
+
+  it("tries oauth-personal once when signed out, then fails with the sign-in message", async () => {
+    vi.stubEnv("FAKE_BEHAVIOR", "signed-out");
+    const runner = createAntigravityRunner({});
+    await expect(collect(runner.execute(tmpDir, "hello", { threadId: "thread_1", cliType: "antigravity" }))).rejects.toThrow(
+      ANTIGRAVITY_SIGN_IN_MESSAGE
+    );
+    expect(sent("authenticate").map((message) => message.params)).toEqual([{ methodId: "oauth-personal" }]);
+    expect(sent("session/new")).toHaveLength(1);
+  });
+
+  it("answers permission requests with allow_once", async () => {
+    vi.stubEnv("FAKE_BEHAVIOR", "permission");
+    const runner = createAntigravityRunner({});
+    await collect(runner.execute(tmpDir, "hello", { threadId: "thread_1", cliType: "antigravity" }));
+    const answer = recorded().find((entry) => entry.in?.id === "perm-1");
+    expect(answer?.in?.result).toEqual({ outcome: { outcome: "selected", optionId: "yes" } });
+  });
+
+  it("cancels on abort and ends the run as aborted with the session id", async () => {
+    vi.stubEnv("FAKE_BEHAVIOR", "cancel");
+    const runner = createAntigravityRunner({});
+    const gen = runner.execute(tmpDir, "hello", { threadId: "thread_1", cliType: "antigravity" });
+    const seen: ContentChunk[] = [];
+    const error = await (async () => {
+      for (let step = await gen.next(); !step.done; step = await gen.next()) {
+        seen.push(step.value);
+        if (step.value.data.includes('"sessionUpdate":"tool_call"')) runner.abort();
+      }
+    })().catch((e: unknown) => e);
+    expect(error).toBeInstanceOf(RunnerExecutionError);
+    expect((error as RunnerExecutionError).message).toBe("Antigravity run aborted");
+    expect((error as RunnerExecutionError).continuationId).toBe("sess-1");
+    expect(sent("session/cancel").map((message) => message.params)).toEqual([{ sessionId: "sess-1" }]);
+    expect(seen.at(-1)?.type).toBe("convoy/acp_prompt_result");
+    expect(parse(seen.at(-1)!).stopReason).toBe("cancelled");
+  }, 10_000);
+
+  it("reports the exit and stderr when agy dies mid-turn", async () => {
+    vi.stubEnv("FAKE_BEHAVIOR", "crash");
+    const runner = createAntigravityRunner({});
+    const error = await collect(runner.execute(tmpDir, "hello", { threadId: "thread_1", cliType: "antigravity" })).catch((e: unknown) => e);
+    expect(error).toBeInstanceOf(RunnerExecutionError);
+    expect((error as RunnerExecutionError).message).toMatch(/exit code 3.*panic: boom/);
+    expect((error as RunnerExecutionError).continuationId).toBe("sess-1");
+  });
+});
+
+describe("answerPermissionRequest", () => {
+  it("declines agent questions until they get a card", () => {
+    expect(
+      answerPermissionRequest({ toolCall: { toolCallId: "interaction_1" }, options: [{ optionId: "a", kind: "allow_once" }] })
+    ).toEqual({ outcome: { outcome: "cancelled" } });
+  });
+});
+
+describe("detectAntigravity", () => {
+  let tmpDir: string;
+  beforeEach(() => {
+    tmpDir = mkdtempSync(join(tmpdir(), "agy-detect-test-"));
+    const file = join(tmpDir, "agy");
+    writeFileSync(file, `#!/usr/bin/env node\n${FAKE_AGY}`);
+    chmodSync(file, 0o755);
+    vi.stubEnv(ANTIGRAVITY_EXECUTABLE_ENV, file);
+  });
+  afterEach(() => {
+    vi.unstubAllEnvs();
+    rmSync(tmpDir, { recursive: true, force: true });
+  });
+
+  it("advertises agy 1.5.12 and newer only", async () => {
+    vi.stubEnv("FAKE_VERSION", "1.5.13");
+    await expect(detectAntigravity()).resolves.toEqual({ type: "antigravity", version: "1.5.13" });
+    vi.stubEnv("FAKE_VERSION", "1.5.11");
+    await expect(detectAntigravity()).resolves.toBeNull();
+  });
+});

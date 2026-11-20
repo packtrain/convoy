@@ -1,5 +1,5 @@
 import type { ContentChunk } from "../../contracts.js";
-import type { AppServerRpc } from "../app-server-rpc.js";
+import type { JsonRpc } from "../../json-rpc.js";
 import { isUnsupportedGoalRpc, parseCodexGoal, parseGoalResponse } from "./parsers.js";
 import type { CodexGoal, GoalCommand, GoalSnapshotAction } from "./validators.js";
 
@@ -7,7 +7,7 @@ import type { CodexGoal, GoalCommand, GoalSnapshotAction } from "./validators.js
  * Native Codex goal state for one runner execution (OS-2277). RPC responses are the
  * source of truth. Spec: docs/specs/cli-thread-goal.md → Codex.
  */
-export function createCodexGoals(rpc: AppServerRpc, emit: (chunk: ContentChunk) => void) {
+export function createCodexGoals(rpc: JsonRpc, emit: (chunk: ContentChunk) => void) {
   let goal: CodexGoal | null = null;
   // `updatedAt` of the last RPC response; older notifications are stale (C4).
   let confirmedAt = 0;

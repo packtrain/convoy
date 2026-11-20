@@ -39,6 +39,7 @@ describe("cli runtime registry", () => {
       "droid",
       "cursor",
       "gemini",
+      "antigravity",
       "coderabbit",
       "github-copilot",
       "other",

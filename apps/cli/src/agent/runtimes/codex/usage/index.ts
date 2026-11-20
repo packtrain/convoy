@@ -1,4 +1,4 @@
-import type { AppServerRpc } from "../app-server-rpc.js";
+import type { JsonRpc } from "../../json-rpc.js";
 import { parseQuotaBuckets, readQuotaAccount } from "./parsers.js";
 import type { QuotaBucket, QuotaReport } from "./validators.js";
 
@@ -26,7 +26,7 @@ export function createCodexUsage() {
       }
     },
 
-    async read(rpc: AppServerRpc): Promise<QuotaReport> {
+    async read(rpc: JsonRpc): Promise<QuotaReport> {
       const revision = accountRevision;
       updates = new Map();
       let timer: ReturnType<typeof setTimeout> | undefined;

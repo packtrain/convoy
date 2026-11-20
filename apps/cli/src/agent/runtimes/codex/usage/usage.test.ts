@@ -1,11 +1,11 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { createCodexUsage } from "./index.js";
 import { parseQuotaBuckets } from "./parsers.js";
-import type { AppServerRpc } from "../app-server-rpc.js";
+import type { JsonRpc } from "../../json-rpc.js";
 
 const account = { account: { type: "chatgpt", email: "one@example.com", planType: "plus" } };
 const quota = { rateLimits: { limitId: "codex", primary: { usedPercent: 25, windowDurationMins: 15, resetsAt: 1730947200 } } };
-function rpc(handler?: (method: string) => unknown): AppServerRpc {
+function rpc(handler?: (method: string) => unknown): JsonRpc {
   return {
     request: vi.fn(async (method: string) => handler ? handler(method) : method === "account/read" ? account : quota),
     notify: vi.fn(), close: vi.fn(),

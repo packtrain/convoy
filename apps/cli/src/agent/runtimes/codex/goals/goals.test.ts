@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from "vitest";
 import type { ContentChunk } from "../../contracts.js";
-import type { AppServerRpc } from "../app-server-rpc.js";
+import type { JsonRpc } from "../../json-rpc.js";
 import { createCodexGoals } from "./index.js";
 import { parseGoalCommand } from "./parsers.js";
 
@@ -12,7 +12,7 @@ function goal(status: string, overrides: Record<string, unknown> = {}) {
 
 function fakeRpc(handler: (method: string, params: Record<string, unknown>) => unknown) {
   const request = vi.fn(async (method: string, params?: unknown) => handler(method, (params ?? {}) as Record<string, unknown>));
-  return { rpc: { request, notify: vi.fn(), close: vi.fn() } as AppServerRpc, request };
+  return { rpc: { request, notify: vi.fn(), close: vi.fn() } as JsonRpc, request };
 }
 
 function snapshots(chunks: ContentChunk[]) {

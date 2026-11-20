@@ -1,7 +1,7 @@
 import { describe, it, expect, vi } from "vitest";
 import { redactAuth } from "../../../lib/config/convex-client.js";
 import { checkNativeCodexAuth, authenticateCodex, managedAuthArgs, managedAuthEnv, redactAuthParams } from "./auth.js";
-import type { AppServerRpc } from "./app-server-rpc.js";
+import type { JsonRpc } from "../json-rpc.js";
 const auth = { mode: "managed" as const, secret: "sentinel-api-key" };
 function rpc(
   config: unknown = { config: { cli_auth_credentials_store: "ephemeral", forced_login_method: "api", model_provider: "openai" } }
@@ -11,7 +11,7 @@ function rpc(
     methods.push(method);
     return method === "config/read" ? config : method === "account/read" ? { account: { type: "apiKey" } } : { type: "apiKey" };
   });
-  return { client: { request, notify: vi.fn(), close: vi.fn() } satisfies AppServerRpc, methods };
+  return { client: { request, notify: vi.fn(), close: vi.fn() } satisfies JsonRpc, methods };
 }
 describe("managed Codex authentication", () => {
   it("redacts structured values without corrupting JSON syntax", () => {

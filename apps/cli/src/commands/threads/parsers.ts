@@ -9,6 +9,7 @@ export const CLI_TYPES = [
   "droid",
   "cursor",
   "gemini",
+  "antigravity",
   "coderabbit",
   "github-copilot",
   "other",

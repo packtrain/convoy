@@ -3,7 +3,7 @@ import type { CodexAuth } from "../../../lib/config/credentials/validators.js";
 import { PROVIDER_LABELS } from "../../../lib/config/provider-keys.js";
 import type { CodexProviderKey } from "../../../lib/config/types.js";
 import { isRecord } from "../../sdk/adapters/adapter-interface.js";
-import type { AppServerRpc } from "./app-server-rpc.js";
+import type { JsonRpc } from "../json-rpc.js";
 
 /** Codex's built-in AWS providers. See docs/specs/cli-provider-keys.md → Codex. */
 export const CODEX_AWS_PROVIDER_IDS = { mantle: "amazon-bedrock", bedrock: "amazon-bedrock-runtime" } as const;
@@ -38,7 +38,7 @@ export function codexSecret(auth?: CodexAuth, provider?: CodexProviderKey): stri
 }
 
 /** Effective config must select the built-in AWS provider; native login is never consulted. */
-export async function assertCodexProvider(rpc: AppServerRpc, provider: CodexProviderKey): Promise<void> {
+export async function assertCodexProvider(rpc: JsonRpc, provider: CodexProviderKey): Promise<void> {
   const id = CODEX_AWS_PROVIDER_IDS[provider.provider];
   const label = codexProviderLabel(provider);
   let response: unknown;
@@ -72,7 +72,7 @@ export function managedAuthEnv(env: NodeJS.ProcessEnv, auth?: CodexAuth): NodeJS
   return result;
 }
 
-export async function authenticateCodex(rpc: AppServerRpc, auth?: CodexAuth): Promise<void> {
+export async function authenticateCodex(rpc: JsonRpc, auth?: CodexAuth): Promise<void> {
   if (auth?.mode !== "managed") return;
   try {
     await withTimeout(
@@ -124,7 +124,7 @@ export function redactAuthParams(params: Record<string, unknown>, secret?: strin
 }
 
 /** A best-effort probe: only an explicit required-but-missing account blocks a run. */
-export async function checkNativeCodexAuth(rpc: AppServerRpc): Promise<void> {
+export async function checkNativeCodexAuth(rpc: JsonRpc): Promise<void> {
   let timer: ReturnType<typeof setTimeout> | undefined;
   let account: unknown;
   try {
