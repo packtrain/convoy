@@ -5,7 +5,7 @@ import { MANAGED_PROVIDER_LABELS } from "../../lib/config/provider-keys.js";
 import { codexAwsHost } from "../../agent/runtimes/codex/auth.js";
 import { CredentialStore } from "../../lib/config/credentials/store.js";
 import { assertCredentialNames, authDescriptor, mutateCredentials } from "../../lib/config/credentials/resolution.js";
-import { MANAGED_RUNTIME_LABELS, managedRuntimeSchema, opencodeSlotSchema, runtimeDescriptor, secretSchema, type ManagedCredentialStatus, type CredentialMutation } from "../../lib/config/credentials/validators.js";
+import { MANAGED_RUNTIME_LABELS, OPENCODE_SLOT_LABELS, managedRuntimeSchema, opencodeSlotSchema, runtimeDescriptor, secretSchema, type ManagedCredentialStatus, type CredentialMutation } from "../../lib/config/credentials/validators.js";
 import { inspectProjectEnvironmentAsync, isProjectEnvironment } from "../project/launcher.js";
 import { serviceRequest, serviceEndpoint } from "../service/client.js";
 import { environmentMode } from "../environment/resolution.js";
@@ -155,7 +155,7 @@ function runtimeStatus({ desired, applied, pending }: ManagedCredentialStatus["p
   if (!Object.keys(slots).length) return `${single}; OpenCode disabled`;
   return single + opencodeSlotSchema.options.map((slot) => {
     const bound = slots[slot];
-    return bound ? part(`OpenCode ${MANAGED_PROVIDER_LABELS[slot]}`, bound, applied?.opencode?.[slot]?.revision) : "";
+    return bound ? part(`OpenCode ${OPENCODE_SLOT_LABELS[slot]}`, bound, applied?.opencode?.[slot]?.revision) : "";
   }).join("");
 }
 

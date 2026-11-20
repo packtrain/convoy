@@ -379,7 +379,7 @@ export async function createAgentRunner(options: AgentRunnerOptions): Promise<Ag
           options.claudeProviderToken ?? (options.claudeAuth?.mode === "disabled" ? undefined : options.claudeAuth?.secret),
           codexSecret(options.codexAuth, options.codexProvider),
           options.cursorAuth?.mode === "managed" ? options.cursorAuth.secret : undefined,
-          ...(options.opencodeAuth?.mode === "managed" ? Object.values(options.opencodeAuth.keys) : []),
+          ...(options.opencodeAuth?.mode === "managed" ? Object.values(options.opencodeAuth.keys).map((key) => typeof key === "string" ? key : key.secret) : []),
         ],
       });
 

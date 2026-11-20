@@ -222,6 +222,13 @@ policy for nested bubblewrap, and a host-only root lifecycle helper. See
 for setup, runtime login, updates, recovery and acceptance commands.
 The manual Dev Containers workflow above remains available.
 
+## Upgrading to CLI 0.148.0
+
+The launcher accepts managed Bedrock keys for OpenCode
+(`credentials-opencode-v2`). On a VM, install the new CLI and rerun
+`install.py` with the same arguments. Until then, assigning a Bedrock key to
+OpenCode is refused; OpenAI and Anthropic keys keep working.
+
 ## Upgrading to CLI 0.118.0
 
 The launcher runs OpenCode as a tested runtime and accepts managed OpenCode

@@ -248,6 +248,39 @@ describe("createOpencodeServerManager", () => {
     }
   });
 
+  // Project key and region options beat the AWS env, and baseURL beats endpoint, so all four go inline (OS-2205).
+  it("pins a managed Bedrock key and region inline and drops inherited AWS variables", async () => {
+    process.env.AWS_BEARER_TOKEN_BEDROCK = "inherited-token";
+    process.env.AWS_PROFILE = "other-account";
+    try {
+      const { env, manager } = await start({ mode: "managed", keys: { openai: "sk-openai-sentinel", "amazon-bedrock": { secret: "bedrock-sentinel", region: "eu-west-1" } } });
+      expect(Object.keys(env).filter((key) => key.startsWith("AWS_"))).toEqual([]);
+      const url = "https://bedrock-runtime.eu-west-1.amazonaws.com";
+      expect(JSON.parse(env.OPENCODE_CONFIG_CONTENT!)).toEqual({
+        enabled_providers: ["openai", "amazon-bedrock"],
+        provider: {
+          openai: { options: { apiKey: "sk-openai-sentinel", baseURL: "https://api.openai.com/v1" } },
+          "amazon-bedrock": { options: { apiKey: "bedrock-sentinel", region: "eu-west-1", endpoint: url, baseURL: url } },
+        },
+      });
+      await manager.shutdown();
+    } finally {
+      delete process.env.AWS_BEARER_TOKEN_BEDROCK;
+      delete process.env.AWS_PROFILE;
+    }
+  });
+
+  it("keeps the AWS environment for tools when no Bedrock key is delivered", async () => {
+    process.env.AWS_PROFILE = "tools";
+    try {
+      const { env, manager } = await start({ mode: "managed", keys: { openai: "sk-openai-sentinel" } });
+      expect(env.AWS_PROFILE).toBe("tools");
+      await manager.shutdown();
+    } finally {
+      delete process.env.AWS_PROFILE;
+    }
+  });
+
   it("enables no provider on a disabled server", async () => {
     const { env, manager } = await start({ mode: "disabled" });
     expect(env.OPENCODE_AUTH_CONTENT).toBe("{}");

@@ -324,10 +324,25 @@ convoy service reload --profile a --interrupt
 Assigning a second OpenAI key replaces the first; the Anthropic key stays. Run
 `convoy keys status` to see each key's desired and applied revision.
 
+CLI 0.148.0 adds a Bedrock slot. A Bedrock API key entry fills it; Mantle
+entries are refused:
+
+```bash
+convoy keys add work-bedrock --provider bedrock --auth api-key --region us-east-1
+convoy keys use work-bedrock --profile a --runtime opencode
+convoy service reload --profile a --interrupt
+```
+
+Requests go to `bedrock-runtime.<region>.amazonaws.com` in the entry's Region.
+The project's AWS variables, `~/.aws` profiles and Bedrock settings in
+`opencode.json` do not change the key or endpoint. The model picker hides
+Bedrock models that OpenCode sends through Mantle, since they do not work on
+Bedrock Runtime.
+
 With any managed key, OpenCode sees only the assigned keys. It ignores the
 project's own `opencode auth login`, its cached ChatGPT login, keys or endpoints
 in a project `opencode.json`, and every other provider. Requests go to
-`api.openai.com` and `api.anthropic.com`. A thread whose model belongs to a
+`api.openai.com`, `api.anthropic.com` and Bedrock Runtime. A thread whose model belongs to a
 provider without a usable key fails with `No usable <provider> key in this project`.
 An OpenCode config that sets `headers` on an assigned provider or one
 of its models fails the run, because those headers would replace the key.
@@ -337,12 +352,13 @@ it never falls back to another login.
 Managed keys need OpenCode 1.18.18 or newer and no administrator config in
 `/etc/opencode`. The project-isolation image installs 1.19.5; on a VM, see
 [Install OpenCode](/docs/cli/isolated-projects#install-opencode). Rerun
-`install.py` after upgrading the CLI; older launchers refuse OpenCode keys.
+`install.py` after upgrading the CLI; older launchers refuse OpenCode keys, and
+launchers older than 0.148.0 refuse OpenCode Bedrock keys.
 
 Every OpenCode server Convoy starts has its own password, so another project
 on the machine cannot use it. A's own agent can still read A's keys.
 
-To clear both keys:
+To clear all OpenCode keys:
 
 ```bash
 convoy keys unassign --profile a --runtime opencode               # OpenCode disabled

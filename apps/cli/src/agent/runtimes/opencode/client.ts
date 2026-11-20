@@ -75,7 +75,7 @@ export interface OpencodeClientLike {
       name: string;
       models: Record<
         string,
-        { id: string; name: string; variants?: Record<string, unknown>; limit?: { context: number } }
+        { id: string; name: string; variants?: Record<string, unknown>; limit?: { context: number }; api?: { npm?: string } }
       >;
     }>;
     connected: string[];

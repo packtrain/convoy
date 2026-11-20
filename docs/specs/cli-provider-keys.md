@@ -562,9 +562,10 @@ convoy keys unassign --profile a --runtime opencode --native-login
 
 - OpenCode reuses existing entries: an OpenAI entry (no `provider`, no `aws`)
   fills the `openai` slot, an Anthropic entry (`provider: "anthropic"`) the
-  `anthropic` slot. AWS and Cursor entries are refused with "OpenCode needs a
-  managed OpenAI or Anthropic key." `use` replaces the key in that entry's slot
-  and keeps the other slot.
+  `anthropic` slot, a Bedrock entry the `amazon-bedrock` slot
+  ([OS-2205](#managed-bedrock-keys-for-opencode-os-2205)). Mantle and Cursor
+  entries are refused with "OpenCode needs a managed OpenAI, Anthropic or Bedrock
+  key." `use` replaces the key in that entry's slot and keeps the other slots.
 - The store keeps `opencodeBindings: { [identity]: { openai?: name, anthropic?: name } }`
   beside the other runtimes' bindings. No record means native login. `{}` means
   disabled. Native login is all or nothing: with any managed slot, OpenCode
@@ -639,6 +640,60 @@ convoy keys unassign --profile a --runtime opencode --native-login
   which the project-isolation firewall already allows.
 - Native OpenCode login stays private to each project:
   `project login <profile> --runtime opencode` runs `opencode auth login`.
+
+## Managed Bedrock keys for OpenCode (OS-2205)
+
+A Bedrock Runtime entry (`aws.provider: "bedrock"`) fills a third OpenCode
+slot, `amazon-bedrock`, beside `openai` and `anthropic`.
+
+```bash
+convoy keys add work-bedrock --provider bedrock --auth api-key --region us-east-1
+convoy keys use work-bedrock --profile a --runtime opencode
+convoy service reload --profile a --interrupt
+```
+
+- Store and descriptor gain the optional `amazon-bedrock` slot. The payload key
+  is `{ secret, region }`, not a string:
+  `opencodeAuth.keys["amazon-bedrock"] = { secret, region }`.
+- The launcher advertises `credentials-opencode-v2` beside v1 and accepts the
+  Bedrock value only as exactly `{secret, region}`, with a bounded single-line
+  secret and a valid Region. Binding a Bedrock key and launching with one need
+  v2. OpenAI and Anthropic payloads still need only v1. Shared registrations
+  skip launcher checks, as for the other slots.
+- Mantle entries are refused. OpenCode's `amazon-bedrock` provider calls Bedrock
+  Runtime; a Mantle key does not work there.
+- Delivery goes in inline config, not the AWS env:
+  `provider.amazon-bedrock.options.{apiKey, region, endpoint, baseURL}`, with
+  both URLs set to `https://bedrock-runtime.<region>.amazonaws.com`. Checked
+  with OpenCode 1.18.18 and 1.19.5:
+  - A project `opencode.json` `options.apiKey` or `region` beats
+    `AWS_BEARER_TOKEN_BEDROCK` and `AWS_REGION`. Inline config beats the project,
+    so the key and Region go inline.
+  - `baseURL` outranks `endpoint`, so both carry the pin.
+  - With a project config that sets a bogus `apiKey`, `region`, `endpoint`,
+    `baseURL` and `profile`, the effective config keeps Convoy's values (the
+    project `profile` passes through), and a real request succeeds. The bearer
+    key wins over a profile.
+  - `OPENCODE_AUTH_CONTENT={}` hides a cached `amazon-bedrock` key in
+    auth.json.
+  - Provider or model `headers` on `amazon-bedrock` can add an `Authorization`
+    header. The existing header guard refuses those runs, as for the other
+    slots.
+- The server env drops inherited `AWS_*` only when a Bedrock key is delivered.
+  A project with only OpenAI or Anthropic keys keeps its AWS env for tool
+  commands.
+- OpenCode routes some Bedrock models through the Mantle SDK
+  (`api.npm === "@ai-sdk/amazon-bedrock/mantle"`). The pinned Runtime endpoint
+  cannot serve them, so with a managed Bedrock key the inventory drops them
+  before the fair per-provider cap (19 of 169 at the time of writing). Native
+  inventories keep them. A thread that already selected one gets the
+  provider's error.
+- The upload redaction list takes the Bedrock entry's `secret`.
+- `keys status` shows `; OpenCode Bedrock managed, desired N, applied N`.
+- Network: OpenCode calls `bedrock-runtime.<region>.amazonaws.com`. `keys add`
+  for a target already allows that host, as for Codex.
+- No new command. `keys rotate`, `rollback`, `disable`, `unassign` and `remove`
+  work as for the other slots.
 
 ## Review corrections, 0.71.1
 

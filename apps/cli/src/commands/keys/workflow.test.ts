@@ -222,11 +222,11 @@ it("lists OpenCode slots, and a project with only OpenCode bound (OS-2018)", asy
   const slot = (revision: number) => ({ mode: "managed" as const, name: "work", revision });
   const project = { identity: "o", profiles: ["o"], state: "online", pending: true, authResult: undefined, verified: false };
   printManagedStatus({ service: true, compatible: true, configurationError: false, entries: [], projects: [
-    { ...project, desired: { mode: "native", opencode: { openai: slot(2), anthropic: slot(1) } }, applied: { mode: "native", opencode: { openai: slot(1) } } },
+    { ...project, desired: { mode: "native", opencode: { openai: slot(2), anthropic: slot(1), "amazon-bedrock": slot(3) } }, applied: { mode: "native", opencode: { openai: slot(1), "amazon-bedrock": slot(3) } } },
     { ...project, profiles: ["d"], desired: { mode: "native", opencode: {} }, applied: { mode: "native", opencode: {} }, pending: false },
   ] });
   const output = log.mock.calls.flat().join("\n");
-  expect(output).toContain("; OpenCode OpenAI managed, desired 2, applied 1; OpenCode Anthropic managed, desired 1, applied none");
+  expect(output).toContain("; OpenCode OpenAI managed, desired 2, applied 1; OpenCode Anthropic managed, desired 1, applied none; OpenCode Bedrock managed, desired 3, applied 3");
   expect(output).toContain("; OpenCode disabled");
   log.mockRestore();
 });

@@ -53,7 +53,9 @@ export const credentialStoreSchema = z
     /** Cursor bindings (OS-2017). */
     cursorBindings: z.record(z.string().regex(/^[a-f0-9]{64}$/), bindingSchema).optional(),
     /** OpenCode key name per provider slot (OS-2018); `{}` disables OpenCode, absent = native login. */
-    opencodeBindings: z.record(z.string().regex(/^[a-f0-9]{64}$/), z.object({ openai: keyNameSchema.optional(), anthropic: keyNameSchema.optional() }).strict()).optional(),
+    opencodeBindings: z.record(z.string().regex(/^[a-f0-9]{64}$/), z.object({
+      openai: keyNameSchema.optional(), anthropic: keyNameSchema.optional(), "amazon-bedrock": keyNameSchema.optional(),
+    }).strict()).optional(),
   })
   .strict()
   .superRefine((s, ctx) => {
@@ -73,7 +75,9 @@ const runtimeAuthDescriptorSchema = z
   })
   .strict();
 /** OpenCode's descriptor: one per bound slot; `{}` is disabled (OS-2018). */
-const opencodeDescriptorSchema = z.object({ openai: runtimeAuthDescriptorSchema.optional(), anthropic: runtimeAuthDescriptorSchema.optional() }).strict();
+const opencodeDescriptorSchema = z.object({
+  openai: runtimeAuthDescriptorSchema.optional(), anthropic: runtimeAuthDescriptorSchema.optional(), "amazon-bedrock": runtimeAuthDescriptorSchema.optional(),
+}).strict();
 /** Codex's descriptor, with Claude Code's (OS-2108), Cursor's (OS-2017) and OpenCode's (OS-2018) beside it when bound. */
 export const authDescriptorSchema = runtimeAuthDescriptorSchema
   .extend({ claude: runtimeAuthDescriptorSchema.optional(), cursor: runtimeAuthDescriptorSchema.optional(), opencode: opencodeDescriptorSchema.optional() })
@@ -106,12 +110,18 @@ export const cursorAuthSchema = z.discriminatedUnion("mode", [
   z.object({ mode: z.literal("disabled") }).strict(),
 ]);
 export type CursorAuth = z.infer<typeof cursorAuthSchema>;
-/** Providers OpenCode takes one managed key for each: OpenAI and Anthropic API keys (OS-2018). */
-export const opencodeSlotSchema = z.enum(["openai", "anthropic"]);
+/** Providers OpenCode takes one managed key for each: OpenAI and Anthropic API keys (OS-2018), Bedrock Runtime keys (OS-2205). */
+export const opencodeSlotSchema = z.enum(["openai", "anthropic", "amazon-bedrock"]);
 export type OpencodeSlot = z.infer<typeof opencodeSlotSchema>;
+export const OPENCODE_SLOT_LABELS: Record<OpencodeSlot, string> = { openai: "OpenAI", anthropic: "Anthropic", "amazon-bedrock": "Bedrock" };
+const opencodeKeysSchema = z.object({
+  openai: secretSchema.optional(), anthropic: secretSchema.optional(),
+  "amazon-bedrock": z.object({ secret: secretSchema, region: awsRegionSchema }).strict().optional(),
+}).strict();
+export type OpencodeKeys = z.infer<typeof opencodeKeysSchema>;
 /** OpenCode payload: the assigned key per slot, or disabled; native login sends none. */
 export const opencodeAuthSchema = z.discriminatedUnion("mode", [
-  z.object({ mode: z.literal("managed"), keys: z.object({ openai: secretSchema.optional(), anthropic: secretSchema.optional() }).strict() }).strict(),
+  z.object({ mode: z.literal("managed"), keys: opencodeKeysSchema }).strict(),
   z.object({ mode: z.literal("disabled") }).strict(),
 ]);
 export type OpencodeAuth = z.infer<typeof opencodeAuthSchema>;

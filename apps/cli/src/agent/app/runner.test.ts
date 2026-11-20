@@ -321,14 +321,14 @@ describe("agent-runner shutdown lifecycle", () => {
 
   it("redacts managed OpenCode keys and gives them to detection and the OpenCode runner (OS-2018)", async () => {
     const logSpy = vi.spyOn(console, "log").mockImplementation(() => {});
-    const opencodeAuth = { mode: "managed" as const, keys: { openai: "managed-openai", anthropic: "managed-anthropic" } };
+    const opencodeAuth = { mode: "managed" as const, keys: { openai: "managed-openai", anthropic: "managed-anthropic", "amazon-bedrock": { secret: "managed-bedrock", region: "us-east-1" } } };
     const runner = await createAgentRunner({
       convexUrl: "https://example.convex.cloud", apiKey: "api_test_123", projectId: "project_123", paths: ["/tmp/repo"], opencodeAuth,
     });
     try {
       const runPromise = runner.run();
       await vi.waitFor(() => expect(createMessageHandlerMock).toHaveBeenCalled());
-      expect(createConvexClientMock).toHaveBeenCalledWith(expect.objectContaining({ secrets: [undefined, undefined, undefined, "managed-openai", "managed-anthropic"] }));
+      expect(createConvexClientMock).toHaveBeenCalledWith(expect.objectContaining({ secrets: [undefined, undefined, undefined, "managed-openai", "managed-anthropic", "managed-bedrock"] }));
       expect(detectAvailableClisMock).toHaveBeenCalledWith(expect.objectContaining({ opencodeAuth }));
       const runnerFactory = (createMessageHandlerMock.mock.calls[0] as unknown[])[0] as (cliType: string) => unknown;
       runnerFactory("opencode");

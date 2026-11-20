@@ -130,3 +130,30 @@ describe("advertised model cap", () => {
     ]);
   });
 });
+
+// A pinned Bedrock Runtime endpoint cannot serve models OpenCode routes through the Mantle SDK (OS-2205).
+describe("managed Bedrock inventory", () => {
+  const model = (id: string, npm: string) => [id, { id, name: id, api: { id, url: "", npm } }] as const;
+  const inventory = {
+    all: [{
+      id: "amazon-bedrock",
+      name: "Amazon Bedrock",
+      models: Object.fromEntries([
+        ...Array.from({ length: 160 }, (_, index) => model(`mantle${index}`, "@ai-sdk/amazon-bedrock/mantle")),
+        model("anthropic.claude-haiku-5-5", "@ai-sdk/amazon-bedrock"),
+      ]),
+    }],
+    connected: ["amazon-bedrock"],
+    defaults: {},
+  };
+
+  it("drops Mantle-SDK models before the cap when a managed Bedrock key is delivered", () => {
+    const managed = mapInventoryToAdvertisedModels(inventory, { mode: "managed", keys: { "amazon-bedrock": { secret: "token", region: "us-east-1" } } });
+    expect(managed.map((entry) => entry.slug)).toEqual(["amazon-bedrock/anthropic.claude-haiku-5-5"]);
+  });
+
+  it("keeps native and other-slot inventories unchanged", () => {
+    expect(mapInventoryToAdvertisedModels(inventory)).toHaveLength(MAX_ADVERTISED_MODELS);
+    expect(mapInventoryToAdvertisedModels(inventory, { mode: "managed", keys: { openai: "sk" } })).toHaveLength(MAX_ADVERTISED_MODELS);
+  });
+});

@@ -239,13 +239,25 @@ describe("managed OpenCode provider keys (OS-2018)", () => {
     expect(authDescriptor(store.read(), identity)).toBeUndefined();
     mutateCredentials({ action: "remove", name: "claude" }, opencodeEnvironment, store);
   });
-  it("refuses AWS and Cursor keys and a launcher without the OpenCode capability", () => {
+  it("refuses Mantle and Cursor keys and a launcher without the OpenCode capability", () => {
     const all = { ...opencodeEnvironment, capabilities: [...opencodeEnvironment.capabilities, "credentials-aws-v1", "credentials-cursor-v1"] };
-    mutateCredentials({ action: "add", name: "aws", secret: "first", aws: { provider: "bedrock", region: "us-east-1" } }, all, store);
+    mutateCredentials({ action: "add", name: "mantle", secret: "first", aws: { provider: "mantle", region: "us-east-1" } }, all, store);
     mutateCredentials({ action: "add", name: "cursor", secret: "first", provider: "cursor" }, all, store);
-    expect(() => bind({ mode: "managed", name: "aws" })).toThrow("OpenCode needs a managed OpenAI or Anthropic key.");
+    expect(() => bind({ mode: "managed", name: "mantle" })).toThrow("OpenCode needs a managed OpenAI, Anthropic or Bedrock key.");
     expect(() => bind({ mode: "managed", name: "cursor" })).toThrow("OpenCode needs");
     mutateCredentials({ action: "add", name: "openai", secret: "first" }, all, store);
     expect(() => bind({ mode: "managed", name: "openai" }, { ...environment, capabilities: ["credentials-v1"] })).toThrow("Managed OpenCode credentials require an updated launcher");
+  });
+  it("fills the Bedrock slot beside the others, only on a launcher with credentials-opencode-v2 (OS-2205)", () => {
+    const v1 = { ...opencodeEnvironment, capabilities: [...opencodeEnvironment.capabilities, "credentials-aws-v1"] };
+    const v2 = { ...v1, capabilities: [...v1.capabilities, "credentials-opencode-v2"] };
+    mutateCredentials({ action: "add", name: "bedrock", secret: "first", aws: { provider: "bedrock", region: "eu-west-1" } }, v1, store);
+    mutateCredentials({ action: "add", name: "openai", secret: "first" }, v1, store);
+    expect(() => bind({ mode: "managed", name: "bedrock" }, v1)).toThrow("Managed OpenCode Bedrock credentials require an updated launcher");
+    bind({ mode: "managed", name: "openai" }, v1);
+    bind({ mode: "managed", name: "bedrock" }, v2);
+    expect(store.read().opencodeBindings).toEqual({ [identity]: { openai: "openai", "amazon-bedrock": "bedrock" } });
+    expect(authDescriptor(store.read(), identity)?.opencode?.["amazon-bedrock"]).toMatchObject({ mode: "managed", name: "bedrock", revision: 1 });
+    expect(() => mutateCredentials({ action: "remove", name: "bedrock" }, v2, store)).toThrow("assigned to a project");
   });
 });

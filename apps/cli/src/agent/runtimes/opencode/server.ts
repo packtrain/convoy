@@ -10,7 +10,8 @@ import { createInterface } from "node:readline";
 import { createServer } from "node:net";
 import { randomBytes } from "node:crypto";
 import { resolveExecutable } from "../../sdk/adapters/executable-resolution.js";
-import type { OpencodeAuth, OpencodeSlot } from "../../../lib/config/credentials/validators.js";
+import type { OpencodeAuth, OpencodeKeys, OpencodeSlot } from "../../../lib/config/credentials/validators.js";
+import { codexAwsHost } from "../codex/auth.js";
 
 /** Env var override for the OpenCode executable path. */
 export const OPENCODE_EXECUTABLE_ENV = "CONVOY_OPENCODE_EXECUTABLE";
@@ -97,10 +98,15 @@ async function findFreePort(): Promise<number> {
   });
 }
 
-/** Each slot's official endpoint, so a project config cannot redirect a managed key (OS-2018). */
-const SLOT_BASE_URLS: Record<OpencodeSlot, string> = {
-  openai: "https://api.openai.com/v1",
-  anthropic: "https://api.anthropic.com/v1",
+/** Each slot's inline options, pinned to the official endpoint so a project config cannot redirect a managed key (OS-2018, OS-2205). */
+const SLOT_OPTIONS: { [S in OpencodeSlot]: (key: NonNullable<OpencodeKeys[S]>) => Record<string, string> } = {
+  openai: (apiKey) => ({ apiKey, baseURL: "https://api.openai.com/v1" }),
+  anthropic: (apiKey) => ({ apiKey, baseURL: "https://api.anthropic.com/v1" }),
+  // baseURL outranks endpoint, so both carry the pin.
+  "amazon-bedrock": ({ secret, region }) => {
+    const url = `https://${codexAwsHost({ provider: "bedrock", region })}`;
+    return { apiKey: secret, region, endpoint: url, baseURL: url };
+  },
 };
 
 function buildOpencodeSubprocessEnv(password: string, auth?: OpencodeAuth): NodeJS.ProcessEnv {
@@ -115,12 +121,14 @@ function buildOpencodeSubprocessEnv(password: string, auth?: OpencodeAuth): Node
   if (auth) {
     // Inline config outranks project config; empty auth hides cached logins and OAuth.
     // Spec: docs/specs/cli-provider-keys.md#managed-provider-keys-for-isolated-opencode-os-2018
-    for (const key of Object.keys(env)) if (/^(OPENCODE|OPENAI|ANTHROPIC)_/.test(key) && key !== "OPENCODE_SERVER_PASSWORD") delete env[key];
-    const keys = auth.mode === "managed" ? Object.entries(auth.keys) as [OpencodeSlot, string][] : [];
+    // AWS_* goes only with a delivered Bedrock key; without one, tools keep their AWS env.
+    const inherited = auth.mode === "managed" && auth.keys["amazon-bedrock"] ? /^(OPENCODE|OPENAI|ANTHROPIC|AWS)_/ : /^(OPENCODE|OPENAI|ANTHROPIC)_/;
+    for (const key of Object.keys(env)) if (inherited.test(key) && key !== "OPENCODE_SERVER_PASSWORD") delete env[key];
+    const keys = auth.mode === "managed" ? Object.entries(auth.keys) as [OpencodeSlot, never][] : [];
     env.OPENCODE_AUTH_CONTENT = "{}";
     env.OPENCODE_CONFIG_CONTENT = JSON.stringify({
       enabled_providers: keys.map(([slot]) => slot),
-      provider: Object.fromEntries(keys.map(([slot, apiKey]) => [slot, { options: { apiKey, baseURL: SLOT_BASE_URLS[slot] } }])),
+      provider: Object.fromEntries(keys.map(([slot, key]) => [slot, { options: SLOT_OPTIONS[slot](key) }])),
     });
   }
   return env;

@@ -12,17 +12,18 @@ import {
   type ClaudeAuth,
   type CursorAuth,
   type OpencodeAuth,
+  type OpencodeKeys,
   type OpencodeSlot,
+  OPENCODE_SLOT_LABELS,
   type Binding,
   type ManagedRuntime,
   MANAGED_RUNTIME_LABELS,
-  type KeyRuntime,
 } from "./validators.js";
 
 type Entry = CredentialData["entries"][string];
 type EntryRule = { accepts: (entry: Entry) => boolean; refusal: string };
-const launcherRequired = (runtime: KeyRuntime) =>
-  `Managed ${MANAGED_RUNTIME_LABELS[runtime]} credentials require an updated launcher. Follow the VM upgrade instructions.`;
+const launcherRequired = (label: string) =>
+  `Managed ${label} credentials require an updated launcher. Follow the VM upgrade instructions.`;
 /** Per runtime: where its bindings live, the launcher capability they need, and the entries it takes. */
 const RUNTIME_BINDINGS: Record<ManagedRuntime, {
   field: "bindings" | "claudeBindings" | "cursorBindings"; capability?: string;
@@ -37,11 +38,16 @@ const RUNTIME_BINDINGS: Record<ManagedRuntime, {
     refusal: "Cursor needs a managed Cursor account key.",
   },
 };
-const OPENCODE_REFUSAL = "OpenCode needs a managed OpenAI or Anthropic key.";
-/** The entries each OpenCode provider slot takes (OS-2018). */
-const OPENCODE_SLOTS: Record<OpencodeSlot, EntryRule> = {
-  openai: { accepts: (e) => !e.provider && !e.aws, refusal: OPENCODE_REFUSAL },
-  anthropic: { accepts: (e) => e.provider === "anthropic", refusal: OPENCODE_REFUSAL },
+const OPENCODE_REFUSAL = "OpenCode needs a managed OpenAI, Anthropic or Bedrock key.";
+type Granted = { secret: string; aws?: Entry["aws"] };
+/** Per OpenCode provider slot: the entries it takes, its extra launcher capability, and its payload key (OS-2018, OS-2205). */
+const OPENCODE_SLOTS: Record<OpencodeSlot, EntryRule & { capability?: string; key: (granted: Granted) => NonNullable<OpencodeKeys[OpencodeSlot]> }> = {
+  openai: { accepts: (e) => !e.provider && !e.aws, refusal: OPENCODE_REFUSAL, key: ({ secret }) => secret },
+  anthropic: { accepts: (e) => e.provider === "anthropic", refusal: OPENCODE_REFUSAL, key: ({ secret }) => secret },
+  "amazon-bedrock": {
+    accepts: (e) => e.aws?.provider === "bedrock", refusal: OPENCODE_REFUSAL, capability: "credentials-opencode-v2",
+    key: ({ secret, aws }) => ({ secret, region: aws!.region }),
+  },
 };
 
 function bindingDescriptor(data: CredentialData, binding: Binding): AuthDescriptor {
@@ -63,7 +69,7 @@ export function authDescriptor(data: CredentialData, identity: string): AuthDesc
 }
 
 /** The bound revision's secret; refuses an entry the runtime cannot take, such as a hand-edited binding. */
-function managedSecret(data: CredentialData, current: { name?: string; revision?: number }, rule: EntryRule) {
+function managedSecret(data: CredentialData, current: { name?: string; revision?: number }, rule: EntryRule): Granted {
   const entry = data.entries[current.name!];
   const secret = entry?.revisions.find((r) => r.revision === current.revision)?.secret;
   if (!secret) throw new Error("Managed credential revision is missing.");
@@ -96,7 +102,7 @@ export function launchPayload(data: CredentialData, current: AuthDescriptor | un
   }
   if (current?.opencode) {
     const keys = Object.fromEntries((Object.entries(current.opencode) as [OpencodeSlot, AuthDescriptor][])
-      .filter(([, slot]) => slot.mode === "managed").map(([slot, bound]) => [slot, managedSecret(data, bound, OPENCODE_SLOTS[slot]).secret]));
+      .filter(([, slot]) => slot.mode === "managed").map(([slot, bound]) => [slot, OPENCODE_SLOTS[slot].key(managedSecret(data, bound, OPENCODE_SLOTS[slot]))])) as OpencodeKeys;
     result.opencodeAuth = Object.keys(keys).length ? { mode: "managed", keys } : { mode: "disabled" };
   }
   return result;
@@ -110,6 +116,7 @@ export function launchCapabilities({ codexAuth, claudeAuth, cursorAuth, opencode
     ...(claudeAuth?.mode === "anthropic" ? ["credentials-anthropic-v1"] : []),
     ...(cursorAuth ? ["credentials-cursor-v1"] : []),
     ...(opencodeAuth ? ["credentials-opencode-v1"] : []),
+    ...(opencodeAuth?.mode === "managed" ? (Object.keys(opencodeAuth.keys) as OpencodeSlot[]).flatMap((slot) => OPENCODE_SLOTS[slot].capability ?? []) : []),
   ];
 }
 
@@ -174,13 +181,16 @@ export function mutateCredentials(request: CredentialMutation, environment: Proj
           throw new Error("Managed credential is missing or disabled. Rotate it to enable a replacement.");
         if (request.runtime === "opencode") {
           if (!supports("credentials-opencode-v1"))
-            throw new Error(launcherRequired("opencode"));
+            throw new Error(launcherRequired(MANAGED_RUNTIME_LABELS.opencode));
           const { [identity]: slots, ...others } = data.opencodeBindings ?? {};
           if (request.binding.mode === "native") data.opencodeBindings = others;
           else if (request.binding.mode === "disabled") data.opencodeBindings = { ...others, [identity]: {} };
           else {
             const slot = (Object.keys(OPENCODE_SLOTS) as OpencodeSlot[]).find((key) => OPENCODE_SLOTS[key].accepts(bound!));
             if (!slot) throw new Error(OPENCODE_REFUSAL);
+            const capability = OPENCODE_SLOTS[slot].capability;
+            if (capability && !supports(capability))
+              throw new Error(launcherRequired(`${MANAGED_RUNTIME_LABELS.opencode} ${OPENCODE_SLOT_LABELS[slot]}`));
             data.opencodeBindings = { ...others, [identity]: { ...slots, [slot]: request.binding.name } };
           }
           return;
@@ -189,7 +199,7 @@ export function mutateCredentials(request: CredentialMutation, environment: Proj
         const runtime = request.runtime ?? "codex";
         const { field, capability, accepts, refusal } = RUNTIME_BINDINGS[runtime];
         if (capability && !supports(capability))
-          throw new Error(launcherRequired(runtime));
+          throw new Error(launcherRequired(MANAGED_RUNTIME_LABELS[runtime]));
         if (bound && !accepts(bound)) throw new Error(refusal);
         if (bound?.provider === "anthropic" && !supports("credentials-anthropic-v1"))
           throw new Error("Managed Anthropic keys require an updated launcher. Follow the VM upgrade instructions.");

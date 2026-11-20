@@ -309,6 +309,16 @@ describe("managed OpenCode keys (OS-2018)", () => {
     expect(calls.promptAsync).toHaveLength(0);
   });
 
+  it("refuses headers on an assigned Bedrock slot (OS-2205)", async () => {
+    const bedrock = { mode: "managed" as const, keys: { "amazon-bedrock": { secret: "token", region: "us-east-1" } } };
+    const { result, calls } = await run(bedrock, {
+      model: "amazon-bedrock/anthropic.claude-haiku-5-5",
+      providerConfig: { "amazon-bedrock": { models: { "anthropic.claude-haiku-5-5": { headers: { Authorization: "Bearer other" } } } } },
+    });
+    await expect(result).rejects.toThrow("OpenCode config sets headers for amazon-bedrock");
+    expect(calls.promptAsync).toHaveLength(0);
+  });
+
   it("allows headers on providers Convoy does not manage", async () => {
     const { result, calls } = await run(managed, { providerConfig: { anthropic: { options: { headers: { "x-api-key": "other" } } } } });
     await result;

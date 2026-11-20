@@ -79,6 +79,17 @@ class LauncherPolicyTests(unittest.TestCase):
             with self.assertRaises(ValueError):
                 launcher.validate_credentials({"config": {"opencodeAuth": auth}})
 
+    def test_managed_opencode_bedrock_key_carries_secret_and_region(self):
+        self.assertIn("credentials-opencode-v2", launcher.CAPABILITIES)
+        bedrock = {"secret": "sentinel", "region": "eu-west-1"}
+        launcher.validate_credentials({"config": {"opencodeAuth": {"mode": "managed", "keys": {"openai": "sentinel", "amazon-bedrock": bedrock}}}})
+        for value in ["sentinel", {"secret": "sentinel"}, {**bedrock, "extra": "x"}, {**bedrock, "region": "Moon-1"},
+                      {**bedrock, "secret": "x\n"}, ["sentinel", "eu-west-1"]]:
+            with self.assertRaises(ValueError):
+                launcher.validate_credentials({"config": {"opencodeAuth": {"mode": "managed", "keys": {"amazon-bedrock": value}}}})
+        with self.assertRaises(ValueError):
+            launcher.validate_credentials({"config": {"opencodeAuth": {"mode": "managed", "keys": {"openai": bedrock}}}})
+
     def test_managed_cursor_keys_reach_cursor_only(self):
         self.assertIn("credentials-cursor-v1", launcher.CAPABILITIES)
         for auth in [{"mode": "managed", "secret": "sentinel"}, {"mode": "disabled"}]:

@@ -53,15 +53,22 @@ function fairQuotas(sizes: number[], cap: number): number[] {
   return quotas;
 }
 
+/** OpenCode routes these Bedrock models through Mantle, which a pinned Bedrock Runtime endpoint cannot serve (OS-2205). */
+const MANTLE_SDK = "@ai-sdk/amazon-bedrock/mantle";
+
 /** Connected-provider models → advertised payload, capped per provider fairly. */
 export function mapInventoryToAdvertisedModels(
   inventory: OpencodeProviderInventory,
+  auth?: OpencodeAuth,
 ): DetectedCliModel[] {
   const connected = new Set(inventory.connected);
+  const managedBedrock = auth?.mode === "managed" && !!auth.keys["amazon-bedrock"];
   const byProvider = inventory.all
     .filter((provider) => connected.has(provider.id))
     .map((provider) =>
-      Object.values(provider.models).map((model): DetectedCliModel => {
+      Object.values(provider.models).filter((model) =>
+        !(managedBedrock && provider.id === "amazon-bedrock" && model.api?.npm === MANTLE_SDK),
+      ).map((model): DetectedCliModel => {
         const variants = Object.keys(model.variants ?? {});
         return {
           slug: `${provider.id}/${model.id}`,
@@ -109,7 +116,7 @@ export async function loadAdvertisedModels(deps?: {
         timer.unref?.();
       }),
     ]);
-    return mapInventoryToAdvertisedModels(inventory);
+    return mapInventoryToAdvertisedModels(inventory, deps?.auth);
   } catch {
     // Fail soft: a CLI without inventory still registers (models unknown).
     return undefined;

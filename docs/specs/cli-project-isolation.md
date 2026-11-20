@@ -316,10 +316,11 @@ prints a missing runtime's install command on its skipped row too, so it shows
 while Codex or Claude Code is ready.
 
 Managed OpenCode keys (OS-2018) send `opencodeAuth: { mode: "managed", keys }`,
-where `keys` holds one or both of `openai` and `anthropic`, or
+where `keys` holds any of `openai`, `anthropic` and `amazon-bedrock`, or
 `{ mode: "disabled" }`. The launcher advertises `credentials-opencode-v1` and
 accepts only those shapes: a non-empty `keys` with known slots and bounded
-single-line values. The worker hands them to the OpenCode server manager, which
+single-line values. `credentials-opencode-v2` (OS-2205) adds the
+`amazon-bedrock` value, exactly `{ secret, region }` with a valid Region. The worker hands them to the OpenCode server manager, which
 puts them in the `opencode serve` child env only. `project check` output gains
 an `opencode` runtime; the CLI treats it as absent for older launchers.
 

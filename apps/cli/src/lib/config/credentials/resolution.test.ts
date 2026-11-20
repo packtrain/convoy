@@ -163,3 +163,21 @@ it("delivers each OpenCode slot's key to OpenCode only (OS-2018)", () => {
   store.mutate((d) => { d.opencodeBindings = { [identity]: { openai: "claude" } }; d.entries.claude.enabled = true; });
   expect(() => launchAuth(identity, authDescriptor(store.read(), identity), store)).toThrow("OpenCode needs");
 });
+
+it("delivers the Bedrock slot's secret and region and needs credentials-opencode-v2 (OS-2205)", () => {
+  const dir = mkdtempSync(join(tmpdir(), "keys-opencode-bedrock-"));
+  dirs.push(dir);
+  const store = new CredentialStore(dir);
+  const identity = "a".repeat(64);
+  store.mutate((d) => {
+    d.entries.openai = { id: "id1", enabled: true, current: 1, revisions: [{ revision: 1, secret: "sk-openai", createdAt: 1 }] };
+    d.entries.aws = { id: "id2", enabled: true, current: 1, aws: { provider: "bedrock", region: "eu-west-1" }, revisions: [{ revision: 1, secret: "bedrock-token", createdAt: 1 }] };
+    d.opencodeBindings = { [identity]: { openai: "openai", "amazon-bedrock": "aws" } };
+  });
+  const payload = launchAuth(identity, authDescriptor(store.read(), identity), store);
+  expect(payload).toEqual({ opencodeAuth: { mode: "managed", keys: { openai: "sk-openai", "amazon-bedrock": { secret: "bedrock-token", region: "eu-west-1" } } } });
+  expect(launchCapabilities(payload)).toEqual(["credentials-opencode-v1", "credentials-opencode-v2"]);
+  // A Mantle entry never reaches the Bedrock Runtime slot.
+  store.mutate((d) => { d.entries.aws.aws = { provider: "mantle", region: "eu-west-1" }; });
+  expect(() => launchAuth(identity, authDescriptor(store.read(), identity), store)).toThrow("OpenCode needs");
+});

@@ -459,7 +459,7 @@ def add(config, registry, request):
 
 
 CAPABILITIES = ["credentials-v1", "credentials-aws-v1", "credentials-claude-v1", "credentials-anthropic-v1", "credentials-cursor-v1",
-                "credentials-opencode-v1"]
+                "credentials-opencode-v1", "credentials-opencode-v2"]
 AWS_REGION = re.compile(r"[a-z]{2}(-[a-z]+)+-[0-9]{1,2}")
 
 
@@ -472,12 +472,17 @@ def validate_credentials(request):
             validate_auth(config[field], modes)
     opencode = config.get("opencodeAuth")
     if opencode is not None:
-        # Disabled, or one key per known provider slot (OS-2018).
+        # Disabled, or one key per known provider slot (OS-2018); Bedrock's carries its region (OS-2205).
         keys = opencode.get("keys") if isinstance(opencode, dict) and set(opencode) == {"mode", "keys"} and opencode["mode"] == "managed" else None
-        require(opencode == {"mode": "disabled"} or (isinstance(keys, dict) and keys and set(keys) <= {"openai", "anthropic"}),
+        require(opencode == {"mode": "disabled"} or (isinstance(keys, dict) and keys and set(keys) <= {"openai", "anthropic", "amazon-bedrock"}),
                 "Invalid managed credential payload")
-        for secret in (keys or {}).values():
-            validate_secret(secret)
+        for slot, key in (keys or {}).items():
+            if slot == "amazon-bedrock":
+                require(isinstance(key, dict) and set(key) == {"secret", "region"}, "Invalid managed credential fields")
+                validate_secret(key["secret"])
+                require(isinstance(key["region"], str) and AWS_REGION.fullmatch(key["region"]), "Invalid managed credential region")
+            else:
+                validate_secret(key)
     require(config.get("codexAuth") is None or config.get("codexAppServer") is not False,
             "Managed credentials require app-server mode")
 

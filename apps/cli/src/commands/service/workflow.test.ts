@@ -137,6 +137,16 @@ describe("startup snapshot", () => {
       mode: "native", opencode: { openai: { mode: "managed", name: "work", entryId: "id", revision: 1 } },
     });
   });
+  it("refuses an OpenCode Bedrock binding on a launcher without credentials-opencode-v2 (OS-2205)", () => {
+    const { config, environment } = snapshot();
+    const identity = config.profiles.a.project_isolation.identity;
+    const credentials = {
+      version: 1 as const, generation: 1, bindings: {}, opencodeBindings: { [identity]: { "amazon-bedrock": "aws" } },
+      entries: { aws: { id: "id", enabled: true, current: 1, aws: { provider: "bedrock" as const, region: "us-east-1" }, revisions: [{ revision: 1, secret: "token", createdAt: 1 }] } },
+    };
+    expect(() => serviceSnapshot(config, { ...environment, capabilities: ["credentials-opencode-v1"] }, credentials)).toThrow("updated project launcher");
+    expect(serviceSnapshot(config, { ...environment, capabilities: ["credentials-opencode-v1", "credentials-opencode-v2"] }, credentials)[0].auth?.opencode?.["amazon-bedrock"]?.mode).toBe("managed");
+  });
   it("refuses a Cursor binding on a launcher without credentials-cursor-v1 (OS-2017)", () => {
     const { config, environment } = snapshot();
     const identity = config.profiles.a.project_isolation.identity;
