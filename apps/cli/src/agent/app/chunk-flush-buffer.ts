@@ -1,3 +1,4 @@
+import { ConvexError } from "convex/values";
 import type { ChunkStreamPolicy, ContentChunk } from "../runtimes/contracts.js";
 import { scrubOversizedChunk } from "./chunk-scrub.js";
 import { redactAuth } from "../../lib/config/convex-client.js";
@@ -20,6 +21,12 @@ const MAX_COALESCED_CHUNK_BYTES = 32 * 1024;
  */
 const MAX_BATCH_CHUNKS = 256;
 const MAX_BATCH_BYTES = 1024 * 1024;
+
+/**
+ * Waits before each resend of a batch that failed outside the app: a Convex
+ * stall or overload must not end the run. Spec: cli-sdk-integration.md.
+ */
+const SEND_RETRY_DELAYS_MS = [1_000, 2_000, 4_000, 8_000];
 
 /**
  * A chunk stamped with its agent-side emit time. The server would otherwise
@@ -143,6 +150,22 @@ export function createChunkFlushBuffer(
     return buffered.splice(0, count);
   }
 
+  /** Sends a batch, resending it after a failure that is not the server's own verdict. */
+  async function sendWithRetry(chunks: StampedContentChunk[]): Promise<void> {
+    for (let attempt = 0; ; attempt += 1) {
+      try {
+        return await options.send(chunks);
+      } catch (error) {
+        const delay = SEND_RETRY_DELAYS_MS[attempt];
+        // A ConvexError (claim lost, message gone) fails the same way on a resend.
+        if (stopped || delay === undefined || error instanceof ConvexError) throw error;
+        await new Promise((resolve) => setTimeout(resolve, delay));
+        // Stopped while waiting: a resend could land after the fail mutation.
+        if (stopped) throw error;
+      }
+    }
+  }
+
   function startFlush(): void {
     clearFlushTimer();
     const chunks = takeBatch();
@@ -152,8 +175,7 @@ export function createChunkFlushBuffer(
     hasUrgentChunk = buffered.length > 0;
     lastFlushAt = Date.now();
 
-    inFlight = options
-      .send(chunks)
+    inFlight = sendWithRetry(chunks)
       .catch((error) => {
         failure ??= error instanceof Error ? error : new Error(String(error));
       })

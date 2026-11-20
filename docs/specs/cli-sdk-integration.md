@@ -170,6 +170,17 @@ Delta transport protocol (CLI → Convex):
   which stalls the message in `streaming` forever (OS-1761). A single chunk
   above the byte cap is still sent alone. This is a runtime-agnostic backstop;
   coalescing is what keeps normal batches small.
+- A send that fails outside the app is resent, same batch, up to four times
+  after waits of 1, 2, 4 and 8 seconds. Convex reports a stalled database as
+  `Your request timed out performing too many system operations.` once a
+  function has spent 15 seconds in syscalls, and an overload the same way;
+  neither says anything about the run, so neither may end it. A failed mutation
+  never committed, so the resend cannot duplicate rows, and it stays inside the
+  one in-flight send, so order holds. A `ConvexError` is the server's own
+  verdict (claim lost, message gone) and fails the run at once, as before. Once
+  the resends run out the run fails with the last error. Stopping the buffer
+  cancels a pending resend. Other mutations of a run (`startRunResponse`,
+  `complete`, `fail`, notices) are not resent.
 - Coalescing stops once the merged chunk reaches 32KB; the next delta starts a
   new chunk (OS-1521). Without the cap, deltas accumulating behind a stalled
   send (network hiccup, Convex reconnect) could grow one chunk past the

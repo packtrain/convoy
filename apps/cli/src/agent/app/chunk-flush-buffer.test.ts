@@ -1,3 +1,4 @@
+import { ConvexError } from "convex/values";
 import { afterEach, beforeEach, describe, expect, test, vi } from "vitest";
 import {
   createChunkFlushBuffer,
@@ -341,20 +342,88 @@ describe("chunk-flush-buffer", () => {
     ]);
   });
 
-  test("send failure surfaces via failure and drain rejects", async () => {
+  test("a send that keeps failing surfaces via failure and drain rejects", async () => {
+    let calls = 0;
     const buffer = createChunkFlushBuffer({
       policy: testPolicy,
       send: async () => {
+        calls += 1;
         throw new Error("network down");
       },
     });
 
     buffer.enqueue({ type: "assistant", data: "first" });
     await vi.advanceTimersByTimeAsync(0);
+    expect(buffer.failure).toBeNull();
 
+    await vi.advanceTimersByTimeAsync(15_000);
+
+    expect(calls).toBe(5);
     expect(buffer.failure?.message).toBe("network down");
     buffer.enqueue({ type: "assistant", data: "ignored after failure" });
     await expect(buffer.drain()).rejects.toThrow("network down");
+  });
+
+  test("a batch that fails on a Convex stall is resent, in order", async () => {
+    const sent: StampedContentChunk[][] = [];
+    let stalls = 2;
+    const buffer = createChunkFlushBuffer({
+      policy: testPolicy,
+      send: async (chunks) => {
+        if (stalls-- > 0) {
+          throw new Error("Your request timed out performing too many system operations.");
+        }
+        sent.push(chunks);
+      },
+    });
+
+    buffer.enqueue({ type: "assistant", data: "first" });
+    await vi.advanceTimersByTimeAsync(0);
+    buffer.enqueue({ type: "assistant", data: "second" });
+    await vi.advanceTimersByTimeAsync(3_000);
+
+    expect(buffer.failure).toBeNull();
+    await buffer.drain();
+    expect(strip(sent)).toEqual([
+      [{ type: "assistant", data: "first" }],
+      [{ type: "assistant", data: "second" }],
+    ]);
+  });
+
+  test("an app error fails the stream without a resend", async () => {
+    let calls = 0;
+    const buffer = createChunkFlushBuffer({
+      policy: testPolicy,
+      send: async () => {
+        calls += 1;
+        throw new ConvexError("Message not claimed by this session");
+      },
+    });
+
+    buffer.enqueue({ type: "assistant", data: "first" });
+    await vi.advanceTimersByTimeAsync(0);
+
+    expect(buffer.failure?.message).toContain("Message not claimed by this session");
+    await vi.advanceTimersByTimeAsync(60_000);
+    expect(calls).toBe(1);
+  });
+
+  test("stop during a resend wait prevents the resend", async () => {
+    let calls = 0;
+    const buffer = createChunkFlushBuffer({
+      policy: testPolicy,
+      send: async () => {
+        calls += 1;
+        throw new Error("network down");
+      },
+    });
+
+    buffer.enqueue({ type: "assistant", data: "first" });
+    await vi.advanceTimersByTimeAsync(0);
+    buffer.stop();
+    await vi.advanceTimersByTimeAsync(60_000);
+
+    expect(calls).toBe(1);
   });
 
   test("stop discards buffered chunks and prevents further sends", async () => {
