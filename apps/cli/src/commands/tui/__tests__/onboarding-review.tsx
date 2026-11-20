@@ -154,7 +154,7 @@ try {
   if (scenario.startsWith("discovery")) {
     await wait(() => frame.includes("Loading accessible"));
     if (scenario === "discovery-unmount") instance.unmount();
-    else { stdin.write("\u001b"); await settle(); }
+    else { stdin.write("\u001b"); await wait(() => Boolean(signal?.aborted)); }
     assert.equal(signal?.aborted, true, "Discovery must abort on Escape or unmount");
     if (scenario !== "discovery-unmount") { await wait(() => frame.includes("Deployment HTTPS")); assert(frame.includes("example.convex.cloud")); }
   } else {
