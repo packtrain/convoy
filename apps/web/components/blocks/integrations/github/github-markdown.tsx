@@ -1,3 +1,4 @@
+import { defaultRemarkPlugins } from "streamdown";
 import { MessageResponse, type MessageResponseProps } from "@/components/ai-elements/message";
 
 type HastNode = { type: string; value?: string; children?: HastNode[] };
@@ -12,10 +13,30 @@ const components: MessageResponseProps["components"] = {
   img: ({ src, alt, title, width, height }) => <img src={src} alt={alt} title={title} width={width} height={height} className="inline max-w-full align-middle" />,
 };
 
+type MdastNode = { type: string; value?: string; children?: MdastNode[] };
+// Split keeps both groups: [text, boundary, @login, text, ...], so every third part is a login.
+const MENTION = /(^|\W)(@[A-Za-z\d][A-Za-z\d-]*)/g;
+
+/** Bolds `@login` in text, as GitHub does; code and link text stay as they are. */
+function boldMentions(node: MdastNode) {
+  if (!node.children || node.type === "link" || node.type === "strong") return;
+  node.children = node.children.flatMap((child): MdastNode[] => {
+    if (child.type !== "text") {
+      boldMentions(child);
+      return [child];
+    }
+    return (child.value ?? "").split(MENTION).flatMap((part, index): MdastNode[] => {
+      if (index % 3 === 2) return [{ type: "strong", children: [{ type: "text", value: part }] }];
+      return part ? [{ type: "text", value: part }] : [];
+    });
+  });
+}
+const remarkPlugins = [...Object.values(defaultRemarkPlugins), () => boldMentions];
+
 /** A GitHub description or comment body (docs/specs/github-integration.md → PR reader). */
 export function GithubMarkdown({ children }: { children: string }) {
   return (
-    <MessageResponse className="text-sm" components={components}>
+    <MessageResponse className="text-sm" components={components} remarkPlugins={remarkPlugins}>
       {children}
     </MessageResponse>
   );

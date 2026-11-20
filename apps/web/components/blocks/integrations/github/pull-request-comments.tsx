@@ -5,7 +5,7 @@ import { useAction } from "convex/react";
 import type { FunctionReturnType } from "convex/server";
 import { formatDistanceToNow } from "date-fns";
 import { Github, MessageSquare, MessageSquareMore, MoreHorizontal, Pencil, Trash2 } from "lucide-react";
-import { CommentInput } from "@/components/blocks/tasks/comments";
+import { CommentInput, type CommentMention } from "@/components/blocks/tasks/comments";
 import type { TimelineComposerMode } from "@/components/blocks/tasks/task-timeline";
 import { Spinner } from "@/components/custom/spinner";
 import {
@@ -119,6 +119,26 @@ export function useGithubCommenting({
 
 export type GithubCommenting = ReturnType<typeof useGithubCommenting>;
 
+/** Who `@` offers: the author, reviewers, assignees, then commenters, without bots. */
+export function mentionCandidates(overview: PullRequestOverview | null, author: string): CommentMention[] {
+  const avatars = new Map<string, string | null>();
+  for (const person of [...(overview?.assignees ?? []), ...(overview?.reviews ?? []), ...(overview?.comments ?? []), ...(overview?.reviewComments ?? [])]) {
+    const [login, avatarUrl] = "login" in person ? [person.login, person.avatarUrl] : [person.author, person.authorAvatarUrl];
+    if (avatarUrl) avatars.set(login, avatarUrl);
+  }
+  const logins = [
+    author,
+    ...(overview?.reviews.map((review) => review.author) ?? []),
+    ...(overview?.requestedReviewers ?? []),
+    ...(overview?.assignees.map(({ login }) => login) ?? []),
+    ...(overview?.comments.map((comment) => comment.author) ?? []),
+    ...(overview?.reviewComments.map((comment) => comment.author) ?? []),
+  ];
+  return [...new Set(logins)]
+    .filter((login) => !login.endsWith("[bot]"))
+    .map((login) => ({ login, avatarUrl: avatars.get(login) ?? null }));
+}
+
 /**
  * Activity's composer: the comment side and the thread side, one open and
  * the other a trigger row facing the stream, as in the task timeline.
@@ -132,6 +152,7 @@ export function PullRequestActivityComposer({
   sort,
   returnTo,
   draftKey,
+  mentions,
 }: {
   commenting: GithubCommenting;
   threadComposer: ReactNode;
@@ -142,6 +163,7 @@ export function PullRequestActivityComposer({
   returnTo: RouteTarget;
   /** Where the PR's comment drafts live in local storage; each member's sits under their GitHub account id. */
   draftKey: string;
+  mentions: CommentMention[];
 }) {
   const { connect, connecting } = useConnectGithubAccount();
   const { organization, account, noAccess, archived } = commenting;
@@ -168,7 +190,7 @@ export function PullRequestActivityComposer({
       {canComment ? (
         <div className={resolved === "comment" ? "block" : "hidden"}>
           {/* Keyed by member, so another member signing in on this browser never sees the draft. */}
-          <CommentDraft key={account.githubUserId} storageKey={`${draftKey}:${account.githubUserId}`} onSubmit={commenting.post} />
+          <CommentDraft key={account.githubUserId} storageKey={`${draftKey}:${account.githubUserId}`} onSubmit={commenting.post} mentions={mentions} />
         </div>
       ) : null}
       <div className={resolved === "thread" ? "block" : "hidden"}>{threadComposer}</div>
@@ -178,14 +200,22 @@ export function PullRequestActivityComposer({
 }
 
 /** The comment input over a draft kept in local storage, so it outlives Reconnect and the trip to GitHub. */
-function CommentDraft({ storageKey, onSubmit }: { storageKey: string; onSubmit: (body: string) => Promise<void> }) {
+function CommentDraft({ storageKey, onSubmit, mentions }: { storageKey: string; onSubmit: (body: string) => Promise<void>; mentions: CommentMention[] }) {
   const [draft, setDraft] = useState(() => readLocalString(storageKey) ?? "");
   const save = (value: string) => {
     setDraft(value);
     if (value) writeLocalString(storageKey, value);
     else removeLocalValue(storageKey);
   };
-  return <CommentInput placeholder="Leave a comment on GitHub..." value={draft} onValueChange={save} onSubmit={onSubmit} />;
+  return (
+    <CommentInput
+      placeholder="Leave a comment on GitHub..."
+      value={draft}
+      onValueChange={save}
+      onSubmit={onSubmit}
+      mentions={mentions}
+    />
+  );
 }
 
 function Trigger({ icon: Icon, label, onClick, disabled }: { icon: typeof MessageSquare; label: string; onClick?: () => void; disabled?: boolean }) {

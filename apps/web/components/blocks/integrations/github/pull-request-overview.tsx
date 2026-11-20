@@ -36,6 +36,7 @@ import { GithubMarkdown } from "./github-markdown";
 import {
   ActivityComment,
   PullRequestActivityComposer,
+  mentionCandidates,
   type GithubCommenting,
   type QuoteLine,
 } from "./pull-request-comments";
@@ -537,6 +538,7 @@ export function PullRequestOverviewTab({
             sort={sort}
             returnTo={hrefFor(pr.number)}
             draftKey={`convoy:github:comment-draft:${organizationSlug}:${projectAlias}:${repositoryId}:${pr.number}`}
+            mentions={mentionCandidates(overview, pr.author)}
             threadComposer={
               <TaskThreadComposer
                 projectId={projectId}
