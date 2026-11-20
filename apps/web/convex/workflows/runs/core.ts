@@ -10,6 +10,7 @@ import { isValidWorktreeBranchName } from "../../../lib/threads/worktree-branche
 import { getAuthenticatedAccess, getOptionalAuthenticatedAccess } from "../../lib/access/auth";
 import { authorizeProjectAccess, requireAuthorizedProject } from "../../lib/access/permissions";
 import { composerContentValidator } from "../../lib/contracts/composerContent";
+import { parseAttachedPullRequest } from "../../lib/contracts/github";
 import { cliThreadWorktreeSpecValidator } from "../../lib/contracts/validators";
 import { ensure } from "../../lib/shared/ensure";
 import { errors as cliErrors } from "../../cli/errors";
@@ -57,6 +58,8 @@ export const start = mutation({
     pathId: v.string(),
     worktree: v.optional(cliThreadWorktreeSpecValidator),
     taskId: v.optional(v.id("tasks")),
+    /** A github.com PR URL or `owner/name#number`: the run's Attached pull request. */
+    pullRequestUrl: v.optional(v.string()),
     // The starting composer's one permitted edit: the first lane's first prompt,
     // stored as that step's run-local override. The pinned version is untouched.
     firstPromptOverride: v.optional(composerContentValidator),
@@ -118,6 +121,10 @@ export const start = mutation({
     if (args.taskId && (!task || task.projectId !== workflow.projectId)) {
       throw new ConvexError("Task not found");
     }
+    const pullRequest =
+      args.pullRequestUrl === undefined
+        ? undefined
+        : await ensure(parseAttachedPullRequest(args.pullRequestUrl)).notNull(cliErrors.PULL_REQUEST_URL_INVALID);
 
     // Validates the draft (assertDefinitionRunnable) when it cuts a new version.
     const version = await cutVersionForRun(ctx, workflow, user._id);
@@ -132,6 +139,7 @@ export const start = mutation({
         projectId: workflow.projectId,
         startedBy: user._id,
         attachedTaskId: task?._id,
+        attachedPullRequest: pullRequest,
         selection: {
           profileId: args.profileId,
           workspace: { pathId: args.pathId, pathSnapshot: pathEntry.path, worktree: args.worktree },
@@ -221,6 +229,7 @@ export const start = mutation({
       cliType: runCliType,
       workflowRunId: runId,
       associatedTaskId: task?._id,
+      attachedPullRequest: pullRequest,
     };
     let containerThreadId: Id<"cliThreads">;
     if (source) {

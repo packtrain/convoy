@@ -250,6 +250,16 @@ describe("TaskThreadComposer", () => {
     expect(screen.getByTestId("thread-composer-focus-request").textContent).toBe("1");
   });
 
+  test("a PR composer offers workflows; the checks composer does not (OS-2383)", () => {
+    const pullRequest = { owner: "Contoso", name: "Convoy", number: 482, ref: "contoso/convoy#482" };
+    const view = renderFooter({ task: undefined, pullRequest });
+    expect(screen.getByTestId("thread-composer-has-workflow-selector").textContent).toBe("true");
+
+    view.unmount();
+    renderFooter({ task: undefined, pullRequest, pullRequestChecks: { headSha: "abc123" } });
+    expect(screen.getByTestId("thread-composer-has-workflow-selector").textContent).toBe("false");
+  });
+
   test("a PR checks run keeps its own draft, replaces its text with the seed, and starts a checks thread (OS-2400)", async () => {
     const pullRequest = { owner: "Contoso", name: "Convoy", number: 482, ref: "contoso/convoy#482" };
     const onSeeded = vi.fn();

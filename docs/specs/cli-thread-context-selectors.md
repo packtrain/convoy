@@ -105,9 +105,12 @@ new-thread composer, no agent selector on follow-ups).
   (worktree/non-git paths), and the persona selector (or read-only persona
   chip on existing threads). The usage/cost/context-window meters render
   right-aligned in the same bar. The bar never wraps: chips shrink and
-  truncate, and in a narrow bar (`@container/composer-bar` below `@lg`) the
-  environment selector, workspace summary, and persona selector collapse to
-  their icons, with the label kept in the accessible name.
+  truncate, and in a narrow bar (`@container/composer-bar` below `@2xl`,
+  672px) the environment selector, workspace summary, persona selector, and
+  workflow selector collapse to icon-only dropdowns, with the label kept in the
+  accessible name and title. Below `@2xl` five labelled pills don't fit: the
+  task sidebar's and a pull request's Activity composers truncated every label
+  to a few letters. The 768px `/threads` composer keeps its labels.
 - Neither the bar nor the footer may widen the composer's host. Both carry
   `[contain:inline-size]`, so a long label truncates instead of pushing the
   thread column past a phone viewport (OS-2144).

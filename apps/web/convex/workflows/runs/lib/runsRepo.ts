@@ -1,6 +1,7 @@
 import type { Doc, Id } from "../../../_generated/dataModel";
 import type { MutationCtx, QueryCtx } from "../../../_generated/server";
 import type { RunSelection } from "../../../lib/contracts/workflowRuns";
+import type { AttachedPullRequest } from "../../../lib/contracts/github";
 
 type Ctx = QueryCtx | MutationCtx;
 
@@ -53,6 +54,7 @@ export async function insertWorkflowRun(
     projectId: Id<"projects">;
     startedBy: Id<"users">;
     attachedTaskId?: Id<"tasks">;
+    attachedPullRequest?: AttachedPullRequest;
     selection: RunSelection;
   },
   now: number

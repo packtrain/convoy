@@ -723,7 +723,7 @@ describe("ThreadComposer", () => {
       render(<ThreadComposer {...props} readOnlyWorkspace={{ kind: "local" }} />);
       const label = screen.getByText("Work locally");
       expect(label.className).toContain("hidden");
-      expect(label.className).toContain("@lg/composer-bar:inline");
+      expect(label.className).toContain("@2xl/composer-bar:inline");
       expect(screen.getByLabelText("Workspace: Work locally")).toBe(label.parentElement);
     });
 

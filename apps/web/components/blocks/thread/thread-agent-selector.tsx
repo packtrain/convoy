@@ -100,10 +100,10 @@ export function ThreadAgentSelector({
             <Bot className="size-4 text-muted-foreground" />
           )}
           {/* Icon-only in a narrow composer bar; the title/aria-label carry the value. */}
-          <span className={cn("hidden min-w-0 max-w-32 truncate @lg/composer-bar:inline", !selectedAgent && "text-muted-foreground")}>
+          <span className={cn("hidden min-w-0 max-w-32 truncate @2xl/composer-bar:inline", !selectedAgent && "text-muted-foreground")}>
             {triggerLabel}
           </span>
-          {!locked && <ChevronDown className="hidden size-3 opacity-50 @lg/composer-bar:block" />}
+          {!locked && <ChevronDown className="hidden size-3 opacity-50 @2xl/composer-bar:block" />}
         </Button>
       </DropdownMenuTrigger>
       <DropdownMenuContent align="start" className="max-h-[70vh] w-56 overflow-y-auto">

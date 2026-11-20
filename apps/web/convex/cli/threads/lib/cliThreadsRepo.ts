@@ -759,6 +759,7 @@ type WorkflowRunContainerInsert = {
   originTaskId?: Id<"tasks">;
   /** Binds the run into the task's Activity/`agentThreadWork` — its only surface until lane threads exist. */
   associatedTaskId?: Id<"tasks">;
+  attachedPullRequest?: AttachedPullRequest;
 };
 
 /**

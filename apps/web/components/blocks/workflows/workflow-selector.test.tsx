@@ -63,6 +63,8 @@ describe("WorkflowSelector", () => {
     render(<WorkflowSelector {...BASE_PROPS} onChange={onChange} value={null} />);
 
     expect(screen.getByTitle("Workflow: none")).toBeDefined();
+    // Icon-only below a 2xl composer bar; the title carries the value.
+    expect(screen.getByTitle("Workflow: none").querySelector("span")?.className).toContain("hidden min-w-0 max-w-32 truncate @2xl/composer-bar:inline");
     fireEvent.click(screen.getByRole("button", { name: "Plan and build" }));
     expect(onChange).toHaveBeenCalledWith({ _id: "wf_1", name: "Plan and build" });
   });

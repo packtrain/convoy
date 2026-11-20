@@ -74,10 +74,10 @@ export function WorkflowSelector({
             style={value?.color ? { color: value.color } : undefined}
           />
           {/* Icon-only in a narrow composer bar; the title/aria-label carry the value. */}
-          <span className={cn("hidden min-w-0 max-w-32 truncate @lg/composer-bar:inline", !value && "text-muted-foreground")}>
+          <span className={cn("hidden min-w-0 max-w-32 truncate @2xl/composer-bar:inline", !value && "text-muted-foreground")}>
             {value?.name ?? "Workflow"}
           </span>
-          <ChevronDown className="hidden size-3 opacity-50 @lg/composer-bar:block" />
+          <ChevronDown className="hidden size-3 opacity-50 @2xl/composer-bar:block" />
         </Button>
       </ModelSelectorDropdownTrigger>
       <ModelSelectorDropdownContent>

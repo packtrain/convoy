@@ -313,14 +313,16 @@ describe("useWorkflowRunComposer", () => {
     expect(toastErrorMock).toHaveBeenCalled();
   });
 
-  test("an attached pull request cannot ride along on a run start (OS-2193)", async () => {
+  test("an attached pull request rides along on a run start (OS-2383)", async () => {
     const { result, select } = setup();
     await select();
 
-    expect(await startAndCatch(result, submitMessage(PROMPT_TEXT, { pullRequestUrl: "https://github.com/contoso/convoy/pull/482" }))).not.toBeNull();
+    await act(async () => {
+      await result.current.maybeStartRun(submitMessage(PROMPT_TEXT, { pullRequestUrl: "https://github.com/contoso/convoy/pull/482" }));
+    });
 
-    expect(startRunMock).not.toHaveBeenCalled();
-    expect(toastErrorMock).toHaveBeenCalledWith("A pull request can't start a workflow run yet. Remove it or deselect the workflow.");
+    expect(startRunMock).toHaveBeenCalledWith(expect.objectContaining({ pullRequestUrl: "https://github.com/contoso/convoy/pull/482" }));
+    expect(toastErrorMock).not.toHaveBeenCalled();
   });
 
   test("an unresolvable machine selection rejects with a toast instead of silently swallowing", async () => {

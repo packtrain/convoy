@@ -656,6 +656,23 @@ describe("workflow run engine (advance)", () => {
   });
 });
 
+describe("a run with an attached pull request (OS-2383)", () => {
+  test("every lane thread and each step's message carry the PR", async () => {
+    const h = await setupStartedRun({ startExtras: { pullRequestUrl: "https://github.com/Contoso/Convoy/pull/482" } });
+    const attached = { owner: "Contoso", name: "Convoy", number: 482, ref: "contoso/convoy#482" };
+    const [first] = await stepsOf(h);
+
+    const thread = await h.t.run((runCtx) => runCtx.db.get("cliThreads", first.threadId!));
+    expect(thread?.attachedPullRequest).toEqual(attached);
+
+    // The next stage goes through the follow-up dispatch, not thread creation.
+    await endThreadRun(h, first.threadId!, "completed");
+    const messages = await messagesOf(h, first.threadId!);
+    expect(messages).toHaveLength(2);
+    expect(messages.map((message) => message.pullRequest)).toEqual([attached, attached]);
+  });
+});
+
 describe("concurrent lanes and the stage barrier (OS-1869)", () => {
   test("start dispatches every lane's first step, each into its own thread", async () => {
     const h = await setupStartedRun({ definition: twoLaneDefinition() });

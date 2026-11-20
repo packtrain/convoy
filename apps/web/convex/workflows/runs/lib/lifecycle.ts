@@ -3,6 +3,7 @@ import { internal } from "../../../_generated/api";
 import type { Doc, Id } from "../../../_generated/dataModel";
 import type { MutationCtx } from "../../../_generated/server";
 import type { ComposerContent } from "../../../lib/contracts/composerContent";
+import { attachedPullRequestUrl } from "../../../lib/contracts/github";
 import type { CliScriptRequest, CliScriptResult, CliThreadAggregateStatus } from "../../../lib/contracts/validators";
 import type { WorkflowStep } from "../../../lib/contracts/workflowDefinition";
 import { getMessageById, listRunMessages } from "../../../cli/lib/cliMessagesRepo";
@@ -512,6 +513,7 @@ function laneThreadSelection(
     cliModel: execution.cliModel,
     cliEffort: execution.cliEffort,
     taskId: run.attachedTaskId,
+    pullRequestUrl: run.attachedPullRequest ? attachedPullRequestUrl(run.attachedPullRequest) : undefined,
     agentWorkSource: "workflow_run" as const,
     projectAgentId: execution.projectAgentId,
     title,

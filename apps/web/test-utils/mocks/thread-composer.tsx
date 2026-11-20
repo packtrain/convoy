@@ -30,6 +30,7 @@ export interface MockThreadComposerProps {
   textareaDisabled?: boolean;
   submitDisabled?: boolean;
   textareaClassName?: string;
+  workflowSelector?: ReactNode;
   contextWindowUsage?: ContextWindowUsage | null;
   usageLimits?: UsageLimitUsage[];
   selectorsProps: {
@@ -199,6 +200,7 @@ export function TaskSidebarThreadComposerMock(
     | "textareaDisabled"
     | "focusRequestKey"
     | "textareaClassName"
+    | "workflowSelector"
   >
 ) {
   const attachedTaskId = props.initialAttachedTask?._id;
@@ -247,6 +249,9 @@ export function TaskSidebarThreadComposerMock(
       </p>
       <p data-testid="thread-composer-focus-request">
         {String(props.focusRequestKey ?? 0)}
+      </p>
+      <p data-testid="thread-composer-has-workflow-selector">
+        {String(props.workflowSelector !== undefined)}
       </p>
     </div>
   );

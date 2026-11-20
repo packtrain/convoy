@@ -407,6 +407,39 @@ describe("workflows.runs.core.start", () => {
     });
   });
 
+  test("an attached pull request lands on the run and its container, ref lowercased (OS-2383)", async () => {
+    const { t, asUser, startArgs } = await setupRunnableWorkflow();
+    const attached = { owner: "Contoso", name: "Convoy", number: 482, ref: "contoso/convoy#482" };
+
+    const { runId, containerThreadId } = await asUser.mutation(api.workflows.runs.core.start, {
+      ...startArgs,
+      pullRequestUrl: "https://github.com/Contoso/Convoy/pull/482",
+    });
+
+    await t.run(async (runCtx) => {
+      expect((await runCtx.db.get("workflowRuns", runId))?.attachedPullRequest).toEqual(attached);
+      expect((await runCtx.db.get("cliThreads", containerThreadId))?.attachedPullRequest).toEqual(attached);
+    });
+    await expect(
+      asUser.mutation(api.workflows.runs.core.start, { ...startArgs, pullRequestUrl: "https://example.com/pull/1" })
+    ).rejects.toThrow("Not a GitHub pull request URL");
+  });
+
+  test("a run started in an existing group stamps the group with the PR (OS-2383)", async () => {
+    const { ctx, t, user, project, profile, asUser, startArgs } = await setupRunnableWorkflow();
+    const container = await ctx.cliThread(user._id, project._id, profile._id, { kind: "group", title: "My group" });
+
+    await asUser.mutation(api.workflows.runs.core.start, {
+      ...startArgs,
+      sourceThreadId: container._id,
+      expectedContainerId: container._id,
+      pullRequestUrl: "contoso/convoy#482",
+    });
+
+    const group = await t.run((runCtx) => runCtx.db.get("cliThreads", container._id));
+    expect(group?.attachedPullRequest?.ref).toBe("contoso/convoy#482");
+  });
+
   test("start guards: outsider, foreign profile, cross-project profile", async () => {
     const { ctx, project, asUser, startArgs } = await setupRunnableWorkflow();
 

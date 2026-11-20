@@ -145,8 +145,8 @@ See ADR 0006 and `workflow-data-schema.md`.
 
 ### Start
 
-Runs start from the new-thread composer — both the `/threads` composer and
-the task sidebar's Activity composer — or from `convoy workflows start` (see
+Runs start from the new-thread composer — the `/threads` composer, the
+task sidebar's Activity composer, and a pull request's Activity composer — or from `convoy workflows start` (see
 CLI), which collects the same inputs as flags. A workflow selector in the
 composer's context bar (branch-selector styling: search input on top, a "New
 workflow…" row linking to the editor, an empty state saying the project has
@@ -224,6 +224,16 @@ An armed composer collects, shared by all Lanes:
 - Optional attached **Task** — the composer's task pill (the task sidebar
   composer keeps its Task locked and attached). Attachments are rejected
   while a workflow is armed — a run start has nowhere to carry files.
+- Optional **Attached pull request** — the composer's PR pill, locked on a
+  PR's Activity composer (OS-2383). `start` takes it as `pullRequestUrl`
+  (`convoy workflows start --pull-request`), parsed like thread creation, and
+  stores it on the run. The container and every lane thread carry it as
+  `attachedPullRequest`, and each lane message as `pullRequest`, the way the
+  task rides on every lane message, so each lane agent gets the
+  `pr(github):` line. The PR Overview's Threads property and Activity list the
+  container and its lanes, as a task's Activity does. The Guide and Pull
+  request checks composers offer no workflows: a run would drop the Guide or
+  the checks.
 - Start collects no bash consent. Execution approval is governed by the
   Step's mode (the same approve-vs-act idea as the composer's mode pill):
   act mode runs each script without prompting, any other mode holds it for

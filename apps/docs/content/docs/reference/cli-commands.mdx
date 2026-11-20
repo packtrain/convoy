@@ -661,6 +661,7 @@ from the definition, so there is no `--cli-type`.
 | `--worktree-branch <branch>` | Run in a new worktree on this branch, created from the path |
 | `--worktree-base <ref>` | Base ref for the worktree branch (needs `--worktree-branch`) |
 | `--task <taskId>` | Attach a task (ID or ref); it must live in the Workflow's project |
+| `--pull-request <pr>` | Attach a GitHub pull request (URL or `owner/name#number`); every Lane thread carries it |
 | `--first-prompt <text>`, `--first-prompt-file <path>` | Override the first Lane's first prompt for this run only. With no prompt Step in that Lane the text becomes a Kickoff step |
 
 Prints the run ID and its container thread ID; `--output json` returns both.

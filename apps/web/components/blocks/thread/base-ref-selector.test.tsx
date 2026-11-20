@@ -38,6 +38,7 @@ describe("WorkspaceSelectors", () => {
     render(<WorkspaceSelectors {...BASE_PROPS} value={undefined} />);
 
     expect(screen.getByTitle("Environment: Work locally")).toBeDefined();
+    expect(screen.getByTitle("Environment: Work locally").querySelector("span")?.className).toContain("@2xl/composer-bar:inline");
     expect(screen.getByTitle("Branch checked out locally: main")).toBeDefined();
   });
 

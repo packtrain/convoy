@@ -593,8 +593,8 @@ export function WorkspaceSelectors({
           >
             <EnvironmentIcon className="size-3.5 shrink-0 opacity-70" />
             {/* Icon-only in a narrow composer bar; the title/aria-label carry the value. */}
-            <span className="hidden min-w-0 truncate @lg/composer-bar:inline">{environmentLabel}</span>
-            <ChevronDown className="hidden size-3 opacity-50 @lg/composer-bar:block" />
+            <span className="hidden min-w-0 truncate @2xl/composer-bar:inline">{environmentLabel}</span>
+            <ChevronDown className="hidden size-3 opacity-50 @2xl/composer-bar:block" />
           </Button>
         </ModelSelectorDropdownTrigger>
         <ModelSelectorDropdownContent className="[&_[data-slot=command]]:p-0">

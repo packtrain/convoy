@@ -257,6 +257,7 @@ describe("workflows write commands", () => {
       startWorkflowCommand.setOptionValue("worktreeBase", "main");
       startWorkflowCommand.setOptionValue("task", "task_1");
       startWorkflowCommand.setOptionValue("firstPrompt", "plan it my way");
+      startWorkflowCommand.setOptionValue("pullRequest", "contoso/convoy#482");
 
       await invoke(startWorkflowCommand, ["wf_1"]);
 
@@ -266,6 +267,7 @@ describe("workflows write commands", () => {
         pathId: "path_1",
         worktree: { parentPathId: "path_1", branch: "os-1930", baseRef: "main" },
         taskId: "task_1",
+        pullRequestUrl: "contoso/convoy#482",
         firstPromptOverride: { displayContent: "plan it my way" },
       });
       expect(output()).toContain("run_1");

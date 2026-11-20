@@ -1521,9 +1521,8 @@ OS-2193 attaches PRs to threads.
   profile runs CLI 0.142.0 or newer.
 - The composer keeps the PR above its keyed content, so attaching a task
   (which remounts it) keeps the PR. A new `initialAttachedPullRequest` from the
-  host replaces it. A workflow run can't carry a PR yet, so starting one with
-  a PR attached fails with "A pull request can't start a workflow run yet.
-  Remove it or deselect the workflow."
+  host replaces it. A workflow run carries the PR to its container and lane
+  threads (docs/specs/workflows.md → Start).
 - Pills show `#number`; the repository is nearly always the same one, so
   only the tooltip names it, at the end. They resolve title and state with
   `pullRequests.getAttached`, which matches the thread's project's connected
@@ -1550,8 +1549,8 @@ OS-2193 attaches PRs to threads.
   the rows keep their full width. The Overview's Threads property and
   Activity's Threads source share that one subscription.
 - Activity's composer is `TaskThreadComposer` with `pullRequest` in place of
-  `task`, its draft keyed `pr:<ref>`. The PR pill is locked there, and the
-  composer has no workflow selector. GitHub comments are read-only, so it has
+  `task`, its draft keyed `pr:<ref>`. The PR pill is locked there. Its
+  workflow selector starts a run on the PR (OS-2383). GitHub comments are read-only, so it has
   no comment side. Fix passes the composer a one-shot `seed`. The composer
   writes it into the draft, pushes it into the mounted editor, and focuses it,
   then `onSeeded` clears it, so a remount (a sort change, Refresh) never

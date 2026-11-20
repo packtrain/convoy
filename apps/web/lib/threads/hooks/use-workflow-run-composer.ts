@@ -176,10 +176,6 @@ export function useWorkflowRunComposer({
       if (message.files.length > 0) {
         throw fail("Attachments can't start a workflow run — remove them or deselect the workflow.");
       }
-      // Runs have no Attached pull request yet (docs/specs/github-integration.md → Attached pull requests).
-      if (message.pullRequestUrl) {
-        throw fail("A pull request can't start a workflow run yet. Remove it or deselect the workflow.");
-      }
       if (!workflow) {
         throw fail("The workflow is still loading — try again in a moment.");
       }
@@ -217,6 +213,7 @@ export function useWorkflowRunComposer({
           pathId: target.pathId,
           worktree: target.worktree,
           taskId: task?._id,
+          pullRequestUrl: message.pullRequestUrl,
           firstPromptOverride: sendsOverride
             ? {
                 displayContent: text,

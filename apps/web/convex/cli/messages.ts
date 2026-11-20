@@ -710,6 +710,7 @@ export const sendForWorkflowStep = internalMutation({
       cliModel: args.cliModel,
       cliEffort: args.cliEffort,
       taskId: thread.associatedTaskId,
+      pullRequest: thread.attachedPullRequest,
       content: trimmedContent,
       processedContent,
       workflowRunStepId: args.workflowRunStepId,

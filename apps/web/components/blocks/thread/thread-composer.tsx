@@ -660,7 +660,7 @@ function ThreadComposerWorkspaceSummary({
     >
       <EnvironmentIcon className="size-3.5 shrink-0 opacity-70" />
       {/* Icon-only in a narrow composer bar, like the editable environment selector. */}
-      <span className="hidden min-w-0 truncate @lg/composer-bar:inline">{label}</span>
+      <span className="hidden min-w-0 truncate @2xl/composer-bar:inline">{label}</span>
     </div>
   );
 
@@ -1211,7 +1211,7 @@ function ThreadComposerContent({
               // [contain:inline-size]: without it this non-wrapping row reports its full chip sum
               // as intrinsic width, and intrinsically sized ancestors grow past the viewport
               // instead of letting the chips shrink.
-              // @container/composer-bar: narrow surfaces collapse the environment and agent pills
+              // @container/composer-bar: below 2xl the environment, agent, and workflow pills collapse
               // to icons rather than truncating every label to noise.
               <div className="-mb-2 flex items-center gap-1 rounded-t-xl border border-b-0 border-border/70 bg-muted/50 px-2 pt-1 pb-3 @container/composer-bar [contain:inline-size]">
                 {showTopBarWorkingDirectory && (

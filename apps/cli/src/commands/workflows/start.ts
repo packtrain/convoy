@@ -15,6 +15,7 @@ interface StartWorkflowOptions extends OutputOptions {
   worktreeBranch?: string;
   worktreeBase?: string;
   task?: string;
+  pullRequest?: string;
   firstPrompt?: string;
   firstPromptFile?: string;
 }
@@ -38,6 +39,7 @@ export const startWorkflowCommand = addGlobalOptions(
       .option("--worktree-branch <branch>", "Run in a new worktree on this branch, created from the path")
       .option("--worktree-base <ref>", "Base ref for the new worktree branch")
       .option("--task <taskId>", "Attach a task (ID or ref)")
+      .option("--pull-request <pr>", "Attach a GitHub pull request (URL or owner/name#number)")
       .option("--first-prompt <text>", "Override the first lane's first prompt for this run only")
       .option("--first-prompt-file <path>", "Read the first-prompt override from a file")
       .option("--org <org>", "Organization ID or slug (used with --project alias)")
@@ -72,6 +74,7 @@ export const startWorkflowCommand = addGlobalOptions(
         },
       }),
       ...(taskId !== undefined && { taskId }),
+      ...(options.pullRequest !== undefined && { pullRequestUrl: options.pullRequest }),
       ...(firstPrompt && { firstPromptOverride: { displayContent: firstPrompt } }),
     });
 

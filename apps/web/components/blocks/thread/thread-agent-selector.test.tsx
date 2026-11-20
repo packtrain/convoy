@@ -81,6 +81,11 @@ describe("ThreadAgentSelector", () => {
     expect(screen.getByTitle("Default")).toBeDefined();
   });
 
+  test("collapses to its icon below a 2xl composer bar", () => {
+    render(<ThreadAgentSelector agents={AGENTS} value={undefined} onChange={vi.fn()} />);
+    expect(screen.getByTitle("Default").querySelector("span")?.className).toContain("hidden min-w-0 max-w-32 truncate @2xl/composer-bar:inline");
+  });
+
   test("shows the selected agent's name and initials avatar on the trigger", () => {
     render(
       <ThreadAgentSelector agents={AGENTS} value="agent-2" onChange={vi.fn()} />

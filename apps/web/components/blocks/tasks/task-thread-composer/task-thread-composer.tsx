@@ -250,9 +250,9 @@ function TaskThreadComposerContent({
         containerClassName={composerContainerClassName ?? "p-5"}
         contentClassName="max-w-none"
         textareaClassName={composerTextareaClassName ?? "min-h-[88px] p-3"}
-        // A run can't carry the PR yet, so the PR's composer offers no workflows.
+        // A run would drop the checks or Guide, so those composers offer no workflows.
         workflowSelector={
-          pullRequest ? undefined : <WorkflowSelector
+          pullRequestChecks || pullRequestGuide ? undefined : <WorkflowSelector
             projectId={projectId}
             organizationSlug={organizationSlug}
             projectAlias={projectAlias}

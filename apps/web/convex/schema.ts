@@ -386,6 +386,8 @@ export default defineSchema({
     projectId: v.id("projects"),
     startedBy: v.id("users"),
     attachedTaskId: v.optional(v.id("tasks")),
+    // Stamped on the container and every lane thread (OS-2383).
+    attachedPullRequest: v.optional(attachedPullRequestValidator),
     selection: runSelectionValidator,
     status: workflowRunStatusValidator,
     startedAt: v.number(),
