@@ -55,12 +55,13 @@ const connection = {
 const openFilters = () => fireEvent.keyDown(screen.getByRole("button", { name: "Filter pull requests" }), { key: "Enter" });
 
 /** Merges partial changes the way the PR page does. */
-function Browser({ initial = {} }: { initial?: Partial<BrowserFilters> }) {
+function Browser({ initial = {}, you }: { initial?: Partial<BrowserFilters>; you?: number }) {
   const [filters, setFilters] = useState<BrowserFilters>({ sort: "updated", order: "desc", query: "", repositoryId: "repo_1", ...initial });
   return (
     <PullRequestBrowser
       projectId={"project_1" as Id<"projects">}
       active={[connection]}
+      you={you}
       filters={filters}
       onFiltersChange={(change) => setFilters((current) => ({ ...current, ...change }))}
       current={{ repositoryId: "repo_1", number: 1 }}
@@ -157,6 +158,23 @@ describe("PullRequestBrowser", () => {
     expect(paginatedArgs.mock.lastCall?.[0].order).toBe("asc");
     // One connected repository leaves nothing to pick.
     expect(screen.queryByText("All repositories")).toBeNull();
+  });
+
+  test("with a Linked GitHub account, Author and Assignee offer You to the lists and search (OS-2435)", () => {
+    const { unmount } = render(<Browser />);
+    openFilters();
+    expect(screen.queryByText("All authors")).toBeNull();
+    unmount();
+
+    render(<Browser you={42} />);
+    openFilters();
+    const [authorYou, assigneeYou] = screen.getAllByRole("menuitemradio", { name: "You" });
+    fireEvent.click(authorYou);
+    expect(paginatedArgs.mock.lastCall?.[0]).toMatchObject({ author: "me", assignee: undefined });
+    openFilters();
+    fireEvent.click(screen.getAllByRole("menuitemradio", { name: "You" })[1] ?? assigneeYou);
+    expect(paginatedArgs.mock.lastCall?.[0]).toMatchObject({ author: "me", assignee: "me" });
+    expect(screen.getByText("Filters active")).toBeTruthy();
   });
 
   test("search is a bar under the header whose border lines up with the reader's tab row, and searches GitHub across states", async () => {

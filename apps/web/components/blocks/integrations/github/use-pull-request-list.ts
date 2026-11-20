@@ -54,6 +54,8 @@ export function usePullRequestList(projectId: Id<"projects">, options: ListOptio
   }, [loadMore, results.length, status, target]);
 
   const exhausted = status === "Exhausted";
+  // A You filter's page can end short at its row cap, so chasing 30 matches could read the whole history.
+  const filtered = Boolean(options.author || options.assignee);
   return {
     results,
     status,
@@ -65,7 +67,8 @@ export function usePullRequestList(projectId: Id<"projects">, options: ListOptio
     /** Closed shows only PRs updated since this until every history page is in; null once it reaches the start. */
     coveredSince,
     loadMore: () => {
-      setWanted({ key, rows: results.length + PAGE_SIZE });
+      if (filtered && status === "CanLoadMore") return loadMore(PAGE_SIZE);
+      setWanted({ key, rows: results.length + (filtered ? 1 : PAGE_SIZE) });
       if (closed && exhausted && !complete) void loadHistory({ projectId, repositoryId, more: true });
     },
   };

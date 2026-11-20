@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { useAction } from "convex/react";
-import type { FunctionReturnType } from "convex/server";
+import type { FunctionArgs, FunctionReturnType } from "convex/server";
 import { api } from "@/convex/_generated/api";
 import type { Id } from "@/convex/_generated/dataModel";
 import { useDebounce } from "@/hooks/react/use-debounce";
@@ -15,12 +15,22 @@ const DEBOUNCE_MS = 300;
 export function usePullRequestSearch(
   projectId: Id<"projects">,
   query: string,
-  { repositoryId, sort, order }: { repositoryId?: string; sort: "updated" | "created"; order: "asc" | "desc" }
+  {
+    repositoryId,
+    sort,
+    order,
+    author,
+    assignee,
+    viewer,
+  }: Omit<FunctionArgs<typeof api.integrations.github.pullRequests.search>, "projectId" | "query" | "page"> & {
+    /** The Linked GitHub user ID behind You; another one starts the search over. */
+    viewer?: number;
+  }
 ) {
   const search = useAction(api.integrations.github.pullRequests.search);
   const trimmed = query.trim();
   const debounced = useDebounce(trimmed, DEBOUNCE_MS);
-  const key = JSON.stringify([projectId, debounced, repositoryId, sort, order]);
+  const key = JSON.stringify([projectId, debounced, repositoryId, sort, order, author, assignee, author || assignee ? viewer : null]);
   // One state per search, so coming back to a query starts it over. `attempt` makes Retry of
   // the same page a new request; `settled` is the attempt answered last.
   const [state, setState] = useState<SearchState>(() => freshSearch(key));
@@ -36,14 +46,14 @@ export function usePullRequestSearch(
         const base = previous.key === key ? previous : freshSearch(key);
         return { ...base, ...change(base), settled: attempt };
       });
-    search({ projectId, query: debounced, repositoryId, sort, order, page }).then(
+    search({ projectId, query: debounced, repositoryId, sort, order, author, assignee, page }).then(
       (result) => settle((base) => ({ pages: [...base.pages.slice(0, page - 1), result], error: null })),
       (error: unknown) => settle(() => ({ error: getErrorMessage(error, "Search failed") }))
     );
     return () => {
       live = false;
     };
-  }, [attempt, debounced, key, order, page, projectId, repositoryId, search, sort]);
+  }, [assignee, attempt, author, debounced, key, order, page, projectId, repositoryId, search, sort]);
 
   const loaded = current.pages;
   // GitHub's pages can shift between requests, so a PR may come back twice. Each page merges

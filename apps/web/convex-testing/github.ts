@@ -38,6 +38,8 @@ export type FakePullRequest = {
   requestedTeams?: string[];
   comments?: { id: number; login: string; userId?: number; body: string; created_at: string }[];
   assignees?: string[];
+  /** The PR's author; octocat by default. */
+  author?: FakeGithubUser;
   milestone?: { title: string; number: number };
   /** Inline review comments; GitHub nulls `line` once the diff moves past it. */
   reviewComments?: {
@@ -79,6 +81,9 @@ const REQUIRED_PERMISSIONS: [RegExp, string][] = [
 ];
 
 const githubUser = (login: string) => ({ login, avatar_url: `https://avatars.githubusercontent.com/${login}` });
+
+/** A stable GitHub user ID for a fake login. */
+export const fakeUserId = (login: string) => [...login].reduce((id, char) => (id * 31 + char.charCodeAt(0)) % 1_000_000, 7);
 
 export const GOOD_CODE = "good-code";
 
@@ -219,8 +224,8 @@ export function createFakeGithub() {
       merged_at: pr.merged ? new Date(pr.updatedAt).toISOString() : null,
       draft: pr.draft,
       labels: pr.labels.map((name) => ({ name })),
-      assignees: (pr.assignees ?? []).map(githubUser),
-      user: { login: "octocat" },
+      assignees: (pr.assignees ?? []).map((login) => ({ ...githubUser(login), id: fakeUserId(login) })),
+      user: pr.author ?? { id: fakeUserId("octocat"), login: "octocat" },
       head: { ref: pr.headRef, sha: pr.headSha },
       base: { ref: "main", sha: pr.baseSha },
       created_at: new Date(pr.createdAt).toISOString(),

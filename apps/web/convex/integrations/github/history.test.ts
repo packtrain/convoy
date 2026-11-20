@@ -6,6 +6,7 @@ import {
   connectedProject,
   drain,
   fakePullRequest,
+  linkGithubAccount,
   listTitles,
   stubGithubAppEnv,
   type T,
@@ -194,6 +195,17 @@ describe("search", () => {
     expect(result).toMatchObject({ hasMore: false, incomplete: false, failures: [] });
     await drain(t);
     expect(await storedNumbers(t)).toEqual([1]);
+  });
+
+  test("You filters add the Linked GitHub account's login, and search nothing without one", async () => {
+    const { org, project, asUser, github } = await connectedProject([fakePullRequest(1, { title: "Fix" })]);
+    const args = { projectId: project._id, query: "fix", sort: "updated", order: "desc", page: 1, author: "me", assignee: "me" } as const;
+    expect((await asUser.action(api.integrations.github.pullRequests.search, args)).pullRequests).toEqual([]);
+    expect(github.state.searches).toEqual([]);
+
+    await linkGithubAccount(asUser, github, org._id, { id: 42, login: "maya" });
+    await asUser.action(api.integrations.github.pullRequests.search, args);
+    expect(github.state.searches).toEqual(['is:pr repo:acme/repo-1 author:maya assignee:maya "fix"']);
   });
 
   test("query syntax cannot widen the scope, and other repositories' hits are dropped", async () => {

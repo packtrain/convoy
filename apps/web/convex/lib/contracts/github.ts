@@ -34,11 +34,14 @@ export const normalizedPullRequestValidator = v.object({
   title: v.string(),
   description: v.string(),
   author: v.string(),
+  /** GitHub user IDs, which the You filters match; rows stored before slice 6.2 lack them until their next sync. A deleted author has none. */
+  authorId: v.optional(v.number()),
   state: pullRequestStateValidator,
   draft: v.boolean(),
   labels: v.array(v.string()),
   /** Assignee logins; rows stored before slice 7 lack them until their next sync. */
   assignees: v.optional(v.array(v.string())),
+  assigneeIds: v.optional(v.array(v.number())),
   headRef: v.string(),
   baseRef: v.string(),
   headSha: v.string(),

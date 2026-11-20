@@ -1195,8 +1195,8 @@ compact), and the reader's header, tab row, and Overview.
   nothing. Closed rows and search results carry the state icon, since they
   mix closed, merged, and open. The filter button opens the thread list's settings dropdown: a
   Compact layout switch, then radio items for Sort by, Order, and
-  Repository (shown only with more than one connected). Filters are shared
-  with the list page.
+  Repository (shown only with more than one connected), then Author and
+  Assignee ([You filters](#you-filters)). Filters are shared with the list page.
 - **Browser rows** are drawn like thread cards: `#number`, title, and
   updated time, then the head branch with the conflicts icon and stack badge
   (the repository leads that line when more than one is connected). Compact
@@ -1698,6 +1698,31 @@ anyone at all.
   closed tab stays unposted with no sweep, as task uploads do.
 - **CLI.** None: the CLI has no PR comment command to extend.
 
+### You filters
+
+OS-2435. The list's toolbar gains Author and Assignee pickers, and the
+browser pane's filter dropdown gains Author and Assignee radio groups. Each
+offers All and You, so they show only while the member has a Linked GitHub
+account in the project's organization. Disconnecting clears an active You
+filter.
+
+- **Matching.** `pullRequests.list` takes `author` and `assignee` (`"me"`)
+  and resolves them to the caller's Linked GitHub account, matched by GitHub
+  user ID, so a renamed login still matches. Stored PRs gain `authorId` and
+  `assigneeIds` from every sync; a row stored before them matches by login
+  until reconciliation's Open phase, or its next change, rewrites it.
+  Without a Linked GitHub account a You filter lists nothing.
+- **Cost.** Assignees are an array, so no index covers them, and both
+  filters read rows from the usual indexes and drop the ones that don't
+  match. A filtered page stops after 500 rows read and ends short, and
+  each Load more reads one more page, however few of its rows match.
+- **Counts.** The tab counts cover every PR, so a You filter hides them.
+- **Search.** The same filters add `author:<login>` and `assignee:<login>`
+  to the GitHub query, with the Linked GitHub account's login. Linking
+  another account starts the search over.
+- **Empty state.** Clear filters resets the repository and You filters.
+- **CLI.** None: the CLI has no PR list command to extend.
+
 ### State actions and bulk actions
 
 Slice 7 (OS-2184).
@@ -2088,8 +2113,8 @@ the agreed priority.
    Activity composer, and "Connect GitHub to comment..." without an
    account. Follow-ups: @mentions (6.1, built, OS-2434; see
    [Linked GitHub accounts and comments](#linked-github-accounts-and-comments)), attachments (built, OS-2172; see
-   [Comment attachments](#comment-attachments)), You filters (6.2,
-   OS-2435), and Convoy names for linked GitHub users (6.3, OS-2436).
+   [Comment attachments](#comment-attachments)), You filters (6.2, built, OS-2435; see
+   [You filters](#you-filters)), and Convoy names for linked GitHub users (6.3, OS-2436).
 7. **State actions** (built, OS-2184; see
    [State actions and bulk actions](#state-actions-and-bulk-actions)). Close, reopen, draft, ready for review, assign, archive
    and unarchive, and the list's bulk actions.

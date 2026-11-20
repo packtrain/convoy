@@ -2,21 +2,25 @@
  * @vitest-environment jsdom
  */
 import { afterEach, describe, expect, test, vi } from "vitest";
-import { cleanup, renderHook } from "@testing-library/react";
+import { act, cleanup, renderHook } from "@testing-library/react";
 import type { Id } from "@/convex/_generated/dataModel";
 import type { IntegrationStatus } from "./use-integration-status";
 import { usePullRequestList } from "./use-pull-request-list";
 
 const loadHistory = vi.fn(async () => null);
+const pageIn = vi.fn();
+let paginated: { results: unknown[]; status: string } = { results: [], status: "Exhausted" };
 
 vi.mock("convex/react", () => ({
-  usePaginatedQuery: () => ({ results: [], status: "Exhausted", loadMore: vi.fn() }),
+  usePaginatedQuery: () => ({ ...paginated, loadMore: pageIn }),
   useMutation: () => loadHistory,
 }));
 
 afterEach(() => {
   cleanup();
   loadHistory.mockClear();
+  pageIn.mockClear();
+  paginated = { results: [], status: "Exhausted" };
 });
 
 const connection = (id: number, history = { started: true, complete: false, loading: false, coveredThrough: 0 }) =>
@@ -34,6 +38,19 @@ describe("usePullRequestList", () => {
     // A status update with the same repositories asks nothing more.
     view.rerender({ scope: [connection(1), connection(2)] });
     expect(loadHistory).toHaveBeenCalledTimes(2);
+  });
+
+  test("with a You filter, Load more reads one page however few of its rows match (OS-2435)", () => {
+    paginated = { results: [{ _id: "pr_1" }], status: "CanLoadMore" };
+    const { result, rerender } = renderHook(() => usePullRequestList(projectId, { ...options, tab: "open", author: "me" }, [connection(1)]));
+    act(() => result.current.loadMore());
+    expect(pageIn).toHaveBeenCalledTimes(1);
+    // The page stopped at its row cap with no match; the next one waits for another click.
+    paginated = { ...paginated, status: "LoadingMore" };
+    rerender();
+    paginated = { ...paginated, status: "CanLoadMore" };
+    rerender();
+    expect(pageIn).toHaveBeenCalledTimes(1);
   });
 
   test("names how far back Closed reaches until every repository has all of its history", () => {

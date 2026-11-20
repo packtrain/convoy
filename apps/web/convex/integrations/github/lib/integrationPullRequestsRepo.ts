@@ -36,7 +36,23 @@ export type PullRequestListOptions = {
   order: "asc" | "desc";
   /** Only rows updated at or after this (closed history's coverage). */
   updatedSince?: number;
+  /** The You filters: only rows this GitHub person authored, or is assigned to. */
+  author?: GithubPerson;
+  assignee?: GithubPerson;
 };
+
+type GithubPerson = { userId: number; login: string };
+
+/** Filtered pages stop after this many rows read, ending short with Load more. */
+const FILTERED_MAX_ROWS_READ = 500;
+
+// ponytail: rows synced before IDs were stored match by login, which a GitHub rename breaks until their next sync.
+function matchesPeople(row: Doc<"integrationPullRequests">, { author, assignee }: PullRequestListOptions): boolean {
+  const authored = !author || (row.authorId !== undefined ? row.authorId === author.userId : row.author === author.login);
+  const assigned =
+    !assignee || (row.assigneeIds ? row.assigneeIds.includes(assignee.userId) : (row.assignees ?? []).includes(assignee.login));
+  return authored && assigned;
+}
 
 /** One list over several repositories, merged in index order (one stream per repository and state). */
 export async function paginatePullRequests(
@@ -72,7 +88,11 @@ export async function paginatePullRequests(
   if (streams.length === 0) {
     return { page: [], isDone: true, continueCursor: "" };
   }
-  return mergedStream(streams, [field]).paginate(paginationOpts);
+  if (!options.author && !options.assignee) {
+    return mergedStream(streams, [field]).paginate(paginationOpts);
+  }
+  const filtered = streams.map((rows) => rows.filterWith(async (row) => matchesPeople(row, options)));
+  return mergedStream(filtered, [field]).paginate({ ...paginationOpts, maximumRowsRead: FILTERED_MAX_ROWS_READ });
 }
 
 /** The stored Layers of one stack, bottom first. A stack holds a handful of PRs. */
@@ -116,6 +136,7 @@ const FIELDS = [
   "title",
   "description",
   "author",
+  "authorId",
   "state",
   "draft",
   "headRef",
@@ -133,7 +154,8 @@ function isUnchanged(existing: Doc<"integrationPullRequests">, incoming: Normali
     JSON.stringify(existing.stack) === JSON.stringify(incoming.stack) &&
     existing.labels.length === incoming.labels.length &&
     existing.labels.every((label, index) => label === incoming.labels[index]) &&
-    JSON.stringify(existing.assignees ?? []) === JSON.stringify(incoming.assignees ?? [])
+    JSON.stringify(existing.assignees ?? []) === JSON.stringify(incoming.assignees ?? []) &&
+    JSON.stringify(existing.assigneeIds) === JSON.stringify(incoming.assigneeIds)
   );
 }
 

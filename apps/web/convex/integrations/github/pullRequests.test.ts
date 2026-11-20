@@ -1,7 +1,17 @@
 /// <reference types="vite/client" />
 import { afterEach, beforeEach, describe, expect, test, vi } from "vitest";
 import { api } from "../../_generated/api";
-import { connectedProject, drain, fakePullRequest, signedWebhook, stubGithubAppEnv, type FakeGithub } from "../../../convex-testing/github";
+import {
+  connectedProject,
+  drain,
+  fakePullRequest,
+  fakeUserId,
+  linkGithubAccount,
+  listTitles,
+  signedWebhook,
+  stubGithubAppEnv,
+  type FakeGithub,
+} from "../../../convex-testing/github";
 import { errors } from "./errors";
 
 beforeEach(async () => {
@@ -87,6 +97,44 @@ describe("stored PR metadata", () => {
     expect(layers.map((layer) => layer.number)).toEqual([6, 7, 5]);
     const other = await ctx.project(org._id, user._id);
     expect(await asUser.query(api.integrations.github.pullRequests.stack, { projectId: other._id, repositoryId, stackId: 9 })).toEqual([]);
+  });
+});
+
+// docs/specs/github-integration.md → You filters.
+describe("You filters", () => {
+  const maya = { id: fakeUserId("maya"), login: "maya" };
+  const pulls = () => [
+    fakePullRequest(1, { author: maya }),
+    fakePullRequest(2, { assignees: ["maya", "sam"] }),
+    fakePullRequest(3, { assignees: ["sam"] }),
+  ];
+
+  test("match the Linked GitHub account by user ID, and match nothing without one", async () => {
+    const { org, project, asUser, github } = await connectedProject(pulls());
+    expect(await listTitles(asUser, project._id, { author: "me" })).toEqual([]);
+    expect(await listTitles(asUser, project._id, { assignee: "me" })).toEqual([]);
+
+    // Renamed on GitHub since the PRs synced: the ID still matches.
+    await linkGithubAccount(asUser, github, org._id, { id: maya.id, login: "maya-renamed" });
+    expect(await listTitles(asUser, project._id, { author: "me" })).toEqual(["PR 1"]);
+    expect(await listTitles(asUser, project._id, { assignee: "me" })).toEqual(["PR 2"]);
+    expect(await listTitles(asUser, project._id, { author: "me", assignee: "me" })).toEqual([]);
+  });
+
+  test("a row synced before IDs were stored matches by login until its next sync stores them", async () => {
+    const { org, project, asUser, github, t } = await connectedProject(pulls());
+    await linkGithubAccount(asUser, github, org._id, maya);
+    const rows = await t.run((run) => run.db.query("integrationPullRequests").collect());
+    for (const row of rows) {
+      await t.run((run) => run.db.patch("integrationPullRequests", row._id, { authorId: undefined, assigneeIds: undefined }));
+    }
+    expect(await listTitles(asUser, project._id, { author: "me" })).toEqual(["PR 1"]);
+    expect(await listTitles(asUser, project._id, { assignee: "me" })).toEqual(["PR 2"]);
+
+    await refresh(t, 2);
+    await drain(t, 5000);
+    const synced = await t.run((run) => run.db.query("integrationPullRequests").collect());
+    expect(synced.find((row) => row.number === 2)).toMatchObject({ authorId: fakeUserId("octocat"), assigneeIds: [maya.id, fakeUserId("sam")] });
   });
 });
 

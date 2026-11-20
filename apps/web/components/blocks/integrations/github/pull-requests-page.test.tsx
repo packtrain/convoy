@@ -384,6 +384,31 @@ describe("PullRequestsPage", () => {
     expect(listChecksArgs).toHaveBeenLastCalledWith([{ projectId: "project_1", refs: ["acme/web#40"] }]);
     expect(screen.getByLabelText("Pull request checks").querySelector('[aria-label="Failed"]')).toBeTruthy();
   });
+  test("You filters show only with a Linked GitHub account, and disconnecting clears them (OS-2435)", () => {
+    status = connected({ syncStatus: "synced", openCount: 3 });
+    const { rerender } = render(<PullRequestsPage />);
+    expect(screen.queryByRole("button", { name: "Filter by author" })).toBeNull();
+
+    accounts = {
+      configured: true,
+      organizations: [{ organizationId: "org_1", organizationSlug: "org", organizationName: "Org", account: { githubUserId: 42, login: "maya", avatarUrl: null, status: "active" } }],
+    };
+    rerender(<PullRequestsPage />);
+    fireEvent.pointerDown(screen.getByRole("button", { name: "Filter by author" }), { button: 0, pointerType: "mouse" });
+    fireEvent.click(screen.getByRole("menuitemradio", { name: "You" }));
+    expect(paginatedArgs.mock.lastCall?.[0]).toMatchObject({ author: "me" });
+    expect(paginatedArgs.mock.lastCall?.[0].assignee).toBeUndefined();
+    expect(screen.getByRole("button", { name: "Filter by author" }).textContent).toBe("Author: You");
+    // Counts cover every PR, not just yours.
+    expect(screen.getByRole("button", { name: /^Open/ }).textContent).toBe("Open");
+    expect(screen.getByRole("button", { name: "Clear filters" })).toBeTruthy();
+
+    accounts = { configured: true, organizations: [{ organizationId: "org_1", organizationSlug: "org", organizationName: "Org", account: null }] };
+    rerender(<PullRequestsPage />);
+    expect(screen.queryByRole("button", { name: "Filter by author" })).toBeNull();
+    expect(paginatedArgs.mock.lastCall?.[0].author).toBeUndefined();
+  });
+
   describe("bulk actions (OS-2184)", () => {
     const linked = (status: "active" | "reconnect" = "active", githubUserId = 42) => {
       accounts = {

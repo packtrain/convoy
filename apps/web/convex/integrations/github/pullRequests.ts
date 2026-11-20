@@ -26,7 +26,8 @@ import {
 } from "./lib/parsers";
 import { findLinkedPullRequest, getPullRequestByNumber, listStackPullRequests, paginatePullRequests } from "./lib/integrationPullRequestsRepo";
 import { getRepositoryById, updateRepositorySync } from "./lib/integrationRepositoriesRepo";
-import { getReadableRepositoryLink, getReadableRepositoryLinks } from "./lib/permissions";
+import { findLinkedAccount } from "./lib/integrationLinkedAccountsRepo";
+import { authorizeIntegrationProject, getReadableRepositoryLink, getReadableRepositoryLinks } from "./lib/permissions";
 import {
   livePullRequestValidator,
   mergeabilityValidator,
@@ -59,6 +60,16 @@ async function readableRepositories(ctx: QueryCtx, projectId: Id<"projects">, re
   return scoped;
 }
 
+/** A You filter: only the caller's own PRs, matched by their Linked GitHub account. */
+const youFilterValidator = v.optional(v.literal("me"));
+
+/** The caller's Linked GitHub account in the project's organization, or null. */
+async function viewerGithubAccount(ctx: QueryCtx, projectId: Id<"projects">) {
+  const access = await authorizeIntegrationProject(ctx, projectId, ProjectPermission.PROJECT_VIEW);
+  const account = access ? await findLinkedAccount(ctx, access.project.organizationId, access.userId) : null;
+  return account ? { userId: account.github.userId, login: account.github.login } : null;
+}
+
 /** Closed rows updated before this may be missing; a repository without history covers nothing yet. */
 function historyFloor(repository: Doc<"integrationRepositories">): number {
   if (repository.history?.complete) return -Infinity;
@@ -78,20 +89,28 @@ export const list = query({
     repositoryId: v.optional(v.string()),
     sort: v.union(v.literal("updated"), v.literal("created")),
     order: v.union(v.literal("asc"), v.literal("desc")),
+    author: youFilterValidator,
+    assignee: youFilterValidator,
     paginationOpts: paginationOptsValidator,
   },
   returns: paginationResultValidator(pullRequestSummaryValidator),
-  handler: async (ctx, { projectId, repositoryId, paginationOpts, ...options }) => {
+  handler: async (ctx, { projectId, repositoryId, paginationOpts, author, assignee, ...options }) => {
     const scoped = await readableRepositories(ctx, projectId, repositoryId);
     const floor = options.tab === "closed" ? Math.max(-Infinity, ...scoped.map(({ repository }) => historyFloor(repository))) : -Infinity;
-    if (floor === Infinity) {
+    const you = author || assignee ? await viewerGithubAccount(ctx, projectId) : undefined;
+    if (floor === Infinity || you === null) {
       return { page: [], isDone: true, continueCursor: "" };
     }
     const repositoryIds = scoped.map(({ repository }) => repository._id);
     const result = await paginatePullRequests(
       ctx,
       repositoryIds,
-      { ...options, updatedSince: floor === -Infinity ? undefined : floor },
+      {
+        ...options,
+        updatedSince: floor === -Infinity ? undefined : floor,
+        author: author ? you : undefined,
+        assignee: assignee ? you : undefined,
+      },
       paginationOpts
     );
     return { ...result, page: result.page.map(toPullRequestSummary) };
@@ -517,6 +536,13 @@ export const getSearchScope = internalQuery({
     })),
 });
 
+/** The caller's GitHub login for the search's You filters, or null without a Linked GitHub account. */
+export const getViewerGithubLogin = internalQuery({
+  args: { projectId: v.id("projects") },
+  returns: v.union(v.string(), v.null()),
+  handler: async (ctx, { projectId }) => (await viewerGithubAccount(ctx, projectId))?.login ?? null,
+});
+
 /** Repositories per search request; their `repo:` qualifiers OR together. */
 const SEARCH_REPOSITORIES_PER_REQUEST = 10;
 /** Requests per search page, bounding the fan-out of a project with many repositories. */
@@ -563,12 +589,15 @@ export const search = action({
     repositoryId: v.optional(v.string()),
     sort: v.union(v.literal("updated"), v.literal("created")),
     order: v.union(v.literal("asc"), v.literal("desc")),
+    author: youFilterValidator,
+    assignee: youFilterValidator,
     page: v.number(),
   },
   returns: searchResultValidator,
-  handler: async (ctx, { projectId, repositoryId, query, sort, order, ...args }): Promise<SearchResult> => {
+  handler: async (ctx, { projectId, repositoryId, query, sort, order, author, assignee, ...args }): Promise<SearchResult> => {
     const terms = searchTerms(query);
-    const scope = terms ? await ctx.runQuery(internal.integrations.github.pullRequests.getSearchScope, { projectId, repositoryId }) : [];
+    const you = terms && (author || assignee) ? await ctx.runQuery(internal.integrations.github.pullRequests.getViewerGithubLogin, { projectId }) : undefined;
+    const scope = terms && you !== null ? await ctx.runQuery(internal.integrations.github.pullRequests.getSearchScope, { projectId, repositoryId }) : [];
     if (!scope.length) {
       return { pullRequests: [], hasMore: false, incomplete: false, omittedRepositories: 0, failures: [] };
     }
@@ -584,7 +613,8 @@ export const search = action({
       sources.slice(0, SEARCH_MAX_REQUESTS).map(async (repositories): Promise<SearchAnswer> => {
         try {
           const token = await mintRepositoryToken(config, repositories[0].installationId, ...repositories.map((r) => r.providerRepositoryId));
-          const q = `is:pr ${repositories.map((r) => `repo:${r.fullName}`).join(" ")} ${terms}`;
+          const people = [author ? `author:${you}` : null, assignee ? `assignee:${you}` : null].filter(Boolean);
+          const q = ["is:pr", ...repositories.map((r) => `repo:${r.fullName}`), ...people, terms].join(" ");
           const params = new URLSearchParams({ q, sort, order, per_page: String(PAGE_SIZE), page: String(page) });
           const body = record(await githubFetch(`/search/issues?${params}`, { token }));
           return { repositories, hits: asList(body.items).map(normalizeSearchHit), total: num(body.total_count), incomplete: body.incomplete_results === true };

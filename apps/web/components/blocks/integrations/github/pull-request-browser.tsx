@@ -1,6 +1,6 @@
 "use client";
 
-import { useId, useRef, type CSSProperties, type ReactNode } from "react";
+import { Fragment, useId, useRef, type CSSProperties, type ReactNode } from "react";
 import { ArrowDownWideNarrow, ArrowLeft, ArrowUpNarrowWide, CalendarPlus, CircleX, Clock, GitBranch, ListFilter } from "lucide-react";
 import type { Id } from "@/convex/_generated/dataModel";
 import { ThreadCollapsibleSection } from "@/components/blocks/thread/thread-list-sections";
@@ -37,6 +37,9 @@ export type BrowserFilters = {
   repositoryId?: string;
   sort: "updated" | "created";
   order: "asc" | "desc";
+  /** The You filters, offered only with a Linked GitHub account. */
+  author?: "me";
+  assignee?: "me";
   /** Searches GitHub live across all states. */
   query: string;
 };
@@ -45,6 +48,11 @@ const RESIZE_BOUNDS = { min: 256, max: 560, default: 320, storageKey: "github:pr
 const widthFromPointer = ({ clientX, containerRect }: { clientX: number; containerRect: DOMRect }) => clientX - containerRect.left;
 
 export const repositoryName = (connection: Connection) => `${connection.repository.owner}/${connection.repository.name}`;
+
+export const PEOPLE_FILTERS = [
+  { key: "author", label: "Author", all: "All authors" },
+  { key: "assignee", label: "Assignee", all: "All assignees" },
+] as const;
 
 const SORT_OPTIONS = [
   { value: "updated", label: "Last updated", icon: Clock },
@@ -63,6 +71,7 @@ const ORDER_OPTIONS = [
 export function PullRequestBrowser({
   projectId,
   active,
+  you,
   filters,
   onFiltersChange,
   current,
@@ -71,6 +80,8 @@ export function PullRequestBrowser({
 }: {
   projectId: Id<"projects">;
   active: Connection[];
+  /** The Linked GitHub user ID; the You filters show only with one. */
+  you: number | undefined;
   filters: BrowserFilters;
   onFiltersChange: (change: Partial<BrowserFilters>) => void;
   current: { repositoryId: string; number: number };
@@ -83,9 +94,9 @@ export function PullRequestBrowser({
   const resize = useResizePanel(asideRef, { bounds: RESIZE_BOUNDS, getWidthFromPointer: widthFromPointer });
   const repository = active.find((connection) => connection.repositoryId === filters.repositoryId);
   const scope = repository ? [repository] : active;
-  const options = { sort: filters.sort, order: filters.order, repositoryId: repository?.repositoryId };
-  const search = usePullRequestSearch(projectId, filters.query, options);
-  const filtered = Boolean(repository) || filters.sort !== "updated" || filters.order !== "desc";
+  const options = { sort: filters.sort, order: filters.order, repositoryId: repository?.repositoryId, author: filters.author, assignee: filters.assignee };
+  const search = usePullRequestSearch(projectId, filters.query, { ...options, viewer: you });
+  const filtered = Boolean(repository || filters.author || filters.assignee) || filters.sort !== "updated" || filters.order !== "desc";
   const row = (pr: PullRequestSummary | PullRequestSearchHit, rowCompact: boolean) => (
     <BrowserRow
       key={`${pr.repositoryId}#${pr.number}`}
@@ -175,6 +186,21 @@ export function PullRequestBrowser({
                 </DropdownMenuRadioGroup>
               </>
             ) : null}
+            {you !== undefined
+              ? PEOPLE_FILTERS.map(({ key, label, all }) => (
+                  <Fragment key={key}>
+                    <DropdownMenuSeparator />
+                    <DropdownMenuLabel className="text-xs text-muted-foreground">{label}</DropdownMenuLabel>
+                    <DropdownMenuRadioGroup
+                      value={filters[key] ?? "all"}
+                      onValueChange={(value) => onFiltersChange({ [key]: value === "me" ? "me" : undefined })}
+                    >
+                      <DropdownMenuRadioItem value="all">{all}</DropdownMenuRadioItem>
+                      <DropdownMenuRadioItem value="me">You</DropdownMenuRadioItem>
+                    </DropdownMenuRadioGroup>
+                  </Fragment>
+                ))
+              : null}
           </DropdownMenuContent>
         </DropdownMenu>
       </header>
@@ -219,7 +245,7 @@ export function PullRequestBrowser({
 }
 
 type RenderRow = (pr: PullRequestSummary | PullRequestSearchHit, compact: boolean) => ReactNode;
-type ListScope = { projectId: Id<"projects">; options: { sort: BrowserFilters["sort"]; order: BrowserFilters["order"]; repositoryId?: string }; scope: Connection[] };
+type ListScope = { projectId: Id<"projects">; options: Omit<BrowserFilters, "query">; scope: Connection[] };
 
 const repositoryNames = (active: Connection[]) => new Map(active.map((connection) => [connection.repositoryId, repositoryName(connection)]));
 

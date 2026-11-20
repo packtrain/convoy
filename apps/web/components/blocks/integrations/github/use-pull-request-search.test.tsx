@@ -56,6 +56,18 @@ describe("usePullRequestSearch", () => {
     expect(result.current.results.map((pr) => pr.number)).toEqual([1, 2, 9]);
   });
 
+  test("a different Linked GitHub account behind You starts the search over (OS-2435)", async () => {
+    search.mockResolvedValueOnce(page([hit(1, 3)])).mockResolvedValueOnce(page([hit(2, 2)], false));
+    const { result, rerender } = renderHook(
+      ({ viewer }) => usePullRequestSearch("project_1" as Id<"projects">, "fix", { sort: "updated", order: "desc", author: "me", viewer }),
+      { initialProps: { viewer: 42 } }
+    );
+    await waitFor(() => expect(result.current.results.map((pr) => pr.number)).toEqual([1]));
+    rerender({ viewer: 43 });
+    await waitFor(() => expect(result.current.results.map((pr) => pr.number)).toEqual([2]));
+    expect(search.mock.calls.map(([args]) => args.page)).toEqual([1, 1]);
+  });
+
   test("coming back to a search starts it over from page 1", async () => {
     search.mockImplementation(async ({ query, page: number }: { query: string; page: number }) => page([hit(number * 10 + query.length, number)]));
     const view = render("fix");

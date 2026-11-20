@@ -30,7 +30,8 @@ import { NoAccess } from "@/components/blocks/no-access";
 import { PullRequestCheckIcons, usePullRequestListChecks } from "@/components/blocks/checks";
 import { toAttachedPullRequest } from "@/convex/lib/contracts/github";
 import { Checkbox } from "@/components/ui/checkbox";
-import { PullRequestBrowser, PullRequestBrowserSkeleton, repositoryName } from "./pull-request-browser";
+import { useLinkedGithubAccounts } from "./linked-github-account";
+import { PEOPLE_FILTERS, PullRequestBrowser, PullRequestBrowserSkeleton, repositoryName } from "./pull-request-browser";
 import { BulkActionsBar } from "./pull-request-bulk-actions";
 import { PullRequestReader, PullRequestReaderSkeleton } from "./pull-request-reader";
 import { StackBadge } from "./pull-request-stack";
@@ -56,6 +57,12 @@ export function PullRequestsPage() {
   const projectId = project?._id;
   const status = useIntegrationStatus(projectId);
   const [options, setOptions] = useState<ListOptions>(DEFAULT_OPTIONS);
+  const accounts = useLinkedGithubAccounts();
+  const you = accounts?.organizations.find((organization) => organization.organizationId === organizationId)?.account?.githubUserId;
+  // Disconnecting clears an active You filter.
+  if (accounts !== undefined && you === undefined && (options.author || options.assignee)) {
+    setOptions((current) => ({ ...current, author: undefined, assignee: undefined }));
+  }
   // Live GitHub search, shared by the list and the reader pane.
   const [query, setQuery] = useState("");
   const params = new URLSearchParams(navigation.location.search);
@@ -84,6 +91,7 @@ export function PullRequestsPage() {
               <PullRequestBrowser
                 projectId={projectId}
                 active={active}
+                you={you}
                 filters={{ ...options, query }}
                 onFiltersChange={({ query: nextQuery, ...change }) => {
                   if (nextQuery !== undefined) setQuery(nextQuery);
@@ -133,6 +141,7 @@ export function PullRequestsPage() {
               projectId={projectId}
               status={status}
               active={active}
+              you={you}
               options={options}
               onOptionsChange={(change) => setOptions((current) => ({ ...current, ...change }))}
               query={query}
@@ -198,6 +207,7 @@ function PullRequestList({
   projectId,
   status,
   active,
+  you,
   options,
   onOptionsChange,
   query,
@@ -208,6 +218,8 @@ function PullRequestList({
   projectId: Id<"projects">;
   status: IntegrationStatus;
   active: Connection[];
+  /** The Linked GitHub user ID; the You filters show only with one. */
+  you: number | undefined;
   options: ListOptions;
   onOptionsChange: (change: Partial<ListOptions>) => void;
   query: string;
@@ -219,13 +231,13 @@ function PullRequestList({
   const filtered = active.find((connection) => connection.repositoryId === options.repositoryId);
   const scope = filtered ? [filtered] : active;
   const list = usePullRequestList(projectId, { ...options, repositoryId: filtered?.repositoryId }, scope);
-  const search = usePullRequestSearch(projectId, query, { ...options, repositoryId: filtered?.repositoryId });
+  const search = usePullRequestSearch(projectId, query, { ...options, repositoryId: filtered?.repositoryId, viewer: you });
   const { results, status: pageStatus } = list;
   const repositories = new Map(active.map((connection) => [connection.repositoryId, connection.repository]));
   const failed = scope.filter((connection) => connection.repository.syncStatus === "error");
   const importing = scope.some((connection) => connection.repository.syncStatus === "importing");
-  // Partial counts mislead, so a backfilling repository hides them until it finishes.
-  const counting = scope.some((connection) => connection.repository.counting);
+  // Partial counts mislead, so a backfilling repository hides them until it finishes. Counts ignore the You filters, so those hide them too.
+  const counting = scope.some((connection) => connection.repository.counting) || Boolean(options.author || options.assignee);
   const counts = {
     open: scope.reduce((sum, connection) => sum + connection.repository.openCount, 0),
     // Stored closed PRs are GitHub's total only once every history page is in.
@@ -281,7 +293,7 @@ function PullRequestList({
             </Button>
           ))}
         </div>
-        <div className="ml-auto flex flex-wrap items-center gap-2">
+        <div className="flex w-full flex-wrap items-center gap-2">
           <SearchInput
             value={query}
             onChange={(event) => onQueryChange(event.target.value)}
@@ -289,7 +301,7 @@ function PullRequestList({
             aria-label="Search pull requests"
             showClearButton={query !== ""}
             onClear={() => onQueryChange("")}
-            className="w-56"
+            className="min-w-56 flex-1"
           />
           <DropdownMenu>
             <DropdownMenuTrigger asChild>
@@ -312,6 +324,27 @@ function PullRequestList({
               </DropdownMenuRadioGroup>
             </DropdownMenuContent>
           </DropdownMenu>
+          {you !== undefined
+            ? PEOPLE_FILTERS.map(({ key, label, all }) => (
+                <DropdownMenu key={key}>
+                  <DropdownMenuTrigger asChild>
+                    <Button variant="outline" size="settings" aria-label={`Filter by ${label.toLowerCase()}`}>
+                      {options[key] ? `${label}: You` : all}
+                      <ChevronDown />
+                    </Button>
+                  </DropdownMenuTrigger>
+                  <DropdownMenuContent align="end" className="w-max">
+                    <DropdownMenuRadioGroup
+                      value={options[key] ?? "all"}
+                      onValueChange={(value) => onOptionsChange({ [key]: value === "me" ? "me" : undefined })}
+                    >
+                      <DropdownMenuRadioItem value="all">{all}</DropdownMenuRadioItem>
+                      <DropdownMenuRadioItem value="me">You</DropdownMenuRadioItem>
+                    </DropdownMenuRadioGroup>
+                  </DropdownMenuContent>
+                </DropdownMenu>
+              ))
+            : null}
           <DropdownMenu>
             <DropdownMenuTrigger asChild>
               <Button
@@ -381,8 +414,8 @@ function PullRequestList({
           importing={importing}
           failed={allFailed ? failed[0] : undefined}
           canManage={status.canManage}
-          filtered={Boolean(filtered)}
-          onReset={() => onOptionsChange({ repositoryId: undefined })}
+          filtered={Boolean(filtered || options.author || options.assignee)}
+          onReset={() => onOptionsChange({ repositoryId: undefined, author: undefined, assignee: undefined })}
         />
       )}
       {list.hasMore && !search.active ? (
@@ -499,7 +532,7 @@ function EmptyList({
       action={
         filtered ? (
           <Button variant="secondary" onClick={onReset}>
-            Show all repositories
+            Clear filters
           </Button>
         ) : null
       }

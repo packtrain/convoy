@@ -40,10 +40,12 @@ export function normalizePullRequest(raw: unknown): NormalizedPullRequest {
     title: str(pr.title),
     description: typeof pr.body === "string" ? pr.body : "",
     author: pr.user ? str(record(pr.user).login) : "ghost",
+    authorId: userId(pr.user),
     state: pr.merged_at ? "merged" : str(pr.state) === "open" ? "open" : "closed",
     draft: pr.draft === true,
     labels: list(pr.labels ?? []).map((label) => str(record(label).name)),
     assignees: list(pr.assignees ?? []).map(login),
+    assigneeIds: list(pr.assignees ?? []).flatMap((user) => userId(user) ?? []),
     headRef: str(head.ref),
     baseRef: str(base.ref),
     headSha: str(head.sha),
@@ -122,6 +124,7 @@ export function normalizeDiffFiles(rawFiles: unknown[]) {
 // --- Overview ---
 
 const login = (user: unknown) => (typeof user === "object" && user !== null && typeof (user as { login?: unknown }).login === "string" ? (user as { login: string }).login : "ghost");
+const userId = (user: unknown) => (typeof user === "object" && user !== null && typeof (user as { id?: unknown }).id === "number" ? (user as { id: number }).id : undefined);
 const text = (value: unknown) => (typeof value === "string" ? value : "");
 const avatarUrl = (user: unknown) => text(record(user ?? {}).avatar_url) || null;
 
