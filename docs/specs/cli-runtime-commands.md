@@ -108,6 +108,12 @@ Generic CLI→server inventory mechanism; slash commands are the first key.
   directory wins name collisions) and emits the same synthetic
   `convoy.commands` chunk. Both runtimes' extractors share
   `shared/syntheticCommands.ts`.
+- Antigravity advertises its own list in an ACP `available_commands_update`
+  after every `session/new` and `session/resume`. The CLI runner
+  (≥ 0.154.0) forwards it as a `session/update` chunk and the backend reads
+  it directly, with no synthetic chunk. `logout` is dropped: it would sign
+  agy out on that machine. See
+  [cli-antigravity-runtime.md](cli-antigravity-runtime.md#slash-commands).
 - Claude Code's own stream advertises **names only** — the descriptions and
   argument hints live in the Agent SDK's initialize control response, not in an
   event. So the CLI runner (≥ 0.54.0) calls `supportedCommands()` once per run
@@ -184,8 +190,9 @@ shared with the composer; only the caller differs. See
   not ride that message** (`supportsFirstMessageRuntimeCommand` on the web
   runtime definition, read through
   `cliTypeSupportsFirstMessageRuntimeCommand`): `claude-code` (system-prompt
-  append every run) and `codex` (app-server re-passes `developerInstructions`;
-  the exec transport rejects runtime commands anyway). `cursor` and `opencode`
+  append every run), `codex` (app-server re-passes `developerInstructions`;
+  the exec transport rejects runtime commands anyway) and `antigravity`
+  (`session/new` `_meta` system-prompt append). `cursor` and `opencode`
   are `agentPromptDelivery: "first-message"`, and a command there either
   displaces the bootstrap (cursor prepends the identity line to the raw
   command, so cursor-agent no longer sees a bare command) or skips it forever
@@ -278,10 +285,11 @@ shared with the composer; only the caller differs. See
 | `claude-code` | init event (`slash_commands`); local `/usage` before discovery | `/usage` uses the SDK usage control request, with no prompt; other commands use raw prompts. `/goal` replies and Stop hook checks drive the composer goal button ([cli-thread-goal.md](cli-thread-goal.md)) |
 | `opencode` | synthetic `convoy.commands` chunk from `command.list()` plus the built-ins executed through dedicated endpoints (`compact`, CLI ≥ 0.43.0) | `session.command()` RPC (OS-1120); `/compact` → `session.summarize()` (OS-1614) |
 | `codex` | synthetic `convoy.commands` chunk listing the built-ins backed by an app-server RPC (`compact`, `usage`, `goal` with description and argument hint, CLI ≥ 0.130.0); exec transport advertises nothing (CLI ≥ 0.42.0). Custom prompts (`~/.codex/prompts`) are still OS-1119 | dedicated app-server RPC per command (`/compact` → `thread/compact/start`, `/usage` → `account/rateLimits/read`, `/goal` → `thread/goal/get`/`set`/`clear`, see [cli-thread-goal.md](cli-thread-goal.md#codex)); exec transport fails the run (OS-1582) |
+| `antigravity` | agy's own `available_commands_update`, read from the stream at chunk append; `logout` hidden (CLI ≥ 0.154.0). Before discovery, agy's built-ins except `compact` | raw prompt; `/compact` shows "Compacting…", then the compaction row ([cli-antigravity-runtime.md](cli-antigravity-runtime.md#slash-commands)) |
 | `cursor` | synthetic `convoy.commands` chunk from a CLI-side scan of `<cwd>/.cursor/commands/` + `~/.cursor/commands/` (`*.md` basenames, project wins dedup, CLI ≥ 0.14.0) | raw prompt (cursor-agent interprets slash text; unknown commands degrade to prose) |
 
 `/compact` is therefore offered on `claude-code`, `codex` (app-server
-transport) and `opencode`. **Cursor deliberately has none:** `cursor-agent
+transport), `opencode` and `antigravity`. **Cursor deliberately has none:** `cursor-agent
 --print` resolves only custom commands and skills — compaction is a TUI-side
 affordance with no print-mode equivalent — so advertising it would deliver
 `/compact` as prose and let the model narrate a compaction that never

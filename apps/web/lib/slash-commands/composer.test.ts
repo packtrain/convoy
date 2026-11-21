@@ -39,6 +39,15 @@ describe("slash command composer helpers", () => {
     expect(getComposerRuntimeCommands("codex", [{ name: "compact" }]).map(command => command.name)).toEqual(["compact", "usage"]);
   });
 
+  test("offers agy's built-in commands before discovery, without compact or usage", () => {
+    const names = getComposerRuntimeCommands("antigravity").map(command => command.name);
+    expect(names).toEqual(["goal", "plan", "schedule", "browser", "grill-me", "teamwork", "learn", "boost"]);
+    expect(isRuntimeCommandMessage("/plan add a login page", getComposerRuntimeCommands("antigravity"))).toBe(true);
+    // Discovery wins once agy reports.
+    const advertised = [{ name: "compact" }, { name: "my-skill" }];
+    expect(getComposerRuntimeCommands("antigravity", advertised)).toBe(advertised);
+  });
+
   test("builds scoped canonical keys", () => {
     expect(buildSlashCommandCanonicalKey({ scope: "organization", key: "review" })).toBe("org:review");
     expect(buildSlashCommandCanonicalKey({ scope: "project", key: "review" })).toBe("project:review");

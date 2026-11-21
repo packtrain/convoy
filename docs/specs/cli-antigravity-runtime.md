@@ -2,7 +2,7 @@
 
 This spec covers how the `antigravity` runtime runs Antigravity CLI (`agy`) in Convoy. The transport is the Agent Client Protocol (ACP), JSON-RPC 2.0 over newline-delimited stdio. Each run spawns its own `agy acp` process.
 
-Status: slices 1 to 3 of the epic OS-2464 (OS-2468, OS-2469, OS-2470). A thread runs in Act or Ask to approve mode on the model and thinking level picked in the composer. It streams text, reasoning and tool calls, shows approval and question cards, follows up in the same agy session and stops on Stop. Slash commands, the context meter, images, steering, `convoy init`, environments and keys come in later slices.
+Status: slices 1 to 4 of the epic OS-2464 (OS-2468 to OS-2471). A thread runs in Act or Ask to approve mode on the model and thinking level picked in the composer. It streams text, reasoning and tool calls, shows approval and question cards, follows up in the same agy session and stops on Stop. It offers agy's slash commands, fills the context meter, sends images as images and offers a local resume command. Steering, `convoy init`, environments and keys come in later slices.
 
 Every fact below is marked **verified** when it comes from traffic recorded on agy 1.5.13 (signed in, Linux container, 2026-11-20) or **t3code** when it only comes from t3code's source in `reference/t3code`.
 
@@ -19,7 +19,7 @@ Code that names agy lives in the `antigravity` folders. The `acp` folders hold p
 - Executable: `CONVOY_ANTIGRAVITY_EXECUTABLE`, then `agy`, then `antigravity` on `PATH`. The binary is `antigravity`, usually linked as `agy`.
 - `agy --version` prints a bare `1.5.13` (verified). Versions below 1.5.12 are not advertised.
 - The advertised row is `{ type: "antigravity", version, models? }`. `models` comes from the inventory session in [Models and thinking level](#models-and-thinking-level).
-- The composer disables Antigravity on a machine that doesn't advertise it. Registration drops the Antigravity row from a CLI older than 0.153.0 (`minAppVersion`, see [cli-minimum-version.md](cli-minimum-version.md#per-runtime-minimum)). 0.151.0 runs every thread with `--dangerously-skip-permissions`, so it would run Ask to approve threads without asking. 0.152.x never sets the model or thinking level, so a remembered selection would run on agy's default while the thread shows the selection. Older CLIs don't know the runtime.
+- The composer disables Antigravity on a machine that doesn't advertise it. Registration drops the Antigravity row from a CLI older than 0.154.0 (`minAppVersion`, see [cli-minimum-version.md](cli-minimum-version.md#per-runtime-minimum)). 0.151.0 runs every thread with `--dangerously-skip-permissions`, so it would run Ask to approve threads without asking. 0.152.x never sets the model or thinking level, so a remembered selection would run on agy's default while the thread shows the selection. 0.153.x wraps slash commands in the run envelope, so a command offered before discovery would reach agy as prose. Older CLIs don't know the runtime.
 - Detection does not report sign-in. A signed-out agy fails the inventory, so it registers without `models`, and its first run fails with the sign-in message.
 
 ## Execution
@@ -33,7 +33,7 @@ Per run:
 1. `initialize` with `protocolVersion: 1` and `clientCapabilities` `{ fs: { readTextFile: false, writeTextFile: false }, terminal: false }`. agy answers protocol version 1, `agentInfo.version` and `agentCapabilities._meta.antigravity.systemPrompt.append: true` (verified). It answers in about 0.1 seconds (verified).
 2. `session/new` with `cwd` and `mcpServers: []`, or `session/resume` with the stored session id when the run has a `continuationId`. Both carry `_meta.antigravity.systemPrompt.append` with the bound Project agent prompt, the thread identity line and the workspace notice. agy accepts the append on resume (verified). When `initialize` lacks the capability, the runner prepends the same text to the prompt. `session/new` returns the session id, model list, modes and config options in about one second (verified).
 3. When the thread has a model, `session/set_config_option` for it, then for the thinking level. See [Models and thinking level](#models-and-thinking-level).
-4. `session/prompt` with one text block. The response carries `stopReason` and `usage` (verified).
+4. `session/prompt` with the image blocks from [Attachments](#attachments), then one text block. The response carries `stopReason` and `usage` (verified).
 
 Signed out, `session/new` fails at once with `-32000 Authentication required` (verified). The runner then calls `authenticate` with `oauth-personal` once and retries. In a headless container that call fails at once with -32603 "No browser is available here" (verified). Whatever fails, the run ends with "Antigravity is not signed in on this machine. Run `agy` in a terminal and sign in, then send the message again." On a desktop the call may open a browser, which nobody has checked yet. The same fallback applies to a signed-out `session/resume`.
 
@@ -53,9 +53,11 @@ Other agent requests, such as `fs/*` or `terminal/*`, get a method-not-found err
 | `session/update` | the notification params as agy sent them, with tool updates compacted (below) |
 | `convoy/acp_text`, `convoy/acp_reasoning` | `{ sessionId, text }`, the accumulated text of one segment. Sent when an update of another kind arrives or the prompt ends |
 | `convoy/acp_prompt_result` | `{ sessionId, stopReason, usage }` |
+| `convoy/antigravity_compaction` | `{ sessionId, phase }` on a `/compact` run: `started` before the prompt, then `completed` on `end_turn` or `failed` otherwise. See [Slash commands](#slash-commands) |
 
 - ACP sends text only as `agent_message_chunk` and `agent_thought_chunk` deltas, never as a whole message (verified). These are forwarded as `session/update` chunks only when partial streaming is on. The backend marks them ephemeral, and the flush buffer merges consecutive chunks of one kind.
-- Not forwarded in this slice: `available_commands_update`, `usage_update`, `session_info_update`, `current_mode_update` and `config_option_update`. They do not close a text segment. Later slices use them for slash commands, the context meter and models.
+- `available_commands_update` and `usage_update` are forwarded as they arrive and do not close a text segment.
+- Not forwarded: `session_info_update`, `current_mode_update` and `config_option_update`. They do not close a text segment either.
 - Tool updates are compacted before sending. agy repeats `rawInput` as `args` and a command's `rawOutput.output` as a text content block (verified), so the runner drops both copies. Every remaining string keeps its last 8,000 characters, as t3code does, behind an `[N characters omitted]` line so a clipped file or command never reads as whole.
 
 ## Modes
@@ -69,7 +71,7 @@ agy 1.5.13 advertises the session modes `default`, `accept-edits`, `auto` and `p
 
 ## Permissions and questions
 
-Ask to approve needs CLI 0.152.0, and the runtime as a whole needs 0.153.0. Older CLIs are not offered Antigravity at all (see [Detection](#detection)).
+Ask to approve needs CLI 0.152.0, and the runtime as a whole needs 0.154.0. Older CLIs are not offered Antigravity at all (see [Detection](#detection)).
 
 **What agy asks.** In `default` mode agy 1.5.13 asked before `ls -la` and not before writing `notes.txt` inside the workspace (verified). The request is the tool call itself: `toolCall` carries the whole `tool_call` update (`toolCallId`, `name`, `kind`, `status: "pending"`, `title`, `rawInput`), and a `tool_call_update` with `status: "pending"` comes just before it (verified). For `ls -la` the options were `{ optionId: "allow", name: "Allow", kind: "allow_once" }` and `{ optionId: "deny", name: "Deny", kind: "reject_once" }`, with no `allow_always` (verified). A declined command ends `failed` with empty output, and agy carries on with the turn (verified).
 
@@ -122,11 +124,14 @@ The generic ACP part (`normalizeAcpChunk`):
 | `session/update` × `tool_call_update` × `completed` | `tool-output`, or `tool-error` when the adapter reports one |
 | `session/update` × `tool_call_update` × `failed` | `tool-error` |
 | `session/update` × `tool_call_update` × other status | `tool-error` when the adapter reports one, else silent `metadata` |
-| `session/update` × `plan`, `user_message_chunk`, `usage_update`, `session_info_update`, `available_commands_update`, `current_mode_update`, `config_option_update` | silent `metadata` |
+| `session/update` × `usage_update` with positive `used` and `size` | `context-window` (`usedTokens` = `used`, `maxTokens` = `size`) |
+| `session/update` × `plan`, `user_message_chunk`, other `usage_update`, `session_info_update`, `available_commands_update`, `current_mode_update`, `config_option_update` | silent `metadata` |
 | `convoy/acp_prompt_result` × `refusal`, `max_tokens`, `max_turn_requests` | `warning` (`acp-<stopReason>`) |
 | `convoy/acp_prompt_result` × other stop reason | silent `metadata` |
 | `convoy/acp_session` | silent `metadata` with `sessionId` |
 | anything else | `unknown` |
+
+The Antigravity part maps `convoy/antigravity_compaction` to a `context-compaction` row: `started` is the in-progress "Compacting…" row, `completed` replaces it with "Conversation compacted", and any other phase with "Compaction did not finish."
 
 `toolCallId` pairs input with output. Without an adapter a tool is named by its `title`, its input is `rawInput` and its output is `rawOutput` or the content text.
 
@@ -168,9 +173,39 @@ The Antigravity part (`normalizeAntigravityChunk`) maps agy's tool `name` onto t
 
 The ACP session id is the `continuationId`. A follow-up spawns a new process and calls `session/resume`, which does not replay history (verified). The resumed session remembered the earlier turn's file edit (verified).
 
+## Slash commands
+
+**What agy sends (verified).** Right after `session/new` and after `session/resume`, agy sends `available_commands_update` with `availableCommands` of `{ name, description }`. t3code adds an optional `input.hint`. agy 1.5.13 listed `goal`, `compact`, `schedule`, `browser`, `plan`, `grill-me`, `teamwork`, `learn`, `boost`, `agy-customizations`, `antigravity-guide`, `run-workflow` and `swarm`. Its skills appear in the same list. A command runs when sent as the whole prompt text.
+
+**Discovery.** The runner forwards the update as a `session/update` chunk. At chunk append the backend reads the last such update in the batch into the `cliRuntimeFacts` row, with `input.hint` as the argument hint (`antigravity/slashCommands.ts`). No synthetic `convoy.commands` chunk is needed. `logout` is never offered. t3code lists it, and running it from a thread would sign agy out on that machine.
+
+**Before discovery.** With no stored list, as in a new thread's composer or on a machine agy has not reported from, the composer offers agy 1.5.x's built-ins with agy's own descriptions: `goal`, `plan`, `schedule`, `browser`, `grill-me`, `teamwork`, `learn` and `boost` (`getComposerRuntimeCommands`). `compact` and the skills wait for discovery: a new thread has nothing to compact, and skills differ per machine. Once agy reports, its list replaces this one. A thread may open on a command (`supportsFirstMessageRuntimeCommand`), because the agent prompt and thread identity ride in `session/new` `_meta`, not in the first message.
+
+**Execution.** A solo runtime command message is sent raw, as the whole prompt text, with no run envelope (`rawRuntimeCommand`). The runner then never prepends the instructions to it, even when agy cannot append a system prompt.
+
+**`/compact` (verified).** agy compacts and ends the turn with `end_turn`, no text and no event that marks the compaction. Its `usage_update` for that turn counts the old context plus the summary, so it went up from 13,512 to 15,368 tokens on a test conversation. The next reply's update showed the drop, to 9,526. So on a `/compact` run the runner does not forward `usage_update`. It sends `convoy/antigravity_compaction` with `started` before the prompt, which shows "Compacting…" while agy works, and `completed` after `end_turn`. A run that ends any other way, including when agy dies, sends `failed`, so the pending row never hangs. The meter keeps its old value until the next reply.
+
+## Context meter
+
+agy sends `usage_update` with `used` (tokens in context) and `size` (window size) right after a session opens and at the end of every reply (verified: `used: 0` first, then `used: 8950, size: 1048576` on Gemini). Positive values normalize to `context-window`, anything else to silent metadata. The shared fold stores the last snapshot on the thread (see [cli-thread-context-window-meter.md](cli-thread-context-window-meter.md#antigravity-rules)).
+
+The prompt result's `usage` (`inputTokens`, `outputTokens`, `cachedReadTokens`, `cachedWriteTokens`, `thoughtTokens`, `totalTokens`) stays in the chunk as metadata. No cost is recorded, see [Known limitations](#known-limitations).
+
+## Attachments
+
+agy advertises `promptCapabilities.image` (verified). `image/bmp`, `image/jpeg`, `image/png` and `image/webp` attachments are sent as `{ type: "image", data: <base64>, mimeType }` blocks ahead of the prompt text, each after a text block naming its message and file: `user-message-1 attachment: "red.png" (image/png)`. A PNG sent this way was described correctly (verified). An image stays out of the prompt's path list once inlined.
+
+An image over 10 MiB, or one that would take the run's images over 50 MiB in total, stays a path reference. These are t3code's limits. Every other attachment is a path reference in the prompt text, which agy reads with its own tools.
+
+## Local resume
+
+The assistant message menu offers `agy --conversation <ACP session id>`. agy stores ACP sessions under the same `antigravity-cli` directory as the interactive CLI, so the session id is a conversation id: `agy --conversation <id> -p` answered from an ACP session's history (verified on 1.5.13).
+
 ## Known limitations
 
-- No slash commands, context meter, image attachments, steering or local resume command.
+- No steering.
+- Before the first run on a machine, the composer offers agy's built-ins only. Skills appear after it.
+- `/compact` leaves the meter at its old value until the next reply.
 - Isolation (`--isolated`) fails fast, as for Cursor and OpenCode.
 - agy 1.5.13 offered no `allow_always` for `ls -la`, so Always allow appears only when agy offers it.
 - A command agy moves to the background survives the run. agy ran `sleep 120` with a 500 ms `WaitMsBeforeAsync`, ended the prompt with `end_turn`, and the `sleep` kept running after its process group was killed (verified). OS-2472 owns commands that outlive the prompt.

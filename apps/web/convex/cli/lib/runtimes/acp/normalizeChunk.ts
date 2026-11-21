@@ -1,5 +1,5 @@
 import type { CliNormalizedEvent } from "@/convex/lib/contracts/validators";
-import { isRecord } from "@/lib/type-guards";
+import { getFiniteNumber, isRecord } from "@/lib/type-guards";
 import type { RawCliChunk } from "../contracts";
 
 /**
@@ -30,7 +30,6 @@ const SILENT_UPDATES = new Set([
   "current_mode_update",
   "config_option_update",
   "session_info_update",
-  "usage_update",
 ]);
 
 const STOP_REASON_WARNINGS = new Map([
@@ -119,7 +118,13 @@ export function normalizeAcpChunk(chunk: RawCliChunk, adapter: AcpToolAdapter = 
         return { kind: delta, text: getString(content.text) ?? "" };
       }
       if (kind === "tool_call" || kind === "tool_call_update") return normalizeToolUpdate(update, adapter);
-      if (SILENT_UPDATES.has(kind)) return silent({ event: kind }, sessionId);
+      if (kind === "usage_update") {
+        // `used` is the tokens in context, `size` the window.
+        const usedTokens = getFiniteNumber(update.used) ?? 0;
+        const maxTokens = getFiniteNumber(update.size) ?? 0;
+        if (usedTokens > 0 && maxTokens > 0) return { kind: "context-window", usedTokens, maxTokens };
+      }
+      if (SILENT_UPDATES.has(kind) || kind === "usage_update") return silent({ event: kind }, sessionId);
       return unknownEvent(chunk, "unrecognized-acp-update");
     }
     default:

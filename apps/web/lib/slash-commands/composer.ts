@@ -227,14 +227,28 @@ const COLD_START_GOAL_COMMANDS: Record<"claude-code" | "codex", RuntimeSlashComm
   codex: { name: "goal", description: "Keep working until a condition holds", argumentHint: "[objective | pause | resume | clear]" },
 };
 
+// agy 1.5.x built-ins, as it advertises them; skills and `compact` wait for discovery.
+const ANTIGRAVITY_COLD_START_COMMANDS: RuntimeSlashCommand[] = [
+  { name: "goal", description: "Run until the specified goal is completely finished." },
+  { name: "plan", description: "Plan carefully before executing a task." },
+  { name: "schedule", description: "Run an instruction on a recurring schedule or as a one-time timer." },
+  { name: "browser", description: "Invoke a browser agent for web tasks." },
+  { name: "grill-me", description: "Interview me to align on a plan." },
+  { name: "teamwork", description: "Invoke a team of agents to autonomously tackle large projects." },
+  { name: "learn", description: "Reflect on recent successes or corrections to capture reusable skills or rules." },
+  { name: "boost", description: "Invoke the Boost multi-agent orchestrator for complex tasks." },
+];
+
 /**
  * Usage is a local control request and works before command discovery. `/goal`
- * is assumed until discovery reports, so a new thread can open on one.
+ * is assumed until discovery reports, so a new thread can open on one. agy's
+ * built-ins are assumed the same way.
  */
 export function getComposerRuntimeCommands(
   cliType: string,
   advertised: RuntimeSlashCommand[] = [],
 ): RuntimeSlashCommand[] {
+  if (cliType === "antigravity") return advertised.length === 0 ? ANTIGRAVITY_COLD_START_COMMANDS : advertised;
   if (cliType !== "codex" && cliType !== "claude-code") return advertised;
   const coldStart = advertised.length === 0 ? [COLD_START_GOAL_COMMANDS[cliType]] : [];
   if (advertised.some(command => command.name === "usage")) return advertised;

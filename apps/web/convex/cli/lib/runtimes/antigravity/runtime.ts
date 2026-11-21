@@ -17,6 +17,7 @@ import {
 } from "./models";
 import { normalizeAntigravityChunk } from "./normalizeChunk";
 import { parseAntigravityAvailableCli } from "./parseAvailableCli";
+import { getAntigravitySlashCommandsFromIncomingChunks } from "./slashCommands";
 
 /**
  * Antigravity CLI over ACP, one `agy acp` process per run. Models and thinking levels
@@ -25,8 +26,10 @@ import { parseAntigravityAvailableCli } from "./parseAvailableCli";
 export const antigravityRuntime: CliRuntimeDefinition = {
   type: "antigravity",
   label: "Antigravity",
-  // 0.151.0 skips every permission; 0.152.x runs on agy's default model whatever the thread shows.
-  minAppVersion: "0.153.0",
+  // 0.151.0 skips every permission; 0.152.x ignores the model; 0.153.x sends slash commands as prose.
+  minAppVersion: "0.154.0",
+  // The system prompt rides in session/new `_meta`, so a raw first message displaces nothing.
+  supportsFirstMessageRuntimeCommand: true,
   parseAvailableCli: (cli: Record<string, unknown>, version: string): ParseResult<CliRuntimeAvailableCli> =>
     parseAntigravityAvailableCli(cli, version),
   normalizeStoredModel: normalizeAntigravityModel,
@@ -46,4 +49,7 @@ export const antigravityRuntime: CliRuntimeDefinition = {
   normalizeChunk: (chunk: RawCliChunk) => normalizeAntigravityChunk(chunk),
   isEphemeralChunk: (chunk: RawCliChunk) => isAcpEphemeralChunk(chunk),
   extractContinuationIdFromChunks: (chunks: RawCliChunk[]) => getAcpContinuationIdFromIncomingChunks(chunks),
+  extractSlashCommandsFromChunks: (chunks: RawCliChunk[]) => getAntigravitySlashCommandsFromIncomingChunks(chunks),
+  // The ACP session id is an agy conversation id (verified on 1.5.13).
+  buildResumeCommand: (continuationId: string) => `agy --conversation ${continuationId}`,
 };

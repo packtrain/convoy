@@ -25,7 +25,7 @@ describe("createAcpClient", () => {
     receive({ jsonrpc: "2.0", id: 1, result: { sessionId: "s-1" } });
     await expect(opened).resolves.toEqual({ sessionId: "s-1", configOptions: [] });
 
-    const prompted = acp.prompt("s-1", "hi");
+    const prompted = acp.prompt("s-1", [{ type: "text", text: "hi" }]);
     await tick();
     expect(written[1]).toMatchObject({ method: "session/prompt", params: { sessionId: "s-1", prompt: [{ type: "text", text: "hi" }] } });
     receive({ jsonrpc: "2.0", id: 2, result: { stopReason: "cancelled" } });

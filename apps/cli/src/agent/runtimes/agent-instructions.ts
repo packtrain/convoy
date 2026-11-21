@@ -62,7 +62,10 @@ export function withRunAttachmentInstructions(
     " To report a check, add --check <key> and one of --passed, --warning, --failed or --not-performed (the last three need --note <why>), plus --value <answer> or --artifact <artifactId> when the check asks for one;" +
     ` \`convoy threads checks ${ids.threadId}\` lists the checks.`;
   // Claude's stream-json input replaces the text prompt, so the line rides in its last frame too.
-  const frames = execution.bootstrapInput as Array<{ message: { content: unknown } }> | undefined;
+  // Other bootstrap input (Antigravity's image blocks) goes alongside the text prompt and stays as is.
+  const frames = execution.inputFormat === "stream-json"
+    ? execution.bootstrapInput as Array<{ message: { content: unknown } }> | undefined
+    : undefined;
   const last = frames?.at(-1);
   // Anthropic message content is a string or a block array; a string becomes one text block.
   const lastContent = typeof last?.message.content === "string"

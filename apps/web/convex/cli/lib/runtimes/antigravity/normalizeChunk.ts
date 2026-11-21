@@ -102,7 +102,23 @@ export const antigravityTool: AcpToolAdapter = (update) => {
   }
 };
 
+/** The runner's `/compact` markers; agy reports none of its own. */
+const ANTIGRAVITY_COMPACTION_CHUNK = "convoy/antigravity_compaction";
+
+function compactionEvent(chunk: RawCliChunk): CliNormalizedEvent {
+  let phase: unknown;
+  try {
+    phase = (JSON.parse(chunk.data) as { phase?: unknown }).phase;
+  } catch {
+    phase = undefined;
+  }
+  if (phase === "started") return { kind: "context-compaction", message: "Compacting…", inProgress: true };
+  if (phase === "completed") return { kind: "context-compaction", message: "Conversation compacted" };
+  return { kind: "context-compaction", message: "Compaction did not finish." };
+}
+
 export function normalizeAntigravityChunk(chunk: RawCliChunk): CliNormalizedEvent {
+  if (chunk.type === ANTIGRAVITY_COMPACTION_CHUNK) return compactionEvent(chunk);
   const event = normalizeAcpChunk(chunk, antigravityTool);
   return event.kind === "warning" && event.code === "acp-refusal"
     ? { ...event, message: "Antigravity refused to continue. This usually means the account's quota is used up." }

@@ -126,4 +126,13 @@ describe("normalizeAntigravityChunk", () => {
       normalizeAntigravityChunk({ type: "convoy/acp_prompt_result", data: JSON.stringify({ sessionId: "s-1", stopReason: "refusal" }) })
     ).toMatchObject({ kind: "warning", code: "acp-refusal", message: expect.stringContaining("quota") });
   });
+
+  test("the runner's compaction markers render as a pending compaction row, then its outcome", () => {
+    // agy sends nothing of its own while `/compact` runs or when it finishes.
+    const marker = (phase: string) =>
+      normalizeAntigravityChunk({ type: "convoy/antigravity_compaction", data: JSON.stringify({ sessionId: "s-1", phase }) });
+    expect(marker("started")).toEqual({ kind: "context-compaction", message: "Compacting…", inProgress: true });
+    expect(marker("completed")).toEqual({ kind: "context-compaction", message: "Conversation compacted" });
+    expect(marker("failed")).toEqual({ kind: "context-compaction", message: "Compaction did not finish." });
+  });
 });

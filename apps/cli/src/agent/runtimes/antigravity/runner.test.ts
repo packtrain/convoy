@@ -67,7 +67,7 @@ readline.createInterface({ input: process.stdin }).on("line", (line) => {
   }
   if (msg.method === "session/prompt") {
     promptId = msg.id;
-    update(session, { sessionUpdate: "available_commands_update", availableCommands: [] });
+    update(session, { sessionUpdate: "available_commands_update", availableCommands: [{ name: "compact", description: "Compact" }] });
     if (behavior === "crash") { process.stderr.write("panic: boom\n"); process.exit(3); }
     if (behavior === "permission-then-fail") {
       send({ id: "perm-1", method: "session/request_permission", params: { sessionId: session, toolCall: { toolCallId: "call_9" }, options: [{ optionId: "yes", kind: "allow_once" }] } });
@@ -149,6 +149,8 @@ describe("createAntigravityRunner (fake agy)", () => {
     expect(result).toEqual({ continuationId: "sess-1" });
     expect(chunks.map((chunk) => chunk.type)).toEqual([
       "convoy/acp_session",
+      "session/update",
+      "session/update",
       "convoy/acp_reasoning",
       "session/update",
       "session/update",
@@ -156,11 +158,14 @@ describe("createAntigravityRunner (fake agy)", () => {
       "convoy/acp_prompt_result",
     ]);
     expect(parse(chunks[0]!)).toEqual({ sessionId: "sess-1", agentVersion: "1.5.13" });
-    expect(parse(chunks[1]!)).toEqual({ sessionId: "sess-1", text: "Thinking hard." });
-    expect(parse(chunks[4]!)).toEqual({ sessionId: "sess-1", text: "Done here." });
-    expect(parse(chunks[5]!)).toMatchObject({ stopReason: "end_turn", usage: { inputTokens: 5 } });
+    // Command and usage updates are forwarded without closing the thought segment around them.
+    expect(parse(chunks[1]!).update).toMatchObject({ sessionUpdate: "available_commands_update" });
+    expect(parse(chunks[2]!).update).toEqual({ sessionUpdate: "usage_update", used: 10, size: 100 });
+    expect(parse(chunks[3]!)).toEqual({ sessionId: "sess-1", text: "Thinking hard." });
+    expect(parse(chunks[6]!)).toEqual({ sessionId: "sess-1", text: "Done here." });
+    expect(parse(chunks[7]!)).toMatchObject({ stopReason: "end_turn", usage: { inputTokens: 5 } });
 
-    const completed = (parse(chunks[3]!).update ?? {}) as { args?: unknown; content?: unknown; rawOutput: { output: string } };
+    const completed = (parse(chunks[5]!).update ?? {}) as { args?: unknown; content?: unknown; rawOutput: { output: string } };
     expect(completed.args).toBeUndefined();
     expect(completed.content).toEqual([]);
     expect(completed.rawOutput.output).toMatch(/^\[\d+ characters omitted\]\nx{8000}$/);
@@ -175,6 +180,38 @@ describe("createAntigravityRunner (fake agy)", () => {
     expect(opened!.params).toMatchObject({ cwd: tmpDir, mcpServers: [] });
     expect(opened!.params._meta?.antigravity.systemPrompt.append).toBe(`Be terse.\n\n${threadIdentityInstruction("thread_1")}`);
     expect(sent("session/prompt")[0]!.params.prompt).toEqual([{ type: "text", text: "hello" }]);
+  });
+
+  it("puts image blocks ahead of the prompt text", async () => {
+    const image = { type: "image", mimeType: "image/png", data: "cG5n" };
+    const runner = createAntigravityRunner({});
+    await collect(runner.execute(tmpDir, "What is this?", { threadId: "thread_1", cliType: "antigravity", bootstrapInput: [image] }));
+    expect(sent("session/prompt")[0]!.params.prompt).toEqual([image, { type: "text", text: "What is this?" }]);
+  });
+
+  it("marks /compact as running, then finished, and drops the compaction call's usage", async () => {
+    const runner = createAntigravityRunner({});
+    const { chunks } = await collect(
+      runner.execute(tmpDir, "/compact", { threadId: "thread_1", cliType: "antigravity", rawRuntimeCommand: true })
+    );
+    expect(chunks.some((chunk) => chunk.data.includes("usage_update"))).toBe(false);
+    const markers = chunks.filter((chunk) => chunk.type === "convoy/antigravity_compaction").map((chunk) => parse(chunk).phase);
+    expect(markers).toEqual(["started", "completed"]);
+    expect(chunks.findIndex((chunk) => chunk.type === "convoy/antigravity_compaction")).toBe(1);
+    expect(chunks.at(-1)!.type).toBe("convoy/acp_prompt_result");
+  });
+
+  it("resolves the pending compaction row when agy dies mid-compaction", async () => {
+    vi.stubEnv("FAKE_BEHAVIOR", "crash");
+    const runner = createAntigravityRunner({});
+    const chunks: ContentChunk[] = [];
+    const gen = runner.execute(tmpDir, "/compact", { threadId: "thread_1", cliType: "antigravity", rawRuntimeCommand: true });
+    const error = await (async () => {
+      for await (const chunk of gen) chunks.push(chunk);
+    })().catch((e: unknown) => e);
+    expect(error).toBeInstanceOf(RunnerExecutionError);
+    const markers = chunks.filter((chunk) => chunk.type === "convoy/antigravity_compaction").map((chunk) => parse(chunk).phase);
+    expect(markers).toEqual(["started", "failed"]);
   });
 
   it("forwards message and thought chunks only with partial streaming", async () => {
@@ -254,6 +291,13 @@ describe("createAntigravityRunner (fake agy)", () => {
     await collect(runner.execute(tmpDir, "hello", { threadId: "thread_1", cliType: "antigravity" }));
     expect(sent("session/new")[0]!.params._meta).toBeUndefined();
     expect(sent("session/prompt")[0]!.params.prompt[0].text).toBe(`${threadIdentityInstruction("thread_1")}\n\nhello`);
+  });
+
+  it("sends a raw runtime command alone even when agy cannot append a system prompt", async () => {
+    vi.stubEnv("FAKE_BEHAVIOR", "no-append");
+    const runner = createAntigravityRunner({});
+    await collect(runner.execute(tmpDir, "/compact", { threadId: "thread_1", cliType: "antigravity", rawRuntimeCommand: true }));
+    expect(sent("session/prompt")[0]!.params.prompt).toEqual([{ type: "text", text: "/compact" }]);
   });
 
   it("tries oauth-personal once when signed out, then fails with the sign-in message", async () => {

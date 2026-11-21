@@ -103,6 +103,9 @@ summaries).
      output and is not added again. Preserve absent cache-write fields as
      unknown. Missing required input/read/output counters or malformed payloads
      leave accounting and the cursor unchanged.
+   - **Antigravity** records nothing. Its prompt result carries tokens, but
+     the pricing catalog has no Gemini models and agy bills by subscription
+     (OS-2481 owns estimates).
    - Runtimes without the capability (generic types) record nothing.
 2. `appendRunContent` (`convex/cli/messages.ts`, assistant branch) calls the
    registry extractor and, when spend is found, schedules

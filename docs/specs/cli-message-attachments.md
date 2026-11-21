@@ -400,3 +400,9 @@ the prompt — both threads run on the same machine.
 - Runtimes without inline-image support (Codex, Cursor, OpenCode) include all
   attachments — images included — as local-path context lines in the run
   prompt (OS-1392).
+- Antigravity sends `image/bmp`, `image/jpeg`, `image/png` and `image/webp`
+  attachments as ACP image blocks (base64 `data` + `mimeType`) ahead of the
+  prompt text, each after a text block naming its message and file. An image
+  over 10 MiB, or past 50 MiB for the run's images in total, stays a
+  local-path line, as do all other attachments. See
+  [cli-antigravity-runtime.md](cli-antigravity-runtime.md#attachments).

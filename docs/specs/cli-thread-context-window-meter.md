@@ -87,6 +87,18 @@ This document defines the context-window usage meter rendered under the shared C
   them through the shared snapshot fold below. Cost accounting ignores this
   synthetic chunk and continues to use step costs.
 
+## Antigravity Rules
+
+- agy sends an ACP `usage_update` with `used` (tokens in context) and `size`
+  (the window) when a session opens and at the end of every reply. The CLI
+  runner forwards it as a `session/update` chunk.
+- The generic ACP normalizer maps positive `used` and `size` to
+  `context-window` with `usedTokens` and `maxTokens`. A zero or missing count,
+  such as the `used: 0` sent when a session opens, is silent metadata.
+- A `/compact` run's own `usage_update` counts the old context plus the
+  summary, so the runner drops it and the meter falls at the next reply. See
+  [cli-antigravity-runtime.md](cli-antigravity-runtime.md#slash-commands).
+
 ## Rendering Rules
 
 - The meter renders in its own right-aligned row directly below the composer shell.

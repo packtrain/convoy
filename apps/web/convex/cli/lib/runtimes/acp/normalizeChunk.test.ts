@@ -55,8 +55,20 @@ describe("normalizeAcpChunk", () => {
     }
   });
 
+  test("maps usage_update to the context window when both counts are positive", () => {
+    // agy 1.5.13 sends `used: 0` right after session/new.
+    expect(normalizeAcpChunk(update({ sessionUpdate: "usage_update", used: 8950, size: 1_048_576 }))).toEqual({
+      kind: "context-window",
+      usedTokens: 8950,
+      maxTokens: 1_048_576,
+    });
+    for (const counts of [{ used: 0, size: 1_048_576 }, { used: 5 }, { used: "5", size: 10 }, { used: 5, size: -1 }]) {
+      expect(normalizeAcpChunk(update({ sessionUpdate: "usage_update", ...counts })).kind).toBe("metadata");
+    }
+  });
+
   test("keeps known updates silent and flags anything else as unknown", () => {
-    expect(normalizeAcpChunk(update({ sessionUpdate: "usage_update", used: 1, size: 2 })).kind).toBe("metadata");
+    expect(normalizeAcpChunk(update({ sessionUpdate: "available_commands_update", availableCommands: [] })).kind).toBe("metadata");
     expect(normalizeAcpChunk(update({ sessionUpdate: "brand_new_update" }))).toMatchObject({
       kind: "unknown",
       reason: "unrecognized-acp-update",

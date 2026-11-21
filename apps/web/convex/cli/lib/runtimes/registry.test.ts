@@ -2,6 +2,7 @@ import { describe, expect, test } from "vitest";
 import {
   buildResumeCommand,
   cliTypeAdvertisesModelCatalog,
+  cliTypeSupportsFirstMessageRuntimeCommand,
   cliTypeSupportsSteering,
   getCliEffortOptions,
   getDefaultCliEffort,
@@ -1183,6 +1184,15 @@ describe("cli runtime registry", () => {
         context: { cliModel: "gpt-5.4" },
       }),
     ).toBeUndefined();
+  });
+
+  test("Antigravity resumes a conversation by its ACP session id", () => {
+    expect(supportsResumeLocally("antigravity")).toBe(true);
+    expect(buildResumeCommand({ cliType: "antigravity", continuationId: "c118a1e5" })).toBe("agy --conversation c118a1e5");
+  });
+
+  test("an Antigravity thread may open on a command: its system prompt rides in session _meta", () => {
+    expect(cliTypeSupportsFirstMessageRuntimeCommand("antigravity")).toBe(true);
   });
 
   test("Cursor resume, continuation, and steering dispatch", () => {

@@ -75,6 +75,8 @@ describe("parseRegisterAvailableClis", () => {
     expect(types(undefined)).toEqual(["codex"]);
     // 0.152.x ignores the selected model and thinking level (OS-2470).
     expect(types("0.152.1")).toEqual(["codex"]);
-    expect(types("0.153.0")).toEqual(["codex", "antigravity"]);
+    // 0.153.x wraps agy's slash commands in the run envelope, so they would reach agy as prose (OS-2471).
+    expect(types("0.153.0")).toEqual(["codex"]);
+    expect(types("0.154.0")).toEqual(["codex", "antigravity"]);
   });
 });

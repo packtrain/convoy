@@ -14,6 +14,15 @@ export interface AcpInitializeResult {
   authMethods?: Array<{ id: string; name?: string }>;
 }
 
+/** `session/prompt` content. Images need the agent's `promptCapabilities.image`. */
+export type AcpContentBlock = { type: "text"; text: string } | { type: "image"; data: string; mimeType: string };
+
+export function isAcpContentBlock(value: unknown): value is AcpContentBlock {
+  if (!isRecord(value)) return false;
+  if (value.type === "text") return typeof value.text === "string";
+  return value.type === "image" && typeof value.data === "string" && typeof value.mimeType === "string";
+}
+
 export interface AcpPromptResult {
   stopReason: string;
   usage?: unknown;
@@ -108,7 +117,7 @@ export interface AcpClient {
   resumeSession(params: { sessionId: string; cwd: string; _meta?: Record<string, unknown> }): Promise<{ configOptions: AcpConfigOption[] }>;
   /** Resolves with the session's updated config options. */
   setConfigOption(sessionId: string, configId: string, value: string): Promise<AcpConfigOption[]>;
-  prompt(sessionId: string, text: string): Promise<AcpPromptResult>;
+  prompt(sessionId: string, prompt: AcpContentBlock[]): Promise<AcpPromptResult>;
   cancel(sessionId: string): void;
   close(reason?: string): void;
 }
@@ -155,8 +164,8 @@ export function createAcpClient(
       const result = await rpc.request("session/set_config_option", { sessionId, configId, value });
       return parseAcpConfigOptions(isRecord(result) ? result.configOptions : undefined);
     },
-    async prompt(sessionId, text) {
-      const result = await rpc.request("session/prompt", { sessionId, prompt: [{ type: "text", text }] });
+    async prompt(sessionId, prompt) {
+      const result = await rpc.request("session/prompt", { sessionId, prompt });
       const stopReason = isRecord(result) && typeof result.stopReason === "string" ? result.stopReason : "end_turn";
       return { stopReason, ...(isRecord(result) && result.usage !== undefined ? { usage: result.usage } : {}) };
     },
