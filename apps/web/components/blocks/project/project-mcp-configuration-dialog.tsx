@@ -22,6 +22,7 @@ import {
   buildCodexFullConfig,
   buildCodexRequiredConfig,
   buildOpencodeMcpConfig,
+  buildAntigravityMcpCommand,
   buildMcpJsonConfig,
   buildProjectScopedMcpUrl,
 } from "@/lib/mcp/config-snippets";
@@ -127,6 +128,7 @@ export function ProjectMcpConfigurationDialog({
   );
   const codexFullConfig = useMemo(() => buildCodexFullConfig(mcpUrl), [mcpUrl]);
   const opencodeConfig = useMemo(() => buildOpencodeMcpConfig(mcpUrl), [mcpUrl]);
+  const antigravityCommand = useMemo(() => buildAntigravityMcpCommand(mcpUrl), [mcpUrl]);
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
@@ -195,6 +197,25 @@ export function ProjectMcpConfigurationDialog({
               title="opencode.json"
               code={opencodeConfig}
               rows={12}
+            />
+          </section>
+
+          <section className="min-w-0 space-y-2">
+            <div>
+              <h3 className="text-sm font-medium">Antigravity</h3>
+              <p className="text-xs text-muted-foreground">
+                Run in a terminal, or run{" "}
+                <code className="rounded bg-muted px-1 py-0.5 text-xs">
+                  convoy init mcp --cli antigravity
+                </code>
+                . agy keeps MCP servers per user, so every agy session uses
+                this project.
+              </p>
+            </div>
+            <CopyableConfigBlock
+              title="agy mcp add"
+              code={antigravityCommand}
+              rows={3}
             />
           </section>
         </div>

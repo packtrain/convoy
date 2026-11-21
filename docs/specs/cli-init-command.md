@@ -6,7 +6,7 @@ The `convoy init` command initializes Convoy integrations in a project. It has t
 
 ### Internal Architecture (Driver-Based)
 
-The implementation is structured around target drivers (`claude`, `codex`, `opencode`) under `apps/cli/src/commands/init/targets/`.
+The implementation is structured around target drivers (`claude`, `codex`, `opencode`, `antigravity`) under `apps/cli/src/commands/init/targets/`.
 
 - Orchestration (`commands/init.ts` + `commands/init/index.ts`) resolves flow, prompts, and shared context.
 - Drivers own target-specific MCP/skill destinations and file formats.
@@ -22,7 +22,7 @@ The implementation is structured around target drivers (`claude`, `codex`, `open
 ```
 convoy init            # Run both MCP + skill setup
 convoy init mcp        # Create/update MCP config for selected CLI targets
-convoy init skill      # Install Convoy skills for Claude Code, Codex, and/or OpenCode
+convoy init skill      # Install Convoy skills for Claude Code, Codex, OpenCode, and/or Antigravity
 ```
 
 ## `convoy init mcp`
@@ -32,6 +32,7 @@ Creates or updates project MCP config for selected CLI targets at the project ro
 - `claude` -> `.mcp.json`
 - `codex` -> `.codex/config.toml`
 - `opencode` -> `opencode.json` (`mcp.convoy` remote entry with a Bearer `Authorization` header and `oauth: false`)
+- `antigravity` -> `~/.gemini/config/mcp_config.json`, the user file, whatever the output directory (see [Antigravity](#antigravity))
 - both -> writes both files
 
 ### Credential Resolution
@@ -95,16 +96,16 @@ If a written file is not ignored, displays a warning with the command to add it 
 |------|-------------|
 | `-o, --output-dir <path>` | Directory to write MCP config files (default: cwd) |
 | `-f, --force` | Overwrite existing config without prompting |
-| `--cli <target...>` | MCP target(s): `claude`, `codex`, `opencode` (repeat or comma-separate; default: all) |
+| `--cli <target...>` | MCP target(s): `claude`, `codex`, `opencode`, `antigravity` (repeat or comma-separate; default: `claude`, `codex`, `opencode`. `antigravity` writes a user file, so it runs only when named) |
 
 ## `convoy init skill`
 
-Installs Convoy skills for one or more CLI targets (`claude`, `codex`, `opencode`).
+Installs Convoy skills for one or more CLI targets (`claude`, `codex`, `opencode`, `antigravity`).
 
 ### CLI Target Selection
 
 - If `--cli` is omitted, user is prompted with a checkbox list.
-- Default checked targets are `claude`, `codex`, and `opencode`.
+- Default checked targets are `claude`, `codex`, and `opencode`. `antigravity` is offered unchecked, because its MCP config is per user.
 - OpenCode skill destinations: project scope `.opencode/skills/<name>`, user scope `~/.config/opencode/skills/<name>` (respects `XDG_CONFIG_HOME`).
 - `--cli` accepts:
   - repeated values: `--cli claude --cli codex`
@@ -129,6 +130,14 @@ If Claude is selected and `--scope` is omitted, the user is prompted to choose.
 Codex skill destinations:
 - `project` scope -> `<projectDir>/.agents/skills/convoy`
 - `user` scope -> `${CODEX_HOME:-~/.codex}/skills/convoy`
+
+### Antigravity
+
+agy has no project-scope MCP file, so this target writes user files. Verified on agy 1.5.14, see [cli-antigravity-runtime.md](cli-antigravity-runtime.md#mcp).
+
+- MCP: `mcpServers.convoy` in `~/.gemini/config/mcp_config.json`, as `{ disabled: false, headers: { Authorization: "Bearer <key>" }, serverUrl }`, the shape `agy mcp add` writes. The driver writes the file itself and does not need `agy` on PATH. It ignores `--output-dir`, treats an empty file (agy creates one on first start) as no config, keeps other servers and keys, and restricts the file to mode `0600` before it writes the key (agy creates it `0644`). The output says the config is per user: every agy session on the machine then uses the project `init` ran in.
+- Skill: project scope `<projectDir>/.agents/skills/convoy`, the same copy Codex writes (a run with both targets copies it once), user scope `~/.gemini/config/skills/convoy`.
+- No gitignore warning, since the file is outside the repo.
 
 ### Prerequisites
 

@@ -2,6 +2,7 @@ import { describe, expect, test } from "vitest";
 import { getToolDefinitions } from "../../convex/mcp/tools";
 import {
   CODEX_APPROVAL_TOOLS,
+  buildAntigravityMcpCommand,
   buildCodexApprovalConfig,
   buildCodexFullConfig,
   buildCodexRequiredConfig,
@@ -93,6 +94,14 @@ Authorization = "Bearer <YOUR_API_KEY>"`);
     expect(buildCodexApprovalConfig()).not.toContain("get_tasks_by_ref");
     expect(buildGenericMcpConfig(mcpUrl)).toBe(`URL: ${mcpUrl}
 Authorization: Bearer <YOUR_API_KEY>`);
+  });
+
+  test("builds the agy mcp add command with a quoted URL", () => {
+    expect(
+      buildAntigravityMcpCommand("https://happy-animal-123.convex.site/api/mcp?project=acme/WEB")
+    ).toBe(
+      'agy mcp add --header "Authorization: Bearer <YOUR_API_KEY>" convoy "https://happy-animal-123.convex.site/api/mcp?project=acme/WEB"'
+    );
   });
 
   test("keeps Codex approval tools aligned with backend MCP tools", () => {

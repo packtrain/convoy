@@ -121,6 +121,31 @@ describe("normalizeAntigravityChunk", () => {
     ).toMatchObject({ toolName: "list_dir", inputJson: JSON.stringify({ Dir: "/w" }) });
   });
 
+  test("call_mcp_tool renders as an MCP row named mcp__<server>__<tool> with the call's arguments", () => {
+    // Recorded from agy 1.5.14 calling a stub `convoy` server (OS-2473).
+    const mcp = (status: string, extra: Record<string, unknown> = {}) =>
+      update({
+        sessionUpdate: status === "in_progress" ? "tool_call" : "tool_call_update",
+        toolCallId: "call_9",
+        name: "call_mcp_tool",
+        status,
+        kind: "execute",
+        title: "MCP Tool get_task",
+        rawInput: { Arguments: { taskId: "OS-1" }, ServerName: "convoy", ToolName: "get_task" },
+        ...extra,
+      });
+    const result = '{"refId":"OS-1","name":"Probe task"}';
+    expect(normalizeAntigravityChunk(mcp("in_progress"))).toEqual({
+      kind: "tool-input",
+      toolCallId: "call_9",
+      toolName: "mcp__convoy__get_task",
+      inputJson: JSON.stringify({ taskId: "OS-1" }),
+    });
+    expect(
+      normalizeAntigravityChunk(mcp("completed", { rawOutput: result, content: [{ type: "content", content: { type: "text", text: result } }] }))
+    ).toEqual({ kind: "tool-output", toolCallId: "call_9", outputJson: JSON.stringify(result) });
+  });
+
   test("a refusal stop reason warns that the quota may be used up", () => {
     expect(
       normalizeAntigravityChunk({ type: "convoy/acp_prompt_result", data: JSON.stringify({ sessionId: "s-1", stopReason: "refusal" }) })

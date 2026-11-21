@@ -40,6 +40,12 @@ export async function resolveSkillTargets(
         name: "OpenCode",
         checked: true,
       },
+      {
+        // Unchecked: agy's MCP config is per user, not per project.
+        value: "antigravity",
+        name: "Antigravity",
+        checked: false,
+      },
     ],
     required: true,
     loop: false,

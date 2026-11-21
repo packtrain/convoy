@@ -71,20 +71,25 @@ const mockResolveConfigFromProfileCommand = vi.mocked(
 
 let tmpDir: string;
 let previousCodexHome: string | undefined;
+let previousHome: string | undefined;
 let previousCwd: string;
 let previousIsTTY: boolean | undefined;
 
 beforeEach(() => {
   previousCodexHome = process.env.CODEX_HOME;
+  previousHome = process.env.HOME;
   previousCwd = process.cwd();
   previousIsTTY = process.stdin.isTTY;
   tmpDir = fs.mkdtempSync(
     path.join(import.meta.dirname ?? process.cwd(), ".tmp-test-init-")
   );
+  // Antigravity's MCP config is per user; keep it out of the real home.
+  process.env.HOME = path.join(tmpDir, "home");
   vi.clearAllMocks();
 });
 
 afterEach(() => {
+  process.env.HOME = previousHome;
   if (previousCodexHome === undefined) {
     delete process.env.CODEX_HOME;
   } else {
@@ -147,6 +152,11 @@ describe("runInitMcp", () => {
 
     const codexConfigPath = path.join(tmpDir, ".codex", "config.toml");
     expect(fs.existsSync(codexConfigPath)).toBe(true);
+
+    // Antigravity's file is per user, so it is written only when named.
+    expect(
+      fs.existsSync(path.join(tmpDir, "home", ".gemini", "config", "mcp_config.json"))
+    ).toBe(false);
   });
 
   it("merges with existing .mcp.json preserving other servers", async () => {
@@ -932,6 +942,37 @@ describe("initCommand", () => {
 
     expect(fs.existsSync(path.join(tmpDir, ".mcp.json"))).toBe(false);
     expect(fs.existsSync(path.join(tmpDir, ".codex", "config.toml"))).toBe(true);
+  });
+
+  it("init mcp without --cli leaves the global Antigravity server alone, and --cli antigravity replaces it", async () => {
+    process.chdir(tmpDir);
+    mockResolveConfigFromProfileCommand.mockReturnValue({
+      convexUrl: "https://happy-animal-123.convex.cloud",
+      apiKey: "sk_user_test123",
+      projectId: "proj123",
+    });
+    mockCreateConvexClient.mockReturnValue({
+      query: vi.fn().mockResolvedValue([
+        { _id: "proj123", name: "Web App", alias: "WEB", organizationId: "org123", organizationName: "Acme", organizationSlug: "acme", role: { name: "org-owner", permissions: ["*"] } },
+      ]),
+      mutation: vi.fn(),
+      action: vi.fn(),
+      subscribe: vi.fn(),
+      close: vi.fn(),
+      client: {} as unknown,
+      secrets: [],
+    } as ReturnType<typeof createConvexClient>);
+    const agyConfigPath = path.join(tmpDir, "home", ".gemini", "config", "mcp_config.json");
+    fs.mkdirSync(path.dirname(agyConfigPath), { recursive: true });
+    fs.writeFileSync(agyConfigPath, JSON.stringify({ mcpServers: { convoy: { serverUrl: "project-a" } } }), "utf-8");
+    const agyServerUrl = () => JSON.parse(fs.readFileSync(agyConfigPath, "utf-8")).mcpServers.convoy.serverUrl;
+
+    await initCommand.parseAsync(["mcp", "--force"], { from: "user" });
+    expect(fs.existsSync(path.join(tmpDir, ".mcp.json"))).toBe(true);
+    expect(agyServerUrl()).toBe("project-a");
+
+    await initCommand.parseAsync(["mcp", "--cli", "antigravity", "--force"], { from: "user" });
+    expect(agyServerUrl()).toBe("https://happy-animal-123.convex.site/api/mcp?project=acme/WEB");
   });
 
   it("root init uses one interactive target selection for MCP and skills", async () => {

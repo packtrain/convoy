@@ -45,6 +45,19 @@ function securityWarning(options: AcpPermissionOption[]): string | undefined {
   return isRecord(warning) ? (getString(warning.message) ?? getString(warning.title)) : undefined;
 }
 
+/** agy marks MCP calls `execute`; name the tool instead, as the transcript row does. */
+function mcpCall(toolCall: AcpPermissionRequest["toolCall"]) {
+  const input = isRecord(toolCall.rawInput) ? toolCall.rawInput : {};
+  const server = getString(input.ServerName);
+  const tool = getString(input.ToolName);
+  if (toolCall.name !== "call_mcp_tool" || !server || !tool) return null;
+  return {
+    toolName: `mcp__${server}__${tool}`,
+    title: `Antigravity wants to use ${tool} from ${server}`,
+    inputJson: JSON.stringify(input.Arguments ?? {}),
+  };
+}
+
 function approvalPayload(request: AcpPermissionRequest) {
   const { toolCall, options } = request;
   const input = isRecord(toolCall.rawInput) ? toolCall.rawInput : {};
@@ -64,6 +77,7 @@ function approvalPayload(request: AcpPermissionRequest) {
     ...(description ? { description } : {}),
     inputJson: JSON.stringify({ ...(command ? { command } : {}), ...(filePath ? { file_path: filePath } : {}), ...input }),
     hasSuggestions: options.some((option) => option.kind === "allow_always"),
+    ...mcpCall(toolCall),
   };
 }
 

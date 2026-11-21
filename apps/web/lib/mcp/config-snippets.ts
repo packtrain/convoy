@@ -166,6 +166,11 @@ export function buildOpencodeMcpConfig(mcpUrl: string) {
   );
 }
 
+/** The URL is quoted because its `?` is a glob character in zsh. */
+export function buildAntigravityMcpCommand(mcpUrl: string) {
+  return `agy mcp add --header "Authorization: Bearer ${MCP_API_KEY_PLACEHOLDER}" convoy "${mcpUrl}"`;
+}
+
 export function buildGenericMcpConfig(mcpUrl: string) {
   return `URL: ${mcpUrl}
 Authorization: Bearer ${MCP_API_KEY_PLACEHOLDER}`;

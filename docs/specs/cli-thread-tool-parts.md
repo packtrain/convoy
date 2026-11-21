@@ -158,6 +158,10 @@ accordion once they are done (OS-1440).
     split on its own, so this form is matched against the Convoy tool catalog by
     suffix — no catalog name is a suffix of another, which a test enforces.
     OpenCode MCP calls to other servers therefore stay unparsed.
+  - Antigravity: agy names every MCP call `call_mcp_tool` with `rawInput.ServerName`,
+    `ToolName` and `Arguments`. The backend normalizer rewrites it to
+    `mcp__<server>__<tool>` with `Arguments` as the input (see
+    [cli-antigravity-runtime.md](cli-antigravity-runtime.md#mcp)).
 - Tool names that match no format are not MCP calls and fall through to other renderers.
 
 ### Convoy Detection (two-tier gate)

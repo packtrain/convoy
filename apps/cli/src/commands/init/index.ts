@@ -12,6 +12,7 @@ export { getClaudeSkillDestination } from "./targets/claude.js";
 export { getCodexSkillDestination } from "./targets/codex.js";
 export {
   INIT_TARGETS,
+  DEFAULT_MCP_TARGETS,
   INIT_SCOPES,
   CLAUDE_METHODS,
   type InitTarget,

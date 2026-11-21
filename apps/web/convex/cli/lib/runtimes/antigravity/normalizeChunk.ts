@@ -97,6 +97,13 @@ export const antigravityTool: AcpToolAdapter = (update) => {
     }
     case "search_web":
       return { ...base, toolName: "WebSearch", input, output: acpContentText(update) };
+    case "call_mcp_tool": {
+      // Claude's `mcp__<server>__<tool>` form, which lib/ai-tools/mcp-tool.ts parses.
+      const server = getString(input.ServerName);
+      const tool = getString(input.ToolName);
+      if (!server || !tool) return { ...base, toolName: "call_mcp_tool" };
+      return { ...base, toolName: `mcp__${server}__${tool}`, input: input.Arguments ?? {} };
+    }
     default:
       return { ...base, toolName: getString(update.name) ?? base.toolName };
   }

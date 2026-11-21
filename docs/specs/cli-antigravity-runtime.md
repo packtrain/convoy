@@ -98,9 +98,9 @@ Ask to approve needs CLI 0.152.0, and the runtime as a whole needs 0.154.0. Olde
 
 | Payload field | Value |
 |---|---|
-| `toolName` | the agy tool name, e.g. `run_command` |
-| `title` | "Antigravity wants to run a command" (`kind: "execute"`), "Antigravity wants to edit a file" (`kind: "edit"`), else "Antigravity wants to use <name>" |
-| `inputJson` | `rawInput`, plus `command` from `CommandLine` and `file_path` from `Path` for the card preview |
+| `toolName` | the agy tool name, e.g. `run_command`, or `mcp__<server>__<tool>` for `call_mcp_tool` |
+| `title` | "Antigravity wants to use <tool> from <server>" for `call_mcp_tool`, which agy marks `execute` (verified), "Antigravity wants to run a command" (`kind: "execute"`), "Antigravity wants to edit a file" (`kind: "edit"`), else "Antigravity wants to use <name>" |
+| `inputJson` | `rawInput`, plus `command` from `CommandLine` and `file_path` from `Path` for the card preview; for `call_mcp_tool` only `rawInput.Arguments` |
 | `description` | the `allow_always` option's `_meta["agy.security.warning"]` message, or its title (t3code) |
 | `hasSuggestions` | true when agy offers `allow_always`, so the card shows Always allow |
 
@@ -161,6 +161,7 @@ The Antigravity part (`normalizeAntigravityChunk`) maps agy's tool `name` onto t
 | `edit_file` (verified) | `Edit` | `file_path` from `Path`, `old_string` from `Target`, `new_string` from `Replacement`, falling back to the diff block's `oldText` and `newText` |
 | `read_file` (verified), `view_file`, `client_view_file` (t3code) | `Read` | `file_path` from `Path` |
 | `search_web` (verified) | `WebSearch`, generic tool row | `rawInput` as is (`query`, optional `domain`) |
+| `call_mcp_tool` (verified) | `mcp__<server>__<tool>` MCP row, from `ServerName` and `ToolName` | `rawInput.Arguments`; output is `rawOutput`, the server's JSON text |
 | `ask_question` (verified) | `AskUserQuestion` inline questionnaire | `questions[]` with `question`, `multiSelect` from `is_multi_select`, `options` as `{ label }` |
 | anything else | its agy name, generic tool row | `rawInput` |
 
@@ -170,6 +171,16 @@ The Antigravity part (`normalizeAntigravityChunk`) maps agy's tool `name` onto t
 - `read_file` and `search_web` updates carry no output in 1.5.13 (verified), so those rows show only their input.
 - `refusal` reads as a quota warning. t3code reports that agy uses it when the quota is used up.
 - t3code reports a duplicate `formatted_output` field. 1.5.13 sent none, so nothing handles it.
+
+## MCP
+
+`convoy init --cli antigravity` sets agy up, like every other runtime. The runner sends `mcpServers: []` in `session/new`, and agy loads its servers from its own config. Spec: [cli-init-command.md](cli-init-command.md#antigravity).
+
+- agy 1.5.14 reads MCP servers only from `~/.gemini/config/mcp_config.json` and from enabled plugins. A `mcp_config.json` in the workspace, in `.agents/` or in `.gemini/config/` is ignored (verified with `agy mcp list`).
+- `agy mcp add --header "Authorization: Bearer <key>" convoy <url>` writes `{ "mcpServers": { "convoy": { "disabled": false, "headers": { "Authorization": "Bearer <key>" }, "serverUrl": "<url>" } } }` (verified in a scratch home).
+- agy loads skills from `<workspace>/.agents/skills/<name>/` and `~/.gemini/config/skills/<name>/`. A copy of the Convoy skill in either one appeared as `convoy` in `available_commands_update`, and was absent without it (verified).
+- A call is a `tool_call` named `call_mcp_tool`, `kind: "execute"`, titled "MCP Tool <tool>", with `rawInput` `{ ServerName, ToolName, Arguments }`. The completed update carries the server's text as `rawOutput` (verified). Before calling, agy may `read_file` the tool's schema under `~/.gemini/antigravity-cli/mcp/<server>/<tool>.json`, which renders as an ordinary Read row.
+- In `default` mode agy asks before every MCP call, with `allow_once` and `reject_once` only (verified).
 
 ## Models and thinking level
 

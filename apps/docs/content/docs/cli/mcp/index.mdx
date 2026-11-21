@@ -4,7 +4,7 @@ description: Expose Convoy tasks and project context to MCP-aware AI clients.
 ---
 
 Convoy ships an MCP (Model Context Protocol) server, so AI clients like
-Claude Code, Codex, and OpenCode can read and write your tasks directly from the
+Claude Code, Codex, OpenCode, and Antigravity can read and write your tasks directly from the
 editor — project-scoped task lookup and search, comments, artifacts, and
 task creation/updates. The full catalog is in the
 [`MCP tools reference`](/docs/reference/mcp-tools).
@@ -51,7 +51,13 @@ convoy init mcp                # choose clients interactively
 convoy init mcp --cli claude   # writes .mcp.json
 convoy init mcp --cli codex    # writes .codex/config.toml
 convoy init mcp --cli opencode # writes opencode.json
+convoy init mcp --cli antigravity # writes ~/.gemini/config/mcp_config.json
 ```
+
+Antigravity has no project-scope MCP file, so `--cli antigravity` writes
+your user config and ignores `--output-dir`. Every agy session then uses
+the project you ran `init` in. For that reason `convoy init mcp` without
+`--cli` leaves Antigravity out.
 
 Useful flags:
 
@@ -94,6 +100,18 @@ deployment's and the token with your API key):
 
 `opencode.json` contains your API key — add it to `.gitignore`.
 
+## Manual Antigravity configuration
+
+To configure Antigravity by hand, run `agy mcp add` with your deployment's
+URL and your API key. Quote the URL: `?` is a glob character in zsh.
+
+```bash
+agy mcp add --header "Authorization: Bearer <YOUR_API_KEY>" convoy \
+  "https://<DEPLOYMENT>.convex.site/api/mcp?project=<ORG_SLUG>/<PROJECT_ALIAS>"
+```
+
+`agy mcp list` shows the server afterwards.
+
 ## Manual Codex configuration
 
 To configure Codex by hand instead of using `init`, create
@@ -114,8 +132,8 @@ from a project route, it also scopes the URL with
 `?project=<ORG>/<ALIAS>`.
 
 You can also open the project header gear menu and choose **Configure MCP**
-to copy project-scoped `.mcp.json` and `.codex/config.toml` snippets for the
-current project.
+to copy project-scoped `.mcp.json`, `.codex/config.toml`, `opencode.json` and
+`agy mcp add` snippets for the current project.
 
 ### Optional per-tool approvals
 

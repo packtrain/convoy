@@ -185,14 +185,24 @@ For OpenCode, place the equivalent remote MCP configuration in
 }
 ```
 
+For Antigravity, run `agy mcp add` (or `convoy init mcp --cli antigravity`).
+agy reads MCP servers only from the user file
+`~/.gemini/config/mcp_config.json`, so the server applies to every agy
+session on the machine. The URL is quoted because `?` is a zsh glob:
+
+```bash
+agy mcp add --header "Authorization: Bearer sk_user_<API_KEY>" convoy "https://<DEPLOYMENT>.convex.site/api/mcp?project=<ORG_SLUG>/<PROJECT_ALIAS>"
+```
+
 The API key settings popup and project header `Configure MCP` dialog should
-render the Codex and OpenCode snippets with the runtime Convex backend URL
+render the Codex, OpenCode and Antigravity snippets with the runtime Convex backend URL
 filled in. When the current route contains an organization slug and project
 alias, the snippet should include the scoped
 `?project=<ORG_SLUG>/<PROJECT_ALIAS>` parameter.
 The project header dialog presents `.mcp.json` first, then
 `.codex/config.toml` with the minimal Codex configuration followed by the full
-per-tool approval version, then `opencode.json`.
+per-tool approval version, then `opencode.json`, then the `agy mcp add`
+command.
 
 Codex per-tool approval blocks are optional. They may be included to let Codex
 run specific Convoy tools without asking each time:

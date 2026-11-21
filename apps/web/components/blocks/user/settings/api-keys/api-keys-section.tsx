@@ -28,6 +28,7 @@ import {
   buildCodexApprovalConfig,
   buildCodexRequiredConfig,
   buildOpencodeMcpConfig,
+  buildAntigravityMcpCommand,
   buildGenericMcpConfig,
   buildMcpJsonConfig,
   buildProjectScopedMcpUrl,
@@ -106,6 +107,7 @@ export function ApiKeysSection() {
   const codexRequiredConfig = buildCodexRequiredConfig(mcpUrl);
   const codexApprovalConfig = buildCodexApprovalConfig();
   const opencodeConfig = buildOpencodeMcpConfig(mcpUrl);
+  const antigravityCommand = buildAntigravityMcpCommand(mcpUrl);
   const genericConfig = buildGenericMcpConfig(mcpUrl);
 
   return (
@@ -260,6 +262,17 @@ export function ApiKeysSection() {
                     Add to <code className="bg-muted px-1 rounded">opencode.json</code> in your project folder (or run <code className="bg-muted px-1 rounded">convoy init mcp --cli opencode</code>):
                   </p>
                   <CodeBlock code={opencodeConfig} />
+                </div>
+
+                {/* Antigravity */}
+                <div className="min-w-0 space-y-2">
+                  <h5 className="font-medium text-sm">
+                    Antigravity
+                  </h5>
+                  <p className="text-xs text-muted-foreground">
+                    Run in a terminal (or run <code className="bg-muted px-1 rounded">convoy init mcp --cli antigravity</code>). agy keeps MCP servers per user in <code className="bg-muted px-1 rounded">~/.gemini/config/mcp_config.json</code>, so every agy session uses this project:
+                  </p>
+                  <CodeBlock code={antigravityCommand} />
                 </div>
 
                 {/* Cursor */}

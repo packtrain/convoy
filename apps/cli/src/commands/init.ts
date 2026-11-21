@@ -4,6 +4,7 @@ import { CONVOY_SKILLS_SH_INSTALL_COMMAND } from "../lib/skill-install-guidance.
 import { resolveConfigFromProfileCommand } from "../lib/config/index.js";
 import {
   CLAUDE_METHODS,
+  DEFAULT_MCP_TARGETS,
   INIT_SCOPES,
   INIT_TARGETS,
   InitError,
@@ -30,7 +31,7 @@ function handleInitError(error: unknown): never {
 
 const mcpSubcommand = new Command("mcp")
   .description(
-    "Create/update MCP server config for selected CLI targets (.mcp.json and/or .codex/config.toml)"
+    "Create/update MCP server config for selected CLI targets (.mcp.json, .codex/config.toml, opencode.json, ~/.gemini/config/mcp_config.json)"
   )
   .option(
     "-o, --output-dir <path>",
@@ -39,7 +40,7 @@ const mcpSubcommand = new Command("mcp")
   .option("-f, --force", "Overwrite existing config without prompting")
   .option(
     "--cli <target...>",
-    `CLI target(s): ${INIT_TARGETS.join(", ")} (repeat or comma-separate; default: all)`
+    `CLI target(s): ${INIT_TARGETS.join(", ")} (repeat or comma-separate; default: ${DEFAULT_MCP_TARGETS.join(", ")})`
   )
   .action(
     async (
@@ -52,7 +53,7 @@ const mcpSubcommand = new Command("mcp")
       const cliTargets =
         parsedCliTargets && parsedCliTargets.length > 0
           ? parsedCliTargets
-          : INIT_TARGETS;
+          : DEFAULT_MCP_TARGETS;
 
       if (!config.convexUrl || !config.apiKey || !config.projectId) {
         console.error(chalk.red("\nMissing required configuration:"));
@@ -83,7 +84,7 @@ const mcpSubcommand = new Command("mcp")
   );
 
 const skillSubcommand = new Command("skill")
-  .description("Install Convoy skills for Claude Code and/or Codex")
+  .description("Install Convoy skills for Claude Code, Codex, OpenCode and/or Antigravity")
   .option(
     "--cli <target...>",
     `CLI target(s): ${INIT_TARGETS.join(", ")} (repeat or comma-separate)`

@@ -7,7 +7,7 @@ import { createConvexClient } from "../../lib/config/index.js";
 import { buildMcpUrl } from "../../lib/url.js";
 import { InitError } from "./errors.js";
 import { getInitDrivers } from "./targets/registry.js";
-import { INIT_TARGETS, type InitMcpConfig, type InitTarget } from "./types.js";
+import { DEFAULT_MCP_TARGETS, INIT_TARGETS, type InitMcpConfig, type InitTarget } from "./types.js";
 
 async function resolveProjectMcpUrl(config: {
   convexUrl: string;
@@ -50,7 +50,7 @@ async function resolveProjectMcpUrl(config: {
 
 export async function runInitMcp(config: InitMcpConfig): Promise<void> {
   const baseDir = path.resolve(config.outputDir ?? process.cwd());
-  const targets: ReadonlyArray<InitTarget> = config.cliTargets ?? INIT_TARGETS;
+  const targets: ReadonlyArray<InitTarget> = config.cliTargets ?? DEFAULT_MCP_TARGETS;
 
   if (targets.length === 0) {
     throw new InitError(

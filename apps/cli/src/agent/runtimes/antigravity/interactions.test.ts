@@ -94,6 +94,24 @@ describe("antigravity tool approvals", () => {
     expect((await answerApproval(command, "not json")).reply).toEqual(cancelled);
   });
 
+  it("names the MCP tool and previews its arguments, although agy marks the call execute", async () => {
+    // Recorded from agy 1.5.14 in `default` mode calling a stub `convoy` server (OS-2473).
+    const mcp: AcpPermissionRequest = {
+      ...command,
+      toolCall: {
+        toolCallId: "call_9",
+        name: "call_mcp_tool",
+        kind: "execute",
+        status: "pending",
+        title: "MCP Tool get_task",
+        rawInput: { Arguments: { taskId: "OS-1" }, ServerName: "convoy", ToolName: "get_task" },
+      },
+    };
+    const { sent } = await answerApproval(mcp, JSON.stringify({ decision: "allow" }));
+    expect(sent.payload).toMatchObject({ toolName: "mcp__convoy__get_task", title: "Antigravity wants to use get_task from convoy" });
+    expect(JSON.parse(sent.payload.inputJson as string)).toEqual({ taskId: "OS-1" });
+  });
+
   it("shows the always button and agy's security warning when allow_always is offered", async () => {
     const { sent } = await answerApproval(risky, JSON.stringify({ decision: "deny" }));
     expect(sent.payload).toMatchObject({ hasSuggestions: true, description: "Untrusted files could re-run this action." });
