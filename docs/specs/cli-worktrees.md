@@ -48,9 +48,10 @@ not itself be a worktree entry; `branch`/`baseRef` must pass the conservative
 branch-name check in `apps/web/lib/threads/worktree-branches.ts`
 (server-validated in `create`; the CLI never sanitizes).
 
-The web composer is not the only initiator: MCP `create_thread` forwards the
-same spec, unsanitized and shape-checked only, to `create` and `addThreadToGroup`
-alike (OS-1222). An agent spawning beside a thread that already runs in a
+The web composer is not the only initiator: MCP `create_thread` and
+`convoy threads create --worktree-branch` (OS-2488) forward the same spec,
+unsanitized and shape-checked only, to `create` and `addThreadToGroup` alike
+(OS-1222). An agent spawning beside a thread that already runs in a
 worktree must send the parent repo's `pathId` explicitly, since the inherited
 one is a worktree. See [mcp-server.md](mcp-server.md#create_thread).
 

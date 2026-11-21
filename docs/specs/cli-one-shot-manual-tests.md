@@ -346,6 +346,11 @@ pnpm --filter @useconvoy/cli run dev -- threads create --profile-id <profileId> 
 # Expect an error naming the valid runtimes, with no mutation attempted.
 pnpm --filter @useconvoy/cli run dev -- threads create --profile-id <profileId> \
   --path-id <pathId> --cli-type claude --content "Hello"
+
+# Expect the thread to start in a new worktree on branch feat/try-cli-worktree.
+pnpm --filter @useconvoy/cli run dev -- threads create --profile-id <profileId> \
+  --path-id <repoPathId> --cli-type claude-code --content "Run git branch --show-current" \
+  --worktree-branch feat/try-cli-worktree --base-ref main
 ```
 
 ---

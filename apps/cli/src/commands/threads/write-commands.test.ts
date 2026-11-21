@@ -137,6 +137,53 @@ describe("threads write commands", () => {
       expect(vi.mocked(console.log).mock.calls.flat().join("\n")).toContain("thr_new");
     });
 
+    it("starts the thread in a new worktree of its path", async () => {
+      query.mockResolvedValueOnce([
+        { _id: "proj_web_1", name: "Web", alias: "WEB", organizationId: "org_acme", organizationName: "Acme", organizationSlug: "acme", role: { name: "org-owner", permissions: ["*"] } },
+      ]);
+      mutation.mockResolvedValueOnce("thr_new");
+      createThreadCommand.setOptionValue("profileId", "prof_1");
+      createThreadCommand.setOptionValue("pathId", "path_1");
+      createThreadCommand.setOptionValue("cliType", "claude-code");
+      createThreadCommand.setOptionValue("content", "Fix login");
+      createThreadCommand.setOptionValue("worktreeBranch", "feat/fix-login");
+      createThreadCommand.setOptionValue("baseRef", "main");
+      createThreadCommand.setOptionValue("fromOrigin", true);
+
+      await invoke(createThreadCommand, []);
+
+      expect(mutation).toHaveBeenCalledWith(api.cli.threads.core.create, expect.objectContaining({
+        pathId: "path_1",
+        worktree: { parentPathId: "path_1", branch: "feat/fix-login", baseRef: "main", startFromOrigin: true },
+      }));
+    });
+
+    it("passes the worktree spec to a Group child, parented on the inherited path", async () => {
+      query.mockResolvedValueOnce(threadRow);
+      mutation.mockResolvedValueOnce({ threadId: "thr_new", containerId: "thr_group" });
+      createThreadCommand.setOptionValue("source", "thr_1");
+      createThreadCommand.setOptionValue("content", "Try another approach");
+      createThreadCommand.setOptionValue("worktreeBranch", "feat/alt");
+
+      await invoke(createThreadCommand, []);
+
+      expect(mutation).toHaveBeenCalledWith(api.cli.threads.groups.addThreadToGroup, expect.objectContaining({
+        worktree: { parentPathId: "path_1", branch: "feat/alt" },
+      }));
+    });
+
+    it.each([
+      ["baseRef", "main"],
+      ["fromOrigin", true],
+    ] as const)("rejects --%s without --worktree-branch", async (key, value) => {
+      createThreadCommand.setOptionValue("source", "thr_1");
+      createThreadCommand.setOptionValue("content", "Fix login");
+      createThreadCommand.setOptionValue(key, value);
+
+      await expect(invoke(createThreadCommand, [])).rejects.toThrow("--worktree-branch");
+      expect(mutation).not.toHaveBeenCalled();
+    });
+
     it("adds a Group child from --source, inheriting the target", async () => {
       query.mockResolvedValueOnce(threadRow);
       mutation.mockResolvedValueOnce({ threadId: "thr_new", containerId: "thr_group" });

@@ -596,7 +596,8 @@ status changes rather than being true last-activity.
 
 - Usage: `convoy threads create --profile-id <id> --path-id <id> --cli-type <type>
   --content <text> [--content-file <path>] [--title <title>] [--task <taskId>]
-  [--source <threadId|containerId>] [--attach <file...>]`.
+  [--source <threadId|containerId>] [--attach <file...>]
+  [--worktree-branch <branch> [--base-ref <ref>] [--from-origin]]`.
 - Calls `api.cli.threads.core.create`, or `api.cli.threads.groups.addThreadToGroup` when
   `--source` is given. Returns `{ threadId, containerId }` in JSON mode;
   `containerId` is absent for a from-scratch create.
@@ -622,6 +623,13 @@ status changes rather than being true last-activity.
   omitted entirely when `--attach` is given — an attachment can carry the message.
   The requirement is that content **or** an attachment is present, matching the
   mutation's own rule; the same is true of `threads send`.
+- `--worktree-branch` runs the thread in a new git worktree (OS-2488), sending
+  the same `worktree` spec as MCP `create_thread`: `parentPathId` is the
+  thread's resolved `pathId`, `--base-ref` maps to `baseRef`, `--from-origin` to
+  `startFromOrigin`. The last two are rejected without `--worktree-branch`. The
+  server validates the branch and rejects a parent that is itself a worktree, so
+  spawning with `--source` from a worktree thread needs the parent repo's
+  `--path-id`. To use an existing worktree, pass its `--path-id` instead.
 
 ### `threads send`
 

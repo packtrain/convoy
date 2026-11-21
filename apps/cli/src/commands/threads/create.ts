@@ -25,6 +25,9 @@ interface CreateThreadOptions extends OutputOptions {
   task?: string;
   source?: string;
   attach?: string[];
+  worktreeBranch?: string;
+  baseRef?: string;
+  fromOrigin?: boolean;
 }
 
 export const createThreadCommand = addGlobalOptions(
@@ -40,6 +43,9 @@ export const createThreadCommand = addGlobalOptions(
       .option("--task <taskId>", "Associate a task (ID or ref)")
       .option("--source <threadId>", "Spawn beside this thread or into this group; inherits its target")
       .option("--attach <file...>", "Files to attach to the first message")
+      .option("--worktree-branch <branch>", "Run in a new git worktree on this new branch, branched from the path")
+      .option("--base-ref <ref>", "Ref the worktree starts from (default: the repo's HEAD)")
+      .option("--from-origin", "Start the worktree from the remote's copy of the base ref")
       .option("--org <org>", "Organization ID or slug (used with --project alias)")
   )
 ).action(async (options: CreateThreadOptions, cmd: Command) => {
@@ -57,6 +63,9 @@ export const createThreadCommand = addGlobalOptions(
     const attach = options.attach ?? [];
     if (content.length === 0 && attach.length === 0) {
       throw new Error("Pass --content, --content-file, or --attach.");
+    }
+    if (!options.worktreeBranch && (options.baseRef !== undefined || options.fromOrigin)) {
+      throw new Error("--base-ref and --from-origin need --worktree-branch.");
     }
 
     // Resolved lazily and memoized: with --source the target's project comes from
@@ -103,6 +112,15 @@ export const createThreadCommand = addGlobalOptions(
         ...(options.title === undefined ? {} : { title: options.title }),
         ...(taskId === undefined ? {} : { taskId }),
         ...(attachments.length === 0 ? {} : { attachments }),
+        // The server validates the branch and that the parent is not a worktree (cli-worktrees.md).
+        ...(options.worktreeBranch === undefined ? {} : {
+          worktree: {
+            parentPathId: target.pathId,
+            branch: options.worktreeBranch,
+            ...(options.baseRef === undefined ? {} : { baseRef: options.baseRef }),
+            ...(options.fromOrigin ? { startFromOrigin: true } : {}),
+          },
+        }),
       };
 
       if (!target.addToGroup) {
