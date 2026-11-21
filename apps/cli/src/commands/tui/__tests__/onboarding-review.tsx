@@ -59,7 +59,9 @@ async function wait(check: () => boolean) {
   while (!check()) { if (Date.now() > deadline) throw new Error(frame); await new Promise<void>(resolve => setImmediate(resolve)); }
   await settle();
 }
-async function key(value: string) { const before = frame; stdin.write(value); await wait(() => frame !== before || !browser.getSnapshot().onboarding); }
+/** The frame without the sidebar spinner, which redraws on its own and would pass for a handled key. */
+const still = () => frame.replace(/\S Loading projects…/, "Loading projects…");
+async function key(value: string) { const before = still(); stdin.write(value); await wait(() => still() !== before || !browser.getSnapshot().onboarding); }
 async function resize(width: number, height: number) { stdout.columns = width; stdout.rows = height; stdout.emit("resize"); await settle(); }
 async function review() { await key("\r"); await wait(() => frame.includes("Register")); await key("\t"); await key("\r"); await wait(() => frame.includes("result")); }
 try {

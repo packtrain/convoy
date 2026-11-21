@@ -1,6 +1,6 @@
 {
   "name": "@useconvoy/cli",
-  "version": "0.152.0",
+  "version": "0.152.1",
   "description": "CLI agent for Convoy",
   "license": "Elastic-2.0",
   "homepage": "https://docs.convoy.build/docs/cli/install",
@@ -50,7 +50,7 @@
     "@anthropic-ai/sdk": "^0.93.0",
     "@inquirer/prompts": "^8.2.0",
     "@opencode-ai/sdk": "^1.17.13",
-    "chalk": "^5.6.2",
+    "chalk": "^6.0.1",
     "commander": "^14.0.2",
     "conf": "^15.0.2",
     "convex": "^1.49.0",
