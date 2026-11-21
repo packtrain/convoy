@@ -164,12 +164,24 @@ cursor-agent -p "..."   # non-interactive
 
 In `strict` network mode the firewall allows `cursor.com`, `api2.cursor.sh`, `api3.cursor.sh`, `api4.cursor.sh`, and `downloads.cursor.com`. If Cursor reports network errors, re-run `sudo /usr/local/bin/init-firewall.sh` (resolved IPs can go stale) and keep this list in sync with what the CLI actually calls.
 
+## Running Antigravity
+
+Antigravity CLI (`agy`) is installed at create time from the `antigravity.google/cli/install.sh` script, into `~/.local/bin`. On macOS agy keeps its sign-in in the keychain, so the host's cannot be mounted. The sign-in lives in the `/home/node/.gemini` volume instead. Sign in once inside the container, and it survives rebuilds:
+
+```bash
+agy acp --login                 # prints a Google URL, then reads the pasted code
+convoy init --cli antigravity   # agy reads MCP servers only from ~/.gemini/config, which is in the volume
+```
+
+In `strict` network mode the firewall allows the Antigravity hosts listed under [Network Firewall](#network-firewall). Google rotates addresses often, so if a session that worked stalls later, re-run `sudo /usr/local/bin/init-firewall.sh`.
+
 ## Mounted Volumes
 
 | Host Path | Container Path | Purpose |
 |---|---|---|
 | (Docker volume) | `/commandhistory` | Persistent bash/zsh history across rebuilds |
 | (Docker volume) | `/home/node/.claude` | Claude Code config and session data |
+| (Docker volume) | `/home/node/.gemini` | Antigravity sign-in, MCP config and conversations |
 | (Docker volume) | `/workspace/node_modules` | Container-only dependencies so Linux native packages do not overwrite host installs |
 | `~/.config/convoy/` | `/home/node/.config/convoy/` | Convoy CLI profiles and API keys |
 | `~/.codex/` | `/home/node/.codex/` | Codex CLI auth, config, and sessions (shared with the host) |
@@ -201,6 +213,7 @@ In `strict` mode, the container runs a restrictive iptables firewall (`init-fire
 - **OpenAI / Codex** — `api.openai.com`, `auth.openai.com`, `auth.api.openai.org`, `chatgpt.com`, `chat.openai.com`, `ab.chatgpt.com`, `persistent.oaistatic.com` (Codex releases may add endpoints; keep this list in sync when Codex reports network errors in strict mode)
 - **OpenCode** — `opencode.ai`, `api.opencode.ai`, `models.dev` (model catalog); provider model calls reuse the Anthropic/OpenAI entries above — other providers need their endpoints added here
 - **Cursor** — `cursor.com`, `api2.cursor.sh`, `api3.cursor.sh`, `api4.cursor.sh`, `downloads.cursor.com`
+- **Antigravity** — `antigravity.google` (installer, sign-in page), `antigravity-cli-auto-updater-974169037036.us-central1.run.app` and `storage.googleapis.com` (install and updates), `accounts.google.com`, `oauth2.googleapis.com`, `www.googleapis.com` (Google sign-in), `cloudcode-pa.googleapis.com`, `daily-cloudcode-pa.googleapis.com` (model API), `generativelanguage.googleapis.com` (Gemini API key)
 - **VS Code** — marketplace, updates, blob storage
 - **Convex** — `$CONVEX_DEPLOYMENT.convex.site`, `$CONVEX_DEPLOYMENT.convex.cloud`
 - **AWS Bedrock** — `bedrock-runtime.$AWS_REGION.amazonaws.com`, `bedrock-mantle.$AWS_REGION.api.aws` (Mantle)

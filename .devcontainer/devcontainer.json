@@ -43,6 +43,8 @@
   "mounts": [
     "source=convoy-bashhistory,target=/commandhistory,type=volume",
     "source=convoy-claude-config,target=/home/node/.claude,type=volume",
+    // Antigravity keeps its sign-in in ~/.gemini; the host's sits in the macOS keychain
+    "source=convoy-gemini-config,target=/home/node/.gemini,type=volume",
     "source=${localEnv:HOME}/.config/convoy,target=/home/node/.config/convoy,type=bind,consistency=cached",
     "source=${localEnv:HOME}/.codex,target=/home/node/.codex,type=bind,consistency=cached",
     "source=${localEnv:HOME}/.cursor,target=/home/node/.cursor,type=bind,consistency=cached",
@@ -98,7 +100,7 @@
   // started on either side remain resumable. `rm -rf` on the sessions path is
   // load-bearing: `ln -sfn` onto an existing real directory nests the link
   // inside it (sessions/sessions) instead of replacing it.
-  "postCreateCommand": "npm install -g @useconvoy/cli@latest @anthropic-ai/claude-code@latest @openai/codex@latest && curl -fsSL https://opencode.ai/install | bash && curl -fsSL https://cursor.com/install | bash && mkdir -p \"$CODEX_HOME\" && rm -rf \"$CODEX_HOME/sessions\" && ln -sfn /home/node/.codex/sessions \"$CODEX_HOME/sessions\" && ln -sfn /home/node/.codex/auth.json \"$CODEX_HOME/auth.json\" && ln -sfn /home/node/.codex/config.toml \"$CODEX_HOME/config.toml\"",
+  "postCreateCommand": "npm install -g @useconvoy/cli@latest @anthropic-ai/claude-code@latest @openai/codex@latest && curl -fsSL https://opencode.ai/install | bash && curl -fsSL https://cursor.com/install | bash && curl -fsSL https://antigravity.google/cli/install.sh | bash && mkdir -p \"$CODEX_HOME\" && rm -rf \"$CODEX_HOME/sessions\" && ln -sfn /home/node/.codex/sessions \"$CODEX_HOME/sessions\" && ln -sfn /home/node/.codex/auth.json \"$CODEX_HOME/auth.json\" && ln -sfn /home/node/.codex/config.toml \"$CODEX_HOME/config.toml\"",
   "postStartCommand": "convoy devcontainer --configure; { cmp -s /usr/local/share/convoy-devcontainer/Dockerfile .devcontainer/Dockerfile && cmp -s /usr/local/bin/init-firewall.sh .devcontainer/init-firewall.sh; } || echo \"WARN: this container's image is older than .devcontainer/. Rebuild the container.\" >&2; sudo /usr/local/bin/init-workspace.sh && if [ \"$DEVCONTAINER_NETWORK_MODE\" = \"strict\" ]; then sudo /usr/local/bin/init-firewall.sh; else echo \"Skipping firewall setup (DEVCONTAINER_NETWORK_MODE=$DEVCONTAINER_NETWORK_MODE)\"; fi",
   "waitFor": "postStartCommand"
 }

@@ -55,8 +55,8 @@ ENV DEVCONTAINER=true
 # copy these folders' owner and mode; Convoy refuses config or state wider than 0700.
 # ~/.local must pre-exist owned by node: the ~/.local/share/opencode bind mount
 # otherwise makes Docker create it as root, which breaks the cursor-agent installer.
-RUN mkdir -p /workspace /home/node/.claude /home/node/.local/share /home/node/.local/bin /home/node/.config/convoy /home/node/.convoy && \
-  chown -R node:node /workspace /home/node/.claude /home/node/.local /home/node/.config /home/node/.convoy && \
+RUN mkdir -p /workspace /home/node/.claude /home/node/.gemini /home/node/.local/share /home/node/.local/bin /home/node/.config/convoy /home/node/.convoy && \
+  chown -R node:node /workspace /home/node/.claude /home/node/.gemini /home/node/.local /home/node/.config /home/node/.convoy && \
   chmod 700 /home/node/.config/convoy /home/node/.convoy
 
 WORKDIR /workspace
@@ -94,11 +94,11 @@ RUN sh -c "$(wget -O- https://github.com/deluan/zsh-in-docker/releases/download/
   -a "export PROMPT_COMMAND='history -a' && export HISTFILE=/commandhistory/.bash_history" \
   -x
 
-# Agent CLIs (claude, codex, opencode, cursor-agent) are NOT installed here.
+# Agent CLIs (claude, codex, opencode, cursor-agent, agy) are NOT installed here.
 # A `RUN npm install -g ...@latest` layer is cached, so every rebuild reinstates
 # whatever version the first build happened to fetch. They install from
-# `postCreateCommand` instead, which Docker never caches. cursor-agent lands in
-# ~/.local/bin and opencode in ~/.opencode/bin. They go on the image PATH because
+# `postCreateCommand` instead, which Docker never caches. cursor-agent and agy land
+# in ~/.local/bin and opencode in ~/.opencode/bin. They go on the image PATH because
 # the project service starts from postStartCommand, which reads no shell rc file.
 ENV PATH=$PATH:/home/node/.local/bin:/home/node/.opencode/bin
 

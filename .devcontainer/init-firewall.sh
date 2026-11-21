@@ -135,6 +135,18 @@ ALLOWED_DOMAINS=(
     "api3.cursor.sh"
     "api4.cursor.sh"
     "downloads.cursor.com"
+    # Antigravity (agy): installer and OAuth page, release manifest, tarballs,
+    # Google sign-in, the model API (daily-* is agy's default endpoint), and
+    # the Gemini API that a managed Gemini key calls
+    "antigravity.google"
+    "antigravity-cli-auto-updater-974169037036.us-central1.run.app"
+    "storage.googleapis.com"
+    "accounts.google.com"
+    "oauth2.googleapis.com"
+    "www.googleapis.com"
+    "cloudcode-pa.googleapis.com"
+    "daily-cloudcode-pa.googleapis.com"
+    "generativelanguage.googleapis.com"
     "sentry.io"
     "statsig.com"
     "marketplace.visualstudio.com"

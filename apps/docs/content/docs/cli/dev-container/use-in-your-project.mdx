@@ -3,7 +3,7 @@ title: Use in your project
 description: Install the AI agent sandbox dev container template into any project with the Convoy CLI.
 ---
 
-The Convoy dev container is also available as a standalone template you can install into **any** project — it does not require Convoy. You get Claude Code, Codex CLI, OpenCode CLI, and Cursor CLI preinstalled in an isolated container, with an optional outbound-network firewall (`strict` / `open` modes).
+The Convoy dev container is also available as a standalone template you can install into **any** project — it does not require Convoy. You get Claude Code, Codex CLI, OpenCode CLI, Cursor CLI, and Antigravity CLI preinstalled in an isolated container, with an optional outbound-network firewall (`strict` / `open` modes).
 
 ## Install with the CLI
 
@@ -62,6 +62,8 @@ Nothing is required. For Convoy users:
 - optional `CONVOY_PROFILE` selects a profile explicitly, with no required profile name
 - startup configures Convoy MCP in a private Codex config without changing the host config
 - the selected profile supplies backend hosts for the strict-mode firewall. A new container has no profile yet, so export `CONVEX_DEPLOYMENT` on the host before the first setup in strict mode
+
+Claude Code and Antigravity sign in inside the container, once: their logins live in container volumes and survive rebuilds. For Antigravity, run `agy acp --login`, then `convoy init --cli antigravity` inside the container, since agy reads its MCP config from the same volume.
 
 Everything else — agent installs, shared Codex/OpenCode auth mounts, network modes, `DEVCONTAINER_EXTRA_ALLOWED_DOMAINS` for your own API endpoints — is generic. The generated `.devcontainer/README.md` documents all environment variables and modes.
 

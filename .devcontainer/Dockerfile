@@ -56,8 +56,8 @@ ENV DEVCONTAINER=true
 # ~/.local/share and ~/.config must pre-exist owned by node: bind mounts (e.g.
 # ~/.local/share/opencode) otherwise make Docker create the parent dirs as
 # root, which breaks the cursor-agent installer writing ~/.local/share.
-RUN mkdir -p /workspace /home/node/.claude /home/node/.local/share /home/node/.local/bin /home/node/.config && \
-  chown -R node:node /workspace /home/node/.claude /home/node/.local /home/node/.config
+RUN mkdir -p /workspace /home/node/.claude /home/node/.gemini /home/node/.local/share /home/node/.local/bin /home/node/.config && \
+  chown -R node:node /workspace /home/node/.claude /home/node/.gemini /home/node/.local /home/node/.config
 
 WORKDIR /workspace
 
@@ -94,12 +94,12 @@ RUN sh -c "$(wget -O- https://github.com/deluan/zsh-in-docker/releases/download/
   -a "export PROMPT_COMMAND='history -a' && export HISTFILE=/commandhistory/.bash_history" \
   -x
 
-# Agent CLIs (claude, codex, opencode, cursor-agent) are NOT installed here.
+# Agent CLIs (claude, codex, opencode, cursor-agent, agy) are NOT installed here.
 # A `RUN npm install -g ...@latest` layer is cached, so every rebuild reinstates
 # whatever version the first build happened to fetch — that is how a `claude`
 # too old for `--permission-mode auto` survived a rebuild. They install from
-# `postCreateCommand` instead, which Docker never caches. cursor-agent lands in
-# ~/.local/bin, hence the PATH entry.
+# `postCreateCommand` instead, which Docker never caches. cursor-agent and agy land
+# in ~/.local/bin, hence the PATH entry.
 ENV PATH=$PATH:/home/node/.local/bin
 
 

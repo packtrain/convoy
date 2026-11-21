@@ -34,9 +34,10 @@
   },
   "remoteUser": "node",
   "mounts": [
-    // Persistent shell history and Claude Code config across rebuilds
+    // Persistent shell history, Claude Code config and Antigravity sign-in across rebuilds
     "source=agent-sandbox-bashhistory-${devcontainerId},target=/commandhistory,type=volume",
     "source=agent-sandbox-claude-config-${devcontainerId},target=/home/node/.claude,type=volume",
+    "source=agent-sandbox-gemini-config-${devcontainerId},target=/home/node/.gemini,type=volume",
     // Agent auth/config shared with the host (log in once on the host, reuse in the container)
     "source=${localEnv:HOME}/.codex,target=/home/node/.codex,type=bind,consistency=cached",
     "source=${localEnv:HOME}/.cursor,target=/home/node/.cursor,type=bind,consistency=cached",
@@ -90,7 +91,7 @@
   // started on either side remain resumable. `rm -rf` on the sessions path is
   // load-bearing: `ln -sfn` onto an existing real directory nests the link
   // inside it (sessions/sessions) instead of replacing it.
-  "postCreateCommand": "npm install -g @useconvoy/cli@latest @anthropic-ai/claude-code@latest @openai/codex@latest && curl -fsSL https://opencode.ai/install | bash && curl -fsSL https://cursor.com/install | bash && mkdir -p \"$CODEX_HOME\" && rm -rf \"$CODEX_HOME/sessions\" && ln -sfn /home/node/.codex/sessions \"$CODEX_HOME/sessions\" && ln -sfn /home/node/.codex/auth.json \"$CODEX_HOME/auth.json\" && ln -sfn /home/node/.codex/config.toml \"$CODEX_HOME/config.toml\"",
+  "postCreateCommand": "npm install -g @useconvoy/cli@latest @anthropic-ai/claude-code@latest @openai/codex@latest && curl -fsSL https://opencode.ai/install | bash && curl -fsSL https://cursor.com/install | bash && curl -fsSL https://antigravity.google/cli/install.sh | bash && mkdir -p \"$CODEX_HOME\" && rm -rf \"$CODEX_HOME/sessions\" && ln -sfn /home/node/.codex/sessions \"$CODEX_HOME/sessions\" && ln -sfn /home/node/.codex/auth.json \"$CODEX_HOME/auth.json\" && ln -sfn /home/node/.codex/config.toml \"$CODEX_HOME/config.toml\"",
   // The Convoy project service starts last, once the firewall is up, even with no
   // projects yet: `convoy project add` then connects a new project to it live.
   "postStartCommand": "convoy devcontainer --configure; { cmp -s /usr/local/share/convoy-devcontainer/Dockerfile .devcontainer/Dockerfile && cmp -s /usr/local/bin/init-firewall.sh .devcontainer/init-firewall.sh; } || echo \"WARN: this container's image is older than .devcontainer/. Rebuild the container.\" >&2; if [ \"$DEVCONTAINER_NETWORK_MODE\" = \"strict\" ]; then sudo /usr/local/bin/init-firewall.sh; else echo \"Skipping firewall setup (DEVCONTAINER_NETWORK_MODE=$DEVCONTAINER_NETWORK_MODE)\"; fi; convoy service start -b || echo \"WARN: the Convoy project service did not start. Fix the error above, then run convoy service start -b.\" >&2",

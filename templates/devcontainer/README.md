@@ -1,16 +1,16 @@
 # AI Agent Sandbox Dev Container
 
-A sandboxed dev container for running AI coding agents (Claude Code, Codex, OpenCode, Cursor CLI) against any project, with an optional outbound-network firewall.
+A sandboxed dev container for running AI coding agents (Claude Code, Codex, OpenCode, Cursor CLI, Antigravity CLI) against any project, with an optional outbound-network firewall.
 
 This is the distributable version of the [Convoy](https://convoy.build) dev container. It is generic: nothing in it requires Convoy, but Convoy users get their CLI profiles and Convex backend wired in automatically when the corresponding env vars are set.
 
 ## What you get
 
-- **Claude Code, Codex CLI, OpenCode CLI, and Cursor CLI** installed globally from `latest` on container create (via `postCreateCommand`, so rebuilds are never stuck on a cached image layer's versions)
+- **Claude Code, Codex CLI, OpenCode CLI, Cursor CLI, and Antigravity CLI** installed globally from `latest` on container create (via `postCreateCommand`, so rebuilds are never stuck on a cached image layer's versions)
 - **Agent auth shared with the host** — log in once on the host, the container reuses `~/.codex`, `~/.cursor`, `~/.local/share/opencode` and `~/.config/opencode`
 - **Its own Convoy environment** — Convoy profiles, keys and the project service live in container volumes, not in the host's `~/.config/convoy`
 - **Two network modes** — `strict` blocks all outbound traffic except a curated allowlist; `open` skips the firewall
-- **Persistent shell history and Claude Code config** across container rebuilds (Docker volumes)
+- **Persistent shell history, Claude Code config and Antigravity sign-in** across container rebuilds (Docker volumes)
 - zsh + powerlevel10k, fzf, git-delta, gh, jq, corepack (pnpm/yarn via project pin)
 
 ## Install
@@ -33,7 +33,7 @@ Copy the four files from this directory (`devcontainer.json`, `Dockerfile`, `ini
 1. Set any env vars you need on your **host** (see below)
 2. Open the project in VS Code (or Cursor) with the [Dev Containers extension](https://marketplace.visualstudio.com/items?itemName=ms-vscode-remote.remote-containers)
 3. Run **Dev Containers: Reopen in Container** from the command palette
-4. Inside the container, run `claude`, `codex`, `opencode`, or `cursor-agent`
+4. Inside the container, run `claude`, `codex`, `opencode`, `cursor-agent`, or `agy`
 
 ## Environment variables
 
@@ -62,6 +62,7 @@ Runs `init-firewall.sh` on container startup. All outbound traffic is blocked ex
 - **OpenAI / Codex** — `api.openai.com`, `auth.openai.com`, `auth.api.openai.org`, `chatgpt.com`, `chat.openai.com`, `ab.chatgpt.com`, `persistent.oaistatic.com`
 - **OpenCode** — `opencode.ai`, `api.opencode.ai`, `models.dev`
 - **Cursor** — `cursor.com`, `api2.cursor.sh`, `api3.cursor.sh`, `api4.cursor.sh`, `downloads.cursor.com`
+- **Antigravity** — `antigravity.google` (installer, sign-in page), `antigravity-cli-auto-updater-974169037036.us-central1.run.app` and `storage.googleapis.com` (install and updates), `accounts.google.com`, `oauth2.googleapis.com`, `www.googleapis.com` (Google sign-in), `cloudcode-pa.googleapis.com`, `daily-cloudcode-pa.googleapis.com` (model API), `generativelanguage.googleapis.com` (Gemini API key)
 - **VS Code** — marketplace, updates, blob storage
 - **AWS Bedrock** — `bedrock-runtime.$AWS_REGION.amazonaws.com`, `bedrock-mantle.$AWS_REGION.api.aws` (Mantle)
 - **Convex** — `$CONVEX_DEPLOYMENT.convex.site` / `.convex.cloud` (only when `CONVEX_DEPLOYMENT` is set)
@@ -96,12 +97,15 @@ The script is safe to re-run — it temporarily opens HTTPS to fetch external da
 
 The firewall resolves allowed domains to IPs once at startup. Providers rotate IPs behind DNS, so after a long-running session an agent may start failing with network/retry errors that have no HTTP status. Re-running `sudo /usr/local/bin/init-firewall.sh` (or restarting the container) refreshes the allowlist. If errors disappear in `open` mode, the stale allowlist was the cause.
 
+Google rotates addresses faster than the other providers, so Antigravity is the first to hit this: a session that worked and later stalls in strict mode needs the same re-run.
+
 ## Agent auth
 
 - **Claude Code** — config lives in a container-local volume (`/home/node/.claude`). Log in inside the container, or set the Bedrock env vars above.
 - **Codex** — shared with the host via `~/.codex`. Run `codex login` on the host; the container reuses `~/.codex/auth.json`.
 - **OpenCode** — shared with the host via `~/.local/share/opencode` (auth) and `~/.config/opencode` (config). Run `opencode auth login` on the host. Providers other than Anthropic/OpenAI need their API endpoints added to the allowlist in strict mode.
 - **Cursor CLI** — shared with the host via `~/.cursor`. Run `cursor-agent login` on the host; the container reuses the stored credentials.
+- **Antigravity CLI** — sign-in lives in a container-local volume (`/home/node/.gemini`), because on macOS agy keeps the host's sign-in in the keychain. Run `agy acp --login` inside the container once. The volume also holds agy's MCP config, so run `convoy init --cli antigravity` inside the container too.
 - **Convoy CLI** — profiles and API keys live in a container volume. Run `convoy setup` inside the container once; see [Convoy connection setup](#convoy-connection-setup).
 
 ## Mounted volumes
@@ -110,6 +114,7 @@ The firewall resolves allowed domains to IPs once at startup. Providers rotate I
 |---|---|---|
 | (Docker volume) | `/commandhistory` | Persistent bash/zsh history across rebuilds |
 | (Docker volume) | `/home/node/.claude` | Claude Code config and session data |
+| (Docker volume) | `/home/node/.gemini` | Antigravity sign-in, MCP config and conversations |
 | `~/.codex/` | `/home/node/.codex/` | Codex CLI auth, config, sessions (shared with host) |
 | `~/.cursor/` | `/home/node/.cursor/` | Cursor CLI auth and config (shared with host) |
 | `~/.local/share/opencode/` | `/home/node/.local/share/opencode/` | OpenCode auth and sessions (shared with host) |
@@ -207,7 +212,8 @@ so no manual start is needed. If it cannot start, startup prints a `WARN:` line
 and the container still comes up; fix the error and run `convoy service start -b`.
 `convoy service status` and `convoy tui` (under Local) show the registered
 projects. They use the agent logins from [Agent auth](#agent-auth): Codex,
-Cursor and OpenCode reuse the host's, Claude Code logs in inside the container.
+Cursor and OpenCode reuse the host's, Claude Code and Antigravity log in inside
+the container.
 A login applies to every project. The service keeps the container's
 `CODEX_HOME` and `CLAUDE_CONFIG_DIR` but not the Bedrock variables, so for Claude
 Code on Bedrock under the service, store the token as a managed key:

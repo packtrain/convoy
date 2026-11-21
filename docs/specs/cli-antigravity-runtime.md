@@ -256,7 +256,16 @@ How it was verified (2026-11-21, dev container, arm64, no bubblewrap there): agy
 
 Inside the boundary a daemon agy moved to the background stays in the worker's PID namespace and ends with it (`--unshare-pid`, `--die-with-parent`). The model inventory runs as on a shared machine, in a new folder under the sandbox's tmpfs `/tmp`. A managed Gemini key reaches agy through the launch frame's `antigravityAuth`, which needs the launcher capability `credentials-antigravity-v1` (OS-2476).
 
-The image's strict firewall (`init-firewall.sh`, shared with `templates/devcontainer`) does not allow agy's Google hosts yet, such as `daily-cloudcode-pa.googleapis.com` and `accounts.google.com`, nor `generativelanguage.googleapis.com`, which a managed Gemini key calls. A managed Docker environment in strict mode needs them in `DEVCONTAINER_EXTRA_ALLOWED_DOMAINS` until OS-2477 adds them. A VM has no such firewall.
+The image's strict firewall (`init-firewall.sh`, shared with `templates/devcontainer`) allows agy's Google hosts, `generativelanguage.googleapis.com` for a managed Gemini key included ([below](#devcontainer)). A VM has no such firewall.
+
+## Devcontainer
+
+OS-2477. Spec: [devcontainer-template.md](devcontainer-template.md#template-requirements-generic--convoy-opt-in).
+
+- `postCreateCommand` runs the official install script, unpinned, after the other agent installs, in `templates/devcontainer`, the repo's `.devcontainer` and the local `sandbox/`. `~/.local/bin` is already on the image `PATH`.
+- The sign-in lives in a named volume at `/home/node/.gemini`, the Claude Code pattern. The user runs `agy acp --login` once inside the container. There is no host mount, because the host's sign-in sits in the macOS keychain.
+- The volume also holds `~/.gemini/config/mcp_config.json`, so `convoy init --cli antigravity` runs inside the container.
+- The strict firewall allows `antigravity.google`, the auto-updater manifest host, `storage.googleapis.com`, `accounts.google.com`, `oauth2.googleapis.com`, `www.googleapis.com`, `cloudcode-pa.googleapis.com`, `daily-cloudcode-pa.googleapis.com` and `generativelanguage.googleapis.com`. The list comes from t3code and happier source. agy's logs in the repo's dev container (open mode) show only `daily-cloudcode-pa.googleapis.com` and `jetski-webchannel.googleapis.com`, its RemoteControl proxy, which Convoy does not use and the firewall does not allow. A strict-mode drop-log check is pending.
 
 ## Known limitations
 
