@@ -39,6 +39,23 @@ connection lives in the CLI process; Convex is the signaling bus.
   explicitly configured user denials and are answered through the same
   bridge). Without a bridge, permission asks auto-reject.
 
+### Antigravity
+
+- Antigravity runs are a bridge consumer (see
+  `docs/specs/cli-antigravity-runtime.md#permissions-and-questions`). agy's
+  `session/request_permission` becomes a `tool-approval` request, or a
+  `question` request when its `toolCallId` starts with `interaction_`.
+- Web decisions map to an offered option by kind: `allow` → `allow_once`,
+  `allow-always` → `allow_always`, `deny` → `reject_once`. A missing kind falls
+  back to the nearest offered one, and with none left the reply is
+  `cancelled`. The card shows Always allow only when agy offers
+  `allow_always`.
+- A question answer maps back to its option id by label. An unknown or
+  ambiguous label is `cancelled`.
+- Only `default` ("Ask to approve") drops `--dangerously-skip-permissions`.
+  Questions reach the bridge in both modes. Without a bridge, tool requests get
+  `allow_once` and questions get `cancelled`.
+
 ### Codex (app-server transport only — the connect default)
 
 - Codex runs join the bridge on the default app-server transport (see
@@ -335,7 +352,7 @@ takes to answer, which the Claude runner's `IDLE_TIMEOUT_MS` (10 min) read as a
 dead run and failed as `timeout_idle` — cancelling the very request the user was
 looking at. The runner counts requests parked on the bridge and re-arms the idle
 deadline instead of failing while that count is above zero (OS-1458). The Codex
-app-server and OpenCode runners apply the same rule to their idle watchdogs:
+app-server, OpenCode and Antigravity runners apply the same rule to their idle watchdogs:
 while `pendingInteractionIds` is non-empty the activity clock refreshes instead
 of SIGKILLing/aborting the parked run (OS-1463). Startup timeout, abort, and
 lease expiry are unchanged.

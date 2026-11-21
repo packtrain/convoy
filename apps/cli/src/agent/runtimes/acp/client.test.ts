@@ -51,4 +51,23 @@ describe("createAcpClient", () => {
     expect(written.find((message) => message.id === 8)).toMatchObject({ error: { code: -32601 } });
     acp.close();
   });
+
+  it("hands the handler a typed request and answers a malformed one as cancelled", async () => {
+    const { io, written, receive } = createIo();
+    const onRequestPermission = vi.fn(async () => ({ outcome: { outcome: "selected" as const, optionId: "a" } }));
+    const acp = createAcpClient(io, { onSessionUpdate: vi.fn(), onRequestPermission }, "Agent");
+    const toolCall = { toolCallId: "call_1", name: "run_command", title: "ls" };
+
+    receive({ jsonrpc: "2.0", id: 1, method: "session/request_permission", params: { sessionId: "s", toolCall, options: [{ optionId: "a", name: "Allow", kind: "allow_once" }] } });
+    receive({ jsonrpc: "2.0", id: 2, method: "session/request_permission", params: { sessionId: "s", toolCall, options: [{ optionId: "a", name: "A", kind: "allow_once" }, { optionId: "a", name: "B", kind: "reject_once" }] } });
+    receive({ jsonrpc: "2.0", id: 3, method: "session/request_permission", params: { sessionId: "s", toolCall, options: [{ optionId: "", name: "A", kind: "allow_once" }] } });
+    receive({ jsonrpc: "2.0", id: 4, method: "session/request_permission", params: { sessionId: "s", toolCall: {}, options: [{ optionId: "a", name: "A", kind: "allow_once" }] } });
+    await tick();
+
+    expect(onRequestPermission).toHaveBeenCalledTimes(1);
+    expect(onRequestPermission).toHaveBeenCalledWith({ sessionId: "s", toolCall, options: [{ optionId: "a", name: "Allow", kind: "allow_once" }] });
+    expect(written).toContainEqual({ jsonrpc: "2.0", id: 1, result: { outcome: { outcome: "selected", optionId: "a" } } });
+    for (const id of [2, 3, 4]) expect(written).toContainEqual({ jsonrpc: "2.0", id, result: { outcome: { outcome: "cancelled" } } });
+    acp.close();
+  });
 });

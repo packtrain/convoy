@@ -27,7 +27,7 @@ describe("cli runtime ui registry", () => {
     expect(CLI_TYPE_SELECTOR_ORDER).toContain("antigravity");
     expect(isCliSelectable("antigravity")).toBe(true);
     expect(isCliSelectable("gemini")).toBe(false);
-    expect(getCliModes("antigravity").map((mode) => mode.label)).toEqual(["Act"]);
+    expect(getCliModes("antigravity").map((mode) => mode.label)).toEqual(["Act", "Ask to approve"]);
     expect(getDefaultMode("antigravity")).toBe("agent");
     expect(getDefaultCliModel("antigravity")).toBeUndefined();
     expect(CLI_TYPE_MAP.antigravity).toBe("Antigravity");

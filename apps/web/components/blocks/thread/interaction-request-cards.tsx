@@ -481,14 +481,16 @@ function QuestionCard({
   request,
   onRespond,
   disabled,
+  runtimeLabel,
 }: {
   request: InteractionRequest;
   onRespond: (responseJson: string) => void;
   disabled: boolean;
+  runtimeLabel: string;
 }) {
   const payload = parsePayload(request);
   const questions = parseQuestions(payload);
-  const title = payload.provider === "codex" ? "Codex has a question" : "Claude has a question";
+  const title = `${runtimeLabel} has a question`;
   const answers = useQuestionAnswers(questions);
   const [activeIndex, setActiveIndex] = useState(0);
 
@@ -642,9 +644,12 @@ function requestLabel(request: InteractionRequest, index: number): string {
 export function InteractionRequestCards({
   threadId,
   className,
+  runtimeLabel = "Claude",
 }: {
   threadId: Id<"cliThreads">;
   className?: string;
+  /** The thread runtime's display name, e.g. "Antigravity". */
+  runtimeLabel?: string;
 }) {
   const pending = useQuery(api.cli.interactionRequests.listPendingByThread, {
     threadId,
@@ -696,7 +701,7 @@ export function InteractionRequestCards({
           return payload.elicitation === true ? (
             <McpElicitationCard payload={payload} disabled={disabled} onRespond={props.onRespond} />
           ) : request.kind === "question" ? (
-            <QuestionCard {...props} />
+            <QuestionCard {...props} runtimeLabel={runtimeLabel} />
           ) : (
             <ToolApprovalCard {...props} />
           );

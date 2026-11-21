@@ -1,4 +1,4 @@
-import { parseAvailableCli } from "../../cli/lib/runtimes/registry";
+import { getCliRuntime, parseAvailableCli } from "../../cli/lib/runtimes/registry";
 import type { AvailableCli } from "../contracts/validators";
 import { jsonError, jsonResponse } from "./responses";
 
@@ -127,15 +127,18 @@ function parseVersion(raw: string | undefined): number[] {
   return match ? [Number(match[1]), Number(match[2]), Number(match[3])] : [0, 0, 0];
 }
 
+function isVersionAtLeast(appVersion: string | undefined, minVersion: string): boolean {
+  const actual = parseVersion(appVersion);
+  const min = parseVersion(minVersion);
+  return (actual.map((n, i) => n - min[i]).find((d) => d !== 0) ?? 0) >= 0;
+}
+
 /** Rejects CLIs older than minVersion with 426 — see docs/specs/cli-minimum-version.md. */
 export function checkMinSupportedCliVersion(
   appVersion: string | undefined,
   minVersion: string
 ): { success: true } | { success: false; response: Response } {
-  const actual = parseVersion(appVersion);
-  const min = parseVersion(minVersion);
-  const diff = actual.map((n, i) => n - min[i]).find((d) => d !== 0) ?? 0;
-  if (diff >= 0) {
+  if (isVersionAtLeast(appVersion, minVersion)) {
     return { success: true };
   }
   return {
@@ -199,7 +202,8 @@ export function parseRegisterPaths(
 }
 
 export function parseRegisterAvailableClis(
-  value: RegisterBody["availableClis"]
+  value: RegisterBody["availableClis"],
+  appVersion: string | undefined
 ): { success: true; value: AvailableCli[] | undefined } | { success: false; response: Response } {
   if (value === undefined) {
     return { success: true, value: undefined };
@@ -218,6 +222,8 @@ export function parseRegisterAvailableClis(
     if (!parsedCli.success) {
       return { success: false, response: jsonError(parsedCli.message, 400) };
     }
+    const minAppVersion = getCliRuntime(parsedCli.value.type).minAppVersion;
+    if (minAppVersion && !isVersionAtLeast(appVersion, minAppVersion)) continue;
     parsed.push(parsedCli.value);
   }
 

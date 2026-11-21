@@ -81,6 +81,20 @@ export const antigravityTool: AcpToolAdapter = (update) => {
     case "view_file":
     case "client_view_file":
       return { ...base, toolName: "Read", input: { file_path: filePath }, output: acpContentText(update) };
+    case "ask_question": {
+      // Pending means agy ended the turn to wait; the inline question part sends the answer as the next prompt.
+      const questions = (Array.isArray(input.questions) ? input.questions : []).filter(isRecord).map((question) => ({
+        question: getString(question.question) ?? "",
+        multiSelect: question.is_multi_select === true,
+        options: (Array.isArray(question.options) ? question.options : []).flatMap((label) => (typeof label === "string" ? [{ label }] : [])),
+      }));
+      return {
+        ...base,
+        toolName: "AskUserQuestion",
+        input: { questions },
+        ...(update.status === "pending" ? { errorText: "Antigravity is waiting for your answer." } : {}),
+      };
+    }
     case "search_web":
       return { ...base, toolName: "WebSearch", input, output: acpContentText(update) };
     default:

@@ -998,6 +998,7 @@ export function ThreadView({
               a fixed-width mini-preview host (OS-1602). */}
           <InteractionRequestCards
             threadId={threadId}
+            runtimeLabel={CLI_TYPE_MAP[chat.cliType]}
             className="mx-auto w-full max-w-3xl min-w-0 px-4 pb-2"
           />
           {chat.workflowRunId !== undefined ? (

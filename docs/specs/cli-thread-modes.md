@@ -27,7 +27,7 @@ For unsent draft persistence rules (text + selectors + thread keying), see `docs
 | `claude-code` | `agent`, `default`, `acceptEdits`, `auto`, `plan` |
 | `codex` | `agent`, `default` (labeled "Ask to approve"), `auto` (labeled "Sandboxed"), `plan` (approval/plan behavior requires the app-server transport, the connection default; degrades to sandboxed never-asks under `--codex-exec`) |
 | `opencode` | `agent`, `default` (labeled "Ask to approve"), `plan` (read-only plan agent; no approve-plan gate) |
-| `antigravity` | `agent` only (labeled "Act"); Ask to approve comes with OS-2469. See [Antigravity runtime](cli-antigravity-runtime.md#modes) |
+| `antigravity` | `agent` (labeled "Act"), `default` (labeled "Ask to approve"). See [Antigravity runtime](cli-antigravity-runtime.md#modes) |
 | `droid` | _none_ |
 | `amp` | _none_ |
 | `other` | _none_ |

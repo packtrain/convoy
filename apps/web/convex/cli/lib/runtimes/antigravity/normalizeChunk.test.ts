@@ -23,6 +23,34 @@ const commandOutput = (code: number, body: string) =>
   `Created At: 2026-11-20T12:38:40-08:00\nCompleted At: 2026-11-20T12:38:41-08:00\nCommand exited with code ${code}.\n\nCommand output:\n${body}`;
 
 describe("normalizeAntigravityChunk", () => {
+  test("ask_question becomes an AskUserQuestion part that turns interactive once agy waits", () => {
+    // agy 1.5.13 leaves the call pending and ends the turn; the next prompt is the answer (OS-2469).
+    const ask = (status: string) =>
+      update({
+        sessionUpdate: status === "in_progress" ? "tool_call" : "tool_call_update",
+        toolCallId: "call_7",
+        name: "ask_question",
+        status,
+        kind: "other",
+        title: "Run ask_question",
+        rawInput: { questions: [{ is_multi_select: false, options: ["(Recommended) Blue", "Green"], question: "Which color?" }] },
+      });
+    expect(normalizeAntigravityChunk(ask("in_progress"))).toEqual({
+      kind: "tool-input",
+      toolCallId: "call_7",
+      toolName: "AskUserQuestion",
+      inputJson: JSON.stringify({
+        questions: [{ question: "Which color?", multiSelect: false, options: [{ label: "(Recommended) Blue" }, { label: "Green" }] }],
+      }),
+    });
+    expect(normalizeAntigravityChunk(ask("pending"))).toEqual({
+      kind: "tool-error",
+      toolCallId: "call_7",
+      errorText: "Antigravity is waiting for your answer.",
+    });
+    expect(normalizeAntigravityChunk(ask("completed"))).toMatchObject({ kind: "tool-output", toolCallId: "call_7" });
+  });
+
   test("run_command renders as a Bash terminal row with the command output only", () => {
     expect(normalizeAntigravityChunk(shell("in_progress"))).toEqual({
       kind: "tool-input",
@@ -33,6 +61,8 @@ describe("normalizeAntigravityChunk", () => {
     expect(
       normalizeAntigravityChunk(shell("completed", { rawOutput: { output: commandOutput(0, "total 0\r\ndone\r\n"), exit_code: 0 }, content: [] }))
     ).toEqual({ kind: "tool-output", toolCallId: "call_1", outputJson: JSON.stringify({ stdout: "total 0\ndone\n" }) });
+    // Ask to approve sends `pending` right before the permission request.
+    expect(normalizeAntigravityChunk(shell("pending")).kind).toBe("metadata");
   });
 
   test("a nonzero exit code inside a completed update is a failed command", () => {

@@ -102,6 +102,14 @@ describe("QuestionCard custom answers", () => {
     pendingRequests = [];
   });
 
+  test("names the thread's runtime in the title", () => {
+    pendingRequests = [questionRequest([{ question: "Pick", options: [{ label: "A" }] }])];
+
+    render(<InteractionRequestCards threadId={threadId} runtimeLabel="Antigravity" />);
+
+    expect(screen.getByText("Antigravity has a question")).toBeTruthy();
+  });
+
   test("sends a free-text answer typed under Other…", () => {
     pendingRequests = [
       questionRequest([

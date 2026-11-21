@@ -5,7 +5,7 @@ import { tmpdir } from "node:os";
 import { RunnerExecutionError, type ContentChunk } from "../contracts.js";
 import { threadIdentityInstruction } from "../agent-instructions.js";
 import { ANTIGRAVITY_EXECUTABLE_ENV, detectAntigravity } from "./detect.js";
-import { ANTIGRAVITY_SIGN_IN_MESSAGE, answerPermissionRequest, createAntigravityRunner } from "./runner.js";
+import { ANTIGRAVITY_SIGN_IN_MESSAGE, createAntigravityRunner } from "./runner.js";
 
 // Replays agy 1.5.13 ACP shapes recorded for OS-2468 (docs/specs/cli-antigravity-runtime.md).
 const FAKE_AGY = String.raw`
@@ -43,6 +43,10 @@ readline.createInterface({ input: process.stdin }).on("line", (line) => {
     promptId = msg.id;
     update(session, { sessionUpdate: "available_commands_update", availableCommands: [] });
     if (behavior === "crash") { process.stderr.write("panic: boom\n"); process.exit(3); }
+    if (behavior === "permission-then-fail") {
+      send({ id: "perm-1", method: "session/request_permission", params: { sessionId: session, toolCall: { toolCallId: "call_9" }, options: [{ optionId: "yes", kind: "allow_once" }] } });
+      return setTimeout(() => send({ id: msg.id, error: { code: -32603, message: "provider failed" } }), 50);
+    }
     if (behavior === "permission") send({ id: "perm-1", method: "session/request_permission", params: { sessionId: session, toolCall: { toolCallId: "call_9" }, options: [{ optionId: "deny", kind: "reject_once" }, { optionId: "yes", kind: "allow_once" }] } });
     update(session, { sessionUpdate: "agent_thought_chunk", content: { type: "text", text: "Thinking " } });
     update(session, { sessionUpdate: "usage_update", used: 10, size: 100 });
@@ -192,6 +196,45 @@ describe("createAntigravityRunner (fake agy)", () => {
     expect(answer?.in?.result).toEqual({ outcome: { outcome: "selected", optionId: "yes" } });
   });
 
+  it("drops the skip-permissions flag in Ask to approve and asks the bridge", async () => {
+    vi.stubEnv("FAKE_BEHAVIOR", "permission");
+    const request = vi.fn(async () => JSON.stringify({ decision: "deny" }));
+    const runner = createAntigravityRunner({});
+    await collect(
+      runner.execute(tmpDir, "hello", {
+        threadId: "thread_1",
+        cliType: "antigravity",
+        cliMode: "default",
+        interactionBridge: { request, cancel: vi.fn() },
+      })
+    );
+    expect(recorded()[0]!.argv).toEqual(["acp"]);
+    expect(request).toHaveBeenCalledWith(expect.objectContaining({ kind: "tool-approval" }), expect.any(AbortSignal));
+    const answer = recorded().find((entry) => entry.in?.id === "perm-1");
+    expect(answer?.in?.result).toEqual({ outcome: { outcome: "selected", optionId: "deny" } });
+  });
+
+  it("abandons an open approval when the prompt fails, rather than withdrawing it", async () => {
+    vi.stubEnv("FAKE_BEHAVIOR", "permission-then-fail");
+    const cancel = vi.fn();
+    const request = vi.fn(
+      (_input: unknown, signal: AbortSignal) =>
+        new Promise<string>((_resolve, reject) => signal.addEventListener("abort", () => reject(new Error("aborted"))))
+    );
+    const runner = createAntigravityRunner({});
+    const error = await collect(
+      runner.execute(tmpDir, "hello", {
+        threadId: "thread_1",
+        cliType: "antigravity",
+        cliMode: "default",
+        interactionBridge: { request, cancel },
+      })
+    ).catch((e: unknown) => e);
+    expect((error as Error).message).toMatch(/provider failed/);
+    expect(request).toHaveBeenCalledTimes(1);
+    expect(cancel.mock.calls.map(([, opts]) => opts)).toEqual([{ abandoned: true, reason: "run ended" }]);
+  });
+
   it("cancels on abort and ends the run as aborted with the session id", async () => {
     vi.stubEnv("FAKE_BEHAVIOR", "cancel");
     const runner = createAntigravityRunner({});
@@ -218,14 +261,6 @@ describe("createAntigravityRunner (fake agy)", () => {
     expect(error).toBeInstanceOf(RunnerExecutionError);
     expect((error as RunnerExecutionError).message).toMatch(/exit code 3.*panic: boom/);
     expect((error as RunnerExecutionError).continuationId).toBe("sess-1");
-  });
-});
-
-describe("answerPermissionRequest", () => {
-  it("declines agent questions until they get a card", () => {
-    expect(
-      answerPermissionRequest({ toolCall: { toolCallId: "interaction_1" }, options: [{ optionId: "a", kind: "allow_once" }] })
-    ).toEqual({ outcome: { outcome: "cancelled" } });
   });
 });
 

@@ -14,6 +14,7 @@ import { threadIdentityInstruction } from "../agent-instructions.js";
 import { ACP_AUTH_REQUIRED_CODE, createAcpClient, type AcpClient } from "../acp/client.js";
 import { JsonRpcError } from "../json-rpc.js";
 import { resolveAntigravityExecutablePath } from "./detect.js";
+import { createAntigravityInteractions } from "./interactions.js";
 import { compactToolUpdate } from "./streaming.js";
 
 /** One `agy acp` process per run. Spec: docs/specs/cli-antigravity-runtime.md. */
@@ -61,17 +62,6 @@ export function buildAntigravitySubprocessEnv(threadId: string): NodeJS.ProcessE
   return env;
 }
 
-/** `allow_once` for tool permissions; agent questions are declined until slice 2. */
-export function answerPermissionRequest(params: Record<string, unknown>): unknown {
-  const toolCall = isRecord(params.toolCall) ? params.toolCall : {};
-  const options = Array.isArray(params.options) ? params.options.filter(isRecord) : [];
-  const allow = options.find((option) => option.kind === "allow_once") ?? options.find((option) => option.kind === "allow_always");
-  if (String(toolCall.toolCallId ?? "").startsWith("interaction_") || typeof allow?.optionId !== "string") {
-    return { outcome: { outcome: "cancelled" } };
-  }
-  return { outcome: { outcome: "selected", optionId: allow.optionId } };
-}
-
 function systemAppend(options: RunnerExecutionOptions): string {
   return [options.agentPrompt, threadIdentityInstruction(options.threadId), options.workspaceNotice]
     .filter((part): part is string => typeof part === "string" && part.length > 0)
@@ -109,10 +99,13 @@ export function createAntigravityRunner(factoryOptions: { partialStreaming?: boo
   let activeChild: ChildProcess | null = null;
   let exited: Promise<void> = Promise.resolve();
   let cancelActive: (() => void) | null = null;
+  let abandonInteractions: (() => void) | null = null;
   let forceKillTimer: NodeJS.Timeout | null = null;
 
   const abort = (): void => {
     aborted = true;
+    // Before session/cancel, so the prompt's end cannot withdraw them first.
+    abandonInteractions?.();
     cancelActive?.();
     const child = activeChild;
     if (!child || child.exitCode !== null || child.signalCode !== null || forceKillTimer) return;
@@ -128,7 +121,9 @@ export function createAntigravityRunner(factoryOptions: { partialStreaming?: boo
     ): AsyncGenerator<ContentChunk, RunnerExecutionResult, unknown> {
       aborted = false;
       const executable = await resolveAntigravityExecutablePath();
-      const child = spawn(executable.command, ["acp", "--dangerously-skip-permissions"], {
+      // Ask to approve is agy's own `default` session mode; Act is the spawn flag.
+      const args = options.cliMode === "default" ? ["acp"] : ["acp", "--dangerously-skip-permissions"];
+      const child = spawn(executable.command, args, {
         cwd: workingDirectory,
         env: buildAntigravitySubprocessEnv(options.threadId),
         stdio: ["pipe", "pipe", "pipe"],
@@ -171,6 +166,9 @@ export function createAntigravityRunner(factoryOptions: { partialStreaming?: boo
       let lastActivityAt = Date.now();
       let idleTimedOut = false;
       let failure: string | null = null;
+      const bridgeAbort = new AbortController();
+      abandonInteractions = () => bridgeAbort.abort();
+      const interactions = createAntigravityInteractions({ bridge: options.interactionBridge, signal: bridgeAbort.signal });
 
       const acp = createAcpClient(
         { stdin: child.stdin!, stdout: child.stdout! },
@@ -196,9 +194,9 @@ export function createAntigravityRunner(factoryOptions: { partialStreaming?: boo
             const forwarded = kind === "tool_call" || kind === "tool_call_update" ? compactToolUpdate(update) : update;
             push({ type: "session/update", data: JSON.stringify({ ...params, update: forwarded }) });
           },
-          async onRequestPermission(params) {
+          onRequestPermission(request) {
             lastActivityAt = Date.now();
-            return answerPermissionRequest(params);
+            return interactions.onRequestPermission(request);
           },
         },
         "Antigravity"
@@ -218,6 +216,8 @@ export function createAntigravityRunner(factoryOptions: { partialStreaming?: boo
       });
 
       const idleWatchdog = setInterval(() => {
+        // A run parked on a card is waiting for the user, not idle (OS-1463).
+        if (interactions.pendingCount() > 0) lastActivityAt = Date.now();
         if (Date.now() - lastActivityAt > IDLE_TIMEOUT_MS) {
           idleTimedOut = true;
           killProcessGroup(child, "SIGKILL");
@@ -242,14 +242,19 @@ export function createAntigravityRunner(factoryOptions: { partialStreaming?: boo
         if (aborted) throw fail("Antigravity run aborted");
         const openedSession = sessionId;
         cancelActive = () => acp.cancel(openedSession);
+        interactions.startPrompt();
         acp.prompt(openedSession, canAppend ? prompt : `${append}\n\n${prompt}`).then(
           (result) => {
+            interactions.endPrompt();
             closeSegment();
             push({ type: "convoy/acp_prompt_result", data: JSON.stringify({ sessionId, ...result }) });
             failure = null;
             finish();
           },
           (error: unknown) => {
+            // A failed prompt fails the run: abandon open requests, don't withdraw them.
+            bridgeAbort.abort();
+            interactions.endPrompt();
             closeSegment();
             failure ??= error instanceof Error ? error.message : String(error);
             finish();
@@ -279,6 +284,8 @@ export function createAntigravityRunner(factoryOptions: { partialStreaming?: boo
         throw fail(failure ?? (error instanceof Error ? error.message : String(error)));
       } finally {
         clearInterval(idleWatchdog);
+        bridgeAbort.abort();
+        abandonInteractions = null;
         if (forceKillTimer) clearTimeout(forceKillTimer);
         forceKillTimer = null;
         cancelActive = null;

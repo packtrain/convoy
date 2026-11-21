@@ -28,6 +28,15 @@ CLIs.
   deliberate: the bump lands with the breaking deploy, and long-lived sessions
   from before it die on their next restart, not mid-stream.
 
+## Per-runtime minimum
+
+A backend runtime definition may set `minAppVersion`. Registration then drops
+that runtime from `availableClis` when the CLI is older, so the machine stays
+connected but cannot be offered threads of that runtime. Use it when an older
+CLI would run the runtime unsafely, not merely with fewer features.
+Antigravity sets `0.152.0`: 0.151.0 ignores Ask to approve and skips every
+permission (OS-2469).
+
 ## CLI handling
 
 None — no version-specific code in the CLI. Registration failures other than

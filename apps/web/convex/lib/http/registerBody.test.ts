@@ -1,5 +1,5 @@
 import { describe, expect, test } from "vitest";
-import { MIN_SUPPORTED_CLI_VERSION, checkMinSupportedCliVersion } from "./registerBody";
+import { MIN_SUPPORTED_CLI_VERSION, checkMinSupportedCliVersion, parseRegisterAvailableClis } from "./registerBody";
 
 async function errorBody(response: Response) {
   return (await response.json()) as {
@@ -56,5 +56,23 @@ describe("checkMinSupportedCliVersion", () => {
     expect(checkMinSupportedCliVersion("0.50.0-beta.1", "0.50.0").success).toBe(
       true
     );
+  });
+});
+
+describe("parseRegisterAvailableClis", () => {
+  const advertised = [
+    { type: "codex", version: "0.142.0" },
+    { type: "antigravity", version: "1.5.13" },
+  ];
+  const types = (appVersion: string | undefined) => {
+    const parsed = parseRegisterAvailableClis(advertised, appVersion);
+    return parsed.success ? parsed.value?.map((cli) => cli.type) : parsed;
+  };
+
+  test("drops a runtime the connecting CLI is too old to run safely", () => {
+    // 0.151.0 ignores Ask to approve and would run it with permissions skipped (OS-2469).
+    expect(types("0.151.0")).toEqual(["codex"]);
+    expect(types(undefined)).toEqual(["codex"]);
+    expect(types("0.152.0")).toEqual(["codex", "antigravity"]);
   });
 });

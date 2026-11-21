@@ -11,6 +11,8 @@ import { normalizeAntigravityChunk } from "./normalizeChunk";
 export const antigravityRuntime: CliRuntimeDefinition = {
   type: "antigravity",
   label: "Antigravity",
+  // 0.151.0 ignores Ask to approve and would skip every permission.
+  minAppVersion: "0.152.0",
   parseAvailableCli: (_cli: Record<string, unknown>, version: string): ParseResult<CliRuntimeAvailableCli> =>
     success({ type: "antigravity", version }),
   normalizeChunk: (chunk: RawCliChunk) => normalizeAntigravityChunk(chunk),

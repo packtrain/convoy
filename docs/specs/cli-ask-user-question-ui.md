@@ -6,6 +6,7 @@ This document defines the UI behavior for inline `AskUserQuestion` tool prompts 
 
 - Applies to `apps/web` thread message part rendering for `AskUserQuestion`.
 - Covers questionnaire interactivity, submission locking, and multi-prompt behavior in a single thread.
+- Antigravity reuses both surfaces (see `docs/specs/cli-antigravity-runtime.md#permissions-and-questions`). agy 1.5.13's `ask_question` tool renders as the append-only tool part, and the submitted answer goes to agy as the next prompt. An `interaction_` permission request renders as the interaction card with one question, `multiSelect: false` and `isOther: false`, because agy takes only one of its options.
 - OpenCode `question.asked` requests reuse this flow: the CLI maps OpenCode's `QuestionInfo` shape to the same payload (`multiple` → `multiSelect`) and maps submitted answers back to OpenCode's ordered per-question label arrays (see `docs/specs/cli-opencode-runtime.md`).
 
 ## Rendering Contract
@@ -114,6 +115,12 @@ tool part (`message-parts/ask-user-question-part.tsx`).
   share a single answer slot.
 - The control type carries the arity: radio rows for single-select, checkbox
   rows for multi-select, including the `Other…` row (see Option Layout).
+
+## Interaction Card Title
+
+The interaction card reads "<runtime> has a question", with the thread runtime's label (`CLI_TYPE_MAP[chat.cliType]`), so Codex, OpenCode and Antigravity threads name their own agent. Without a label it reads "Claude has a question".
+
+A question with `isOther: false` has no `Other…` row. Runtimes that cannot take free text set it.
 
 ## Interactivity Contract
 

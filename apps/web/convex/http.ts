@@ -230,7 +230,7 @@ http.route({
       const parsedPaths = parseRegisterPaths(body.paths);
       if (!parsedPaths.success) return parsedPaths.response;
 
-      const parsedAvailableClis = parseRegisterAvailableClis(body.availableClis);
+      const parsedAvailableClis = parseRegisterAvailableClis(body.availableClis, scalars.appVersion);
       if (!parsedAvailableClis.success) return parsedAvailableClis.response;
 
       const result = await ctx.runMutation(internal.cli.sessions.register, {

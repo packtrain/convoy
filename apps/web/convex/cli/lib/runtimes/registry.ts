@@ -70,6 +70,8 @@ export type CliRuntimeDefinition = {
    * `cliRuntimeCatalogs` (OS-1721). Readers skip a lookup that could only miss.
    */
   advertisesModelCatalog?: boolean;
+  /** Oldest @useconvoy/cli that runs this runtime safely; older CLIs register without it. */
+  minAppVersion?: string;
   parseAvailableCli: (
     cli: Record<string, unknown>,
     version: string,

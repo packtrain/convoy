@@ -7,7 +7,7 @@ import type { RawCliChunk } from "../contracts";
  * through the tool adapter. Chunk contract: docs/specs/cli-antigravity-runtime.md.
  */
 
-/** How one tool update renders. `errorText` turns a completed update into an error. */
+/** How one tool update renders. `errorText` turns any tool update into an error. */
 export type AcpToolView = {
   toolName: string;
   input: unknown;
@@ -82,7 +82,7 @@ function normalizeToolUpdate(update: Record<string, unknown>, adapter: AcpToolAd
   if (update.sessionUpdate === "tool_call") {
     return { kind: "tool-input", toolCallId, toolName: view.toolName, inputJson: JSON.stringify(view.input) };
   }
-  if (status === "failed" || (status === "completed" && view.errorText !== undefined)) {
+  if (status === "failed" || view.errorText !== undefined) {
     return { kind: "tool-error", toolCallId, errorText: view.errorText ?? "Tool failed." };
   }
   if (status === "completed") {

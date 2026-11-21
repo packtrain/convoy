@@ -19,10 +19,53 @@ export interface AcpPromptResult {
   usage?: unknown;
 }
 
+export interface AcpPermissionOption {
+  optionId: string;
+  name: string;
+  /** `allow_once`, `allow_always`, `reject_once` or `reject_always`. */
+  kind: string;
+  _meta?: Record<string, unknown>;
+}
+
+/** `session/request_permission` params. `toolCall` is a tool call update. */
+export interface AcpPermissionRequest {
+  sessionId: string;
+  toolCall: Record<string, unknown> & { toolCallId: string };
+  options: AcpPermissionOption[];
+}
+
+export type AcpPermissionReply = {
+  outcome: { outcome: "selected"; optionId: string } | { outcome: "cancelled" };
+};
+
+export const ACP_PERMISSION_CANCELLED: AcpPermissionReply = { outcome: { outcome: "cancelled" } };
+
+/** Null when the tool call id is missing or an option id is empty or repeated. */
+export function parseAcpPermissionRequest(params: Record<string, unknown>): AcpPermissionRequest | null {
+  const toolCall = isRecord(params.toolCall) ? params.toolCall : {};
+  if (typeof toolCall.toolCallId !== "string" || !Array.isArray(params.options)) return null;
+  const options: AcpPermissionOption[] = [];
+  for (const option of params.options) {
+    if (!isRecord(option) || typeof option.optionId !== "string" || !option.optionId.trim()) return null;
+    if (options.some((seen) => seen.optionId === option.optionId)) return null;
+    options.push({
+      optionId: option.optionId,
+      name: typeof option.name === "string" ? option.name : "",
+      kind: typeof option.kind === "string" ? option.kind : "",
+      ...(isRecord(option._meta) ? { _meta: option._meta } : {}),
+    });
+  }
+  return {
+    sessionId: typeof params.sessionId === "string" ? params.sessionId : "",
+    toolCall: { ...toolCall, toolCallId: toolCall.toolCallId },
+    options,
+  };
+}
+
 export interface AcpClientHandlers {
   onSessionUpdate(params: Record<string, unknown>): void;
-  /** Answers `session/request_permission` with the full `{ outcome }` result. */
-  onRequestPermission(params: Record<string, unknown>): Promise<unknown>;
+  /** Never sees a malformed request; the client answers those `cancelled`. */
+  onRequestPermission(request: AcpPermissionRequest): Promise<AcpPermissionReply>;
 }
 
 export interface AcpClient {
@@ -46,10 +89,11 @@ export function createAcpClient(
       onNotification: (method, params) => {
         if (method === "session/update") handlers.onSessionUpdate(params);
       },
-      onRequest: (method, params) =>
-        method === "session/request_permission"
-          ? handlers.onRequestPermission(params)
-          : Promise.reject(new Error(`Unsupported ACP request "${method}"`)),
+      onRequest: async (method, params) => {
+        if (method !== "session/request_permission") throw new Error(`Unsupported ACP request "${method}"`);
+        const request = parseAcpPermissionRequest(params);
+        return request ? handlers.onRequestPermission(request) : ACP_PERMISSION_CANCELLED;
+      },
     },
     { label, envelope: true }
   );

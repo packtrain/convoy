@@ -1,8 +1,8 @@
-import { MousePointerClick } from "lucide-react";
+import { MessageCircleQuestion, MousePointerClick } from "lucide-react";
 import AntigravityColorIcon from "@/components/icons/antigravity-color";
 import type { CliRuntimeUiDefinition } from "./contracts";
 
-/** Act only until Ask to approve lands (OS-2469). Spec: docs/specs/cli-antigravity-runtime.md. */
+/** `default` reuses the "Ask to approve" mode value. Spec: docs/specs/cli-antigravity-runtime.md. */
 export const antigravityRuntimeUi: CliRuntimeUiDefinition = {
   type: "antigravity",
   icon: AntigravityColorIcon,
@@ -13,6 +13,12 @@ export const antigravityRuntimeUi: CliRuntimeUiDefinition = {
       label: "Act",
       description: "Full access, auto-allows all commands, never asks",
       icon: MousePointerClick,
+    },
+    {
+      value: "default",
+      label: "Ask to approve",
+      description: "Asks you before running commands",
+      icon: MessageCircleQuestion,
     },
   ],
 };
