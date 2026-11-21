@@ -1,7 +1,7 @@
 # Convoy project environment
 
 This template is for the OS-1958 implementation. Runtime and Docker/VM acceptance
-are still pending. Projects run Codex, Claude Code, Cursor or OpenCode when a root-owned binary is
+are still pending. Projects run Codex, Claude Code, Cursor, OpenCode or Antigravity when a root-owned binary is
 installed; the launcher checks at each start. Do not use it for sensitive projects
 until the acceptance procedure passes.
 
@@ -117,8 +117,8 @@ scoped provider credentials.
 ## Acceptance procedure
 
 Use a disposable environment with two test projects and non-sensitive credentials.
-The launcher runs only the runtimes Convoy has tested in the boundary, `codex` and
-`claude-code`, and only from root-owned binaries. `install.py` prints its sandbox
+The launcher runs only the runtimes Convoy has tested in the boundary, `codex`,
+`claude-code`, `cursor`, `opencode` and `antigravity`, and only from root-owned binaries. `install.py` prints its sandbox
 check and the detected runtimes. Both Codex transports need testing.
 
 1. Register A and B and enter their shells. Record `id`, `/proc/self/status`,
@@ -221,6 +221,19 @@ policy for nested bubblewrap, and a host-only root lifecycle helper. See
 [Managed local environments](https://docs.convoy.build/docs/cli/managed-environments)
 for setup, runtime login, updates, recovery and acceptance commands.
 The manual Dev Containers workflow above remains available.
+
+## Upgrading to CLI 0.159.0
+
+The launcher runs Antigravity (`agy`) as a tested runtime. This image installs
+agy 1.5.14 root-owned in `/usr/local/bin` (amd64 and arm64), the same build a
+managed Agent runtimes install offers. On a VM, install the new CLI, rerun
+`install.py` with the same arguments, and install agy as in the
+[isolated projects guide](https://docs.convoy.build/docs/cli/isolated-projects#install-antigravity).
+Then sign each project in with `convoy project login <profile> --runtime antigravity`.
+Until the rerun, the old launcher answers that login with `Unsupported runtime`
+and never offers Antigravity to a project. A CLI older than 0.158.0 cannot read
+`project check` from this launcher, so upgrade both together. Antigravity has
+no managed key yet.
 
 ## Upgrading to CLI 0.148.0
 

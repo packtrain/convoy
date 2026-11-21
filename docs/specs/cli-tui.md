@@ -1161,9 +1161,8 @@ the details view even when its preview or the project list cannot fit.
 
 Project Actions adds [i] Log in to Codex and [o] Log in to Claude Code, next to
 [h] Private project shell. [y] Log in to Antigravity runs `agy acp --login` the
-same way (CLI 0.158.0, OS-2474). It is offered only on a shared target, because no
-launcher runs agy yet; the reason says Antigravity runs in shared projects only.
-An SSH remote does not report its mode yet, so it reads as isolated there. An action is unavailable when the project's status
+same way (CLI 0.158.0, OS-2474), on isolated targets too since CLI 0.159.0
+(OS-2475). An action is unavailable when the project's status
 lists the runtimes detected at its last start and that runtime is not among them.
 The reason names the fix: install it root-owned, then reload. Without that list
 (an older service, or a project that never started) both are offered, and the

@@ -16,7 +16,7 @@ import { cursorRuntime } from "./cursor/runtime.js";
 import { opencodeRuntime } from "./opencode/runtime.js";
 import { antigravityRuntime } from "./antigravity/runtime.js";
 import { RunnerExecutionError } from "./contracts.js";
-import { MANAGED_RUNTIME_LABELS } from "../../lib/config/credentials/validators.js";
+import { loginRuntimeLabels } from "../../commands/project/validators.js";
 
 const runtimeDefinitions: Record<string, CliRuntimeDefinition> = {
   "claude-code": claudeCodeRuntime,
@@ -58,7 +58,7 @@ export function createRunnerForCliType(
       // Fail through the normal per-run lifecycle so claims and the queue recover.
       // eslint-disable-next-line require-yield
       async *execute() {
-        throw new RunnerExecutionError(`${cliType} is not available in this project. Isolated projects run ${Object.values(MANAGED_RUNTIME_LABELS).join(", ")} installed root-owned, for example under /usr/local/bin.`);
+        throw new RunnerExecutionError(`${cliType} is not available in this project. Isolated projects run ${Object.values(loginRuntimeLabels).join(", ")} installed root-owned, for example under /usr/local/bin.`);
       },
       abort() {},
       async shutdown() {},

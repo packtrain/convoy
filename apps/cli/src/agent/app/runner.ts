@@ -2,7 +2,8 @@ import { randomUUID } from "crypto";
 import * as os from "node:os";
 import * as path from "node:path";
 import chalk from "chalk";
-import { MANAGED_RUNTIME_LABELS, type ClaudeAuth, type CodexAuth, type CursorAuth, type OpencodeAuth } from "../../lib/config/credentials/validators.js";
+import { type ClaudeAuth, type CodexAuth, type CursorAuth, type OpencodeAuth } from "../../lib/config/credentials/validators.js";
+import { loginRuntimeLabels } from "../../commands/project/validators.js";
 import type { CodexProviderKey } from "../../lib/config/types.js";
 import { api } from "../../convex/_generated/api.js";
 import type { Id } from "../../convex/_generated/dataModel.js";
@@ -174,7 +175,7 @@ export async function createAgentRunner(options: AgentRunnerOptions): Promise<Ag
 
     if (!streamFile && availableClis.length === 0) {
       throw new ConnectDiagnosticError(process.env.CONVOY_PROJECT_IDENTITY
-        ? `No runtime started in this project. Detected for this project: ${process.env.CONVOY_PROJECT_RUNTIMES || "none"}. Install ${Object.values(MANAGED_RUNTIME_LABELS).join(", ")} root-owned, for example under /usr/local/bin, then reload the project.`
+        ? `No runtime started in this project. Detected for this project: ${process.env.CONVOY_PROJECT_RUNTIMES || "none"}. Install ${Object.values(loginRuntimeLabels).join(", ")} root-owned, for example under /usr/local/bin, then reload the project.`
         : "No supported CLI runtime was detected on PATH. Install Claude Code or use --stream for fixture-based testing.", "runtime-missing");
     }
 

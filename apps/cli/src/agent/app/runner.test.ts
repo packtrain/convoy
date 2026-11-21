@@ -437,7 +437,7 @@ describe("agent-runner shutdown lifecycle", () => {
     try {
       const failure = await runner.run().catch((error: unknown) => error);
       expect(failure).toBeInstanceOf(ConnectDiagnosticError);
-      expect(failure).toMatchObject({ reason: "runtime-missing", message: expect.stringContaining("Detected for this project: codex. Install Codex, Claude Code, Cursor, OpenCode root-owned") });
+      expect(failure).toMatchObject({ reason: "runtime-missing", message: expect.stringContaining("Detected for this project: codex. Install Codex, Claude Code, Cursor, OpenCode, Antigravity root-owned") });
     } finally { vi.unstubAllEnvs(); await runner.stop(); }
   });
 

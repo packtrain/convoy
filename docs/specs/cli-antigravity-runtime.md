@@ -231,7 +231,7 @@ The assistant message menu offers `agy --conversation <ACP session id>`. agy sto
 
 ## Project environments
 
-Antigravity joins the login runtimes of shared projects and managed Docker environments (CLI 0.158.0, OS-2474). Isolated projects follow in OS-2475, because no `launcher.py` detects agy yet.
+Antigravity joins the login runtimes of shared projects and managed Docker environments (CLI 0.158.0, OS-2474), and of isolated projects (CLI 0.159.0, OS-2475, [below](#isolated-projects)).
 
 - `loginRuntimeSchema` is the key runtimes plus `antigravity`, so `project login --runtime antigravity` parses and `keys use --runtime antigravity` does not. The managed key arrives in OS-2476.
 - The check and the sign-in resolve agy as the worker does: `CONVOY_ANTIGRAVITY_EXECUTABLE`, then `agy`, then `antigravity` on `PATH`. So a check never passes an agy the worker would not run, and never fails one it would.
@@ -240,7 +240,21 @@ Antigravity joins the login runtimes of shared projects and managed Docker envir
 - The user install is the official script, `curl -fsSL https://antigravity.google/cli/install.sh | bash`. It installs `~/.local/bin/antigravity` with an `agy` link.
 - A managed Docker environment's Agent runtimes panel offers the pinned build `ANTIGRAVITY_BUILD` (1.5.14) and installs only that. The root install downloads the versioned tarball, checks the manifest's sha512 for the machine and extracts the binary into `/usr/local/bin`. Spec: [cli-tui.md](cli-tui.md#agent-runtimes-cli-01240-os-2236).
 - agy's state follows `HOME`, never `GEMINI_HOME`, so the service passes no extra variable. Spec: [cli-shared-environments.md](cli-shared-environments.md#execution).
-- The TUI's project Actions offer [y] Log in to Antigravity on shared targets, the same handoff as the Codex and Claude Code logins. Spec: [cli-tui.md](cli-tui.md#runtime-login-cli-01100). There is no Runtime access entry, as for Cursor and OpenCode, because agy reports no account.
+- The TUI's project Actions offer [y] Log in to Antigravity, the same handoff as the Codex and Claude Code logins. Spec: [cli-tui.md](cli-tui.md#runtime-login-cli-01100). There is no Runtime access entry, as for Cursor and OpenCode, because agy reports no account.
+
+### Isolated projects
+
+`launcher.py` lists `antigravity` among the runtimes tested inside the boundary: binary `agy`, login `agy acp --login`, config folder `~/.gemini/antigravity-cli`, login file `antigravity-oauth-token` in it. The folder is the file's direct parent, because `runtime_files` skips a link only on the last path part. The image and a VM install agy 1.5.14 root-owned, the build a managed install pins. Spec: [cli-project-isolation.md](cli-project-isolation.md#runtime-detection-and-login-cli-01100-os-2166-os-2160).
+
+Where the sign-in lives. agy 1.5.14 logs `Using file-based token storage because no D-Bus session bus detected` and writes `~/.gemini/antigravity-cli/antigravity-oauth-token`, mode 0600. The sandbox's `--clearenv` leaves no D-Bus address and the boundary has no session bus, so the file is what agy uses. `SSH_CONNECTION` is not needed. agy refreshes the token in place, so the project HOME must stay writable, which it is. The sign-in is a file in the private HOME, so it survives a service restart, and another project cannot read it.
+
+The sandbox sets `AGY_CLI_DISABLE_AUTO_UPDATE=1` for every command, the login included, which runs outside the runner. The root-owned binary cannot be replaced by the project UID anyway.
+
+How it was verified (2026-11-21, dev container, arm64, no bubblewrap there): agy ran under exactly the sandbox environment (`env -i` with the launcher's variables, a fresh HOME holding only the token file, an empty `TMPDIR`, a read-only binary). `session/new` listed the account's models, a prompt completed, the binary's SHA-256 was unchanged and `TMPDIR` stayed empty. `agy acp --login` in a fresh HOME printed the Google link, chose file storage and asked for the code. Pending, and required before CLI 0.159.0 is published: the VM acceptance in OS-2475, inside bubblewrap. It covers a completed login, a thread and the model inventory, a follow-up after a service restart, background-process cleanup, the untrusted-binary refusal, cross-project HOME denial, the older-launcher upgrade path and the x86-64 build.
+
+Inside the boundary a daemon agy moved to the background stays in the worker's PID namespace and ends with it (`--unshare-pid`, `--die-with-parent`). The model inventory runs as on a shared machine, in a new folder under the sandbox's tmpfs `/tmp`. No managed key yet (OS-2476).
+
+The image's strict firewall (`init-firewall.sh`, shared with `templates/devcontainer`) does not allow agy's Google hosts yet, such as `daily-cloudcode-pa.googleapis.com` and `accounts.google.com`. A managed Docker environment in strict mode needs them in `DEVCONTAINER_EXTRA_ALLOWED_DOMAINS` until OS-2477 adds them. A VM has no such firewall.
 
 ## Known limitations
 

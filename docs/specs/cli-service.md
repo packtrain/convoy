@@ -296,9 +296,9 @@ wording lives next to the `project check` fixes so both say the same thing.
 A project's `runtimes` list carries the same keys, at most one each
 (`antigravity` since CLI 0.158.0, OS-2474). A TUI before 0.158.0 cannot parse a
 status that lists `antigravity` and shows the service as unavailable until it
-is updated. A new TUI reads an older service, which never sends it. Only a
-shared worker reports `antigravity`, since no isolated launcher detects agy
-yet.
+is updated. A new TUI reads an older service, which never sends it. Shared
+workers report it since 0.158.0, isolated ones since the 0.159.0 launcher
+(OS-2475).
 
 Each project's status also carries that guidance as an optional `warning` (at most
 256 characters). The service sets it for the reasons above, a launch failure, a

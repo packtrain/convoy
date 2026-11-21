@@ -109,8 +109,9 @@ unit tests.
 
 The launcher keeps the runtimes Convoy has tested inside the boundary in code:
 `codex` (binary `codex`), `claude-code` (binary `claude`), since CLI
-0.117.0 `cursor` (binary `cursor-agent`, OS-2017) and since 0.118.0 `opencode`
-(binary `opencode`, OS-2018). Adding one is a release,
+0.117.0 `cursor` (binary `cursor-agent`, OS-2017), since 0.118.0 `opencode`
+(binary `opencode`, OS-2018) and since 0.159.0 `antigravity` (binary `agy`,
+OS-2475). Adding one is a release,
 not an administrator edit. At every worker, shell and login start it
 looks for each binary on the sandbox `PATH`, without the project's
 `~/.local/bin`, and keeps it only if the binary resolves to a root-owned file
@@ -136,17 +137,20 @@ and its `runtimes.json` are gone. The helper's status still returns an empty
 `runtimes` list because host CLIs 0.109.0 and older require the field.
 
 Before every shell, login or worker start, the launcher creates `~/.codex`,
-`~/.claude`, `~/.config/cursor` and `~/.local/share/opencode` (0700, project UID) in the project HOME if
+`~/.claude`, `~/.config/cursor`, `~/.local/share/opencode` and `~/.gemini/antigravity-cli` (0700, project UID) in the project HOME if
 they are missing. It opens HOME with `O_NOFOLLOW` and walks each folder one
 part at a time with `O_NOFOLLOW` relative to that handle, so it never follows
 or changes a link the project made. A linked `~/.config` leaves Cursor's folder
 uncreated and reads as not logged in. `project check` looks for
-`~/.config/cursor/auth.json` and `~/.local/share/opencode/auth.json` the same way.
+`~/.config/cursor/auth.json`, `~/.local/share/opencode/auth.json` and
+`~/.gemini/antigravity-cli/antigravity-oauth-token` the same way.
 
 `launcher login <identity> <runtime>` is the shell mode with one command
 instead of bash: `codex login --device-auth`, `claude auth login`,
-`NO_OPEN_BROWSER=1 cursor-agent login`, which prints the browser link, or
-`opencode auth login`, which asks for a provider and its key. It refuses
+`NO_OPEN_BROWSER=1 cursor-agent login`, which prints the browser link,
+`opencode auth login`, which asks for a provider and its key, or
+`agy acp --login`, which prints a Google link and asks for the code from the
+page it lands on. It refuses
 a runtime that detection did not find. The CLI exposes it as
 `project shell <profile> --login <runtime>`, which local, managed Docker and SSH
 targets forward like the shell. `project login <profile> --runtime <runtime>`
@@ -210,7 +214,8 @@ stderr message, because its stdout is the terminal.
 **Runtime state.** Detection now also reports runtimes it skipped. The worker
 receives `CONVOY_PROJECT_UNTRUSTED` (on the sandbox `PATH` but failing
 `trusted_path`) and `CONVOY_PROJECT_LOGGED_OUT` (detected, with no login file:
-`~/.codex/auth.json` or `~/.claude/.credentials.json`). The launcher checks those
+`~/.codex/auth.json`, `~/.claude/.credentials.json` or another runtime's login
+file listed above). The launcher checks those
 files as root through `O_NOFOLLOW` handles and `lstat`, so it never follows a
 link the project made or reads a file's contents. The worker drops a runtime from
 `loggedOut` when the profile assigns it managed credentials.
@@ -330,6 +335,19 @@ Claude Code. Its postinstall puts the native binary at
 `/usr/local/bin/opencode`, so the launcher's trust check sees the real binary,
 not a wrapper. A VM administrator installs it with the same npm command, which
 `project check` prints.
+
+Antigravity (OS-2475) has no managed key yet (OS-2476). The image installs agy
+1.5.14, the build `ANTIGRAVITY_BUILD` in `apps/cli/src/commands/project/formatters.ts`
+pins for a managed install, from the same release tarball and SHA-512 per
+architecture. Its single `antigravity` executable lands root-owned in
+`/usr/local/bin`, with `agy` linked to it; a test keeps the Dockerfile and the
+managed install on the same build. The sandbox sets `AGY_CLI_DISABLE_AUTO_UPDATE=1`
+for every command, because the login runs outside the runner that sets it for runs.
+With no D-Bus session in the sandbox agy stores its sign-in as a file in the
+project HOME, so the sign-in survives restarts and stays per project
+([cli-antigravity-runtime.md](cli-antigravity-runtime.md#isolated-projects)).
+`project check` output gains an `antigravity` runtime; the CLI treats it as
+absent for older launchers.
 
 Install matching CLI/launcher versions before enabling bindings; older launchers
 are rejected by the new CLI. Codex managed auth is app-server-only and ephemeral;

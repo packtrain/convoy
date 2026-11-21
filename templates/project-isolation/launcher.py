@@ -25,7 +25,8 @@ SAFE_ENV = {"PATH": "/usr/local/bin:/usr/bin:/bin", "LANG": "C.UTF-8"}
 RUNTIMES = {"codex": ("codex", "Codex", "codex login --device-auth", ".codex", "auth.json"),
             "claude-code": ("claude", "Claude Code", "claude auth login", ".claude", ".credentials.json"),
             "cursor": ("cursor-agent", "Cursor", "NO_OPEN_BROWSER=1 cursor-agent login", ".config/cursor", "auth.json"),
-            "opencode": ("opencode", "OpenCode", "opencode auth login", ".local/share/opencode", "auth.json")}
+            "opencode": ("opencode", "OpenCode", "opencode auth login", ".local/share/opencode", "auth.json"),
+            "antigravity": ("agy", "Antigravity", "agy acp --login", ".gemini/antigravity-cli", "antigravity-oauth-token")}
 # Who holds a project lease, as written into its lease file.
 HOLDERS = {"service": "the project service", "connect": "a foreground connection", "shell": "a private project shell",
            "login": "a runtime login", "registration": "a registration", "unknown": "another connection or shell"}
@@ -329,7 +330,7 @@ def sandbox_args(config, entry):
            "HOME": "/home/convoy", "USER": "convoy-project", "LOGNAME": "convoy-project",
            "TMPDIR": "/tmp", "XDG_RUNTIME_DIR": "/run/user", "XDG_CONFIG_HOME": "/home/convoy/.config",
            "XDG_CACHE_HOME": "/home/convoy/.cache", "XDG_DATA_HOME": "/home/convoy/.local/share",
-           "CODEX_HOME": "/home/convoy/.codex", "CLAUDE_CONFIG_DIR": "/home/convoy/.claude",
+           "CODEX_HOME": "/home/convoy/.codex", "CLAUDE_CONFIG_DIR": "/home/convoy/.claude", "AGY_CLI_DISABLE_AUTO_UPDATE": "1",
            "CONVOY_PROJECT_IDENTITY": entry["identity"], "TERM": "xterm-256color",
            "CONVOY_PROJECT_RUNTIMES": ",".join(name for name, state in states.items() if state == "ready"),
            "CONVOY_PROJECT_UNTRUSTED": ",".join(name for name, state in states.items() if state == "untrusted"),

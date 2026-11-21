@@ -270,7 +270,7 @@ sudo sh -c 'umask 022 && npm install -g --prefix /usr/local @openai/codex'
 /usr/local/bin/codex --version
 ```
 
-Projects use every tested runtime (Codex, Claude Code, Cursor, OpenCode) whose binary is root-owned
+Projects use every tested runtime (Codex, Claude Code, Cursor, OpenCode, Antigravity) whose binary is root-owned
 and not group- or world-writable. The launcher checks at each start, so a runtime
 installed later needs only a project reload. A binary under a project's own HOME
 is ignored.
@@ -291,6 +291,10 @@ Cursor uses `--runtime cursor`, which runs `cursor-agent login` and prints a
 browser link. Cursor is not on npm; see [Install Cursor](#install-cursor).
 OpenCode uses `--runtime opencode`, which runs `opencode auth login`; see
 [Install OpenCode](#install-opencode).
+Antigravity uses `--runtime antigravity`, which runs `agy acp --login`. Open
+the printed Google link in your PC's browser, sign in, then paste the code or
+the full URL of the page you land on. See
+[Install Antigravity](#install-antigravity).
 
 ### Install Cursor
 
@@ -316,6 +320,21 @@ sudo sh -c 'umask 022 && npm install -g --prefix /usr/local opencode-ai@1.19.5'
 ```
 
 Then reload the projects. Managed OpenCode keys need 1.18.18 or newer.
+
+### Install Antigravity
+
+Install the build Convoy tested, root-owned, on x86-64 or ARM64. The command
+checks the download's SHA-512 and fails on any other architecture.
+`convoy project check a` also prints it while Antigravity is missing:
+
+```bash
+sudo sh -c 'umask 022 && case $(uname -m) in x86_64) p=linux-x64/cli_linux_x64 s=83311d3f354567612dc16c1ae2ea9b503d6f6833aa4e138d39aa229da3f3bb99b0e4d7cca0bce4796b0060d6a51d8113eb7449ed5dc0e7900bf217107ea5bff9;; aarch64) p=linux-arm/cli_linux_arm64 s=c9b29bba475f63a1a80161ae93ba72b221c7a586d9851e4d0061546704bab66d6b2760b25d716d191724fc7564f3246456ee151e28aa37af48dbcd72bdc6c463;; *) echo "Antigravity has no Linux build for $(uname -m)." >&2; exit 1;; esac && t=$(mktemp -d) && { curl -fsSL "https://storage.googleapis.com/antigravity-public/antigravity-cli/1.5.14-5302690847260672/$p.tar.gz" -o "$t/agy.tgz" && echo "$s  $t/agy.tgz" | sha512sum -c --quiet - && tar --no-same-owner -xzf "$t/agy.tgz" -C /usr/local/bin antigravity && ln -sf antigravity /usr/local/bin/agy; r=$?; rm -rf "$t"; exit $r; }'
+/usr/local/bin/agy --version   # 1.5.14
+```
+
+Then reload the projects. Do not use the install script from Google here: it
+installs into your own HOME, which projects cannot see, and agy updates itself
+there. Each project keeps its own Google sign-in in its private HOME.
 
 Repeat with `convoy project login b --runtime codex`. The path `/home/convoy/.codex` looks
 identical in each shell but maps to different private storage. Signing both
@@ -395,6 +414,9 @@ Project a
 ✓ Codex config folder
 ✗ Codex logged in. Run project login a --runtime codex.
 - Claude Code not installed
+✓ Antigravity installed root-owned
+✓ Antigravity config folder
+✗ Antigravity logged in. Run project login a --runtime antigravity.
 ✓ Project lease: held by the project service
 ✓ Backend accepts the project key
 ```

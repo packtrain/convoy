@@ -1,6 +1,6 @@
 {
   "name": "Convoy projects",
-  "build": { "dockerfile": "Dockerfile", "args": { "CONVOY_VERSION": "0.158.0" } },
+  "build": { "dockerfile": "Dockerfile", "args": { "CONVOY_VERSION": "0.159.0" } },
   "remoteUser": "node",
   "updateRemoteUserUID": false,
   "workspaceMount": "source=${localWorkspaceFolder},target=/workspace,type=bind",

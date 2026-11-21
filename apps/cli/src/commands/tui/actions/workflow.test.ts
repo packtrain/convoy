@@ -120,10 +120,13 @@ it("logs in to Antigravity on a shared target with agy's own sign-in (OS-2474)",
   expect(f.browser.getSnapshot().action?.message).toMatch(/^Logged in to Antigravity\. The login applies to every project/);
 });
 
-it("offers the Antigravity login only on shared targets (OS-2474)", async () => {
+it("offers the Antigravity login on isolated targets that detected agy (OS-2475)", async () => {
   const f = await fixture();
-  expect(f.browser.unavailable("login-antigravity")).toBe("Antigravity runs in shared projects only. Isolated projects cannot run it yet.");
-  Object.assign(f.connection, { mode: "shared" });
+  f.projects[0].runtimes = ["codex"];
+  f.browser.beginAction("status"); await settle(f.browser);
+  expect(f.browser.unavailable("login-antigravity")).toBe("Antigravity was not detected on this target when a last started. Install it root-owned, for example under /usr/local/bin, then [u] Reload project.");
+  f.projects[0].runtimes = ["codex", "antigravity"];
+  f.browser.beginAction("status"); await settle(f.browser);
   expect(f.browser.unavailable("login-antigravity")).toBeUndefined();
 });
 

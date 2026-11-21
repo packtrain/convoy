@@ -30,7 +30,7 @@ def diagnose(launcher, config):
               "After fixing it, reload the projects; no reinstall is needed.")
     runtimes = launcher.detect_runtimes(config)
     print(f"Detected runtimes: {', '.join(runtimes)}." if runtimes else
-          "No runtime detected. Install codex, claude, cursor-agent or opencode root-owned, for example under /usr/local/bin, then reload the projects.")
+          "No runtime detected. Install codex, claude, cursor-agent, opencode or agy root-owned, for example under /usr/local/bin, then reload the projects.")
 
 
 def node_problem(node):

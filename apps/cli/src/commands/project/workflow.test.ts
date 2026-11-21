@@ -415,12 +415,13 @@ describe("project login", () => {
     await loginProject("a", "codex", false, 5_000, 1);
     expect(replies).toEqual([]);
   });
-  it("refuses Antigravity in an isolated project before pausing it (OS-2474)", async () => {
-    mocks.service.mockResolvedValue(worker({}));
-    await expect(loginProject("a", "antigravity", true)).rejects.toThrow("Antigravity runs in shared projects only");
-    await expect(openProjectShell("a", undefined, undefined, "antigravity")).rejects.toThrow("Antigravity runs in shared projects only");
-    expect(mocks.service).not.toHaveBeenCalled();
-    expect(mocks.shell).not.toHaveBeenCalled();
+  it("runs the Antigravity login inside an isolated project (OS-2475)", async () => {
+    const replies = [worker({}), { applied: true }, { applied: true }, worker({})];
+    mocks.service.mockImplementation(async () => replies.shift());
+    await loginProject("a", "antigravity", false, 5_000, 1);
+    expect(mocks.shell).toHaveBeenCalledWith(identity, undefined, "antigravity");
+    await openProjectShell("a", undefined, undefined, "antigravity");
+    expect(mocks.shell).toHaveBeenLastCalledWith(identity, undefined, "antigravity");
   });
   it("refuses to stop active runs without --interrupt", async () => {
     mocks.service.mockResolvedValue(worker({ activeRuns: 2 }));

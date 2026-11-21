@@ -31,7 +31,7 @@ const runtimeFactsSchema = z.object({ state: z.enum(["ready", "untrusted", "miss
 export const launcherCheckSchema = z.object({
   sandbox: z.string().max(4096).nullable(),
   holder: z.enum(["service", "connect", "shell", "login", "registration", "unknown"]).nullable(),
-  // Launchers before CLI 0.117.0 report no Cursor, before 0.118.0 no OpenCode; none reports Antigravity yet (OS-2475).
+  // Launchers before CLI 0.117.0 report no Cursor, before 0.118.0 no OpenCode, before 0.159.0 no Antigravity.
   runtimes: z.object({ codex: runtimeFactsSchema, "claude-code": runtimeFactsSchema, cursor: runtimeFactsSchema.optional(), opencode: runtimeFactsSchema.optional(),
     antigravity: runtimeFactsSchema.optional() }).strict(),
 }).strict();

@@ -49,8 +49,6 @@ export class ActionWorkflow {
       if (!client?.hello?.capabilities?.includes("host-cli-v1")) return "Update the service for project maintenance.";
       if ((kind === "shell" || loginRuntime(kind)) && !target.shell) return "Private shell requires a configured Linux project environment or managed Docker target.";
       const login = loginRuntime(kind);
-      // No project launcher runs agy yet (OS-2475).
-      if (login === "antigravity" && target.mode !== "shared") return "Antigravity runs in shared projects only. Isolated projects cannot run it yet.";
       if (login && project.runtimes && !project.runtimes.includes(login)) {
         return `${loginRuntimeLabels[login]} was not detected on this target when ${project.profile} last started. Install it ${target.mode === "shared" ? "for this account" : "root-owned, for example under /usr/local/bin"}, then [u] Reload project.`;
       }

@@ -241,13 +241,15 @@ class LauncherPolicyTests(unittest.TestCase):
         with patch.object(launcher.shutil, "which", side_effect=lambda name, path=None: binaries.get(name)), \
                 patch.object(launcher.Path, "resolve", lambda self, strict=False: self), \
                 patch.object(launcher, "trusted_path", side_effect=trusted):
-            self.assertEqual(launcher.runtime_states(self.config), {"codex": "ready", "claude-code": "untrusted", "cursor": "missing", "opencode": "missing"})
+            self.assertEqual(launcher.runtime_states(self.config), {"codex": "ready", "claude-code": "untrusted", "cursor": "missing", "opencode": "missing", "antigravity": "missing"})
             args = launcher.sandbox_args(self.config, {"identity": self.identity, "path": str(self.root / "a")})
             self.assertEqual(args[args.index("CONVOY_PROJECT_UNTRUSTED") + 1], "claude-code")
             self.assertEqual(args[args.index("CONVOY_PROJECT_LOGGED_OUT") + 1], "codex")
             (home / ".codex" / "auth.json").write_text("{}")
             args = launcher.sandbox_args(self.config, {"identity": self.identity, "path": str(self.root / "a")})
             self.assertEqual(args[args.index("CONVOY_PROJECT_LOGGED_OUT") + 1], "")
+            # The login runs outside the runner, so the sandbox keeps agy from replacing itself.
+            self.assertEqual(args[args.index("AGY_CLI_DISABLE_AUTO_UPDATE") + 1], "1")
 
     def test_login_files_are_found_without_following_project_links(self):
         home, outside = self.root / "home", self.root / "outside"
@@ -259,7 +261,10 @@ class LauncherPolicyTests(unittest.TestCase):
         (home / ".config").symlink_to(outside)
         (outside / "cursor").mkdir()
         (outside / "cursor" / "auth.json").write_text("{}")
-        self.assertEqual(launcher.runtime_files(home), {"codex": (False, False), "claude-code": (True, False), "cursor": (False, False), "opencode": (False, False)})
+        (home / ".gemini").symlink_to(outside)
+        (outside / "antigravity-cli").mkdir()
+        (outside / "antigravity-cli" / "antigravity-oauth-token").write_text("{}")
+        self.assertEqual(launcher.runtime_files(home), {"codex": (False, False), "claude-code": (True, False), "cursor": (False, False), "opencode": (False, False), "antigravity": (False, False)})
         (home / ".claude" / ".credentials.json").unlink()
         (home / ".claude" / ".credentials.json").write_text("{}")
         self.assertEqual(launcher.runtime_files(home)["claude-code"], (True, True))
@@ -271,7 +276,12 @@ class LauncherPolicyTests(unittest.TestCase):
         (home / ".local" / "share" / "opencode").mkdir(parents=True)
         (home / ".local" / "share" / "opencode" / "auth.json").write_text("{}")
         self.assertEqual(launcher.runtime_files(home)["opencode"], (True, True))
-        self.assertEqual(launcher.runtime_files(self.root / "absent"), {"codex": (False, False), "claude-code": (False, False), "cursor": (False, False), "opencode": (False, False)})
+        (home / ".gemini").unlink()
+        (home / ".gemini" / "antigravity-cli").mkdir(parents=True)
+        self.assertEqual(launcher.runtime_files(home)["antigravity"], (True, False))
+        (home / ".gemini" / "antigravity-cli" / "antigravity-oauth-token").write_text("{}")
+        self.assertEqual(launcher.runtime_files(home)["antigravity"], (True, True))
+        self.assertEqual(launcher.runtime_files(self.root / "absent"), {"codex": (False, False), "claude-code": (False, False), "cursor": (False, False), "opencode": (False, False), "antigravity": (False, False)})
 
     def test_a_held_lease_names_its_holder(self):
         fd = launcher.take_lease(self.config, self.identity, "shell")
@@ -338,7 +348,7 @@ class LauncherPolicyTests(unittest.TestCase):
         fd = launcher.take_lease(self.config, self.identity, "service")
         try:
             with patch.object(launcher, "check_boundary", side_effect=ValueError("Sandbox check failed: bwrap: denied.")), \
-                    patch.object(launcher, "runtime_states", return_value={"codex": "ready", "claude-code": "missing", "cursor": "missing", "opencode": "missing"}):
+                    patch.object(launcher, "runtime_states", return_value={"codex": "ready", "claude-code": "missing", "cursor": "missing", "opencode": "missing", "antigravity": "missing"}):
                 result = launcher.check(self.config, entry)
         finally:
             os.close(fd)
@@ -346,7 +356,8 @@ class LauncherPolicyTests(unittest.TestCase):
             "codex": {"state": "ready", "home": True, "loggedIn": True},
             "claude-code": {"state": "missing", "home": False, "loggedIn": False},
             "cursor": {"state": "missing", "home": False, "loggedIn": False},
-            "opencode": {"state": "missing", "home": False, "loggedIn": False}}})
+            "opencode": {"state": "missing", "home": False, "loggedIn": False},
+            "antigravity": {"state": "missing", "home": False, "loggedIn": False}}})
         self.assertFalse((home / ".claude").exists())
 
     def test_runtime_homes_are_created_without_following_symlinks(self):
@@ -360,6 +371,7 @@ class LauncherPolicyTests(unittest.TestCase):
         self.assertEqual(outside.stat().st_mode & 0o777, 0o755)
         self.assertEqual((home / ".config" / "cursor").stat().st_mode & 0o777, 0o700)
         self.assertEqual((home / ".local" / "share" / "opencode").stat().st_mode & 0o777, 0o700)
+        self.assertEqual((home / ".gemini" / "antigravity-cli").stat().st_mode & 0o777, 0o700)
         linked = self.root / "linked"
         linked.mkdir()
         (linked / ".config").symlink_to(outside)
@@ -385,6 +397,9 @@ class LauncherPolicyTests(unittest.TestCase):
             with patch.object(launcher, "detect_runtimes", return_value=["opencode"]):
                 launcher.supervise(self.config, entry, {"login": "opencode"}, shell=True)
                 self.assertIn("opencode auth login", spawn.call_args.args[0])
+            with patch.object(launcher, "detect_runtimes", return_value=["antigravity"]):
+                launcher.supervise(self.config, entry, {"login": "antigravity"}, shell=True)
+                self.assertIn("agy acp --login", spawn.call_args.args[0])
 
     def test_boundary_check_explains_a_user_namespace_denial(self):
         failed = subprocess.CompletedProcess([], 1, "", "bwrap: setting up uid map: Permission denied\n")

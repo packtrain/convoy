@@ -48,7 +48,7 @@ Roughly ordered from lightest to heaviest:
 
 | Layer | Examples | Protects against |
 |---|---|---|
-| Runtime permission settings | Claude Code permission modes, Codex sandbox flags, OpenCode rulesets | Unapproved commands and file writes |
+| Runtime permission settings | Claude Code permission modes, Codex sandbox flags, OpenCode rulesets, Antigravity Ask to approve | Unapproved commands and file writes |
 | Runtime OS sandboxes | `convoy connect --isolated`; Seatbelt (macOS), Landlock/bubblewrap (Linux) | File/network access outside allowed paths, no container needed |
 | Containers | Dev container, plain Docker/Podman | Host filesystem and host credentials |
 | Lightweight VMs | WSL2, OrbStack, Lima, Tart, UTM, Apple `container` | Container escapes; full kernel boundary |

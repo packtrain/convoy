@@ -1,5 +1,6 @@
+import { readFileSync } from "node:fs";
 import { expect, it } from "vitest";
-import { ANTIGRAVITY_BUILD, guidance, projectChecks, runtimeInstall, sharedProjectChecks } from "./formatters.js";
+import { ANTIGRAVITY_BUILD, guidance, installCommand, projectChecks, runtimeInstall, sharedProjectChecks } from "./formatters.js";
 import type { LauncherCheck } from "./validators.js";
 
 const facts = (patch: Partial<LauncherCheck> = {}): LauncherCheck => ({ sandbox: null, holder: null, runtimes: {
@@ -111,4 +112,22 @@ it("checks Antigravity in a shared project: unknown login, and an agy below the 
 it("logs Antigravity in with its own Google sign-in (OS-2474)", () => {
   expect(guidance.sharedLogin("antigravity")).toBe("Run agy acp --login once for all projects.");
   expect(runtimeInstall("antigravity", ANTIGRAVITY_BUILD)).toMatch(/sha512sum -c/);
+});
+
+it("pins the same agy build in the project-isolation image as the managed install (OS-2475)", () => {
+  const dockerfile = readFileSync(new URL("../../../../../templates/project-isolation/Dockerfile", import.meta.url), "utf8");
+  const install = installCommand("antigravity");
+  const sums = install.match(/[a-f0-9]{128}/g) ?? [];
+  expect(sums).toHaveLength(2);
+  for (const sum of sums) expect(dockerfile).toContain(sum);
+  expect(dockerfile).toContain(/https:\/\/storage\.googleapis\.com\/[^"$]+/.exec(install)?.[0]);
+  expect(dockerfile).toContain("ln -s antigravity /usr/local/bin/agy");
+});
+
+it("checks Antigravity in an isolated project with its project login (OS-2475)", () => {
+  const ready = facts({ runtimes: { ...facts().runtimes, antigravity: { state: "ready", home: true, loggedIn: false } } });
+  expect(projectChecks("a", ready, "ok", native).filter(check => check.id.startsWith("antigravity-"))).toEqual([
+    { id: "antigravity-installed", status: "pass", label: "Antigravity installed root-owned" },
+    { id: "antigravity-home", status: "pass", label: "Antigravity config folder" },
+    { id: "antigravity-login", status: "fail", label: "Antigravity logged in", fix: "Run project login a --runtime antigravity." }]);
 });
