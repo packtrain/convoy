@@ -200,6 +200,23 @@ describe("ThreadTabList", () => {
     expect(onSelect).toHaveBeenCalledWith("thread:child");
   });
 
+  // Tabs never shrink, so a narrow sidebar must scroll them, not clip them.
+  test("scrolls horizontally when the tabs overflow", () => {
+    render(<ThreadTabList tabs={defaultTabs} activeId="changes" onSelect={vi.fn()} />);
+
+    const tablist = screen.getByRole("tablist");
+    expect(tablist.className).toContain("overflow-x-auto");
+    expect(tablist.className).not.toContain("overflow-hidden");
+  });
+
+  // The mobile sidebar is a right-hand vaul drawer, which drags on any
+  // horizontal swipe unless the target opts out.
+  test("swiping the tabs scrolls them instead of dragging the mobile drawer", () => {
+    render(<ThreadTabList tabs={defaultTabs} activeId="changes" onSelect={vi.fn()} />);
+
+    expect(screen.getByRole("tablist").hasAttribute("data-vaul-no-drag")).toBe(true);
+  });
+
   test("keeps a tab icon from shrinking when its label is long", () => {
     render(
       <ThreadTabList

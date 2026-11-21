@@ -122,6 +122,7 @@ This document defines the reusable task detail presentation infrastructure for t
 
 - The thread header exposes **one** sidebar action: the open/close toggle. Per-feature header buttons (Run timeline, All changes) were removed in OS-1169.
 - The sidebar has an **underline tab bar** (the shared `Tabs` `underline` variant) that is always visible while the sidebar is open. Three kinds of tab, and no others: **fixed** tabs (`Changes`, `Tasks`) which are always present and never closable; **conditional** tabs (`Workflow`, `Checks`) which exist while the thread has what they show and have no close control; and **conditional closable singleton** tabs (`Task detail`, `Artifact`) which exist exactly while their query param is set and carry a close affordance that clears it. There is no empty-state panel menu and no `+` button — the user never creates a tab directly, only by setting a param.
+- Tabs keep their natural width. When they don't fit (a narrow sidebar, mobile), the tab list scrolls horizontally, with the scrollbar hidden, rather than clipping the trailing tabs. In the mobile drawer a horizontal swipe on the tab list scrolls it; it does not drag the drawer closed.
 - Sidebar state is `activePanel` (`thread` — full mode only | `changes` | `tasks` | `workflow` | `evidence` | `task` | `artifact`) + a `changesView` + open/closed, page-local (not persisted across reloads). The layout mode itself *is* persisted; see "Layout Modes" above.
 - Tabs:
   - **Changes** (default) — the run-diff viewer. What it shows is its `changesView`:

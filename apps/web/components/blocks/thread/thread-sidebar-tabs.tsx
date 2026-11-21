@@ -243,12 +243,16 @@ export function ThreadTabList<Id extends string>({
   onSelect,
   className,
 }: ThreadTabListProps<Id>) {
-  // Fixed tab sets only (panels): the group strip cuts its overflow instead
-  // (`ThreadTabStrip`), so nothing here ever needs to scroll.
+  // Tabs never shrink, so a narrow sidebar scrolls them instead of clipping;
+  // no-drag keeps that swipe from dragging the mobile drawer shut.
   return (
     <div
       role="tablist"
-      className={cn("flex min-w-0 items-stretch overflow-hidden", className)}
+      data-vaul-no-drag
+      className={cn(
+        "no-scrollbar flex min-w-0 items-stretch overflow-x-auto overscroll-x-contain",
+        className
+      )}
     >
       {tabs.map((tab) => (
         <Fragment key={tab.id}>
