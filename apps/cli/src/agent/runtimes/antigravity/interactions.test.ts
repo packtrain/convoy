@@ -134,12 +134,22 @@ describe("antigravity interaction lifecycle", () => {
     await expect(interactions.onRequestPermission(question)).resolves.toEqual(cancelled);
   });
 
-  it("cancels a request that arrives with no open prompt, without asking", async () => {
+  it("cancels a request that arrives before the first prompt, without asking", async () => {
+    const { bridge, requests } = fakeBridge();
+    const run = new AbortController();
+    const interactions = createAntigravityInteractions({ bridge, signal: run.signal });
+    await expect(interactions.onRequestPermission(command)).resolves.toEqual(cancelled);
+    expect(requests).toEqual([]);
+  });
+
+  // A backgrounded command can ask after the prompt has answered (OS-2472).
+  it("still asks for a request that arrives after the prompt ended", async () => {
     const { bridge, requests } = fakeBridge();
     const { interactions } = open(bridge);
     interactions.endPrompt();
-    await expect(interactions.onRequestPermission(command)).resolves.toEqual(cancelled);
-    expect(requests).toEqual([]);
+    void interactions.onRequestPermission(command);
+    await tick();
+    expect(requests).toHaveLength(1);
   });
 
   it("withdraws pending requests when the prompt ends, and abandons them when the run does", async () => {

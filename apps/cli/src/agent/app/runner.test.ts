@@ -202,7 +202,7 @@ describe("agent-runner shutdown lifecycle", () => {
         String(url).endsWith("/api/agent/register")
       );
       const body = JSON.parse(String((registerCall?.[1] as { body: string }).body));
-      expect(body.steeringCliTypes).toEqual(["claude-code"]);
+      expect(body.steeringCliTypes).toEqual(["claude-code", "antigravity"]);
       expect(logSpy).toHaveBeenCalledWith(
         expect.stringContaining("predates the app-server protocol")
       );
@@ -244,7 +244,7 @@ describe("agent-runner shutdown lifecycle", () => {
       const registerCall = fetchMock.mock.calls.find(([url]) => String(url).endsWith("/api/agent/register"));
       const body = String((registerCall?.[1] as { body: string }).body);
       expect(body).not.toContain("aws-token");
-      expect(JSON.parse(body).steeringCliTypes).toEqual(["claude-code", "codex"]);
+      expect(JSON.parse(body).steeringCliTypes).toEqual(["claude-code", "codex", "antigravity"]);
       const runnerFactory = (createMessageHandlerMock.mock.calls[0] as unknown[])[0] as (cliType: string) => unknown;
       runnerFactory("codex");
       const { createRunnerForCliType } = await import("../runtimes/registry.js");

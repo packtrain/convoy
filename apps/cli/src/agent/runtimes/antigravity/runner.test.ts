@@ -17,8 +17,9 @@ const record = (entry) => fs.appendFileSync(process.env.FAKE_RECORD, JSON.string
 record({ argv: process.argv.slice(2), env: { thread: process.env.CONVOY_THREAD_ID ?? null, key: process.env.CONVOY_API_KEY ?? null, update: process.env.AGY_CLI_DISABLE_AUTO_UPDATE ?? null } });
 const send = (msg) => process.stdout.write(JSON.stringify({ jsonrpc: "2.0", ...msg }) + "\n");
 const update = (sessionId, u) => send({ method: "session/update", params: { sessionId, update: u } });
-let promptId = null;
+let open = [];
 let session = null;
+const answer = (id, result) => { open = open.filter((entry) => entry !== id); send({ id, result }); };
 // agy 1.5.13 advertises thinking levels only for the selected model.
 const CATALOG = { "gemini-3.8-flash": { name: "Gemini 3.8 Flash", levels: ["low", "medium", "high"] }, "gpt-oss-120b-medium": { name: "GPT-OSS 120B (Medium)", levels: [] } };
 let model = "gemini-3.8-flash";
@@ -32,7 +33,11 @@ const tool = { toolCallId: "call_1", name: "run_command", args: { CommandLine: "
 readline.createInterface({ input: process.stdin }).on("line", (line) => {
   const msg = JSON.parse(line);
   record({ in: msg });
-  if (msg.result !== undefined) return;
+  if (msg.result !== undefined) {
+    if (msg.id === "perm-late") finishLate();
+    if (msg.id === "perm-ask") replyLate();
+    return;
+  }
   if (msg.method === "initialize") {
     const meta = behavior === "no-append" ? {} : { _meta: { antigravity: { systemPrompt: { append: true } } } };
     return send({ id: msg.id, result: { protocolVersion: 1, agentCapabilities: { loadSession: true, ...meta }, agentInfo: { name: "Antigravity ACP Server", version: "1.5.13" } } });
@@ -63,10 +68,21 @@ readline.createInterface({ input: process.stdin }).on("line", (line) => {
   if (msg.method === "session/resume") { session = msg.params.sessionId; return send({ id: msg.id, result: { configOptions: config() } }); }
   if (msg.method === "session/cancel") {
     update(session, { sessionUpdate: "tool_call_update", ...tool, status: "failed", rawOutput: { output: "" } });
-    return send({ id: promptId, result: { stopReason: "cancelled" } });
+    // agy reports the command failed before it has killed it.
+    if (behavior === "background-stop") setTimeout(() => fs.writeFileSync(process.env.FAKE_RECORD + ".reaped", ""), 200);
+    return open.forEach((id) => answer(id, { stopReason: "cancelled" }));
   }
   if (msg.method === "session/prompt") {
-    promptId = msg.id;
+    // agy 1.5.14: a second prompt answers the first with end_turn and the turn goes on under it.
+    if (behavior === "steer" && open.length > 0) {
+      answer(open[0], { stopReason: "end_turn", usage: { inputTokens: 5, outputTokens: 2 } });
+      open.push(msg.id);
+      update(session, { sessionUpdate: "tool_call_update", ...tool, status: "completed", rawOutput: { output: "ok" } });
+      update(session, { sessionUpdate: "agent_message_chunk", content: { type: "text", text: "Steered." } });
+      update(session, { sessionUpdate: "usage_update", used: 20, size: 100 });
+      return setTimeout(() => answer(msg.id, { stopReason: "end_turn", usage: { inputTokens: 7, outputTokens: 3 } }), 20);
+    }
+    open.push(msg.id);
     update(session, { sessionUpdate: "available_commands_update", availableCommands: [{ name: "compact", description: "Compact" }] });
     if (behavior === "crash") { process.stderr.write("panic: boom\n"); process.exit(3); }
     if (behavior === "permission-then-fail") {
@@ -78,14 +94,59 @@ readline.createInterface({ input: process.stdin }).on("line", (line) => {
     update(session, { sessionUpdate: "usage_update", used: 10, size: 100 });
     update(session, { sessionUpdate: "agent_thought_chunk", content: { type: "text", text: "hard." } });
     update(session, { sessionUpdate: "tool_call", ...tool, status: "in_progress" });
-    if (behavior === "cancel") return;
+    if (behavior === "cancel" || behavior === "steer") return;
+    // agy 1.5.14 backgrounds a command, ends the prompt, then reports it with no prompt open.
+    if (behavior.startsWith("background") || behavior === "daemon") {
+      if (behavior === "daemon") {
+        update(session, { sessionUpdate: "tool_call", ...tool, toolCallId: "call_d", rawInput: { CommandLine: "serve", IsDaemon: true }, status: "in_progress" });
+        // A partial update that leaves out rawInput.
+        update(session, { sessionUpdate: "tool_call_update", toolCallId: "call_d", kind: "execute", status: "in_progress" });
+      }
+      update(session, { sessionUpdate: "tool_call_update", ...tool, status: behavior === "daemon" ? "completed" : "in_progress" });
+      update(session, { sessionUpdate: "agent_message_chunk", content: { type: "text", text: "Started." } });
+      answer(msg.id, { stopReason: "end_turn" });
+      update(session, { sessionUpdate: "usage_update", used: 20, size: 100 });
+      if (behavior === "background-permission") return setTimeout(() => send({ id: "perm-late", method: "session/request_permission", params: { sessionId: session, toolCall: { toolCallId: "call_8" }, options: [{ optionId: "yes", kind: "allow_once" }] } }), 50);
+      if (behavior === "background" || behavior === "background-chain" || behavior === "background-slow") setTimeout(finishLate, 50);
+      // The command finishes and its reply asks before going on; the user takes a while.
+      if (behavior === "background-ask") {
+        setTimeout(() => {
+          update(session, { sessionUpdate: "tool_call_update", ...tool, status: "completed", rawOutput: { output: "finished" } });
+          update(session, { sessionUpdate: "usage_update", used: 25, size: 100 });
+        }, 20);
+        setTimeout(() => send({ id: "perm-ask", method: "session/request_permission", params: { sessionId: session, toolCall: { toolCallId: "call_7" }, options: [{ optionId: "yes", kind: "allow_once" }] } }), 50);
+      }
+      return;
+    }
     const output = "Command exited with code 0.\n\nCommand output:\n" + "x".repeat(9000);
     update(session, { sessionUpdate: "tool_call_update", ...tool, status: "completed", rawOutput: { output, exit_code: 0 }, content: [{ type: "content", content: { type: "text", text: output } }] });
     update(session, { sessionUpdate: "agent_message_chunk", content: { type: "text", text: "Done " } });
     update(session, { sessionUpdate: "agent_message_chunk", content: { type: "text", text: "here." } });
-    setTimeout(() => send({ id: msg.id, result: { stopReason: "end_turn", usage: { inputTokens: 5, outputTokens: 2 } } }), 20);
+    setTimeout(() => answer(msg.id, { stopReason: "end_turn", usage: { inputTokens: 5, outputTokens: 2 } }), 20);
   }
 });
+function replyLate() {
+  update(session, { sessionUpdate: "agent_message_chunk", content: { type: "text", text: "Finished." } });
+  update(session, { sessionUpdate: "usage_update", used: 30, size: 100 });
+}
+function finishLate() {
+  update(session, { sessionUpdate: "tool_call_update", ...tool, status: "completed", rawOutput: { output: "finished" } });
+  const reply = () => {
+    update(session, { sessionUpdate: "agent_message_chunk", content: { type: "text", text: "Finished." } });
+    update(session, { sessionUpdate: "usage_update", used: 30, size: 100 });
+  };
+  if (behavior === "background-slow") return setTimeout(reply, 900);
+  reply();
+  if (behavior !== "background-chain") return;
+  // agy sends usage_update before every tool call, so a late reply can go on with another command.
+  const next = { ...tool, toolCallId: "call_2", title: "make" };
+  update(session, { sessionUpdate: "tool_call", ...next, status: "in_progress" });
+  setTimeout(() => {
+    update(session, { sessionUpdate: "tool_call_update", ...next, status: "completed", rawOutput: { output: "made" } });
+    update(session, { sessionUpdate: "agent_message_chunk", content: { type: "text", text: "Chained." } });
+    update(session, { sessionUpdate: "usage_update", used: 40, size: 100 });
+  }, 50);
+}
 `;
 
 async function collect(gen: AsyncGenerator<ContentChunk, unknown, unknown>): Promise<{ chunks: ContentChunk[]; result: unknown }> {
@@ -374,6 +435,144 @@ describe("createAntigravityRunner (fake agy)", () => {
     expect(sent("session/cancel").map((message) => message.params)).toEqual([{ sessionId: "sess-1" }]);
     expect(seen.at(-1)?.type).toBe("convoy/acp_prompt_result");
     expect(parse(seen.at(-1)!).stopReason).toBe("cancelled");
+  }, 10_000);
+
+  const textOf = (chunks: ContentChunk[]) =>
+    chunks.filter((chunk) => chunk.type === "convoy/acp_text").map((chunk) => parse(chunk).text);
+  const types = (chunks: ContentChunk[]) => chunks.map((chunk) => chunk.type);
+
+  it("steers an open prompt with a second session/prompt and sums usage into one result", async () => {
+    vi.stubEnv("FAKE_BEHAVIOR", "steer");
+    const runner = createAntigravityRunner({});
+    expect(await runner.steer!({ prompt: "early", inputFormat: "prompt" })).toBe(false);
+    const gen = runner.execute(tmpDir, "hello", { threadId: "thread_1", cliType: "antigravity", steerEnabled: true });
+    const chunks: ContentChunk[] = [];
+    const steered: boolean[] = [];
+    for (let step = await gen.next(); !step.done; step = await gen.next()) {
+      chunks.push(step.value);
+      if (step.value.data.includes('"sessionUpdate":"tool_call"')) {
+        steered.push(await runner.steer!({ prompt: "Stop at 10", inputFormat: "prompt", bootstrapInput: [{ type: "image", mimeType: "image/png", data: "cG5n" }] }));
+      }
+    }
+    expect(steered).toEqual([true]);
+    expect(sent("session/prompt").map((message) => message.params.prompt)).toEqual([
+      [{ type: "text", text: "hello" }],
+      [{ type: "image", mimeType: "image/png", data: "cG5n" }, { type: "text", text: "Stop at 10" }],
+    ]);
+    expect(textOf(chunks)).toEqual(["Steered."]);
+    const results = chunks.filter((chunk) => chunk.type === "convoy/acp_prompt_result").map(parse);
+    expect(results).toEqual([{ sessionId: "sess-1", stopReason: "end_turn", usage: { inputTokens: 12, outputTokens: 5 } }]);
+    expect(chunks.at(-1)!.type).toBe("convoy/acp_prompt_result");
+    expect(await runner.steer!({ prompt: "late", inputFormat: "prompt" })).toBe(false);
+  });
+
+  it("keeps the run open for a backgrounded command until it completes and agy reports usage", async () => {
+    vi.stubEnv("FAKE_BEHAVIOR", "background");
+    const runner = createAntigravityRunner({});
+    const gen = runner.execute(tmpDir, "hello", { threadId: "thread_1", cliType: "antigravity" });
+    const chunks: ContentChunk[] = [];
+    let steeredAfterPrompt: boolean | null = null;
+    for (let step = await gen.next(); !step.done; step = await gen.next()) {
+      chunks.push(step.value);
+      if (step.value.type === "convoy/acp_prompt_result") steeredAfterPrompt = await runner.steer!({ prompt: "x", inputFormat: "prompt" });
+    }
+    // No prompt is open after the response, so a steer queues for the next run.
+    expect(steeredAfterPrompt).toBe(false);
+    expect(textOf(chunks)).toEqual(["Started.", "Finished."]);
+    const resultAt = types(chunks).indexOf("convoy/acp_prompt_result");
+    const completedAt = chunks.findIndex((chunk) => chunk.data.includes('"status":"completed"') && chunk.data.includes("finished"));
+    expect(resultAt).toBeGreaterThan(0);
+    expect(completedAt).toBeGreaterThan(resultAt);
+    // The closing usage_update ends the run; the open text segment closes after it.
+    expect(parse(chunks.at(-2)!).update).toEqual({ sessionUpdate: "usage_update", used: 30, size: 100 });
+    expect(chunks.at(-1)!.type).toBe("convoy/acp_text");
+    expect(sent("session/cancel")).toEqual([]);
+  });
+
+  it("keeps waiting when a late reply starts another command right after its usage_update", async () => {
+    vi.stubEnv("FAKE_BEHAVIOR", "background-chain");
+    const runner = createAntigravityRunner({});
+    const { chunks } = await collect(runner.execute(tmpDir, "hello", { threadId: "thread_1", cliType: "antigravity" }));
+    expect(textOf(chunks)).toEqual(["Started.", "Finished.", "Chained."]);
+  });
+
+  // The usage_update before the command finished must not end the run under agy's slow reply.
+  it("waits for the reply to a finished command even when it takes longer than the settle delay", async () => {
+    vi.stubEnv("FAKE_BEHAVIOR", "background-slow");
+    const runner = createAntigravityRunner({});
+    const { chunks } = await collect(runner.execute(tmpDir, "hello", { threadId: "thread_1", cliType: "antigravity" }));
+    expect(textOf(chunks)).toEqual(["Started.", "Finished."]);
+  });
+
+  it("does not wait for a daemon command", async () => {
+    vi.stubEnv("FAKE_BEHAVIOR", "daemon");
+    const runner = createAntigravityRunner({});
+    const { chunks, result } = await collect(runner.execute(tmpDir, "hello", { threadId: "thread_1", cliType: "antigravity" }));
+    expect(result).toEqual({ continuationId: "sess-1" });
+    expect(textOf(chunks)).toEqual(["Started."]);
+  });
+
+  it("asks the bridge for a permission request that arrives after the prompt", async () => {
+    vi.stubEnv("FAKE_BEHAVIOR", "background-permission");
+    const request = vi.fn(async () => JSON.stringify({ decision: "allow" }));
+    const runner = createAntigravityRunner({});
+    const { chunks } = await collect(
+      runner.execute(tmpDir, "hello", {
+        threadId: "thread_1",
+        cliType: "antigravity",
+        cliMode: "default",
+        interactionBridge: { request, cancel: vi.fn() },
+      })
+    );
+    expect(request).toHaveBeenCalledTimes(1);
+    const answered = recorded().find((entry) => entry.in?.id === "perm-late");
+    expect(answered?.in?.result).toEqual({ outcome: { outcome: "selected", optionId: "yes" } });
+    expect(textOf(chunks)).toEqual(["Started.", "Finished."]);
+  });
+
+  it("keeps the run open while a late permission request waits for the user", async () => {
+    vi.stubEnv("FAKE_BEHAVIOR", "background-ask");
+    const request = vi.fn(async () => {
+      await new Promise((resolve) => setTimeout(resolve, 900));
+      return JSON.stringify({ decision: "allow" });
+    });
+    const runner = createAntigravityRunner({});
+    const { chunks } = await collect(
+      runner.execute(tmpDir, "hello", {
+        threadId: "thread_1",
+        cliType: "antigravity",
+        cliMode: "default",
+        interactionBridge: { request, cancel: vi.fn() },
+      })
+    );
+    const answered = recorded().find((entry) => entry.in?.id === "perm-ask");
+    expect(answered?.in?.result).toEqual({ outcome: { outcome: "selected", optionId: "yes" } });
+    expect(textOf(chunks)).toEqual(["Started.", "Finished."]);
+  });
+
+  it("stops a run waiting on a backgrounded command without waiting for the force kill", async () => {
+    vi.stubEnv("FAKE_BEHAVIOR", "background-stop");
+    const runner = createAntigravityRunner({});
+    const gen = runner.execute(tmpDir, "hello", { threadId: "thread_1", cliType: "antigravity" });
+    const seen: ContentChunk[] = [];
+    let stoppedAt = 0;
+    const error = await (async () => {
+      for (let step = await gen.next(); !step.done; step = await gen.next()) {
+        seen.push(step.value);
+        if (step.value.type === "convoy/acp_prompt_result") {
+          stoppedAt = Date.now();
+          runner.abort();
+        }
+      }
+    })().catch((e: unknown) => e);
+    expect((error as RunnerExecutionError).message).toBe("Antigravity run aborted");
+    expect(Date.now() - stoppedAt).toBeLessThan(2_000);
+    expect(sent("session/cancel")).toHaveLength(1);
+    // agy kills the command on cancel and reports it failed.
+    expect(seen.at(-1)!.data).toContain('"status":"failed"');
+    // The command runs in its own session, beyond the group kill, so agy gets time to reap it.
+    await new Promise((resolve) => setTimeout(resolve, 500));
+    expect(existsSync(`${recordFile}.reaped`)).toBe(true);
   }, 10_000);
 
   it("reports the exit and stderr when agy dies mid-turn", async () => {

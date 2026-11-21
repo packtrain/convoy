@@ -132,9 +132,8 @@ export function createAntigravityInteractions(options: { bridge?: InteractionBri
       promptOpen = true;
     },
 
-    /** agy answered the prompt: requests still open are withdrawn, not abandoned. */
+    /** agy answered the last prompt: requests still open are withdrawn, not abandoned. Later ones still ask. */
     endPrompt(): void {
-      promptOpen = false;
       if (options.signal.aborted) return;
       for (const [requestId, controller] of pending) {
         pending.delete(requestId);
@@ -144,7 +143,6 @@ export function createAntigravityInteractions(options: { bridge?: InteractionBri
     },
 
     async onRequestPermission(request: AcpPermissionRequest): Promise<AcpPermissionReply> {
-      // ponytail: requests after the prompt ends are cancelled; OS-2472 routes them.
       if (!promptOpen) return ACP_PERMISSION_CANCELLED;
       if (!options.bridge) return answerWithoutUser(request);
       if (isQuestion(request)) {

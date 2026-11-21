@@ -2,7 +2,7 @@
 
 This spec covers how the `antigravity` runtime runs Antigravity CLI (`agy`) in Convoy. The transport is the Agent Client Protocol (ACP), JSON-RPC 2.0 over newline-delimited stdio. Each run spawns its own `agy acp` process.
 
-Status: slices 1 to 4 of the epic OS-2464 (OS-2468 to OS-2471). A thread runs in Act or Ask to approve mode on the model and thinking level picked in the composer. It streams text, reasoning and tool calls, shows approval and question cards, follows up in the same agy session and stops on Stop. It offers agy's slash commands, fills the context meter, sends images as images and offers a local resume command. Steering, `convoy init`, environments and keys come in later slices.
+Status: slices 1 to 5 of the epic OS-2464 (OS-2468 to OS-2472). A thread runs in Act or Ask to approve mode on the model and thinking level picked in the composer. It streams text, reasoning and tool calls, shows approval and question cards, follows up in the same agy session and stops on Stop. It offers agy's slash commands, fills the context meter, sends images as images and offers a local resume command. A message sent mid-run steers the run, and a run waits for the commands agy moves to the background. `convoy init`, environments and keys come in later slices.
 
 Every fact below is marked **verified** when it comes from traffic recorded on agy 1.5.13 (signed in, Linux container, 2026-11-20) or **t3code** when it only comes from t3code's source in `reference/t3code`.
 
@@ -37,9 +37,26 @@ Per run:
 
 Signed out, `session/new` fails at once with `-32000 Authentication required` (verified). The runner then calls `authenticate` with `oauth-personal` once and retries. In a headless container that call fails at once with -32603 "No browser is available here" (verified). Whatever fails, the run ends with "Antigravity is not signed in on this machine. Run `agy` in a terminal and sign in, then send the message again." On a desktop the call may open a browser, which nobody has checked yet. The same fallback applies to a signed-out `session/resume`.
 
-**Cancel.** Stop sends the `session/cancel` notification and waits for the prompt response. agy marks the running tool `failed` with empty output and answers `stopReason: "cancelled"` within a few milliseconds (verified). The runner SIGKILLs the process group 5 seconds after Stop if agy is still alive, as Codex does, and kills it after every run.
+**Cancel.** Stop sends the `session/cancel` notification and waits for the prompt response. agy marks the running tool `failed` with empty output and answers `stopReason: "cancelled"` within a few milliseconds (verified). With no prompt open, during the wait in [Run lifecycle](#run-lifecycle), agy marks each backgrounded command `failed` and kills it (verified on 1.5.14), and the run ends once none is left. The runner SIGKILLs the process group 5 seconds after Stop if agy is still alive, as Codex does, and kills it after every run. A stopped run ends at once but leaves agy those 5 seconds. agy starts each command in its own session, so the group kill does not reach it, and agy reports a cancelled command `failed` before it has killed it (verified: a `sleep` outlived an immediate kill). Only agy itself reaps it.
 
-**Idle watchdog.** No ACP traffic for 600 seconds kills the run, as for Codex.
+**Idle watchdog.** No ACP traffic for 600 seconds stops the run the same way, `session/cancel` then the kill, and fails it with "Antigravity produced no output for 10 minutes and was terminated." The message names the commands still running, if any.
+
+## Run lifecycle
+
+**Steering.** `steer()` sends another `session/prompt` on the run's session. agy answers the open prompt with `end_turn` at once and carries on under the new one (verified on 1.5.14). `steer()` returns false when no prompt is open, and the message waits for the next run. See [cli-steering.md](cli-steering.md#antigravity-runner).
+
+**Commands that outlive the prompt.** A `run_command` with `WaitMsBeforeAsync` lets agy answer the prompt with `end_turn` while the command is still `in_progress`. When the command finishes, agy sends `tool_call_update` with `completed`, then message chunks, then `usage_update`, with no prompt open (verified on 1.5.14). The runner tracks every `execute` tool call that is not `completed` or `failed`, except daemons (`rawInput.IsDaemon === true`), which may never finish. A call seen once as a daemon stays excluded, since later partial updates may omit `rawInput`. A run waiting on a dev server would sit until the idle watchdog.
+
+```
+on prompt response:  openPrompts -= 1; when 0, send one convoy/acp_prompt_result, then finish if no tracked command
+on tool update completed/failed:  untrack it
+on usage_update:  if no other update or permission request follows within 500 ms, finish if openPrompts == 0,
+                  no tracked command and no open permission request
+on Stop:  session/cancel; finish when the prompts have answered and agy has failed every tracked command
+on idle timeout:  as Stop, and report the commands still running
+```
+
+agy sends a `usage_update` before every `tool_call` of a reply, in the same millisecond (verified), so the 500 ms lets a late reply that starts another command track it before the run ends. Updates in the wait are forwarded as usual. A permission request in the wait goes to the bridge, see [Permissions and questions](#permissions-and-questions).
 
 **Permission requests.** See [Permissions and questions](#permissions-and-questions).
 
@@ -52,7 +69,7 @@ Other agent requests, such as `fs/*` or `terminal/*`, get a method-not-found err
 | `convoy/acp_session` | `{ sessionId, agentVersion }`, sent after new or resume. The continuation id comes from here |
 | `session/update` | the notification params as agy sent them, with tool updates compacted (below) |
 | `convoy/acp_text`, `convoy/acp_reasoning` | `{ sessionId, text }`, the accumulated text of one segment. Sent when an update of another kind arrives or the prompt ends |
-| `convoy/acp_prompt_result` | `{ sessionId, stopReason, usage }` |
+| `convoy/acp_prompt_result` | `{ sessionId, stopReason, usage }`, once per run when the last open prompt answers. `usage` sums the numeric fields of every prompt response in the run |
 | `convoy/antigravity_compaction` | `{ sessionId, phase }` on a `/compact` run: `started` before the prompt, then `completed` on `end_turn` or `failed` otherwise. See [Slash commands](#slash-commands) |
 
 - ACP sends text only as `agent_message_chunk` and `agent_thought_chunk` deltas, never as a whole message (verified). These are forwarded as `session/update` chunks only when partial streaming is on. The backend marks them ephemeral, and the flush buffer merges consecutive chunks of one kind.
@@ -104,8 +121,8 @@ t3code also reports questions as a permission request whose `toolCallId` starts 
 
 **Lifecycle.**
 
-- Requests reach the bridge only while a `session/prompt` is open. One that arrives after the prompt response is answered `cancelled`. OS-2472 owns requests from commands that outlive the prompt.
-- When the prompt response arrives with requests still open, agy has withdrawn them. The runner cancels each with `abandoned: false` and answers `cancelled`.
+- Requests reach the bridge from the first `session/prompt` until the run ends, including in the wait for a backgrounded command. One that arrives before the first prompt is answered `cancelled`.
+- When the last open prompt answers with requests still open, agy has withdrawn them. The runner cancels each with `abandoned: false` and answers `cancelled`. A prompt answered because a steered one replaced it withdraws nothing.
 - When the run is stopped or fails, open requests are cancelled with `abandoned: true` before `session/cancel` goes out, and agy gets `cancelled`.
 - While a request is open, the idle watchdog re-arms instead of killing the run.
 - Without an interaction bridge on the connection, tool requests get `allow_once` and `interaction_` questions get `cancelled`.
@@ -203,12 +220,13 @@ The assistant message menu offers `agy --conversation <ACP session id>`. agy sto
 
 ## Known limitations
 
-- No steering.
 - Before the first run on a machine, the composer offers agy's built-ins only. Skills appear after it.
 - `/compact` leaves the meter at its old value until the next reply.
 - Isolation (`--isolated`) fails fast, as for Cursor and OpenCode.
 - agy 1.5.13 offered no `allow_always` for `ls -la`, so Always allow appears only when agy offers it.
-- A command agy moves to the background survives the run. agy ran `sleep 120` with a 500 ms `WaitMsBeforeAsync`, ended the prompt with `end_turn`, and the `sleep` kept running after its process group was killed (verified). OS-2472 owns commands that outlive the prompt.
+- A daemon command agy moves to the background survives the run. The run ends without it and kills agy's process group, which does not reach the command (verified). Work agy starts after the run has closed is lost with the process.
+- A late reply that pauses more than 500 ms between a step's `usage_update` and its next `tool_call` is cut there. agy sent the two together in every recorded step.
+- A message sent while the run waits for a backgrounded command does not steer. It waits for the next run, which starts after the wait.
 - Upstream API errors that agy reports as a normal reply are not detected. t3code reads agy's session database for this.
 - No cost rollups. The pricing catalog has no Gemini models and Antigravity bills by subscription.
 

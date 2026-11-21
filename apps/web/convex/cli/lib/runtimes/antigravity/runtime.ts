@@ -30,6 +30,8 @@ export const antigravityRuntime: CliRuntimeDefinition = {
   minAppVersion: "0.154.0",
   // The system prompt rides in session/new `_meta`, so a raw first message displaces nothing.
   supportsFirstMessageRuntimeCommand: true,
+  // A second session/prompt steers the open turn (CLI 0.155.0 advertises it in steeringCliTypes).
+  supportsSteering: true,
   parseAvailableCli: (cli: Record<string, unknown>, version: string): ParseResult<CliRuntimeAvailableCli> =>
     parseAntigravityAvailableCli(cli, version),
   normalizeStoredModel: normalizeAntigravityModel,

@@ -4,12 +4,20 @@ import {
   RunnerExecutionError,
   type CliRuntimeRunner,
   type ContentChunk,
+  type PreparedRuntimeExecution,
   type RunnerExecutionOptions,
   type RunnerExecutionResult,
 } from "../contracts.js";
 import { getDebugLevel } from "../debug.js";
 import { threadIdentityInstruction } from "../agent-instructions.js";
-import { ACP_AUTH_REQUIRED_CODE, createAcpClient, isAcpContentBlock, type AcpClient, type AcpConfigOption } from "../acp/client.js";
+import {
+  ACP_AUTH_REQUIRED_CODE,
+  createAcpClient,
+  isAcpContentBlock,
+  type AcpClient,
+  type AcpConfigOption,
+  type AcpContentBlock,
+} from "../acp/client.js";
 import { JsonRpcError } from "../json-rpc.js";
 import { buildAntigravitySubprocessEnv, killProcessGroup, resolveAntigravityExecutablePath } from "./detect.js";
 import { createAntigravityInteractions } from "./interactions.js";
@@ -21,6 +29,8 @@ import { compactToolUpdate } from "./streaming.js";
 const IDLE_TIMEOUT_MS = 600_000;
 const IDLE_CHECK_INTERVAL_MS = 30_000;
 const ABORT_FORCE_KILL_MS = 5_000;
+/** agy sends a step's `usage_update` and its next `tool_call` together, so a late reply settles after this. */
+const USAGE_SETTLE_MS = 500;
 const STDERR_TAIL_LINES = 12;
 
 export const ANTIGRAVITY_SIGN_IN_MESSAGE =
@@ -37,6 +47,14 @@ const ANTIGRAVITY_COMPACTION_CHUNK = "convoy/antigravity_compaction";
 
 function debugLog(kind: string, payload: string): void {
   if (getDebugLevel() >= 1) console.log(`[Antigravity:${kind}] ${payload.slice(0, 400)}`);
+}
+
+/** Numeric usage fields summed across the run's prompt responses. */
+function addUsage(total: Record<string, number>, usage: unknown): void {
+  if (!isRecord(usage)) return;
+  for (const [key, value] of Object.entries(usage)) {
+    if (typeof value === "number" && Number.isFinite(value)) total[key] = (total[key] ?? 0) + value;
+  }
 }
 
 function systemAppend(options: RunnerExecutionOptions): string {
@@ -101,6 +119,7 @@ export function createAntigravityRunner(factoryOptions: { partialStreaming?: boo
   let cancelActive: (() => void) | null = null;
   let abandonInteractions: (() => void) | null = null;
   let forceKillTimer: NodeJS.Timeout | null = null;
+  let activeSteer: ((blocks: AcpContentBlock[]) => boolean) | null = null;
 
   const abort = (): void => {
     aborted = true;
@@ -165,6 +184,20 @@ export function createAntigravityRunner(factoryOptions: { partialStreaming?: boo
         if (segment && segment.text.length > 0) push({ type: segment.type, data: JSON.stringify({ sessionId, text: segment.text }) });
         segment = null;
       };
+      // The run ends when the last prompt has answered and no non-daemon command is still running.
+      let prompted = false;
+      let openPrompts = 0;
+      const runningCommands = new Map<string, string>();
+      // Daemons may never finish, so they never hold the run; later partial updates omit rawInput.
+      const daemons = new Set<string>();
+      const usage: Record<string, number> = {};
+      const settle = () => {
+        // An open card means agy is waiting for the user, and its reply goes on after the answer.
+        if (!prompted || openPrompts > 0 || runningCommands.size > 0 || interactions.pendingCount() > 0) return;
+        closeSegment();
+        finish();
+      };
+      let settleTimer: NodeJS.Timeout | null = null;
       let lastActivityAt = Date.now();
       let idleTimedOut = false;
       let failure: string | null = null;
@@ -180,6 +213,8 @@ export function createAntigravityRunner(factoryOptions: { partialStreaming?: boo
             debugLog("update", JSON.stringify(params));
             const update = isRecord(params.update) ? params.update : {};
             const kind = typeof update.sessionUpdate === "string" ? update.sessionUpdate : "";
+            // Only a usage_update with nothing after it for USAGE_SETTLE_MS ends a late reply.
+            if (kind !== "usage_update" && settleTimer) clearTimeout(settleTimer);
             if (kind === "agent_message_chunk" || kind === "agent_thought_chunk") {
               const type = kind === "agent_message_chunk" ? "convoy/acp_text" : "convoy/acp_reasoning";
               const content = isRecord(update.content) ? update.content : {};
@@ -195,14 +230,30 @@ export function createAntigravityRunner(factoryOptions: { partialStreaming?: boo
             if (METADATA_UPDATES.has(kind)) {
               // The compaction call's usage is the old context plus the summary, not what is left.
               if (!(compacting && kind === "usage_update")) push({ type: "session/update", data: JSON.stringify(params) });
+              // usage_update closes each reply, including one agy sends after a backgrounded command.
+              if (kind === "usage_update") {
+                if (settleTimer) clearTimeout(settleTimer);
+                settleTimer = setTimeout(settle, USAGE_SETTLE_MS);
+              }
               return;
             }
             closeSegment();
-            const forwarded = kind === "tool_call" || kind === "tool_call_update" ? compactToolUpdate(update) : update;
-            push({ type: "session/update", data: JSON.stringify({ ...params, update: forwarded }) });
+            const isTool = kind === "tool_call" || kind === "tool_call_update";
+            push({ type: "session/update", data: JSON.stringify({ ...params, update: isTool ? compactToolUpdate(update) : update }) });
+            if (!isTool || typeof update.toolCallId !== "string") return;
+            const id = update.toolCallId;
+            if (isRecord(update.rawInput) && update.rawInput.IsDaemon === true) daemons.add(id);
+            if (update.status === "completed" || update.status === "failed" || daemons.has(id)) {
+              runningCommands.delete(id);
+              // Stopped: agy kills the commands on cancel, and no reply follows.
+              if (aborted) settle();
+            } else if (update.kind === "execute") {
+              runningCommands.set(id, typeof update.title === "string" ? update.title : (runningCommands.get(id) ?? id));
+            }
           },
           onRequestPermission(request) {
             lastActivityAt = Date.now();
+            if (settleTimer) clearTimeout(settleTimer);
             return interactions.onRequestPermission(request);
           },
         },
@@ -225,9 +276,10 @@ export function createAntigravityRunner(factoryOptions: { partialStreaming?: boo
       const idleWatchdog = setInterval(() => {
         // A run parked on a card is waiting for the user, not idle (OS-1463).
         if (interactions.pendingCount() > 0) lastActivityAt = Date.now();
-        if (Date.now() - lastActivityAt > IDLE_TIMEOUT_MS) {
+        if (Date.now() - lastActivityAt > IDLE_TIMEOUT_MS && !idleTimedOut) {
           idleTimedOut = true;
-          killProcessGroup(child, "SIGKILL");
+          // Cancel, not a bare kill: a backgrounded command runs in its own session and survives the group kill.
+          abort();
         }
       }, IDLE_CHECK_INTERVAL_MS);
       idleWatchdog.unref();
@@ -258,26 +310,43 @@ export function createAntigravityRunner(factoryOptions: { partialStreaming?: boo
           return { type: ANTIGRAVITY_COMPACTION_CHUNK, data: JSON.stringify({ sessionId, phase }) };
         };
         if (compacting) push(compaction("started"));
+        const sendPrompt = (blocks: AcpContentBlock[]) => {
+          prompted = true;
+          openPrompts += 1;
+          acp.prompt(openedSession, blocks).then(
+            (result) => {
+              addUsage(usage, result.usage);
+              // A steered prompt answers the one before it with end_turn; the turn goes on.
+              if (--openPrompts > 0) return;
+              interactions.endPrompt();
+              closeSegment();
+              if (compacting) push(compaction(result.stopReason === "end_turn" ? "completed" : "failed"));
+              const summed = Object.keys(usage).length > 0 ? { usage } : {};
+              push({ type: "convoy/acp_prompt_result", data: JSON.stringify({ sessionId, ...result, ...summed }) });
+              failure = null;
+              if (aborted) finish();
+              else settle();
+            },
+            (error: unknown) => {
+              openPrompts -= 1;
+              // A failed prompt fails the run: abandon open requests, don't withdraw them.
+              bridgeAbort.abort();
+              interactions.endPrompt();
+              closeSegment();
+              failure ??= error instanceof Error ? error.message : String(error);
+              finish();
+            }
+          );
+        };
         // A prefix would turn a raw command back into prose.
         const text = canAppend || options.rawRuntimeCommand ? prompt : `${append}\n\n${prompt}`;
-        acp.prompt(openedSession, [...images, { type: "text", text }]).then(
-          (result) => {
-            interactions.endPrompt();
-            closeSegment();
-            if (compacting) push(compaction(result.stopReason === "end_turn" ? "completed" : "failed"));
-            push({ type: "convoy/acp_prompt_result", data: JSON.stringify({ sessionId, ...result }) });
-            failure = null;
-            finish();
-          },
-          (error: unknown) => {
-            // A failed prompt fails the run: abandon open requests, don't withdraw them.
-            bridgeAbort.abort();
-            interactions.endPrompt();
-            closeSegment();
-            failure ??= error instanceof Error ? error.message : String(error);
-            finish();
-          }
-        );
+        sendPrompt([...images, { type: "text", text }]);
+        // Steering is another session/prompt; with none open the message waits for the next run.
+        activeSteer = (blocks) => {
+          if (done || aborted || openPrompts === 0) return false;
+          sendPrompt(blocks);
+          return true;
+        };
 
         for (;;) {
           const chunk = chunks.shift();
@@ -294,8 +363,13 @@ export function createAntigravityRunner(factoryOptions: { partialStreaming?: boo
 
         // A prompt that never answered still resolves the pending "Compacting…" row.
         if (compactionOpen) yield compaction("failed");
+        if (idleTimedOut) {
+          const still = [...runningCommands.values()].map((title) => `\`${title}\``).join(", ");
+          throw fail(
+            `Antigravity produced no output for ${IDLE_TIMEOUT_MS / 60_000} minutes and was terminated.${still ? ` Still running: ${still}.` : ""}`
+          );
+        }
         if (aborted) throw fail("Antigravity run aborted");
-        if (idleTimedOut) throw fail(`Antigravity produced no output for ${IDLE_TIMEOUT_MS / 60_000} minutes and was terminated.`);
         if (failure !== null) throw fail(failure);
         return { continuationId: sessionId };
       } catch (error) {
@@ -303,16 +377,27 @@ export function createAntigravityRunner(factoryOptions: { partialStreaming?: boo
         if (aborted) throw fail("Antigravity run aborted");
         throw fail(failure ?? (error instanceof Error ? error.message : String(error)));
       } finally {
+        activeSteer = null;
         clearInterval(idleWatchdog);
+        if (settleTimer) clearTimeout(settleTimer);
         bridgeAbort.abort();
         abandonInteractions = null;
         if (forceKillTimer) clearTimeout(forceKillTimer);
         forceKillTimer = null;
         cancelActive = null;
         acp.close("run finished");
-        if (child.exitCode === null && child.signalCode === null) killProcessGroup(child, "SIGKILL");
+        if (child.exitCode === null && child.signalCode === null) {
+          // agy reports a stopped command failed before it reaps it, and the group kill can't reach it.
+          if (aborted) setTimeout(() => killProcessGroup(child, "SIGKILL"), ABORT_FORCE_KILL_MS).unref();
+          else killProcessGroup(child, "SIGKILL");
+        }
         if (activeChild === child) activeChild = null;
       }
+    },
+
+    steer(injection: PreparedRuntimeExecution): boolean {
+      const images = (injection.bootstrapInput ?? []).filter(isAcpContentBlock);
+      return activeSteer?.([...images, { type: "text", text: injection.prompt }]) ?? false;
     },
 
     abort,

@@ -4,8 +4,9 @@ Steering for CLI agent runs (OS-1111). While a run is streaming, the user can
 inject a queued message into the in-progress run instead of waiting for it to
 finish. The injected message becomes the next turn of the same provider
 session and streams into the same assistant message. Supported for Claude
-Code runs and for Codex runs served over the app-server transport (the
-default; absent under `convoy connect --codex-exec`).
+Code runs, for Codex runs served over the app-server transport (the
+default; absent under `convoy connect --codex-exec`) and for Antigravity
+runs (CLI 0.155.0 and newer).
 
 ## User-visible behavior
 
@@ -252,6 +253,21 @@ default; absent under `convoy connect --codex-exec`).
   resolve `false` without an RPC.
 - Codex absorbs the steered input into the active turn (it does not open a
   second turn), so the run still ends at its single `turn/completed`.
+
+### Antigravity runner
+
+- `steer()` sends another `session/prompt` on the run's session and returns
+  `true` once it is written. agy (1.5.14, verified) answers the open prompt
+  with `end_turn` and carries on under the new one, so the run ends when the
+  last open prompt has answered. Cancel and restart would kill running
+  commands and subagents, so it is never used.
+- It returns `false` after the last prompt has answered, after abort and
+  between runs. The message then rides the next run. That includes the wait
+  for a backgrounded command: see
+  [cli-antigravity-runtime.md](cli-antigravity-runtime.md#run-lifecycle).
+- The steered messages' mode is ignored. agy's mode is the spawn flag.
+- One `convoy/acp_prompt_result` per run, with usage summed across its
+  prompts.
 
 ### Non-steerable runtimes
 

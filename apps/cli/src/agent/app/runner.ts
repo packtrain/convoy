@@ -219,8 +219,8 @@ export async function createAgentRunner(options: AgentRunnerOptions): Promise<Ag
         // per-runtime capability (codex steers only over app-server).
         supportsSteering: true,
         steeringCliTypes: effectiveCodexAppServer
-          ? ["claude-code", "codex"]
-          : ["claude-code"],
+          ? ["claude-code", "codex", "antigravity"]
+          : ["claude-code", "antigravity"],
         force,
       },
       5000

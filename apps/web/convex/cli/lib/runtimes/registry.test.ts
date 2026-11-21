@@ -1195,6 +1195,10 @@ describe("cli runtime registry", () => {
     expect(cliTypeSupportsFirstMessageRuntimeCommand("antigravity")).toBe(true);
   });
 
+  test("Antigravity steers: a second session/prompt joins the open turn", () => {
+    expect(cliTypeSupportsSteering("antigravity")).toBe(true);
+  });
+
   test("Cursor resume, continuation, and steering dispatch", () => {
     expect(
       buildResumeCommand({ cliType: "cursor", continuationId: "chat-1" }),
