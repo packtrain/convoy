@@ -294,9 +294,10 @@ convoy environment status --environment dev --json
 ### Install or update agent runtimes
 
 In `convoy tui`, open the environment's Actions and choose Agent runtimes (`r`). It lists Claude Code, Codex,
-OpenCode and Cursor with the installed version, the version on offer and whether
-an update is available. Claude Code and Codex are offered at their npm `latest`.
-OpenCode and Cursor stay on the builds Convoy tested. Check the runtimes to install
+OpenCode, Cursor and Antigravity with the installed version, the version on offer
+and whether an update is available. Claude Code and Codex are offered at their npm
+`latest`. OpenCode, Cursor and Antigravity stay on the builds Convoy tested;
+Antigravity's download is checked against its published SHA-512 before it installs. Check the runtimes to install
 or update, then choose Install / update. A popup confirms the batch, then shows each
 runtime's progress and any failure. A failed runtime stays checked so you can retry
 it. Reload a project or restart the service before it uses a newly installed

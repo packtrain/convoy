@@ -2,13 +2,22 @@ import { TESTED_OPENCODE_PACKAGE } from "../../agent/runtimes/opencode/server.js
 import { LOGIN_COMMANDS, loginRuntimeLabels, loginRuntimeSchema, type LauncherCheck, type LoginRuntime, type ProjectCheck, type SharedCheck } from "./validators.js";
 
 // One wording for service warnings and project check fixes. Spec: docs/specs/cli-service.md#worker-failure-reasons
-const LABELS: Record<string, string> = { codex: "Codex", "claude-code": "Claude Code", opencode: "OpenCode", cursor: "Cursor" };
+const LABELS: Record<string, string> = loginRuntimeLabels;
 const npm = (pkg: string) => `npm install -g --prefix /usr/local ${pkg}`;
 /** The Cursor Agent build the project-isolation Dockerfile installs (OS-2017). */
 export const CURSOR_BUILD = "2026.10.22-27dcf5f";
-/** npm package per runtime; Cursor ships as a tarball instead. */
-export const RUNTIME_PACKAGES: Record<Exclude<LoginRuntime, "cursor">, string> = { codex: "@openai/codex", "claude-code": "@anthropic-ai/claude-code", opencode: "opencode-ai" };
-/** Root-owned install per runtime; Cursor's and OpenCode's are the tested builds the project-isolation Dockerfile installs (OS-2017, OS-2018). */
+/** The agy build a managed root install pins; sha512 per `uname -m` from agy's release manifest (OS-2474). */
+export const ANTIGRAVITY_BUILD = "1.5.14";
+const ANTIGRAVITY_TARBALLS = `https://storage.googleapis.com/antigravity-public/antigravity-cli/${ANTIGRAVITY_BUILD}-5302690847260672`;
+const ANTIGRAVITY_SHA512 = {
+  x86_64: "83311d3f354567612dc16c1ae2ea9b503d6f6833aa4e138d39aa229da3f3bb99b0e4d7cca0bce4796b0060d6a51d8113eb7449ed5dc0e7900bf217107ea5bff9",
+  aarch64: "c9b29bba475f63a1a80161ae93ba72b221c7a586d9851e4d0061546704bab66d6b2760b25d716d191724fc7564f3246456ee151e28aa37af48dbcd72bdc6c463",
+};
+/** npm package per runtime; Cursor and Antigravity ship as tarballs. */
+export const RUNTIME_PACKAGES: Partial<Record<LoginRuntime, string>> = { codex: "@openai/codex", "claude-code": "@anthropic-ai/claude-code", opencode: "opencode-ai" };
+/** The only version a managed root install offers; a runtime without one offers npm's latest. */
+export const TESTED_BUILDS: Partial<Record<LoginRuntime, string>> = { cursor: CURSOR_BUILD, opencode: TESTED_OPENCODE_PACKAGE.split("@")[1], antigravity: ANTIGRAVITY_BUILD };
+/** Root-owned install per runtime; Cursor's, OpenCode's and Antigravity's are tested builds (OS-2017, OS-2018, OS-2474). */
 const INSTALLS: Record<LoginRuntime, string> = {
   codex: npm("@openai/codex"), "claude-code": npm("@anthropic-ai/claude-code"),
   cursor: `mkdir -p /usr/local/lib/cursor-agent && curl -fsSL https://downloads.cursor.com/lab/${CURSOR_BUILD}/linux/`
@@ -16,11 +25,16 @@ const INSTALLS: Record<LoginRuntime, string> = {
   + " | tar --no-same-owner --strip-components=1 -xzf - -C /usr/local/lib/cursor-agent && chmod -R go-w /usr/local/lib/cursor-agent"
   + " && ln -sf /usr/local/lib/cursor-agent/cursor-agent /usr/local/bin/cursor-agent",
   opencode: npm(TESTED_OPENCODE_PACKAGE),
+  antigravity: `case $(uname -m) in x86_64) p=linux-x64/cli_linux_x64 s=${ANTIGRAVITY_SHA512.x86_64};; aarch64) p=linux-arm/cli_linux_arm64 s=${ANTIGRAVITY_SHA512.aarch64};;`
+    + ` *) echo "Antigravity has no Linux build for $(uname -m)." >&2; exit 1;; esac && t=$(mktemp -d) && { curl -fsSL "${ANTIGRAVITY_TARBALLS}/$p.tar.gz" -o "$t/agy.tgz"`
+    + ` && echo "$s  $t/agy.tgz" | sha512sum -c --quiet - && tar --no-same-owner -xzf "$t/agy.tgz" -C /usr/local/bin antigravity && ln -sf antigravity /usr/local/bin/agy;`
+    + ` r=$?; rm -rf "$t"; exit $r; }`,
 };
 /** Install as this account, for a shared environment. */
-const USER_INSTALLS: Record<LoginRuntime, string> = {
+export const USER_INSTALLS: Record<LoginRuntime, string> = {
   codex: "npm install -g @openai/codex", "claude-code": "npm install -g @anthropic-ai/claude-code",
   cursor: "curl https://cursor.com/install -fsS | bash", opencode: `npm install -g ${TESTED_OPENCODE_PACKAGE}`,
+  antigravity: "curl -fsSL https://antigravity.google/cli/install.sh | bash",
 };
 export const HOLDERS: Record<string, string> = {
   service: "the project service", connect: "a foreground connection", shell: "a private project shell",
@@ -30,8 +44,11 @@ export const HOLDERS: Record<string, string> = {
 const names = (keys: string[]) => keys.map(key => LABELS[key] ?? key).join(" and ");
 export const runtimeLabel = (key: string) => LABELS[key] ?? key;
 export const installCommand = (runtime: LoginRuntime) => `sudo sh -c 'umask 022 && ${INSTALLS[runtime]}'`;
-/** Root install of an exact version, run by the host in a managed container. Cursor only has its tested build. */
-export const runtimeInstall = (runtime: LoginRuntime, version: string) => `umask 022 && ${runtime === "cursor" ? INSTALLS.cursor : npm(`${RUNTIME_PACKAGES[runtime]}@${version}`)}`;
+/** Root install of an exact version, run by the host in a managed container. A tarball runtime only has its tested build. */
+export const runtimeInstall = (runtime: LoginRuntime, version: string) => {
+  const pkg = RUNTIME_PACKAGES[runtime];
+  return `umask 022 && ${pkg ? npm(`${pkg}@${version}`) : INSTALLS[runtime]}`;
+};
 
 export const guidance = {
   untrusted: (keys: string[]) => `${names(keys)} ${keys.length > 1 ? "are" : "is"} installed but not root-owned, or is group/world-writable, so projects ignore it. Reinstall it as root with umask 022.`,
@@ -105,11 +122,17 @@ export function projectChecks(profile: string, facts: LauncherCheck, backend: Ba
 /** The shared `project check` list: no sandbox row, user installs, and an unknown login is never a failure. Spec: docs/specs/cli-shared-environments.md#runtimes-and-logins */
 export function sharedProjectChecks(profile: string, facts: SharedCheck, backend: BackendProbe): ProjectCheck["checks"] {
   const checks: Check[] = [];
-  const ready = Object.values(facts.runtimes).some(runtime => runtime.installed);
+  const ready = Object.values(facts.runtimes).some(runtime => runtime.installed && !runtime.unusable);
   for (const key of loginRuntimeSchema.options) {
-    const { installed, login } = facts.runtimes[key], label = loginRuntimeLabels[key], id = (check: string) => `${key}-${check}`;
+    const { installed, login, unusable } = facts.runtimes[key], label = loginRuntimeLabels[key], id = (check: string) => `${key}-${check}`;
     if (!installed) {
       checks.push(ready ? skip(id("installed"), `${label} not installed`, `To use it, install it: ${USER_INSTALLS[key]}.`) : fail(id("installed"), `${label} installed`, `Install it: ${USER_INSTALLS[key]}.`));
+      continue;
+    }
+    if (unusable) {
+      // Only agy reports this, so the fix names agy's own update.
+      const how = `agy update or reinstall it: ${USER_INSTALLS[key]}.`;
+      checks.push(ready ? skip(id("installed"), `${label} ${unusable}`, `To use it, update it with ${how}`) : fail(id("installed"), `${label} ${unusable}`, `Update it with ${how}`));
       continue;
     }
     checks.push(pass(id("installed"), `${label} installed`));

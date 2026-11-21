@@ -5,7 +5,8 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { readLocalEnvironment, saveLocalEnvironment } from "./paths.js";
 import { RUNTIME_PROBE, applyEnvironmentMode, chooseEnvironmentMode, environmentMode, modeChoiceOpen, recordEnvironmentMode, type ModeSetup, offeredVersion, parseRuntimeVersions, publishedVersion, runtimeState } from "./resolution.js";
-import { CURSOR_BUILD } from "../project/formatters.js";
+import { ANTIGRAVITY_BUILD, CURSOR_BUILD } from "../project/formatters.js";
+import { MIN_ANTIGRAVITY_VERSION } from "../../agent/runtimes/antigravity/detect.js";
 import { TESTED_OPENCODE_PACKAGE } from "../../agent/runtimes/opencode/server.js";
 
 it("pins a verified exact release instead of latest", async () => {
@@ -31,8 +32,8 @@ it("refuses a prerelease host rather than downgrading a stable target", async ()
 
 describe("agent runtimes", () => {
   it("reads each runtime's version from its --version line", () => {
-    expect(parseRuntimeVersions("claude\t2.1.3 (Claude Code)\ncodex\tcodex-cli 0.156.1\nopencode\t\ncursor-agent\t?\n"))
-      .toEqual({ "claude-code": "2.1.3", codex: "0.156.1", cursor: "unknown" });
+    expect(parseRuntimeVersions("claude\t2.1.3 (Claude Code)\ncodex\tcodex-cli 0.156.1\nopencode\t\ncursor-agent\t?\nantigravity\t1.5.13\n"))
+      .toEqual({ "claude-code": "2.1.3", codex: "0.156.1", cursor: "unknown", antigravity: "1.5.13" });
   });
   it("offers updates, never downgrades, and compares Cursor's dated builds", () => {
     expect(runtimeState("2.1.3", "2.1.9")).toBe("update");
@@ -44,6 +45,14 @@ describe("agent runtimes", () => {
     expect(runtimeState("2026.10.01-aaaaaaa", CURSOR_BUILD)).toBe("update");
     expect(runtimeState("2026.11.20-bbbbbbb", CURSOR_BUILD)).toBe("newer");
     expect(runtimeState(CURSOR_BUILD, CURSOR_BUILD)).toBe("current");
+  });
+  it("pins an Antigravity build at or above the floor, so an older agy reads as needing an update (OS-2474)", async () => {
+    expect(runtimeState(MIN_ANTIGRAVITY_VERSION, ANTIGRAVITY_BUILD)).toBe("update");
+    expect(runtimeState("1.5.11", ANTIGRAVITY_BUILD)).toBe("update");
+    const request = vi.fn(async () => new Response("{}"));
+    await expect(offeredVersion("antigravity", request)).resolves.toBe(ANTIGRAVITY_BUILD);
+    expect(request).not.toHaveBeenCalled();
+    expect(RUNTIME_PROBE).toContain(" antigravity;");
   });
   it("offers npm latest for Claude Code and Codex and the tested builds for OpenCode and Cursor", async () => {
     const request = vi.fn(async (url: string | URL | Request) => new Response(JSON.stringify({ version: String(url).includes("claude-code") ? "2.1.9" : "0.160.0" })));

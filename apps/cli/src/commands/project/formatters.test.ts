@@ -1,10 +1,10 @@
 import { expect, it } from "vitest";
-import { projectChecks, sharedProjectChecks } from "./formatters.js";
+import { ANTIGRAVITY_BUILD, guidance, projectChecks, runtimeInstall, sharedProjectChecks } from "./formatters.js";
 import type { LauncherCheck } from "./validators.js";
 
 const facts = (patch: Partial<LauncherCheck> = {}): LauncherCheck => ({ sandbox: null, holder: null, runtimes: {
   codex: { state: "ready", home: true, loggedIn: true }, "claude-code": { state: "missing", home: false, loggedIn: false } }, ...patch });
-const native = { codex: true, "claude-code": true, cursor: true, opencode: true };
+const native = { codex: true, "claude-code": true, cursor: true, opencode: true, antigravity: true };
 const status = (checks: ReturnType<typeof projectChecks>) => Object.fromEntries(checks.map(check => [check.id, check.status]));
 
 it("passes a ready project and skips a runtime that is not installed", () => {
@@ -34,7 +34,7 @@ it("fails missing runtimes with their install commands when none is ready", () =
 });
 
 it("skips the login check for managed credentials", () => {
-  const checks = projectChecks("a", facts({ runtimes: { codex: { state: "ready", home: true, loggedIn: false }, "claude-code": { state: "missing", home: false, loggedIn: false } } }), "ok", { codex: false, "claude-code": true, cursor: true, opencode: true });
+  const checks = projectChecks("a", facts({ runtimes: { codex: { state: "ready", home: true, loggedIn: false }, "claude-code": { state: "missing", home: false, loggedIn: false } } }), "ok", { codex: false, "claude-code": true, cursor: true, opencode: true, antigravity: true });
   expect(checks.find(check => check.id === "codex-login")).toMatchObject({ status: "skip", label: "Codex uses managed credentials" });
 });
 
@@ -74,9 +74,9 @@ it("checks OpenCode when the launcher reports it, with its npm install (OS-2018)
 it("checks a shared project without a sandbox row or sudo, and never fails an unknown login (OS-2247)", () => {
   const checks = sharedProjectChecks("a", { holder: "service", runtimes: {
     codex: { installed: true, login: "signed-out" }, "claude-code": { installed: true, login: "unknown" },
-    cursor: { installed: false, login: "unknown" }, opencode: { installed: true, login: "signed-in" } } }, "ok");
+    cursor: { installed: false, login: "unknown" }, opencode: { installed: true, login: "signed-in" }, antigravity: { installed: false, login: "unknown" } } }, "ok");
   expect(status(checks)).toEqual({ "codex-installed": "pass", "codex-login": "fail", "claude-code-installed": "pass", "claude-code-login": "skip",
-    "cursor-installed": "skip", "opencode-installed": "pass", "opencode-login": "pass", lease: "pass", backend: "pass" });
+    "cursor-installed": "skip", "opencode-installed": "pass", "opencode-login": "pass", "antigravity-installed": "skip", lease: "pass", backend: "pass" });
   expect(checks.find(check => check.id === "codex-login")?.fix).toBe("Run codex login --device-auth once for all projects.");
   expect(checks.find(check => check.id === "claude-code-login")?.label).toBe("Claude Code login status unknown");
   expect(JSON.stringify(checks)).not.toMatch(/sudo|root|sandbox/i);
@@ -84,9 +84,31 @@ it("checks a shared project without a sandbox row or sudo, and never fails an un
 
 it("names a user npm install for each missing runtime in a shared project (OS-2247)", () => {
   const missing = { installed: false, login: "unknown" as const };
-  const checks = sharedProjectChecks("a", { holder: null, runtimes: { codex: missing, "claude-code": missing, cursor: missing, opencode: missing } }, "ok");
+  const checks = sharedProjectChecks("a", { holder: null, runtimes: { codex: missing, "claude-code": missing, cursor: missing, opencode: missing, antigravity: missing } }, "ok");
   expect(checks.filter(check => check.id.endsWith("-installed")).map(check => [check.status, check.fix])).toEqual([
     ["fail", "Install it: npm install -g @openai/codex."], ["fail", "Install it: npm install -g @anthropic-ai/claude-code."],
-    ["fail", "Install it: curl https://cursor.com/install -fsS | bash."], ["fail", "Install it: npm install -g opencode-ai@1.19.5."]]);
+    ["fail", "Install it: curl https://cursor.com/install -fsS | bash."], ["fail", "Install it: npm install -g opencode-ai@1.19.5."],
+    ["fail", "Install it: curl -fsSL https://antigravity.google/cli/install.sh | bash."]]);
   expect(checks.some(check => check.id.endsWith("-login"))).toBe(false);
+});
+
+it("checks Antigravity in a shared project: unknown login, and an agy below the floor needs an update (OS-2474)", () => {
+  const missing = { installed: false, login: "unknown" as const }, codex = { installed: true, login: "signed-in" as const };
+  const runtimes = { codex, "claude-code": missing, cursor: missing, opencode: missing };
+  const ready = sharedProjectChecks("a", { holder: null, runtimes: { ...runtimes, antigravity: { installed: true, login: "unknown" } } }, "ok");
+  expect(ready.filter(check => check.id.startsWith("antigravity-"))).toEqual([
+    { id: "antigravity-installed", status: "pass", label: "Antigravity installed" },
+    { id: "antigravity-login", status: "skip", label: "Antigravity login status unknown" }]);
+  const unusable = { installed: true, login: "unknown" as const, unusable: "1.5.11 is older than Convoy supports" };
+  const old = sharedProjectChecks("a", { holder: null, runtimes: { ...runtimes, antigravity: unusable } }, "ok");
+  expect(old.filter(check => check.id.startsWith("antigravity-"))).toEqual([{ id: "antigravity-installed", status: "skip",
+    label: "Antigravity 1.5.11 is older than Convoy supports", fix: "To use it, update it with agy update or reinstall it: curl -fsSL https://antigravity.google/cli/install.sh | bash." }]);
+  const only = sharedProjectChecks("a", { holder: null, runtimes: { ...runtimes, codex: missing, antigravity: unusable } }, "ok");
+  expect(only.find(check => check.id === "antigravity-installed")).toMatchObject({ status: "fail",
+    fix: "Update it with agy update or reinstall it: curl -fsSL https://antigravity.google/cli/install.sh | bash." });
+});
+
+it("logs Antigravity in with its own Google sign-in (OS-2474)", () => {
+  expect(guidance.sharedLogin("antigravity")).toBe("Run agy acp --login once for all projects.");
+  expect(runtimeInstall("antigravity", ANTIGRAVITY_BUILD)).toMatch(/sha512sum -c/);
 });

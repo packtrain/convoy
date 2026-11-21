@@ -8,6 +8,8 @@ import { existsSync, readFileSync, realpathSync, statSync } from "node:fs";
 import { projectEnvironmentSchema, projectRegistrationSchema, type WorkerLaunchConfig, projectAddResultSchema, unavailableProjectResult, type LoginRuntime, launcherCheckSchema, projectAccountsSchema, loginRuntimeSchema, LOGIN_COMMANDS, type SharedRuntimeStates } from "./validators.js";
 import { findOnPath } from "../../agent/sdk/adapters/executable-resolution.js";
 import { RUNTIME_BINARIES } from "../environment/resolution.js";
+import { USER_INSTALLS } from "./formatters.js";
+import { compareVersions } from "../../agent/sdk/versioning/provider-version.js";
 import { launchCapabilities } from "../../lib/config/credentials/resolution.js";
 import { cliPackageRoot } from "../../lib/version.js";
 import type { LauncherFacts } from "../environment/validators.js";
@@ -133,8 +135,8 @@ export function spawnProjectLauncher(identity: string, config: WorkerLaunchConfi
   return child;
 }
 
-/** Runtime config homes a shared service and its workers keep, so they read what a foreground connect reads. */
-export const SHARED_RUNTIME_HOMES = ["CODEX_HOME", "CLAUDE_CONFIG_DIR"];
+/** Runtime config homes and the agy override a shared service and its workers keep, so they run what a foreground connect runs. */
+export const SHARED_RUNTIME_ENV = ["CODEX_HOME", "CLAUDE_CONFIG_DIR", "CONVOY_ANTIGRAVITY_EXECUTABLE"];
 
 const WORKER = fileURLToPath(new URL(`./worker.${import.meta.url.endsWith(".ts") ? "ts" : "js"}`, import.meta.url));
 
@@ -142,7 +144,7 @@ const WORKER = fileURLToPath(new URL(`./worker.${import.meta.url.endsWith(".ts")
 export function spawnSharedWorker(entry: ServiceProfile, worker = WORKER, execArgv = process.execArgv) {
   if (!entry.path || entry.config.mode !== "shared") throw new Error("Not a shared registration.");
   const env: Record<string, string> = {};
-  for (const name of ["HOME", "PATH", "LANG", "TERM", ...SHARED_RUNTIME_HOMES]) if (process.env[name]) env[name] = process.env[name]!;
+  for (const name of ["HOME", "PATH", "LANG", "TERM", ...SHARED_RUNTIME_ENV]) if (process.env[name]) env[name] = process.env[name]!;
   const child = spawn(process.execPath, [...execArgv, worker], { stdio: ["pipe", "pipe", "pipe"], cwd: "/", env });
   child.stdin.on("error", () => {});
   child.stdin.write(`${JSON.stringify({ ...entry.config, paths: [entry.path], projectIdentity: entry.identity })}\n`);
@@ -184,7 +186,9 @@ export async function projectShell(identity: string, signal?: AbortSignal, login
 export async function sharedShell(folder: string, signal?: AbortSignal, login?: LoginRuntime): Promise<void> {
   signal?.throwIfAborted();
   if (!login && !existsSync(folder)) throw new Error(`Project folder ${folder} is missing.`);
-  const code = await terminalExit(login
+  const agy = login === "antigravity" ? await resolveAgy() : undefined;
+  if (login === "antigravity" && !agy) throw new Error(`Antigravity is not installed on this account. Install it: ${USER_INSTALLS.antigravity}.`);
+  const code = await terminalExit(agy ? spawn(agy, ["acp", "--login"], { cwd: homedir(), stdio: "inherit" }) : login
     // exec /usr/bin/env: the runtime takes the spawned PID, so abort's SIGTERM reaches it, env prefix included.
     ? spawn("/bin/sh", ["-c", `exec /usr/bin/env ${LOGIN_COMMANDS[login]}`], { cwd: homedir(), stdio: "inherit" })
     : spawn(process.env.SHELL || "/bin/sh", [], { cwd: folder, stdio: "inherit" }), signal);
@@ -243,12 +247,32 @@ const STATUS_COMMANDS: Partial<Record<LoginRuntime, string[]>> = { codex: ["logi
 /** Runtimes on PATH and their own login status; `unknown` unless the status command answers clearly. Spec: docs/specs/cli-shared-environments.md#runtimes-and-logins */
 export async function sharedRuntimeStates(): Promise<SharedRuntimeStates> {
   const entries = await Promise.all(loginRuntimeSchema.options.map(async runtime => {
+    if (runtime === "antigravity") return [runtime, await agyState()] as const;
     const binary = await findOnPath(RUNTIME_BINARIES[runtime]), args = STATUS_COMMANDS[runtime];
     if (!binary || !args) return [runtime, { installed: Boolean(binary), login: "unknown" }] as const;
     const { code, stdout, output } = await statusOutput(binary, args);
     return [runtime, { installed: true, login: runtime === "codex" ? codexLogin(code, output) : claudeLogin(code, stdout) }] as const;
   }));
   return Object.fromEntries(entries) as SharedRuntimeStates;
+}
+
+// Lazy: detect.ts loads child_process at import, which launcher tests mock.
+const antigravity = () => import("../../agent/runtimes/antigravity/detect.js");
+
+/** The agy the worker would run: the override, then `agy`, then `antigravity`; undefined when none resolves. */
+async function resolveAgy(): Promise<string | undefined> {
+  return (await (await antigravity()).resolveAntigravityExecutablePath().catch(() => undefined))?.command;
+}
+
+/** agy has no status command; it is usable when `--version` succeeds at or above the worker's floor. */
+async function agyState(): Promise<SharedRuntimeStates["antigravity"]> {
+  const binary = await resolveAgy();
+  if (!binary) return { installed: false, login: "unknown" };
+  const { MIN_ANTIGRAVITY_VERSION } = await antigravity();
+  const { code, stdout } = await statusOutput(binary, ["--version"]);
+  const version = code === 0 ? /\d+\.\d+\.\d+/.exec(stdout)?.[0] : undefined;
+  if (!version) return { installed: true, login: "unknown", unusable: "did not report its version" };
+  return compareVersions(version, MIN_ANTIGRAVITY_VERSION) < 0 ? { installed: true, login: "unknown", unusable: `${version} is older than Convoy supports` } : { installed: true, login: "unknown" };
 }
 
 // Same answers the launcher's account_result recognizes.

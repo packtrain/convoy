@@ -1,11 +1,10 @@
-import { MANAGED_RUNTIME_LABELS } from "../../lib/config/credentials/validators.js";
 import chalk from "chalk";
 import stringWidth from "string-width";
 import { stripVTControlCharacters } from "node:util";
 import type { BrowseState, Health, Observation, Row } from "./validators.js";
 import type { WorkerState } from "../service/validators.js";
 import { guidance } from "../project/formatters.js";
-import type { LoginRuntime } from "../project/validators.js";
+import { loginRuntimeLabels, type LoginRuntime } from "../project/validators.js";
 import type { EnvironmentMode } from "../environment/validators.js";
 
 export const plain = (value: unknown) => stripVTControlCharacters(String(value ?? "unknown")).replace(/[\p{Cc}\p{Bidi_Control}]/gu, " ");
@@ -64,7 +63,7 @@ export function warningGroups(profiles: WorkerState[], profile?: string) {
     const warning = plain(p.warning ?? "");
     let remaining = warning;
     const logins: string[] = [];
-    for (const [runtime, label] of Object.entries(MANAGED_RUNTIME_LABELS)) {
+    for (const [runtime, label] of Object.entries(loginRuntimeLabels)) {
       // Isolated and shared projects word the notice differently. Spec: docs/specs/cli-shared-environments.md#runtimes-and-logins
       const notice = [`${label} is not logged in for this project.`, `${label} is not logged in on this account.`].find(text => remaining.includes(text));
       if (!notice) continue;
@@ -74,7 +73,7 @@ export function warningGroups(profiles: WorkerState[], profile?: string) {
     }
     const summary = logins.length && !remaining.trim() ? `Needs sign-in: ${logins.join(", ")}`
       : warning.split(/(?<=[.!?])\s+/)[0] || "No additional details from the service.";
-    const details = warning.split(/(?<=\.) (?=(?:Codex|Claude Code|Cursor|OpenCode) is not logged in|Run project login|Run [^.]+ once for all projects)/);
+    const details = warning.split(/(?<=\.) (?=(?:Codex|Claude Code|Cursor|OpenCode|Antigravity) is not logged in|Run project login|Run [^.]+ once for all projects)/);
     return { profile: plain(p.profile), status: p.status, summary, details };
   });
 }

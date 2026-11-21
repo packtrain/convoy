@@ -9,8 +9,7 @@ import { installLauncher, isProjectEnvironment, launcherFacts } from "../project
 import { readConfig } from "../../lib/config/toml.js";
 import { MODE_COPY, launcherPrerequisites, prerequisiteFailure, prerequisiteLines } from "./formatters.js";
 import type { Prerequisite } from "./validators.js";
-import { CURSOR_BUILD, RUNTIME_PACKAGES } from "../project/formatters.js";
-import { TESTED_OPENCODE_PACKAGE } from "../../agent/runtimes/opencode/server.js";
+import { RUNTIME_PACKAGES, TESTED_BUILDS } from "../project/formatters.js";
 import { loginRuntimeSchema, type LoginRuntime } from "../project/validators.js";
 let target: Environment | undefined;
 export function setTargetEnvironment(environment?: Environment) { target = environment; }
@@ -124,7 +123,7 @@ export async function publishedVersion(version: string, installed?: string, requ
 }
 
 /** `--version` binary per runtime, in display order. */
-export const RUNTIME_BINARIES: Record<LoginRuntime, string> = { "claude-code": "claude", codex: "codex", opencode: "opencode", cursor: "cursor-agent" };
+export const RUNTIME_BINARIES: Record<LoginRuntime, string> = { "claude-code": "claude", codex: "codex", opencode: "opencode", cursor: "cursor-agent", antigravity: "antigravity" };
 /**
  * Prints `binary<TAB>first --version line` per runtime; an empty version means not installed, "?" no output.
  * A throwaway HOME: the image's ~/.config is root-owned, and OpenCode creates its config folder even for --version.
@@ -152,12 +151,12 @@ export function runtimeState(installed: string | undefined, offered: string | un
   return order < 0 ? "update" : order > 0 ? "newer" : "current";
 }
 
-/** npm `latest` for Claude Code and Codex; the tested builds for OpenCode and Cursor. */
+/** The tested build where a runtime has one, else npm `latest`. */
 export async function offeredVersion(runtime: LoginRuntime, request: typeof fetch = fetch) {
-  if (runtime === "cursor") return CURSOR_BUILD;
-  if (runtime === "opencode") return TESTED_OPENCODE_PACKAGE.split("@")[1];
+  const tested = TESTED_BUILDS[runtime], pkg = RUNTIME_PACKAGES[runtime];
+  if (tested || !pkg) return tested;
   let response: Response;
-  try { response = await request(`https://registry.npmjs.org/${RUNTIME_PACKAGES[runtime].replace("/", "%2F")}/latest`, { signal: AbortSignal.timeout(15_000) }); }
+  try { response = await request(`https://registry.npmjs.org/${pkg.replace("/", "%2F")}/latest`, { signal: AbortSignal.timeout(15_000) }); }
   catch { throw new Error("Cannot reach npm. Check the host network and retry."); }
   if (!response.ok) throw new Error("npm lookup failed. Check registry availability and retry.");
   return z.object({ version: packageVersion }).parse(await response.json()).version;

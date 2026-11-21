@@ -1160,7 +1160,10 @@ the details view even when its preview or the project list cannot fit.
 ## Runtime login, CLI 0.110.0
 
 Project Actions adds [i] Log in to Codex and [o] Log in to Claude Code, next to
-[h] Private project shell. An action is unavailable when the project's status
+[h] Private project shell. [y] Log in to Antigravity runs `agy acp --login` the
+same way (CLI 0.158.0, OS-2474). It is offered only on a shared target, because no
+launcher runs agy yet; the reason says Antigravity runs in shared projects only.
+An SSH remote does not report its mode yet, so it reads as isolated there. An action is unavailable when the project's status
 lists the runtimes detected at its last start and that runtime is not among them.
 The reason names the fix: install it root-owned, then reload. Without that list
 (an older service, or a project that never started) both are offered, and the
@@ -1260,7 +1263,8 @@ A managed Docker environment's Actions list Agent runtimes (r) in its Maintenanc
 section. It opens in the Actions panel, titled Agent runtimes, while the sidebar keeps
 Actions selected. Esc returns to the Actions list. A stopped container makes the
 action unavailable, like the other maintenance actions. The panel shows each agent
-runtime that projects can use: Claude Code, Codex, OpenCode and Cursor. While the
+runtime that projects can use: Claude Code, Codex, OpenCode, Cursor and
+Antigravity (CLI 0.158.0, OS-2474). While the
 versions load, a blank line and then an accent-coloured line with the sidebar's
 animated spinner say "Checking installed runtimes in <environment>…", followed by
 what is being read. A refresh with rows already shown says "Refreshing runtime
@@ -1279,9 +1283,13 @@ The offered version depends on the runtime:
 | Codex | npm `latest` of `@openai/codex` |
 | OpenCode | The tested build, `TESTED_OPENCODE_PACKAGE` |
 | Cursor | The tested build the project-isolation Dockerfile installs |
+| Antigravity | The pinned build `ANTIGRAVITY_BUILD`, 1.5.14 |
 
 OpenCode and Cursor stay on their tested builds because managed keys depend on
-them ([cli-project-isolation.md](cli-project-isolation.md)). The Runtimes panel never
+them ([cli-project-isolation.md](cli-project-isolation.md)). Antigravity stays on
+its pinned build so a managed image changes runtime only with a CLI release. The
+pin is at or above `MIN_ANTIGRAVITY_VERSION`, so an agy too old for Convoy reads
+Update available. The Runtimes panel never
 offers a downgrade. A runtime newer than the offered version shows Newer than
 offered and cannot be checked.
 
@@ -1309,7 +1317,11 @@ still detaches, and an install already running in the container may complete.
 Each install runs as root in the environment's container under the environment
 lock, with umask 022, so projects trust the binary. npm runtimes install the exact
 offered version with `npm install -g --prefix /usr/local`. Cursor installs the
-tested tarball the project-isolation Dockerfile uses. After an install the host
+tested tarball the project-isolation Dockerfile uses. Antigravity downloads the
+pinned build's tarball for `uname -m` (x86_64 or aarch64), checks it against the
+sha512 from agy's release manifest, and extracts its one `antigravity` executable
+into `/usr/local/bin` with an `agy` link. A checksum mismatch installs nothing.
+Root ownership also stops agy's self-update from replacing the binary. After an install the host
 reads that runtime's version again; a version that differs from the offered one is
 a failure. A stopped container fails the version check with a Start environment
 hint.

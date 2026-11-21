@@ -5,7 +5,7 @@ import { startupFailureSchema } from "./validators.js";
 import { spawn } from "node:child_process";
 import { fileURLToPath } from "node:url";
 import { Command, Option } from "commander";
-import { isProjectEnvironment, SHARED_RUNTIME_HOMES } from "../project/launcher.js";
+import { isProjectEnvironment, SHARED_RUNTIME_ENV } from "../project/launcher.js";
 import { serviceRequest, serviceEndpoint } from "./client.js";
 import { ServiceLogs } from "./logs.js";
 import { LAUNCH_AGENT_LABEL, launchAgentPath, removeLaunchAgent, servicePaths, writeLaunchAgent } from "./paths.js";
@@ -37,7 +37,7 @@ export async function startService(background: boolean, quiet = false): Promise<
   const child = spawn(process.execPath, [...process.execArgv, entrypoint], {
     cwd: "/", detached: background, stdio: ["ignore", "pipe", "pipe"],
     env: { HOME: process.env.HOME, PATH: mode === "shared" ? process.env.PATH ?? "/usr/local/bin:/usr/bin:/bin" : "/usr/local/bin:/usr/bin:/bin", LANG: "C.UTF-8",
-      ...mode === "shared" ? Object.fromEntries(SHARED_RUNTIME_HOMES.flatMap(name => process.env[name] ? [[name, process.env[name]]] : [])) : {} },
+      ...mode === "shared" ? Object.fromEntries(SHARED_RUNTIME_ENV.flatMap(name => process.env[name] ? [[name, process.env[name]]] : [])) : {} },
   });
   let exited = false;
   let detached = false;
@@ -81,7 +81,7 @@ export async function startService(background: boolean, quiet = false): Promise<
 
 /** The login job runs this CLI with the caller's PATH, since launchd starts with a minimal one. */
 function launchAgent(): string {
-  const environment = Object.fromEntries(["PATH", ...SHARED_RUNTIME_HOMES].flatMap(name => process.env[name] ? [[name, process.env[name]!]] : []));
+  const environment = Object.fromEntries(["PATH", ...SHARED_RUNTIME_ENV].flatMap(name => process.env[name] ? [[name, process.env[name]!]] : []));
   return launchAgentPlist(LAUNCH_AGENT_LABEL, [process.execPath, ...process.execArgv, process.argv[1], "service", "start"], environment);
 }
 

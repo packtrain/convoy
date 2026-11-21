@@ -57,10 +57,12 @@ it("passes the starting PATH to a shared service so its workers find Homebrew an
 it("passes the runtimes' config homes to a shared service, as a foreground connect sees them (OS-2250)", async () => {
   mocks.mode.mockReturnValueOnce("shared");
   vi.stubEnv("CODEX_HOME", "/home/node/.codex-local"); vi.stubEnv("CLAUDE_CONFIG_DIR", "/home/node/.claude");
+  vi.stubEnv("CONVOY_ANTIGRAVITY_EXECUTABLE", "/opt/agy/custom-agy");
   const worker = child(); mocks.spawn.mockReturnValue(worker); vi.spyOn(console, "log").mockImplementation(() => {});
   try {
     const started = startService(true); worker.stdout.write("ready\n"); await started;
-    expect(mocks.spawn.mock.calls[0][2].env).toMatchObject({ CODEX_HOME: "/home/node/.codex-local", CLAUDE_CONFIG_DIR: "/home/node/.claude" });
+    expect(mocks.spawn.mock.calls[0][2].env).toMatchObject({ CODEX_HOME: "/home/node/.codex-local", CLAUDE_CONFIG_DIR: "/home/node/.claude",
+      CONVOY_ANTIGRAVITY_EXECUTABLE: "/opt/agy/custom-agy" });
   } finally { vi.unstubAllEnvs(); }
 });
 it("cleans a background owner when readiness is invalid", async () => {

@@ -415,6 +415,13 @@ describe("project login", () => {
     await loginProject("a", "codex", false, 5_000, 1);
     expect(replies).toEqual([]);
   });
+  it("refuses Antigravity in an isolated project before pausing it (OS-2474)", async () => {
+    mocks.service.mockResolvedValue(worker({}));
+    await expect(loginProject("a", "antigravity", true)).rejects.toThrow("Antigravity runs in shared projects only");
+    await expect(openProjectShell("a", undefined, undefined, "antigravity")).rejects.toThrow("Antigravity runs in shared projects only");
+    expect(mocks.service).not.toHaveBeenCalled();
+    expect(mocks.shell).not.toHaveBeenCalled();
+  });
   it("refuses to stop active runs without --interrupt", async () => {
     mocks.service.mockResolvedValue(worker({ activeRuns: 2 }));
     await expect(loginProject("a", "codex", false)).rejects.toThrow("Add --interrupt");
@@ -503,7 +510,7 @@ describe("shared project check (OS-2247)", () => {
     mocks.state.mode = "shared";
     mocks.state.config = { profiles: { a: profile } } as unknown as ConfigFile;
     const missing = { installed: false, login: "unknown" };
-    mocks.runtimes.mockResolvedValue({ codex: { installed: true, login: "signed-out" }, "claude-code": missing, cursor: missing, opencode: missing });
+    mocks.runtimes.mockResolvedValue({ codex: { installed: true, login: "signed-out" }, "claude-code": missing, cursor: missing, opencode: missing, antigravity: missing });
     vi.stubGlobal("fetch", vi.fn(async () => new Response("{}", { status: 400 })));
   });
   afterEach(() => { vi.unstubAllEnvs(); vi.unstubAllGlobals(); rmSync(home, { recursive: true, force: true }); });
@@ -512,7 +519,7 @@ describe("shared project check (OS-2247)", () => {
     try {
       const result = await checkProject("a");
       expect(mocks.check).not.toHaveBeenCalled();
-      expect(result.checks.map(check => check.id)).toEqual(["codex-installed", "codex-login", "claude-code-installed", "cursor-installed", "opencode-installed", "lease", "backend"]);
+      expect(result.checks.map(check => check.id)).toEqual(["codex-installed", "codex-login", "claude-code-installed", "cursor-installed", "opencode-installed", "antigravity-installed", "lease", "backend"]);
       expect(result.checks.find(check => check.id === "lease")).toMatchObject({ status: "fail", label: "Project lease: held by a foreground connection" });
       expect(result.checks.find(check => check.id === "backend")?.status).toBe("pass");
     } finally { release(); }

@@ -229,6 +229,19 @@ An image over 10 MiB, or one that would take the run's images over 50 MiB in tot
 
 The assistant message menu offers `agy --conversation <ACP session id>`. agy stores ACP sessions under the same `antigravity-cli` directory as the interactive CLI, so the session id is a conversation id: `agy --conversation <id> -p` answered from an ACP session's history (verified on 1.5.13).
 
+## Project environments
+
+Antigravity joins the login runtimes of shared projects and managed Docker environments (CLI 0.158.0, OS-2474). Isolated projects follow in OS-2475, because no `launcher.py` detects agy yet.
+
+- `loginRuntimeSchema` is the key runtimes plus `antigravity`, so `project login --runtime antigravity` parses and `keys use --runtime antigravity` does not. The managed key arrives in OS-2476.
+- The check and the sign-in resolve agy as the worker does: `CONVOY_ANTIGRAVITY_EXECUTABLE`, then `agy`, then `antigravity` on `PATH`. So a check never passes an agy the worker would not run, and never fails one it would.
+- Sign-in is `agy acp --login`, agy's only sign-in outside its TUI, spawned directly with the resolved executable. It prints a Google URL, reads the pasted code and exits. Cancelled, it prints `login cancelled` and exits 1 (verified on 1.5.14). Specs: [cli-shared-environments.md](cli-shared-environments.md#runtimes-and-logins).
+- agy has no status command, so its login is always `unknown`. `project check` runs `agy --version` only. A version below `MIN_ANTIGRAVITY_VERSION`, a nonzero exit, a timeout or output without a version marks agy unusable, with the fix `agy update` or the install script, since the worker would not advertise it.
+- The user install is the official script, `curl -fsSL https://antigravity.google/cli/install.sh | bash`. It installs `~/.local/bin/antigravity` with an `agy` link.
+- A managed Docker environment's Agent runtimes panel offers the pinned build `ANTIGRAVITY_BUILD` (1.5.14) and installs only that. The root install downloads the versioned tarball, checks the manifest's sha512 for the machine and extracts the binary into `/usr/local/bin`. Spec: [cli-tui.md](cli-tui.md#agent-runtimes-cli-01240-os-2236).
+- agy's state follows `HOME`, never `GEMINI_HOME`, so the service passes no extra variable. Spec: [cli-shared-environments.md](cli-shared-environments.md#execution).
+- The TUI's project Actions offer [y] Log in to Antigravity on shared targets, the same handoff as the Codex and Claude Code logins. Spec: [cli-tui.md](cli-tui.md#runtime-login-cli-01100). There is no Runtime access entry, as for Cursor and OpenCode, because agy reports no account.
+
 ## Known limitations
 
 - Before the first run on a machine, the composer offers agy's built-ins only. Skills appear after it.

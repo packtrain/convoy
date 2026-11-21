@@ -289,8 +289,16 @@ cause and the fix:
 
 Each ends with the `service reload --profile <key>` retry. A failure after the
 last retry with no known reason points to `project check <profile>`. Runtime names are
-kept only for known keys (`codex`, `claude-code`, `opencode`, `cursor`). The
+kept only for known keys, the login runtimes `codex`, `claude-code`, `opencode`,
+`cursor` and `antigravity`; the service drops any other name silently. The
 wording lives next to the `project check` fixes so both say the same thing.
+
+A project's `runtimes` list carries the same keys, at most one each
+(`antigravity` since CLI 0.158.0, OS-2474). A TUI before 0.158.0 cannot parse a
+status that lists `antigravity` and shows the service as unavailable until it
+is updated. A new TUI reads an older service, which never sends it. Only a
+shared worker reports `antigravity`, since no isolated launcher detects agy
+yet.
 
 Each project's status also carries that guidance as an optional `warning` (at most
 256 characters). The service sets it for the reasons above, a launch failure, a

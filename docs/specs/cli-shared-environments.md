@@ -137,10 +137,16 @@ account, cwd `/`, environment limited to `HOME`, `PATH`, `LANG` and `TERM`, the
 launch frame on stdin with `mode: "shared"`. The runtimes' config homes,
 `CODEX_HOME` and `CLAUDE_CONFIG_DIR`, pass through from `service start` to each
 worker when set (CLI 0.134.1, OS-2250), so the service's runtimes read the same
-config as a foreground connect. The devcontainer template depends on this: its
+config as a foreground connect. `CONVOY_ANTIGRAVITY_EXECUTABLE` passes the same
+way (CLI 0.158.0, OS-2474), so a service worker runs the agy that `project
+check` and `project login` resolved. The devcontainer template depends on this: its
 private `CODEX_HOME` keeps the Codex state database off the host mount. Other
 provider variables, such as the Bedrock token, do not pass; a project under the
-service gets them from [managed credentials](#credentials).
+service gets them from [managed credentials](#credentials). Antigravity needs no
+variable: agy 1.5.14 keeps its state under `HOME/.gemini` and ignores
+`GEMINI_HOME` and `ANTIGRAVITY_GEMINI_DIR`, verified by opening ACP sessions
+with each set (OS-2474). So `GEMINI_HOME` is not passed, and the model
+inventory deletes its session files from `HOME/.gemini/antigravity-cli`.
 
 In shared mode, `PATH` is the one the service was started with: the shell that
 ran `convoy service start`, or the TUI process. The service records it at start
@@ -183,11 +189,21 @@ can be absent while the runtime is logged in (Claude Code keeps credentials in
 the macOS Keychain). When the CLI cannot tell, status is `unknown`, never
 `logged out`. Codex (`codex login status`) and Claude Code (`claude auth status
 --json`) have status commands, run with the launcher's 8-second deadline and
-16 KiB cap; Cursor and OpenCode always read `unknown`. `project check <profile>`
+16 KiB cap; Cursor, OpenCode and Antigravity always read `unknown`. agy has no
+status command, so for it the check runs only `agy --version`, with the same
+deadline, on the executable the worker resolves (`CONVOY_ANTIGRAVITY_EXECUTABLE`,
+then `agy`, then `antigravity`). A version below `MIN_ANTIGRAVITY_VERSION`
+(1.5.12) reads "Antigravity 1.5.11 is older than Convoy supports". A failed
+probe reads "Antigravity did not report its version". Both have the fix `agy
+update` or the install script. Such an agy counts as not installed for the
+check's failure rule and for the worker's runtime list, since the worker would
+not advertise it (CLI 0.158.0, OS-2474). `project check <profile>`
 runs in-process (CLI 0.131.0, OS-2247): each runtime installed and logged in,
 the lease holder and the backend probe. There is no sandbox row, an `unknown`
 login is a skipped row, not a failure, and install fixes name `npm install -g
-<package>` (Cursor: its own install script) without `sudo`. A shared worker
+<package>` (Cursor: its own install script; Antigravity: `curl -fsSL
+https://antigravity.google/cli/install.sh | bash`, which installs to
+`~/.local/bin`) without `sudo`. A shared worker
 started by the service runs the same status commands before its `connecting`
 event and lists installed and logged-out runtimes in it, so the service shows
 a "not logged in" warning: "Codex is not logged in on this account. Run `codex
@@ -200,7 +216,8 @@ service or lease folder reads as a free lease.
 with the user's own environment and inherited stdio; its exit status is not an
 error. `project shell --login <runtime>` and `project login` run the runtime's
 own login command (`codex login --device-auth`, `claude auth login`,
-`NO_OPEN_BROWSER=1 cursor-agent login`, `opencode auth login`) in the user's
+`NO_OPEN_BROWSER=1 cursor-agent login`, `opencode auth login`, `agy acp
+--login` with the resolved agy, spawned directly) in the user's
 HOME, through `/bin/sh -c 'exec /usr/bin/env …'` so the runtime replaces the
 shell and a cancelled TUI stops it. A login applies to every project in the
 environment. Neither takes the project lease, pauses the project or reloads it
@@ -225,7 +242,8 @@ advertises `local-shared-v1`.
 `~/Library/LaunchAgents/build.convoy.service.plist`, mode 0644, that runs
 `convoy service start` in the foreground at each login. Nothing installs it
 silently. It holds the running Node and CLI paths as absolute paths, plus
-`PATH`, `CODEX_HOME` and `CLAUDE_CONFIG_DIR` from the shell that ran enable,
+`PATH`, `CODEX_HOME`, `CLAUDE_CONFIG_DIR` and `CONVOY_ANTIGRAVITY_EXECUTABLE`
+from the shell that ran enable,
 because launchd starts jobs with a minimal environment. Enable starts nothing
 now. `convoy service disable` deletes the file and leaves a running service
 alone.

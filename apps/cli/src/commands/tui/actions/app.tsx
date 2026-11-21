@@ -7,7 +7,7 @@ import { palette, plain, terminalJson, wrapLines } from "../formatters.js";
 import { confirmationLines } from "./formatters.js";
 import { Dialog } from "../dialog/index.js";
 
-const labels: Record<Action, string> = { status: "Service status", logs: "Saved service JSON logs", start: "Start shared service", stop: "Stop shared service", pause: "Pause project", reload: "Reload project", shell: "Private project shell", "login-codex": "Log in to Codex", "login-claude-code": "Log in to Claude Code", check: "Check project", remove: "Remove project from environment", cancel: "Cancel selected run" };
+const labels: Record<Action, string> = { status: "Service status", logs: "Saved service JSON logs", start: "Start shared service", stop: "Stop shared service", pause: "Pause project", reload: "Reload project", shell: "Private project shell", "login-codex": "Log in to Codex", "login-claude-code": "Log in to Claude Code", "login-antigravity": "Log in to Antigravity", check: "Check project", remove: "Remove project from environment", cancel: "Cancel selected run" };
 export function ActionDialog({ state, browser, width, height, inline = false }: { state: BrowseState; browser: Browser; width: number; height: number; inline?: boolean }) {
   const action = state.action;
   if (!action || action.entries || Boolean(action.pending) === inline) return null;
@@ -41,6 +41,7 @@ const project: Control[] = [
   { type: "action", kind: "shell", key: "h", label: labels.shell, section: "Project" },
   { type: "action", kind: "login-codex", key: "i", label: labels["login-codex"], section: "Project" },
   { type: "action", kind: "login-claude-code", key: "o", label: labels["login-claude-code"], section: "Project" },
+  { type: "action", kind: "login-antigravity", key: "y", label: labels["login-antigravity"], section: "Project" },
   { type: "action", kind: "check", key: "e", label: labels.check, section: "Project" },
   { type: "action", kind: "remove", key: "v", label: labels.remove, section: "Project" },
   { type: "runtime-access", key: "t", label: "Runtime access", section: "Credentials" },

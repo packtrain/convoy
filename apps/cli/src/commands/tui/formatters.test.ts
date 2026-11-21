@@ -129,6 +129,14 @@ it("summarizes a shared project's sign-in notice the same way (OS-2247)", () => 
     "Cursor is not logged in on this account.", "Run NO_OPEN_BROWSER=1 cursor-agent login once for all projects."]);
 });
 
+it("groups an Antigravity sign-in notice with the others (OS-2474)", () => {
+  const warning = "Codex is not logged in on this account. Run codex login --device-auth once for all projects. Antigravity is not logged in on this account. Run agy acp --login once for all projects.";
+  const groups = warningGroups([{ profile: "a", status: "online", attempts: 1, warning }]);
+  expect(groups[0].summary).toBe("Needs sign-in: Codex, Antigravity");
+  expect(groups[0].details).toEqual(["Codex is not logged in on this account.", "Run codex login --device-auth once for all projects.",
+    "Antigravity is not logged in on this account.", "Run agy acp --login once for all projects."]);
+});
+
 it("retains unknown and mixed warning text instead of classifying it as only sign-in", () => {
   const warning = "Backend unavailable. Codex is not logged in for this project. Run project login a --runtime codex.";
   const group = warningGroups([{ profile: "a", status: "failed", attempts: 1, warning }])[0];

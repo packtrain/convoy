@@ -112,6 +112,21 @@ it("logs in on a shared target without pausing or reloading, then offers Reload 
   expect(f.browser.getSnapshot().action?.message).toBe("Logged in to Codex. The login applies to every project in this environment. Running agents were not restarted; if this project does not pick it up, use [u] Reload project.");
 });
 
+it("logs in to Antigravity on a shared target with agy's own sign-in (OS-2474)", async () => {
+  const f = await fixture();
+  Object.assign(f.connection, { mode: "shared" });
+  f.browser.beginAction("login-antigravity"); await settle(f.browser);
+  expect(f.shell).toHaveBeenCalledWith("a", "a", expect.any(AbortSignal), "antigravity");
+  expect(f.browser.getSnapshot().action?.message).toMatch(/^Logged in to Antigravity\. The login applies to every project/);
+});
+
+it("offers the Antigravity login only on shared targets (OS-2474)", async () => {
+  const f = await fixture();
+  expect(f.browser.unavailable("login-antigravity")).toBe("Antigravity runs in shared projects only. Isolated projects cannot run it yet.");
+  Object.assign(f.connection, { mode: "shared" });
+  expect(f.browser.unavailable("login-antigravity")).toBeUndefined();
+});
+
 it("opens a shared project's shell without pausing it (OS-2248)", async () => {
   const f = await fixture();
   Object.assign(f.connection, { mode: "shared" });

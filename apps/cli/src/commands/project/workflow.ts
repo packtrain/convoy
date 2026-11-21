@@ -210,7 +210,13 @@ export async function openProjectShell(key: string, expectedIdentity?: string, s
   const identity = profile && registrationIdentity(profile);
   if (!identity) throw new Error("No registered project with that profile key.");
   if (expectedIdentity && expectedIdentity !== identity) throw new Error("Project registration changed. Inspect status before opening its shell.");
+  if (!profile.project_mode && login) assertIsolatedLogin(login);
   await (profile.project_mode ? sharedShell(profile.paths[0], signal, login) : projectShell(identity, signal, login));
+}
+
+/** No project launcher runs agy yet (OS-2475); refuse before pausing anything. */
+function assertIsolatedLogin(runtime: LoginRuntime): void {
+  if (runtime === "antigravity") throw new Error("Antigravity runs in shared projects only. Isolated projects cannot run it yet.");
 }
 
 /** Pause the project in a running service, run only the runtime login, then reload and wait for online. A shared login skips the pause and reload. */
@@ -224,6 +230,7 @@ export async function loginProject(key: string, runtime: LoginRuntime, interrupt
   }
   const identity = profile?.project_isolation?.identity;
   if (!identity) throw new Error("No isolated registration with that profile key.");
+  assertIsolatedLogin(runtime);
   const socket = servicePaths(undefined, false).socket;
   const status = await serviceRequest(socket, { op: "status" }).catch((error) => {
     if (!(error instanceof ServiceUnavailableError)) throw error;
@@ -265,7 +272,7 @@ export async function checkProject(key: string): Promise<ProjectCheck> {
   const auth = authDescriptor(new CredentialStore().read(), identity);
   const [facts, backend] = await Promise.all([checkLauncher(identity), probeBackend(profile.url, profile.api_key)]);
   return { profile: key, checks: projectChecks(key, facts, backend, {
-    codex: !auth || auth.mode === "native", "claude-code": !auth?.claude, cursor: !auth?.cursor || auth.cursor.mode === "native", opencode: !auth?.opencode,
+    codex: !auth || auth.mode === "native", "claude-code": !auth?.claude, cursor: !auth?.cursor || auth.cursor.mode === "native", opencode: !auth?.opencode, antigravity: true,
   }) };
 }
 

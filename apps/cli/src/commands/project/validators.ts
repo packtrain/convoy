@@ -17,21 +17,23 @@ export const projectEnvironmentSchema = z.object({
   registrations: z.array(projectRegistrationSchema),
 });
 export type ProjectEnvironment = z.infer<typeof projectEnvironmentSchema>;
-/** Runtimes the project launcher can log in; it runs each one's own login command. */
-export const loginRuntimeSchema = keyRuntimeSchema;
+/** Runtimes with a project login; Antigravity has no managed key yet (OS-2474). */
+export const loginRuntimeSchema = z.enum([...keyRuntimeSchema.options, "antigravity"]);
 export type LoginRuntime = z.infer<typeof loginRuntimeSchema>;
-export const loginRuntimeLabels = MANAGED_RUNTIME_LABELS;
+export const loginRuntimeLabels: Record<LoginRuntime, string> = { ...MANAGED_RUNTIME_LABELS, antigravity: "Antigravity" };
 /** Each runtime's own login, run as this account in a shared environment. */
 export const LOGIN_COMMANDS: Record<LoginRuntime, string> = {
   codex: "codex login --device-auth", "claude-code": "claude auth login", cursor: "NO_OPEN_BROWSER=1 cursor-agent login", opencode: "opencode auth login",
+  antigravity: "agy acp --login",
 };
 const runtimeFactsSchema = z.object({ state: z.enum(["ready", "untrusted", "missing"]), home: z.boolean(), loggedIn: z.boolean() }).strict();
 /** The launcher's read-only `check` answer. Spec: docs/specs/cli-project-isolation.md#failure-reasons-and-project-check-cli-01110-os-2161-os-2162 */
 export const launcherCheckSchema = z.object({
   sandbox: z.string().max(4096).nullable(),
   holder: z.enum(["service", "connect", "shell", "login", "registration", "unknown"]).nullable(),
-  // Launchers before CLI 0.117.0 report no Cursor, before 0.118.0 no OpenCode.
-  runtimes: z.object({ codex: runtimeFactsSchema, "claude-code": runtimeFactsSchema, cursor: runtimeFactsSchema.optional(), opencode: runtimeFactsSchema.optional() }).strict(),
+  // Launchers before CLI 0.117.0 report no Cursor, before 0.118.0 no OpenCode; none reports Antigravity yet (OS-2475).
+  runtimes: z.object({ codex: runtimeFactsSchema, "claude-code": runtimeFactsSchema, cursor: runtimeFactsSchema.optional(), opencode: runtimeFactsSchema.optional(),
+    antigravity: runtimeFactsSchema.optional() }).strict(),
 }).strict();
 export type LauncherCheck = z.infer<typeof launcherCheckSchema>;
 export const projectCheckSchema = z.object({
@@ -155,5 +157,9 @@ const nativeAccountSchema = z.object({
 export const projectAccountsSchema = z.object({ codex: nativeAccountSchema, "claude-code": nativeAccountSchema });
 export type ProjectAccounts = z.infer<typeof projectAccountsSchema>;
 /** A shared project's runtimes, read in-process. Spec: docs/specs/cli-shared-environments.md#runtimes-and-logins */
-export type SharedRuntimeStates = Record<LoginRuntime, { installed: boolean; login: z.infer<typeof nativeAccountSchema>["status"] }>;
+export type SharedRuntimeStates = Record<LoginRuntime, {
+  installed: boolean; login: z.infer<typeof nativeAccountSchema>["status"];
+  /** Why the worker would not advertise an installed runtime, e.g. "1.5.11 is older than Convoy supports" (Antigravity only). */
+  unusable?: string;
+}>;
 export interface SharedCheck { holder: string | null; runtimes: SharedRuntimeStates }

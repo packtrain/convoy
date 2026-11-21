@@ -122,12 +122,24 @@ describe("shared registrations (OS-2248)", () => {
     const { disableConnectEvents } = await import("../../lib/connect-events.js");
     const write = vi.spyOn(process.stdout, "write").mockImplementation(() => true);
     const out = { installed: true, login: "signed-out" };
-    mocks.states.mockResolvedValue({ codex: out, "claude-code": out, cursor: out, opencode: out });
+    mocks.states.mockResolvedValue({ codex: out, "claude-code": out, cursor: out, opencode: out, antigravity: out });
     try {
       await runConnect({ ...config, nonInteractive: true, jsonEvents: true, leaseHolder: "service",
         claudeAuth: { mode: "bedrock", secret: "s", region: "us-east-1" }, codexProvider: { provider: "bedrock", token: "s", region: "us-east-1" } }).catch(() => {});
       const events = write.mock.calls.map(([line]) => JSON.parse(String(line)) as Record<string, unknown>);
-      expect(events).toContainEqual(expect.objectContaining({ status: "connecting", loggedOut: ["cursor", "opencode"] }));
+      expect(events).toContainEqual(expect.objectContaining({ status: "connecting", loggedOut: ["cursor", "opencode", "antigravity"] }));
+    } finally { disableConnectEvents(); }
+  });
+  it("leaves an agy below the floor out of the runtimes it reports (OS-2474)", async () => {
+    const { disableConnectEvents } = await import("../../lib/connect-events.js");
+    const write = vi.spyOn(process.stdout, "write").mockImplementation(() => true);
+    const none = { installed: false, login: "unknown" };
+    mocks.states.mockResolvedValue({ codex: { installed: true, login: "signed-in" }, "claude-code": none, cursor: none, opencode: none,
+      antigravity: { installed: true, login: "unknown", unusable: "1.5.11 is older than Convoy supports" } });
+    try {
+      await runConnect({ ...config, nonInteractive: true, jsonEvents: true, leaseHolder: "service" }).catch(() => {});
+      const events = write.mock.calls.map(([line]) => JSON.parse(String(line)) as Record<string, unknown>);
+      expect(events).toContainEqual(expect.objectContaining({ status: "connecting", runtimes: ["codex"] }));
     } finally { disableConnectEvents(); }
   });
   it("leaves a service worker's frame credentials as sent", async () => {

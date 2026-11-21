@@ -1,7 +1,7 @@
 import * as paths from "./paths.js";
 import { getCliVersion } from "../../lib/version.js";
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { CURSOR_BUILD } from "../project/formatters.js";
+import { ANTIGRAVITY_BUILD, CURSOR_BUILD } from "../project/formatters.js";
 import { existsSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
@@ -484,6 +484,7 @@ describe("agent runtimes", () => {
       { runtime: "codex", installed: "0.156.1", offered: "0.156.1", state: "current" },
       { runtime: "opencode", installed: undefined, offered: "1.19.5", state: "missing" },
       { runtime: "cursor", installed: undefined, offered: CURSOR_BUILD, state: "missing" },
+      { runtime: "antigravity", installed: undefined, offered: ANTIGRAVITY_BUILD, state: "missing" },
     ]);
   });
   it("keeps the other runtimes when one npm lookup fails", async () => {
@@ -498,6 +499,16 @@ describe("agent runtimes", () => {
     await expect(controller.installRuntime(environment, "codex", "0.156.1")).resolves.toBe("0.156.1");
     expect(commands).toContainEqual(["exec", "--user", "root", containerName(environment), "sh", "-c", "umask 022 && npm install -g --prefix /usr/local @openai/codex@0.156.1"]);
   });
+  it("installs Antigravity's pinned build root-owned after checking its sha512 (OS-2474)", async () => {
+    let installed = "";
+    const { controller, commands } = running(() => `claude\t\ncodex\t\nopencode\t\ncursor-agent\t\nantigravity\t${installed}\n`, () => { installed = ANTIGRAVITY_BUILD; });
+    await expect(controller.installRuntime(environment, "antigravity", ANTIGRAVITY_BUILD)).resolves.toBe(ANTIGRAVITY_BUILD);
+    const script = commands.find(args => args.includes("root"))!.at(-1)!;
+    expect(script).toMatch(/^umask 022 && /);
+    expect(script).toContain(`antigravity-cli/${ANTIGRAVITY_BUILD}-`);
+    expect(script).toMatch(/sha512sum -c/);
+    expect(script).toContain("/usr/local/bin");
+  });
   it("fails when the runtime reports another version after install", async () => {
     const { controller } = running(() => "claude\t2.1.3\ncodex\t\nopencode\t\ncursor-agent\t\n");
     await expect(controller.installRuntime(environment, "claude-code", "2.1.9")).rejects.toThrow("Claude Code reports 2.1.3 after install, not 2.1.9");
@@ -505,6 +516,7 @@ describe("agent runtimes", () => {
   it("refuses a version other than the tested build and shell metacharacters", async () => {
     const { controller, commands } = running(() => "");
     await expect(controller.installRuntime(environment, "cursor", "2026.11.01-abc")).rejects.toThrow("tested build");
+    await expect(controller.installRuntime(environment, "antigravity", "1.5.13")).rejects.toThrow("Antigravity installs only its tested build");
     await expect(controller.installRuntime(environment, "codex", "1.0.0;id")).rejects.toThrow();
     expect(commands.filter(args => args[0] === "exec")).toEqual([]);
   });

@@ -198,8 +198,8 @@ allows overwriting an existing definition. This command writes files, whereas
 | `project add <path>` | Register an isolated workspace and remote project; prompts on the control host |
 | `project list` | List registrations and observed service state; accepts `--json` |
 | `project remove <profile>` | Unregister while retaining files; `--yes` confirms and `--interrupt` separately permits stopping active work |
-| `project shell <profile>` | Open the private HOME/workspace for login and diagnostics; pause its connection first. `--login codex\|claude-code\|cursor\|opencode` runs only that runtime's login |
-| `project login <profile> --runtime codex\|claude-code\|cursor\|opencode` | Pause the project, run the runtime's login in its private shell, reload it and wait until online; `--interrupt` permits stopping active runs |
+| `project shell <profile>` | Open the private HOME/workspace for login and diagnostics; pause its connection first. `--login codex\|claude-code\|cursor\|opencode\|antigravity` runs only that runtime's login |
+| `project login <profile> --runtime codex\|claude-code\|cursor\|opencode\|antigravity` | Pause the project, run the runtime's login in its private shell, reload it and wait until online; `--interrupt` permits stopping active runs. Antigravity logs in for shared projects only |
 | `project check <profile>` | Check the sandbox, each runtime (installed root-owned, config folder, logged in), the project lease and the backend key, with a fix for each failure. Read-only; exits 1 on a failed check. `--json` always exits 0 |
 
 `project add` accepts `--profile-key <key>`, `--project <id-or-alias>` to select

@@ -400,7 +400,7 @@ export async function runConnect(config: RunConnectConfig): Promise<void> {
     // The service warns about logged-out runtimes from this event. Spec: docs/specs/cli-shared-environments.md#runtimes-and-logins
     const runtimes = release && config.jsonEvents ? await sharedRuntimeStates() : undefined;
     await connectAgents(config, runtimes && {
-      runtimes: loginRuntimeSchema.options.filter(key => runtimes[key].installed),
+      runtimes: loginRuntimeSchema.options.filter(key => runtimes[key].installed && !runtimes[key].unusable),
       loggedOut: loginRuntimeSchema.options.filter(key => runtimes[key].login === "signed-out"),
     });
   } finally { release?.(); }
@@ -439,7 +439,7 @@ async function connectAgents(config: RunConnectConfig, shared?: { runtimes: stri
   // Isolated workers report the launcher's runtime state so clients can offer logins and warn.
   const launcherList = (name: string) => (process.env[name] ?? "").split(",").filter(Boolean);
   const native: Record<LoginRuntime, boolean> = {
-    codex: !config.codexProvider && (!config.codexAuth || config.codexAuth.mode === "native"), "claude-code": !config.claudeAuth, cursor: !config.cursorAuth, opencode: !config.opencodeAuth,
+    codex: !config.codexProvider && (!config.codexAuth || config.codexAuth.mode === "native"), "claude-code": !config.claudeAuth, cursor: !config.cursorAuth, opencode: !config.opencodeAuth, antigravity: true,
   };
   emitConnectEvent({ event: "status", status: "connecting", ...shared && { ...shared, loggedOut: shared.loggedOut.filter((runtime) => native[runtime as LoginRuntime]) },
     ...(process.env.CONVOY_PROJECT_RUNTIMES !== undefined ? { runtimes: launcherList("CONVOY_PROJECT_RUNTIMES"),

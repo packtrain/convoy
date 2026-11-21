@@ -15,8 +15,8 @@ let frame = "", raw = "", reads = 0, failRead = scenario === "status-error";
 let release: (() => void) | undefined;
 const installs: [LoginRuntime, string][] = [];
 const installed: Partial<Record<LoginRuntime, string>> = { "claude-code": "2.1.3", codex: "0.156.1", cursor: "2026.11.20-bbbbbbb" };
-const offered: Record<LoginRuntime, string> = { "claude-code": "2.1.9", codex: "0.156.1", opencode: "1.19.5", cursor: "2026.10.22-27dcf5f" };
-const labels: Record<LoginRuntime, string> = { "claude-code": "Claude Code", codex: "Codex", opencode: "OpenCode", cursor: "Cursor" };
+const offered: Record<LoginRuntime, string> = { "claude-code": "2.1.9", codex: "0.156.1", opencode: "1.19.5", cursor: "2026.10.22-27dcf5f", antigravity: "1.5.14" };
+const labels: Record<LoginRuntime, string> = { "claude-code": "Claude Code", codex: "Codex", opencode: "OpenCode", cursor: "Cursor", antigravity: "Antigravity" };
 const state = (runtime: LoginRuntime): RuntimeVersion["state"] => !installed[runtime] ? "missing" : installed[runtime] === offered[runtime] ? "current" : runtime === "cursor" ? "newer" : "update";
 stdout.on("data", chunk => { if (plain(chunk.toString()).trim()) { frame = plain(chunk.toString()); raw = chunk.toString(); } });
 const browser = new Browser([{ id: "fixture", name: "Managed fixture", transport: "docker", endpoint: "fixture container", open: async () => { throw new Error("offline"); },
@@ -86,7 +86,8 @@ try {
       await key(" "); await key(down); await key(" "); await key(down); await key(" ");
       assert(/\[x\] Claude Code/.test(frame) && /\[x\] OpenCode/.test(frame), frame);
       assert(!/\[x\] Codex/.test(frame), "An up-to-date runtime cannot be checked");
-      await key(down); await key(down);
+      assert(/\[ \] Antigravity\s+Not installed\s+not installed → 1\.5\.14/.test(frame), "Antigravity is offered its pinned build: " + frame);
+      await key(down); await key(down); await key(down);
       assert(frame.includes("> [ Install / update 2 ]"), frame);
       await key("\u001b[C");
       assert(frame.includes("> [ Refresh ]"), "→ moves between the buttons: " + frame);

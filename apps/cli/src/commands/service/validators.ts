@@ -1,4 +1,4 @@
-import { profileKeySchema, type WorkerLaunchConfig } from "../project/validators.js";
+import { loginRuntimeSchema, profileKeySchema, type LoginRuntime, type WorkerLaunchConfig } from "../project/validators.js";
 import { ProfileSchema } from "../../lib/config/types.js";
 import { authResultSchema, authDescriptorSchema, credentialMutationSchema, type AuthDescriptor, type CredentialMutation } from "../../lib/config/credentials/validators.js";
 import { environmentModeSchema, type EnvironmentMode } from "../environment/validators.js";
@@ -38,8 +38,9 @@ export const workerStateSchema = z.object({
   exitCode: z.number().int().optional(),
   identity: z.string().optional(), activeRuns: z.number().int().nonnegative().optional(),
   pending: z.boolean().optional(), paused: z.boolean().optional(),
-  /** Runtimes the launcher detected at the last worker start; kept while paused. */
-  runtimes: z.array(z.enum(["codex", "claude-code", "opencode", "cursor"])).max(4).optional(),
+  /** Runtimes the launcher detected at the last worker start; kept while paused. Unknown names are dropped; a TUI before CLI 0.158.0 rejects them. */
+  runtimes: z.array(z.string().max(80)).max(16)
+    .transform(names => names.filter((name): name is LoginRuntime => loginRuntimeSchema.safeParse(name).success)).optional(),
   /** Service-owned guidance for the latest failed attempt; never worker text. */
   warning: z.string().max(256).optional(),
 });

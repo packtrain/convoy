@@ -49,6 +49,14 @@ while logged out. `convoy project shell a` opens your `$SHELL` in the project
 folder. `convoy project check a` lists each runtime (installed, logged in), the
 project lease and the backend key.
 
+For Antigravity, install agy with `curl -fsSL https://antigravity.google/cli/install.sh | bash`
+and sign in with `convoy project login a --runtime antigravity`, which runs
+`agy acp --login`: open the Google link it prints, then paste the code back. In
+`convoy tui`, the project's Actions offer the same as [y] Log in to Antigravity.
+agy has no status command, so `project check` shows its login as unknown. It does
+read agy's version and asks you to run `agy update` when agy is older than
+Convoy supports or does not report its version.
+
 Pause, reload, remove, logs and the TUI work as described below. The sandbox
 rows, root-owned runtime installs and private shells do not apply.
 

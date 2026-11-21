@@ -1,5 +1,5 @@
 import { RUNTIME_BINARIES, RUNTIME_PROBE, offeredVersion, parseRuntimeVersions, publishedVersion, runtimeState } from "./resolution.js";
-import { runtimeInstall, runtimeLabel } from "../project/formatters.js";
+import { TESTED_BUILDS, runtimeInstall, runtimeLabel } from "../project/formatters.js";
 import type { LoginRuntime } from "../project/validators.js";
 import type { RuntimeVersion } from "./validators.js";
 import { environmentFormSchema, type EnvironmentProposal, type EnvironmentForm, type EnvironmentMaintenance, type EnvironmentProgress } from "./validators.js";
@@ -121,7 +121,7 @@ export class EnvironmentController {
   /** Root install of the exact offered version; returns the version the runtime then reports. */
   async installRuntime(environment: Environment, runtime: LoginRuntime, version: string) {
     packageVersion.parse(version);
-    if ((runtime === "cursor" || runtime === "opencode") && version !== await offeredVersion(runtime)) throw new Error(`${runtimeLabel(runtime)} installs only its tested build.`);
+    if (TESTED_BUILDS[runtime] && version !== TESTED_BUILDS[runtime]) throw new Error(`${runtimeLabel(runtime)} installs only its tested build.`);
     const container = await this.container(environment);
     if (!container?.State.Running) throw new Error("Environment is stopped. Start environment from Actions, then retry.");
     await this.execute(["exec", "--user", "root", containerName(environment), "sh", "-c", runtimeInstall(runtime, version)], { progress: true, timeout: 900_000 });

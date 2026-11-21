@@ -73,7 +73,7 @@ export function Environments({ browser, width, height }: { browser: Browser; wid
   const execute = () => run(async () => {
     if (state.environment === "create") {
       await browser.createEnvironment(submittedForm, progress, creation);
-      if (alive.current) { setCreated(true); setMessage([`Environment ${form.name} is ready.`, "Next: Add project. Projects use Codex or Claude Code when the image provides it."]); }
+      if (alive.current) { setCreated(true); setMessage([`Environment ${form.name} is ready.`, "Next: Add project. Projects use the agent runtimes the image provides; Agent runtimes installs more."]); }
       return;
     }
     const result = await target.maintenance!.execute(chosen.operation, progress, { version: proposal?.proposed });

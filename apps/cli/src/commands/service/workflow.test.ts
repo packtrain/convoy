@@ -228,6 +228,18 @@ it("keeps a runtime notice while the project is online", async () => {
   await serviceRequest(p.socket, { op: "stop" });
 });
 
+it("keeps Antigravity in a worker's detected runtimes (OS-2474)", async () => {
+  const p = paths(); const { config, environment } = snapshot();
+  const service = await runService(p, serviceSnapshot(config, environment), () => spawn(process.execPath, ["-e", `
+    console.log(JSON.stringify({v:1,event:'status',status:'connecting',runtimes:['codex','claude-code','opencode','cursor','antigravity']}));
+    console.log(JSON.stringify({v:1,event:'status',status:'online'}));
+    process.stdin.resume(); process.stdin.on('end',()=>process.exit(0));
+  `])); services.push(service);
+  await until(async () => (await serviceRequest(p.socket, { op: "status" })).profiles?.[0].status === "online");
+  expect((await serviceRequest(p.socket, { op: "status" })).profiles?.[0].runtimes).toEqual(["codex", "claude-code", "opencode", "cursor", "antigravity"]);
+  await serviceRequest(p.socket, { op: "stop" });
+});
+
 it("names the runtime's own login for a shared project's notice (OS-2247)", async () => {
   const p = paths();
   const service = await runService(p, sharedServiceSnapshot({ profiles: { a: sharedProfile() } }), () => spawn(process.execPath, ["-e", `

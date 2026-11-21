@@ -7,10 +7,11 @@ import { launchAuth } from "../../lib/config/credentials/resolution.js";
 import { spawnProjectLauncher, spawnSharedWorker } from "../project/launcher.js";
 import { ServiceLogs } from "./logs.js";
 import { failureWarning, runtimeNotice } from "../project/formatters.js";
+import { loginRuntimeSchema } from "../project/validators.js";
 import { FRAME_LIMIT, statusSchema, toServiceInspection, type WorkerState, type ServiceProfile, type ServiceManagement, type ServiceRequest } from "./validators.js";
 
 type Snapshot = ServiceProfile[];
-const RUNTIMES = ["codex", "claude-code", "opencode", "cursor"];
+const RUNTIMES: readonly string[] = loginRuntimeSchema.options;
 
 export async function runService(
   paths: { directory: string; socket: string }, snapshot: Snapshot,

@@ -90,7 +90,7 @@ describe("shared direct connect", () => {
   });
   it("reports detected and logged-out runtimes to the service, never an unknown login (OS-2247)", async () => {
     const missing = { installed: false, login: "unknown" };
-    mocks.runtimes.mockResolvedValue({ codex: { installed: true, login: "signed-out" }, "claude-code": { installed: true, login: "unknown" }, cursor: missing, opencode: missing });
+    mocks.runtimes.mockResolvedValue({ codex: { installed: true, login: "signed-out" }, "claude-code": { installed: true, login: "unknown" }, cursor: missing, opencode: missing, antigravity: missing });
     const events: string[] = [];
     const write = vi.spyOn(process.stdout, "write").mockImplementation((line) => { events.push(String(line)); return true; });
     try { await runConnect({ ...config, jsonEvents: true }); }
