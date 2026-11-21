@@ -156,7 +156,7 @@ export default function Home() {
                 Your coding agents.
               </h2>
               <p className="mx-auto mt-6 max-w-[52ch] text-[17px] leading-[1.65] text-[#c6cad3]">
-                Use Claude Code, Codex, OpenCode, or Cursor with your team&apos;s workflows.
+                Use Claude Code, Codex, OpenCode, Cursor, or Antigravity with your team&apos;s workflows.
                 Agents run on your connected machines. Follow their work and review
                 results in Convoy&apos;s web UI.
               </p>

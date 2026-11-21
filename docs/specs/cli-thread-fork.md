@@ -199,7 +199,8 @@ compaction. Codex `/usage` records no turn and stays disabled. A branch of a
 the flag from the composer draft.
 
 OpenCode and Cursor still resume in place and stay disabled until their fork
-calls (OpenCode `POST /session/{id}/fork`) are wired.
+calls (OpenCode `POST /session/{id}/fork`) are wired. Antigravity resumes in
+place too: agy cannot truncate a session's history.
 
 ## Thread view
 

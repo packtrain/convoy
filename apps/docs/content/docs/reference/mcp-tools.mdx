@@ -1106,7 +1106,9 @@ whole command and must start with `/`. Convoy prompts from
 [`list_prompts`](#list_prompts) are **not** these — pass their `content` as
 ordinary `content`.
 
-Only `claude-code` and `codex` targets accept it. `cursor` and `opencode`
+Only `claude-code`, `codex` and `antigravity` targets accept it. `antigravity`
+receives the thread's identity and agent prompt with the session, not in the
+first message. `cursor` and `opencode`
 inject the thread's identity and its bound project agent's prompt into the
 first message of a fresh session, so a raw command there would either displace
 that bootstrap or skip it for the thread's whole life — those `cliType`s are
@@ -1167,10 +1169,11 @@ the CLI hands `content` to the agent as a command instead of as text, so
 `/compact` compacts that thread's context. `content` must be the whole
 message and start with `/`; anything else is rejected. This is the same
 mechanism the web composer's `/` menu uses, so it works where that does —
-`/compact` on `claude-code`, `codex` and `opencode` threads.
+`/compact` on `claude-code`, `codex`, `opencode` and `antigravity` threads.
 
 There is no way to list a thread's commands over MCP, and an unrecognized
-command behaves differently per runtime: `claude-code` and `cursor` also run
+command behaves differently per runtime: `claude-code`, `cursor` and
+`antigravity` also run
 their own custom commands and skills, `opencode` fails the run on a name it
 does not know, and **`codex` executes `/compact` and `/usage`**. Any other command
 reaches it as ordinary text, which it may answer as if it had run.

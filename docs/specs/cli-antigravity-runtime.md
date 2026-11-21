@@ -2,9 +2,9 @@
 
 This spec covers how the `antigravity` runtime runs Antigravity CLI (`agy`) in Convoy. The transport is the Agent Client Protocol (ACP), JSON-RPC 2.0 over newline-delimited stdio. Each run spawns its own `agy acp` process.
 
-Status: slices 1 to 5 of the epic OS-2464 (OS-2468 to OS-2472). A thread runs in Act or Ask to approve mode on the model and thinking level picked in the composer. It streams text, reasoning and tool calls, shows approval and question cards, follows up in the same agy session and stops on Stop. It offers agy's slash commands, fills the context meter, sends images as images and offers a local resume command. A message sent mid-run steers the run, and a run waits for the commands agy moves to the background. `convoy init`, environments and keys come in later slices.
+Status: slices 1 to 10 and 12 of the epic OS-2464 (OS-2468 to OS-2477, OS-2479). A thread runs in Act or Ask to approve mode on the model and thinking level picked in the composer. It streams text, reasoning and tool calls, shows approval and question cards, follows up in the same agy session and stops on Stop. It offers agy's slash commands, fills the context meter, sends images as images and offers a local resume command. A message sent mid-run steers the run, and a run waits for the commands agy moves to the background. `convoy init` sets up agy's MCP server and skill, shared projects, managed environments and isolated projects detect, install and sign in agy, a project can bind a managed Gemini API key, and the devcontainer templates install agy. The public docs, the landing page and the READMEs name Antigravity. Still open: the desktop app's onboarding (OS-2478) and cost estimates (OS-2481).
 
-Every fact below is marked **verified** when it comes from traffic recorded on agy 1.5.13 (signed in, Linux container, 2026-11-20) or **t3code** when it only comes from t3code's source in `reference/t3code`.
+Every fact below is marked **verified** when it comes from traffic recorded on agy 1.5.13 or 1.5.14 (signed in, Linux container, 2026-11-20 and later) or **t3code** when it only comes from t3code's source in `reference/t3code`.
 
 ## Scope
 

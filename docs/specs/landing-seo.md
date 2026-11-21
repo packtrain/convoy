@@ -57,8 +57,8 @@ the year. "AI project management" is falling and draws unrelated intent.
 
 - The title carries the category term "AI coding agents" beside the "software
   factory" tagline.
-- The description names Claude Code, Codex, OpenCode and Cursor and stays within
-  160 characters.
+- The description names Claude Code, Codex, OpenCode, Cursor and Antigravity
+  and stays within 160 characters.
 - The body uses the words of the exact-fit queries: "web UI" in the coding-agent
   introduction, "remotely" in the phone card, "Self-host" in "Run Convoy
   yourself".

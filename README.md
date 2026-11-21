@@ -1,8 +1,8 @@
 # Convoy
 
 Convoy is a project management app for teams working with AI coding agents.
-Manage tasks, run Claude Code, Codex, OpenCode or Cursor against your repos,
-and review their output in the browser. Agents run on your machines; the web
+Manage tasks, run Claude Code, Codex, OpenCode, Cursor or Antigravity against
+your repos, and review their output in the browser. Agents run on your machines; the web
 app shows their conversations, tool calls and code changes.
 
 ![Convoy task list, agent conversation and task details](docs/assets/readme/hero.png)
@@ -65,7 +65,7 @@ welcome.
 | Skills, prompts and workflows packs | Bundle reusable skills, prompts and workflows. | Next |
 | Mobile app | Access Convoy from a dedicated mobile app. | Next |
 | Kanban and task lists | Track tasks with custom statuses, labels, priorities and sections. | Available |
-| Claude Code, Codex, OpenCode and Cursor | Run agents against your repos and follow output in browser threads. | Available |
+| Claude Code, Codex, OpenCode, Cursor and Antigravity | Run agents against your repos and follow output in browser threads. | Available |
 | Diff review | Inspect code changes and leave inline comments. | Available |
 | Usage and cost tracking | See reported usage and estimated costs per thread. | Available |
 | Task assignment to agents | Start work automatically when a task is assigned to a project agent. | Available |
@@ -84,7 +84,7 @@ welcome.
 | Docker self-hosting | Run the web app and backend with Docker Compose. | Available |
 | Desktop app | Manage local agent connections from a menubar app. | Postponed |
 
-Runtime capabilities differ. See [runtime support and deployment status](https://docs.convoy.build/docs/reference/roadmap).
+Runtime capabilities differ, and Antigravity runs show no cost estimate yet. See [runtime support and deployment status](https://docs.convoy.build/docs/reference/roadmap).
 
 ## Develop from source
 
@@ -151,7 +151,8 @@ credential, log in in the project’s private shell, or skip and configure it la
 Devcontainer setup installs the Convoy CLI, resolves the host workspace's profile,
 and configures container-local Codex MCP and backend firewall hosts. Profile names
 can differ between machines; `CONVOY_PROFILE` is an optional explicit selector.
-See [devcontainer setup](.devcontainer/README.md).
+Antigravity signs in and runs `convoy init --cli antigravity` inside the
+container. See [devcontainer setup](.devcontainer/README.md).
 
 ### Browser screenshots from agents
 

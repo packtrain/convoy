@@ -367,7 +367,7 @@ This is chosen over appending to the agent prompt because:
   (`apps/cli/src/agent/runtimes/agent-instructions.ts`), so long threads would
   lose Skill awareness exactly where it matters most.
 - It requires no change to `agent-instructions.ts` and no change to any of the
-  four runtimes.
+  runtimes.
 - Freshness is equivalent. Every Convoy run spawns a fresh agent process, so
   `tools/list` re-runs on every user message.
 

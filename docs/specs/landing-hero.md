@@ -149,19 +149,21 @@ build, test, and review software with AI. Give teams a proven starting point
 they can adapt and improve together." Workflows here include the team's broader
 AI software development process, not only saved workflow runs.
 
-The coding-agent introduction reads "Use Claude Code, Codex, OpenCode, or Cursor
-with your team's workflows. Agents run on your connected machines. Follow their
+The coding-agent introduction reads "Use Claude Code, Codex, OpenCode, Cursor, or
+Antigravity with your team's workflows. Agents run on your connected machines. Follow their
 work and review results in Convoy's web UI." The feature index retains the runtime
-differences in steering and approvals.
+differences in steering and approvals. Below it, the logo wall shows the five runtimes in
+`app/cli-logos.tsx`: two columns with the fifth cell spanning the last row on
+screens below the `lg` breakpoint, one row of five from `lg`.
 
 The closing CTA reads "Build your team's way of working with AI." Its supporting
 paragraph reads "Start with one workflow. Give your team a process they can reuse
 and improve."
 
 The site title reads "Convoy | The software factory for AI coding agents". The
-metadata description reads "Run Claude Code, Codex, OpenCode and Cursor from one
-web UI. Share agents, skills and workflows across your team, assign tasks and
-review results together." Why these words:
+metadata description reads "Run Claude Code, Codex, OpenCode, Cursor and
+Antigravity from one web UI. Share agents, skills and workflows across your team,
+assign tasks and review results." Why these words:
 [landing-seo.md](landing-seo.md#search-terms).
 
 The phone card body reads "Your agent works on your code on a computer or server

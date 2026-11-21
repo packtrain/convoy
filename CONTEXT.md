@@ -328,7 +328,7 @@ A live connection from a Convoy CLI process for one CLI profile, including its c
 _Avoid_: CLI profile when referring to online state
 
 **CLI runtime**:
-A concrete command-line coding tool that can process a CLI thread, such as Claude Code, Codex, Cursor, or opencode.
+A concrete command-line coding tool that can process a CLI thread, such as Claude Code, Codex, Cursor, opencode, or Antigravity.
 _Avoid_: Agent
 
 **CLI thread**:

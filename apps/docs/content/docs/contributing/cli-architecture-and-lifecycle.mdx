@@ -22,7 +22,9 @@ Web UI <-> Convex backend <-> Convoy CLI <-> local runtime (e.g. Claude Code)
   query. Codex uses its app-server protocol by default, with an optional
   `codex exec --json` transport. OpenCode uses a long-lived
   `opencode serve` process driven through its SDK. Cursor uses a fresh
-  `cursor-agent` print-mode process for each turn.
+  `cursor-agent` print-mode process for each turn. Antigravity uses a fresh
+  `agy acp` process for each turn and speaks the Agent Client Protocol
+  (ACP), JSON-RPC over stdio.
 
 <Mermaid
   chart={`sequenceDiagram
@@ -77,6 +79,8 @@ CLI:
   Codex transport; `codex/runner.ts` runs the optional exec transport
 - `apps/cli/src/agent/runtimes/opencode/runner.ts` drives the OpenCode SDK
 - `apps/cli/src/agent/runtimes/cursor/runner.ts` executes Cursor print mode
+- `apps/cli/src/agent/runtimes/antigravity/runner.ts` drives `agy acp`
+  through the ACP client in `acp/client.ts` and the shared `json-rpc.ts`
 
 Frontend:
 
@@ -263,8 +267,8 @@ scatter `cliType === "claude-code"` checks across top-level Convex modules.
 
 ## Current runtime status
 
-The CLI registers executable runners for Claude Code, Codex, OpenCode, and
-Cursor. Codex uses the app-server protocol by default; `convoy connect
+The CLI registers executable runners for Claude Code, Codex, OpenCode,
+Cursor, and Antigravity. Codex uses the app-server protocol by default; `convoy connect
 --codex-exec` selects its exec transport. Other runtime slugs have no
 registered CLI runner and fail when selected for execution.
 

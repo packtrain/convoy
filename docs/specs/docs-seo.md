@@ -42,9 +42,9 @@ that uses the same wording. Reasoning and the Trends data:
 
 | Page | Title |
 | --- | --- |
-| `/docs/using/ai-threads` | A web UI for Claude Code, Codex and OpenCode |
+| `/docs/using/ai-threads` | A web UI for Claude Code, Codex, OpenCode and Antigravity |
 | `/docs/using/skills` | Share agent skills across your team |
-| `/docs/reference/roadmap` | Claude Code, Codex, OpenCode and Cursor support |
+| `/docs/reference/roadmap` | Claude Code, Codex, OpenCode, Cursor and Antigravity support |
 | `/docs/deployment/self-hosting-convex` | Self-hosted coding agents: Docker deployment |
 
 Descriptions stay within 160 characters. The Skills title says "agent skills",

@@ -36,7 +36,7 @@ test('title and description carry the category term and the runtime names', asyn
   const html = await read('index.html');
   assert.equal(html.match(/<title>([^<]*)<\/title>/)?.[1], 'Convoy | The software factory for AI coding agents');
   const description = meta(html, 'description');
-  for (const runtime of ['Claude Code', 'Codex', 'OpenCode', 'Cursor']) assert.ok(description.includes(runtime), runtime);
+  for (const runtime of ['Claude Code', 'Codex', 'OpenCode', 'Cursor', 'Antigravity']) assert.ok(description.includes(runtime), runtime);
   assert.ok(description.length <= 160, `description is ${description.length} characters`);
 });
 

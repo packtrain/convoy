@@ -4,7 +4,7 @@ export const site = {
   name: "Convoy",
   title: "Convoy | The software factory for AI coding agents",
   description:
-    "Run Claude Code, Codex, OpenCode and Cursor from one web UI. Share agents, skills and workflows across your team, assign tasks and review results together.",
+    "Run Claude Code, Codex, OpenCode, Cursor and Antigravity from one web UI. Share agents, skills and workflows across your team, assign tasks and review results.",
   url: "https://convoy.build",
   docsUrl: "https://docs.convoy.build/",
   repoUrl: process.env.LANDING_REPO_URL?.trim() || "https://github.com/packtrain/convoy",
@@ -18,7 +18,7 @@ export const featureGroups: FeatureGroup[] = [
     title: "Agent execution",
     features: [
       { name: "Agent threads", body: "Follow coding agents on your connected machines. Read their responses, inspect tool calls and diffs, and send follow-up instructions in a thread." },
-      { name: "Supported runtimes", body: "Run Claude Code, Codex, OpenCode or Cursor, and pick the runtime and model for each thread. Steering and approvals depend on what each runtime supports." },
+      { name: "Supported runtimes", body: "Run Claude Code, Codex, OpenCode, Cursor or Antigravity, and pick the runtime and model for each thread. Steering and approvals depend on what each runtime supports." },
       { name: "Watch Tower", body: "See agent runs from every project in your organization. Find questions, failures and work ready for review in List or Board view, with batch actions for triage." },
       { name: "Agent dispatch", body: "Assign a task to an agent with its own instructions and preferences. Start a thread from the task and follow its progress from the board." },
       { name: "Steering & approvals", body: "Review diffs and send feedback to the agent. Supported runtimes also let you steer a running agent and approve or deny tool use." },

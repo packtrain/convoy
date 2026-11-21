@@ -1,11 +1,11 @@
 ---
-title: Claude Code, Codex, OpenCode and Cursor support
+title: Claude Code, Codex, OpenCode, Cursor and Antigravity support
 sidebarTitle: Runtime support
-description: "What Convoy supports for each coding agent: Claude Code, Codex, OpenCode and Cursor compared on approvals, plan mode, steering, image input and sandboxing."
+description: "What Convoy supports for each coding agent: Claude Code, Codex, OpenCode, Cursor and Antigravity compared on approvals, plan mode, steering and images."
 ---
 
-Convoy runs four coding agents: Claude Code, Codex, OpenCode and Cursor. This
-page compares what each supports in a thread.
+Convoy runs five coding agents: Claude Code, Codex, OpenCode, Cursor and
+Antigravity. This page compares what each supports in a thread.
 
 A runtime appearing in configuration does not guarantee that it can execute
 a thread. This page records the runners and capabilities implemented in
@@ -19,7 +19,8 @@ Convoy. Your machine also needs the runtime installed and authenticated.
 | Codex | Supported, app-server by default | Interactive approvals, questions, and plan mode on app-server | App-server only | Files referenced by local path | Supported |
 | OpenCode | Supported through `opencode serve` and its SDK | Interactive approvals, questions, and plan mode | Not supported | Files referenced by local path | Rejected |
 | Cursor | Supported through `cursor-agent` print mode | Non-interactive Act and Guarded modes; no approval prompts or plan mode | Not supported | Files referenced by local path | Rejected |
-| Amp, Droid, Gemini, CodeRabbit, GitHub Copilot, Other | No registered CLI runner | Unavailable | Unavailable | Unavailable | Unavailable |
+| Antigravity | Supported through `agy acp` (Agent Client Protocol) | Act and Ask to approve with approval prompts and questions; no plan mode | Supported | JPEG, PNG, WebP, BMP | Rejected |
+| Amp, Droid, Gemini CLI, CodeRabbit, GitHub Copilot, Other | No registered CLI runner | Unavailable | Unavailable | Unavailable | Unavailable |
 
 Steering sends a queued message into an active turn. Without steering,
 follow-up messages wait for the next turn. Inline image input means Convoy
@@ -27,7 +28,7 @@ passes image content directly to the runtime. A path reference instead
 requires the runtime to read the downloaded file with its own tools.
 
 `--isolated` requests an OS sandbox through Convoy. Runtime permission
-modes are separate controls. OpenCode and Cursor fail an isolated run
+modes are separate controls. OpenCode, Cursor and Antigravity fail an isolated run
 instead of silently running without that sandbox. See
 [Isolation options](/docs/cli/isolation-options).
 
@@ -45,7 +46,7 @@ steering, live token deltas, or the context-window meter. Approval-style
 modes degrade to sandboxed execution that never asks; Plan mode does not
 become read-only on this transport.
 
-### OpenCode and Cursor
+### OpenCode, Cursor and Antigravity
 
 OpenCode requires version 1.14.19 or later. Its connection discovers the
 machine's model catalog and per-model variants. It supports streaming
@@ -56,6 +57,20 @@ chat for follow-ups. Act allows commands through `--force`; Guarded follows
 the machine's permission configuration and skips denied commands. Neither
 mode asks for approval mid-run. Cursor streams coalesced output but does
 not report a context-window meter.
+
+Antigravity requires agy 1.5.12 or later and Convoy CLI 0.154.0 or later.
+Each turn runs a new `agy acp` process that resumes the saved session. Its
+connection discovers the account's models and each model's thinking levels.
+It supports streaming output, agy's slash commands, the context-window
+meter, and `agy --conversation <id>` to resume a thread locally. Act skips
+agy's permission prompts; Ask to approve shows them in the thread. It has
+no usage limits reader, no subagent viewer, and no edit or fork from a
+message. Antigravity runs show no cost estimate yet. Gemini CLI is a
+separate product with no runner.
+
+Antigravity also runs in [isolated projects](/docs/cli/isolated-projects)
+and can use a
+[managed Gemini API key](/docs/cli/provider-keys#gemini-api-keys-for-antigravity).
 
 See [Adding a runtime](/docs/contributing/adding-a-runtime) for the steps
 needed to add a runner. These capabilities were checked against the CLI

@@ -92,7 +92,7 @@ Per runtime:
   `workspace-write` with the profile paths as extra writable roots. On
   Linux, `/tmp` additionally stays writable (Codex's default; it is often
   the only temp dir there).
-- **Cursor and OpenCode** — no OS sandbox support; runs fail fast with a
+- **Cursor, OpenCode and Antigravity** — no OS sandbox support; runs fail fast with a
   clear error. Use Claude Code or Codex on isolated profiles, or disable
   isolation.
 
@@ -114,6 +114,9 @@ layer to configure regardless of anything else:
   Landlock/seccomp on Linux.
 - **OpenCode** uses session permission rulesets; "Ask to approve"
   routes each request to the thread for approval.
+- **Antigravity** asks before commands and MCP calls in "Ask to approve";
+  Act starts agy with `--dangerously-skip-permissions`. Convoy does not use
+  agy's own `--sandbox`.
 
 These are per-command guardrails, not a machine boundary: the agent
 process itself still runs as your user. Treat them as the baseline,

@@ -3,111 +3,180 @@ title: Adding a runtime
 description: Steps to land execution support for a new CLI runtime.
 ---
 
-Convoy already has a runtime registry, so adding a new runtime slug is a
-data change. Adding real *execution* support is the harder piece. This page
-lists what you need to implement on each side.
+A real runtime is three folders and a spec: an executor in the CLI, a
+backend definition in Convex, and UI metadata in the web app. Around them
+sit a number of hand-kept lists that must name the new slug. This page lists
+both, in the order Antigravity was added (epic OS-2464).
 
 Read [`CLI architecture and lifecycle`](/docs/contributing/cli-architecture-and-lifecycle)
-first — it has the system shape, event union, and file pointers this page
+first. It has the system shape, event union, and file pointers this page
 builds on.
 
 ## 1. Pick and register the slug
 
-Edit `apps/web/convex/cli/lib/runtimes/contracts.ts`:
+- Add the slug to `CLI_RUNTIME_SLUGS` in
+  `apps/web/convex/cli/lib/runtimes/contracts.ts`.
+- Add the same literal to `cliTypeValidator` and
+  `availableGenericCliValidator` in
+  `apps/web/convex/cli/lib/runtimes/validators.ts`. Both are written by hand,
+  so the compiler does not catch a missing entry.
+- If the runtime reports a per-machine model catalog, add it to
+  `CATALOG_CLI_RUNTIME_SLUGS` in the same `contracts.ts`. Its catalog then
+  goes to the `cliRuntimeCatalogs` table, like OpenCode's and Antigravity's.
 
-- Add your slug to `CLI_RUNTIME_SLUGS` (and `GENERIC_CLI_RUNTIME_SLUGS` if
-  you do not yet have a bespoke runtime folder).
-- A slug becomes a stable public identifier — renaming later forces a data
-  migration of `cliSessions`, `cliProfiles`, and `cliMessageChunks` rows.
+A slug is a stable public identifier. Every table whose field uses
+`cliTypeValidator` in `apps/web/convex/schema.ts` stores it: `cliThreads`,
+`cliMessages`, `cliRuntimeCatalogs`, `cliRuntimeFacts`, `costRollups` and
+others, plus the advertised runtimes in `cliSessions.availableClis` and
+`cliProfiles.lastKnownClis`. Removing or renaming the literal needs a data migration
+first, because a Convex deploy fails while any stored row still holds it.
 
 ## 2. Backend runtime definition
 
-Two options:
+Create `apps/web/convex/cli/lib/runtimes/<slug>/` with a `runtime.ts` that
+exports a `CliRuntimeDefinition`, and add it to the exhaustive record in
+`registry.ts`. Typical members:
 
-- **Generic runtime** — good enough if your runtime does not need a
-  custom chunk normalizer, custom models, or custom continuation handling.
-  Use `createGenericCliRuntime({ type, label })` in `registry.ts`. The
-  generic runtime provides a default `parseAvailableCli` and an
-  identity-style chunk path.
-- **Bespoke runtime** — create
-  `apps/web/convex/cli/lib/runtimes/<slug>/` with at least `runtime.ts`
-  exporting a `CliRuntimeDefinition`, then register it in
-  `registry.ts`. Typical members:
-  - `parseAvailableCli` — validate the CLI-reported `availableClis` row
-  - `normalizeChunk` — map `RawCliChunk → CliNormalizedEvent`. The
-    contract is defined in `apps/web/convex/lib/contracts/validators.ts`.
-    Keep all runtime-specific parsing here.
-  - `getModelOptions` / `resolveRunModel` / `normalizeStoredModel` if the
-    runtime exposes user-visible model choices.
-  - `extractContinuationIdFromChunks` / `buildResumeCommand` if the
-    runtime supports continuations.
+- `parseAvailableCli`: validate the CLI-reported `availableClis` row.
+- `normalizeChunk`: map `RawCliChunk` to `CliNormalizedEvent`. The contract
+  is in `apps/web/convex/lib/contracts/validators.ts`. Keep all
+  runtime-specific parsing here. An ACP agent composes over the generic
+  mapping in `runtimes/acp/normalizeChunk.ts`.
+- `getModelOptions`, `resolveRunModel` and `normalizeStoredModel` when the
+  runtime offers model choices, plus effort options for thinking levels.
+- `extractContinuationIdFromChunks` and `buildResumeCommand` for follow-ups
+  and the local resume command.
+- `minAppVersion`: registration drops the runtime's row from an older CLI
+  that would run it wrongly. Rules in `docs/specs/cli-minimum-version.md`.
+- `supportsSteering`: the backend half of steering. The CLI half is in
+  step 4.
+- `supportsFirstMessageRuntimeCommand`: set it when the agent prompt and
+  thread identity reach the runtime outside the first message, so a thread
+  may open on a slash command.
 
-See `apps/web/convex/cli/lib/runtimes/claudeCode/` as the worked example.
+Shared validators go in the runtime folder's `validators.ts`. See
+`apps/web/convex/cli/lib/runtimes/antigravity/` for a recent example and
+`claudeCode/` for the largest one.
 
-## 3. Frontend UI metadata
+## 3. Web UI
 
-Edit `apps/web/lib/cli-runtime-ui/`:
+In `apps/web/lib/cli-runtime-ui/`:
 
-- Register the slug with a label, icon, and selector metadata (see
-  existing `claude-code.tsx` and `codex.tsx` entries).
-- Any runtime-specific UI (e.g. a context-window meter) should use the
-  normalized event kinds, not raw chunk shapes.
+- Add `<slug>.tsx` with the label, icon and modes, and register it in
+  `registry.ts`.
+- Add the slug to `CLI_TYPE_SELECTOR_ORDER` in `registry.ts`, or the
+  composer never offers it.
+- Use normalized event kinds for runtime-specific UI, never raw chunk
+  shapes.
 
-## 4. CLI-side executor
+Elsewhere in `apps/web`:
 
-Create `apps/cli/src/agent/runtimes/<slug>/`:
+- `lib/slash-commands/composer.ts`, `getComposerRuntimeCommands`: the
+  commands the composer offers before the runtime reports its own.
+- `lib/mcp/config-snippets.ts` and the MCP setup dialogs, when the runtime
+  has its own MCP setup command.
+- The usage dashboard's chart colors in
+  `components/blocks/project/usage/project-usage-dashboard.tsx`.
 
-- `runner.ts` exporting a `CliRuntimeRunner` (see the contract in
-  `apps/cli/src/agent/runtimes/contracts.ts`). A runner yields raw chunks:
+The approval and question card titles come from the runtime's label, so
+they need no change.
 
-  ```ts
-  async *execute(...) {
-    for await (const chunk of spawnTheRuntime(...)) {
-      yield { type: chunk.type, data: chunk.data };
-    }
+## 4. CLI executor
+
+Create `apps/cli/src/agent/runtimes/<slug>/` with `runtime.ts`, `runner.ts`,
+`detect.ts` and `streaming.ts`, implementing `CliRuntimeDefinition` from
+`apps/cli/src/agent/runtimes/contracts.ts`. A runner yields raw chunks:
+
+```ts
+async *execute(...) {
+  for await (const chunk of spawnTheRuntime(...)) {
+    yield { type: chunk.type, data: chunk.data };
   }
-  ```
+}
+```
 
-- `detect.ts` exporting whatever `detectAvailableClis` needs to report this
-  runtime in `registerSession`.
-- Optional: `models.ts`, `prompts.ts`, `continuation.ts` mirroring the
-  Claude Code layout when the runtime needs them.
+Register it in `apps/cli/src/agent/runtimes/registry.ts`. A `cliType`
+without a registered runner fails fast with an "unsupported cliType"
+message. Then add the slug to:
 
-Register the runner in `apps/cli/src/agent/runtimes/registry.ts`. A cliType
-without a registered runner fails fast with a clear "unsupported cliType"
-message instead of silently hanging.
+- `DEFAULT_PROVIDER_COMMANDS` in `apps/cli/src/agent/sdk/constants.ts`, the
+  executable names detection looks for.
+- `steeringCliTypes` in `apps/cli/src/agent/app/runner.ts`, if the runtime
+  steers.
+- `CLI_TYPES` in `apps/cli/src/commands/threads/parsers.ts` and the list in
+  `apps/cli/src/commands/project-agents/parsers.ts`, so
+  `convoy threads create --cli-type` and project agents accept it.
 
-Two transport shapes exist as worked examples:
+Three transport shapes exist as worked examples:
 
-- **Per-turn subprocess** (`apps/cli/src/agent/runtimes/codex/`) — spawn the
-  CLI once per run in JSON-stream mode and forward stdout lines as chunks.
-  Simplest; no mid-run interactivity.
-- **Interactive server + SDK** (`apps/cli/src/agent/runtimes/opencode/`) —
-  keep a long-lived server process, drive sessions through the runtime's
-  SDK, and route permission/question requests through the interaction
-  bridge. Use this when the runtime supports mid-run approvals or
-  streaming deltas.
+- **Per-turn subprocess** (`codex/runner.ts`, `cursor/`): spawn the CLI once
+  per run in JSON-stream mode and forward stdout lines as chunks. Simplest,
+  with no mid-run interactivity.
+- **Interactive server and SDK** (`opencode/`): keep a long-lived server
+  process, drive sessions through the runtime's SDK, and route permission
+  and question requests through the interaction bridge.
+- **JSON-RPC over stdio** (`codex/app-server-runner.ts`, `antigravity/`):
+  one process per run that speaks JSON-RPC on stdin and stdout. Antigravity
+  uses the Agent Client Protocol (ACP) through the protocol-only client in
+  `acp/client.ts` and the shared `json-rpc.ts`, so a later ACP agent only
+  needs its own folder.
 
-## 5. Specs
+## 5. Setup, environments and isolation
 
-Per the project's specs-first workflow, update or add a spec in
-`docs/specs/` that documents:
+A runtime users can run also needs:
 
-- expected stream shapes from this runtime
-- continuation semantics (if any)
-- tool-call handling
-- any known payload gotchas that should be preserved across refactors
+- **`convoy init`**: a target in `apps/cli/src/commands/init/targets/` and
+  its config writer under `init/config/`, so threads reach Convoy's MCP
+  server and skill.
+- **Shared projects and managed environments**: the login command and
+  launcher facts in `apps/cli/src/commands/project/validators.ts`, the
+  binary in `RUNTIME_BINARIES` in
+  `apps/cli/src/commands/environment/resolution.ts`, a pinned build in
+  `TESTED_BUILDS` in `apps/cli/src/commands/project/formatters.ts`, and the TUI's
+  Agent runtimes panel and login action under `apps/cli/src/commands/tui/`.
+  `loginRuntimeSchema` is `keyRuntimeSchema`, so a runtime with a login
+  also needs a managed key, or the two schemas must be split.
+- **Isolated projects**: an entry in `RUNTIMES` in
+  `templates/project-isolation/launcher.py`, the root-owned install in its
+  `Dockerfile`, and the binary name in `install.py`'s hint. The launcher is installed root-owned, so
+  this is a launcher release with its own acceptance run.
+- **Managed keys**: the provider and the runtime in
+  `apps/cli/src/lib/config/credentials/validators.ts` and
+  `apps/cli/src/lib/config/provider-keys.ts`, plus the TUI credentials
+  screen.
+- **Devcontainers**: the install, sign-in volume and firewall hosts in
+  `templates/devcontainer`, the repo's `.devcontainer` and the gitignored
+  `sandbox/.devcontainer`. These three copies are kept in sync by hand.
+- **Desktop app**: its own agent list in `apps/desktop/src/lib/agent-catalog.ts`
+  and `apps/desktop/src-tauri/src/agents.rs`.
 
-## 6. Tests
+Each of these changes the CLI, so each bumps its version. The release rules
+are in `docs/agents/publishing-the-cli.md`.
 
-- Backend: add `normalizeChunk.test.ts` fixtures covering each event kind
-  your parser emits. Use Convex-test patterns (`pnpm web:test:once`).
-- CLI: add a `runner.test.ts` that exercises the executor against a
-  deterministic fixture stream. Claude Code uses `--stream <jsonl>` for this;
-  replicate that pattern so your runtime has a non-live test path.
+## 6. Specs
 
-## 7. Roadmap
+Per the specs-first workflow, add `docs/specs/cli-<slug>-runtime.md`. Mark
+each fact as verified against recorded traffic or taken from someone
+else's source. Cover:
 
-Update [`Roadmap`](/docs/reference/roadmap) when you move a runtime from
-"config surface only" to "executable" so the public docs stay honest about
-which runtimes users can actually run today.
+- the stream shapes the runtime sends
+- continuation semantics
+- tool-call and permission handling
+- payload gotchas that must survive refactors
+
+## 7. Tests
+
+- Backend: `normalizeChunk.test.ts` with inline chunks for each event kind
+  the parser emits. Run `pnpm web:test:once`.
+- CLI: a `runner.test.ts` that drives the executor against a fake process
+  or a fixture stream, so the runtime has a test path that needs no
+  sign-in.
+
+## 8. Public docs
+
+Update the [runtime support matrix](/docs/reference/roadmap) when a runtime
+becomes executable, and every page that lists the runtimes: AI threads, the
+CLI index, the FAQ, the glossary, isolation options, the root and CLI
+READMEs, `CONTEXT.md` and the landing page. `apps/docs/app/seo.test.mjs`
+and `apps/landing/app/seo.test.mjs` pin titles and descriptions that name
+the runtimes.

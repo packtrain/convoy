@@ -132,7 +132,7 @@ convoy connect --buffered             # Turn off live token streaming (on by def
 convoy connect --codex-exec           # Run Codex through `codex exec` instead of app-server
 ```
 
-`connect` serves the runtimes detected on this machine (Claude Code, Codex, OpenCode). If none is installed, startup fails with a clear error.
+`connect` serves the runtimes detected on this machine (Claude Code, Codex, OpenCode, Cursor, Antigravity). If none is installed, startup fails with a clear error.
 Use `-c` / `--concurrency` to control max simultaneous chat subprocesses per `convoy connect` process (valid range: `1-50`). Without the flag, the resolved profile's optional `concurrency` value is used, then the default `5`.
 Partial (delta) agent event streaming is on by default, so responses render token-by-token in the web app. Use `--buffered` to send whole events only (a profile can default this with `streaming = false` in `config.toml`; the flag wins).
 Codex threads are served over the `codex app-server` protocol by default — this enables mid-run approval prompts and questions, read-only Plan mode, steering queued messages into a running turn, live deltas, and the context-window meter. Use `--codex-exec` to fall back to non-interactive `codex exec`. The app-server transport needs codex-cli ≥ 0.142; an older binary is detected at connect time and downgraded to `codex exec` with a warning.

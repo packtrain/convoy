@@ -48,7 +48,8 @@ yourself — the runtime's own permission settings are the enforcement layer
 for what it may touch locally (Claude Code's permission modes; Codex's OS
 sandbox flags; OpenCode's session permission rulesets, where Agent mode
 auto-allows all tools and "Ask to approve" routes each request to the
-thread for approval). Opting into
+thread for approval; Antigravity's Act mode skips agy's permission prompts,
+and "Ask to approve" routes each one to the thread). Opting into
 [`--isolated`](/docs/cli/isolation-options#the-built-in-isolated-mode)
 adds an OS-level sandbox generated from the profile's paths, so agents
 cannot write outside the granted folders (Claude Code and Codex).

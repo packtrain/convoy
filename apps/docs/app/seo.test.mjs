@@ -136,12 +136,13 @@ test("the root redirects to the docs index", async () => {
 
 test("retitled pages lead with the searched wording", () => {
   const expected = {
-    "/docs/using/ai-threads": "A web UI for Claude Code, Codex and OpenCode",
+    "/docs/using/ai-threads":
+      "A web UI for Claude Code, Codex, OpenCode and Antigravity",
     "/docs/using/skills": "Share agent skills across your team",
     "/docs/deployment/self-hosting-convex":
       "Self-hosted coding agents: Docker deployment",
     "/docs/reference/roadmap":
-      "Claude Code, Codex, OpenCode and Cursor support",
+      "Claude Code, Codex, OpenCode, Cursor and Antigravity support",
   };
   for (const [route, heading] of Object.entries(expected)) {
     const { html } = pages.find((page) => page.route === route);
