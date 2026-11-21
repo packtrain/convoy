@@ -183,7 +183,7 @@ export async function runService(
       const change = request.credentials;
       // Direct workers report nothing, so only this service's live children can be vouched for.
       const accounted = change.action === "remove" ? [...workers].filter(([, worker]) => worker.child &&
-        ![worker.entry.auth?.name, worker.entry.auth?.claude?.name, worker.entry.auth?.cursor?.name,
+        ![worker.entry.auth?.name, worker.entry.auth?.claude?.name, worker.entry.auth?.cursor?.name, worker.entry.auth?.antigravity?.name,
           ...Object.values(worker.entry.auth?.opencode ?? {}).map((slot) => slot.name)].includes(change.name)).map(([identity]) => identity) : [];
       await management.credentials(change, accounted);
       try { return { registered: true, applied: await reconcile() }; } catch { return { registered: true, applied: false }; }

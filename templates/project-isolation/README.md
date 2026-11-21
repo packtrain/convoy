@@ -222,6 +222,13 @@ policy for nested bubblewrap, and a host-only root lifecycle helper. See
 for setup, runtime login, updates, recovery and acceptance commands.
 The manual Dev Containers workflow above remains available.
 
+## Upgrading to CLI 0.160.0
+
+The launcher accepts managed Gemini keys for Antigravity
+(`credentials-antigravity-v1`). On a VM, install the new CLI and rerun
+`install.py` with the same arguments. Until then, adding a Gemini key or
+assigning one to Antigravity is refused; Google sign-in keeps working.
+
 ## Upgrading to CLI 0.159.0
 
 The launcher runs Antigravity (`agy`) as a tested runtime. This image installs
@@ -232,8 +239,7 @@ managed Agent runtimes install offers. On a VM, install the new CLI, rerun
 Then sign each project in with `convoy project login <profile> --runtime antigravity`.
 Until the rerun, the old launcher answers that login with `Unsupported runtime`
 and never offers Antigravity to a project. A CLI older than 0.158.0 cannot read
-`project check` from this launcher, so upgrade both together. Antigravity has
-no managed key yet.
+`project check` from this launcher, so upgrade both together.
 
 ## Upgrading to CLI 0.148.0
 

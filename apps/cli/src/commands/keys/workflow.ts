@@ -122,7 +122,7 @@ export async function localManagedStatus(): Promise<ManagedCredentialStatus> {
       revision: e.current,
       retainedRevisions: e.revisions.map((r) => r.revision),
     })),
-    projects: [...new Set([data.bindings, data.claudeBindings ?? {}, data.cursorBindings ?? {}, data.opencodeBindings ?? {}].flatMap((record) => Object.keys(record)))].map((identity) => {
+    projects: [...new Set([data.bindings, data.claudeBindings ?? {}, data.cursorBindings ?? {}, data.antigravityBindings ?? {}, data.opencodeBindings ?? {}].flatMap((record) => Object.keys(record)))].map((identity) => {
       const worker = service?.profiles?.find((w) => w.identity === identity);
       const active = environment?.registrations.find((r) => r.identity === identity)?.active;
       const desired = authDescriptor(data, identity);

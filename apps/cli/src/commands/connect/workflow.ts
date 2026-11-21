@@ -23,7 +23,7 @@ import {
 import { CodexProviderKeySchema, type CodexProviderKey } from "../../lib/config/types.js";
 import { CredentialStore } from "../../lib/config/credentials/store.js";
 import { authDescriptor, connectAuth, launchAuth, assertCredentialNames } from "../../lib/config/credentials/resolution.js";
-import type { ClaudeAuth, CodexAuth, CursorAuth, OpencodeAuth } from "../../lib/config/credentials/validators.js";
+import type { ClaudeAuth, CodexAuth, CursorAuth, AntigravityAuth, OpencodeAuth } from "../../lib/config/credentials/validators.js";
 import { launchProject, sharedRuntimeStates } from "../project/launcher.js";
 import { environmentMode } from "../environment/resolution.js";
 import { acquireLock, leasePath, LockHeldError } from "../service/paths.js";
@@ -83,6 +83,7 @@ interface RunConnectConfig {
   codexAuth?: CodexAuth;
   claudeAuth?: ClaudeAuth;
   cursorAuth?: CursorAuth;
+  antigravityAuth?: AntigravityAuth;
   opencodeAuth?: OpencodeAuth;
   claudeProviderToken?: string;
   codexProvider?: CodexProviderKey;
@@ -439,7 +440,7 @@ async function connectAgents(config: RunConnectConfig, shared?: { runtimes: stri
   // Isolated workers report the launcher's runtime state so clients can offer logins and warn.
   const launcherList = (name: string) => (process.env[name] ?? "").split(",").filter(Boolean);
   const native: Record<LoginRuntime, boolean> = {
-    codex: !config.codexProvider && (!config.codexAuth || config.codexAuth.mode === "native"), "claude-code": !config.claudeAuth, cursor: !config.cursorAuth, opencode: !config.opencodeAuth, antigravity: true,
+    codex: !config.codexProvider && (!config.codexAuth || config.codexAuth.mode === "native"), "claude-code": !config.claudeAuth, cursor: !config.cursorAuth, antigravity: !config.antigravityAuth, opencode: !config.opencodeAuth,
   };
   emitConnectEvent({ event: "status", status: "connecting", ...shared && { ...shared, loggedOut: shared.loggedOut.filter((runtime) => native[runtime as LoginRuntime]) },
     ...(process.env.CONVOY_PROJECT_RUNTIMES !== undefined ? { runtimes: launcherList("CONVOY_PROJECT_RUNTIMES"),
@@ -485,6 +486,7 @@ async function connectAgents(config: RunConnectConfig, shared?: { runtimes: stri
       codexAuth: config.codexAuth,
       claudeAuth: config.claudeAuth,
       cursorAuth: config.cursorAuth,
+      antigravityAuth: config.antigravityAuth,
       opencodeAuth: config.opencodeAuth,
       claudeProviderToken: config.claudeProviderToken,
       codexProvider: config.codexProvider,

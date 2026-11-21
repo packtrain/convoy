@@ -159,6 +159,18 @@ describe("startup snapshot", () => {
       mode: "native", cursor: { mode: "managed", name: "work", entryId: "id", revision: 1 },
     });
   });
+  it("refuses an Antigravity binding on a launcher without credentials-antigravity-v1 (OS-2476)", () => {
+    const { config, environment } = snapshot();
+    const identity = config.profiles.a.project_isolation.identity;
+    const credentials = {
+      version: 1 as const, generation: 1, bindings: {}, antigravityBindings: { [identity]: { mode: "managed" as const, name: "work" } },
+      entries: { work: { id: "id", enabled: true, current: 1, provider: "gemini" as const, revisions: [{ revision: 1, secret: "key", createdAt: 1 }] } },
+    };
+    expect(() => serviceSnapshot(config, { ...environment, capabilities: ["credentials-v1", "credentials-cursor-v1"] }, credentials)).toThrow("updated project launcher");
+    expect(serviceSnapshot(config, { ...environment, capabilities: ["credentials-antigravity-v1"] }, credentials)[0].auth).toEqual({
+      mode: "native", antigravity: { mode: "managed", name: "work", entryId: "id", revision: 1 },
+    });
+  });
 });
 
 it("reports structured status, omits raw secrets, and stops via control EOF", async () => {
@@ -727,6 +739,17 @@ it("vouches for running workers that hold no grant of a removed credential", asy
 it("never vouches for a running worker whose Cursor holds a removed credential (OS-2017)", async () => {
   const p=paths(); const {config,environment}=snapshot();
   const desired=serviceSnapshot(config,environment).map(e=>({...e,auth:{mode:"native" as const,cursor:{mode:"managed" as const,name:"work",entryId:"id",revision:1}}}));
+  const calls: string[][] = [];
+  const service=await runService(p,desired,()=>spawn(process.execPath,["-e","process.stdin.resume();process.stdin.on('end',()=>process.exit(0))"]),1000,100,
+    {snapshot:()=>desired,credentials:(_request,accounted)=>{calls.push(accounted ?? []);}}); services.push(service);
+  await serviceRequest(p.socket,{op:"credentials.mutate",credentials:{action:"remove",name:"work"}});
+  await serviceRequest(p.socket,{op:"credentials.mutate",credentials:{action:"remove",name:"other"}});
+  expect(calls).toEqual([[], [desired[0].identity]]);
+});
+
+it("never vouches for a running worker whose Antigravity holds a removed credential (OS-2476)", async () => {
+  const p=paths(); const {config,environment}=snapshot();
+  const desired=serviceSnapshot(config,environment).map(e=>({...e,auth:{mode:"native" as const,antigravity:{mode:"managed" as const,name:"work",entryId:"id",revision:1}}}));
   const calls: string[][] = [];
   const service=await runService(p,desired,()=>spawn(process.execPath,["-e","process.stdin.resume();process.stdin.on('end',()=>process.exit(0))"]),1000,100,
     {snapshot:()=>desired,credentials:(_request,accounted)=>{calls.push(accounted ?? []);}}); services.push(service);

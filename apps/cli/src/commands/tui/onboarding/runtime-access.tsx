@@ -59,7 +59,7 @@ export function RuntimeAccess({ browser, profile, width, height, onDone }: {
       const [worker, credentials] = await Promise.all([browser.prepareOnboardingAccess(profile), target.credentials!.status()]);
       if (alive.current) {
         for (const row of bindingRows(credentials, [worker], ["codex", "claude-code"])) {
-          if (row.runtime === "cursor") continue;
+          if (row.runtime !== "codex" && row.runtime !== "claude-code") continue;
           const runtime = row.runtime;
           if (draft[runtime] && sameBinding(draft[runtime], row.saved)) delete draft[runtime];
           saved[runtime] = row.saved;

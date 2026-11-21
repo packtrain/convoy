@@ -80,7 +80,7 @@ it.each(["sidebar", "scope", "local", "error", "project", "draft", "stopped", "p
   expect(result.stdout).toContain("Navigation checks passed: " + scenario);
 });
 
-it.each(["unsupported", "shared", "shared-stale", "status-error", "assign", "leave", "rejection", "narrow", "narrow-forms", "vanish", "add", "add-anthropic", "add-rejected", "rotate", "disable-rollback", "remove", "project", "project-reload", "project-saved", "project-cursor", "environment-reload"])("runtime credentials renderer: %s", async scenario => {
+it.each(["unsupported", "shared", "shared-stale", "status-error", "assign", "leave", "rejection", "narrow", "narrow-forms", "vanish", "add", "add-anthropic", "add-rejected", "rotate", "disable-rollback", "remove", "project", "project-reload", "project-saved", "project-cursor", "add-gemini", "project-antigravity", "environment-reload"])("runtime credentials renderer: %s", async scenario => {
   const result = await tsx("credentials.tsx", [scenario]);
   expect(result.stdout).toContain("Credential renderer checks passed: " + scenario);
 });

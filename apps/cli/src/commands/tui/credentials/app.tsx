@@ -13,7 +13,7 @@ import { assignmentNames, bindingLabel, delivery, draftNote, entryLine, provider
 import type { Action } from "../actions/validators.js";
 
 /** Each runtime's TUI login action; one without names the CLI login instead. */
-const LOGIN_ACTIONS: Record<ManagedRuntime, Action | undefined> = { codex: "login-codex", "claude-code": "login-claude-code", cursor: undefined };
+const LOGIN_ACTIONS: Record<ManagedRuntime, Action | undefined> = { codex: "login-codex", "claude-code": "login-claude-code", cursor: undefined, antigravity: "login-antigravity" };
 
 const failure = (error: unknown) => plain(error instanceof Error ? error.message : "Operation failed.");
 type Tone = "ok" | "error" | "warn" | "busy";
@@ -77,7 +77,7 @@ export function Credentials({ browser, state, active, width, height }: { browser
         if (!native) { setPopup({ kind: "reload", profiles: [...new Set(changes.map(change => change.row.profile))], saved: done, then }); then = undefined; }
         else setMessage(note("ok", `Saved ${done} change${done === 1 ? "" : "s"}. Rows show service-reported delivery; pending rows apply after [u] Reload project. Running agents were not restarted.`,
           !login ? `Native login: run convoy project login ${restored!.profile} --runtime ${native} in a terminal.`
-            : "Native login: select the project, then choose [i] Log in to Codex or [o] Log in to Claude Code from its Actions."));
+            : "Native login: select the project, then choose [i] Log in to Codex, [o] Log in to Claude Code or [y] Log in to Antigravity from its Actions."));
       }
     } catch (cause) {
       const row = changes[done].row;
@@ -275,6 +275,7 @@ const providers = [
   { label: "AWS Bedrock (Mantle)", provider: "mantle", runtimes: "Codex and Claude Code" }, { label: "AWS Bedrock", provider: "bedrock", runtimes: "Codex and Claude Code" },
   { label: "Anthropic API", provider: "anthropic", runtimes: "Claude Code" },
   { label: "Cursor account", provider: "cursor", runtimes: "Cursor" },
+  { label: "Gemini API", provider: "gemini", runtimes: "Antigravity" },
 ] as const;
 function AddCredential({ browser, target, entries, width, height, onClose }: {
   browser: Browser; target: Connection; entries: Entry[]; width: number; height: number; onClose(name?: string, done?: string): void;

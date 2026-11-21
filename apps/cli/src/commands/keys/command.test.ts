@@ -197,6 +197,18 @@ it("routes a Cursor add, use and unassign to managed credentials, never config.t
   expect(mocks.set).not.toHaveBeenCalled();
   expect(mocks.assign).not.toHaveBeenCalled();
 });
+it("routes a Gemini add, use and unassign to managed credentials for Antigravity, never config.toml (OS-2476)", async () => {
+  await run("add", "work", "--provider", "gemini", "--auth", "api-key");
+  expect(mocks.mutate).toHaveBeenCalledWith({ action: "add", name: "work", secret: "dummy", provider: "gemini" });
+  await expect(run("add", "work", "--provider", "gemini")).rejects.toThrow("--auth api-key");
+  await expect(run("add", "work", "--provider", "gemini", "--auth", "api-key", "--region", "us-east-1")).rejects.toThrow("region");
+  await run("use", "work", "--runtime", "antigravity", "--profile", "a");
+  expect(mocks.mutate).toHaveBeenLastCalledWith({ action: "bind", profile: "a", runtime: "antigravity", binding: { mode: "managed", name: "work" } });
+  await run("unassign", "--runtime", "antigravity", "--profile", "iso");
+  expect(mocks.mutate).toHaveBeenLastCalledWith({ action: "bind", profile: "iso", runtime: "antigravity", binding: { mode: "disabled" } });
+  expect(mocks.set).not.toHaveBeenCalled();
+  expect(mocks.assign).not.toHaveBeenCalled();
+});
 it("routes OpenCode use and unassign to managed credentials, never config.toml (OS-2018)", async () => {
   await run("use", "work", "--runtime", "opencode", "--profile", "a");
   expect(mocks.mutate).toHaveBeenLastCalledWith({ action: "bind", profile: "a", runtime: "opencode", binding: { mode: "managed", name: "work" } });

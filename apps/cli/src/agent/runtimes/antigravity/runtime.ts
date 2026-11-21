@@ -27,7 +27,7 @@ export const antigravityRuntime: CliRuntimeDefinition = {
     // Unverified whether `agy acp --sandbox` honors writable roots, so isolation fails fast.
     options.sandbox
       ? createSandboxUnsupportedRunner("antigravity")
-      : createAntigravityRunner({ partialStreaming: options.partialStreaming }),
+      : createAntigravityRunner({ partialStreaming: options.partialStreaming, antigravityAuth: options.antigravityAuth }),
   normalizeCliModel: (model) => (isAntigravityModel(model) ? model : undefined),
   isInlineImageAttachment: (contentType) => INLINE_IMAGE_TYPES.has(contentType.toLowerCase()),
   async prepareRunExecution(input: RuntimeExecutionInput): Promise<PreparedRuntimeExecution> {

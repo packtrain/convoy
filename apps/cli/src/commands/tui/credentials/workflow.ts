@@ -2,9 +2,9 @@ import { managedRuntimeSchema, runtimeDescriptor, type Binding, type CredentialM
 import type { WorkerState } from "../../service/validators.js";
 import type { BindingRow, Draft, Entry, Runtime } from "./validators.js";
 
-/** Runtimes each provider's key serves (OS-2108, OS-2016, OS-2017). */
+/** Runtimes each provider's key serves (OS-2108, OS-2016, OS-2017, OS-2476). */
 const PROVIDER_RUNTIMES: Record<string, Runtime[]> = {
-  openai: ["codex"], anthropic: ["claude-code"], cursor: ["cursor"], mantle: ["codex", "claude-code"], bedrock: ["codex", "claude-code"],
+  openai: ["codex"], anthropic: ["claude-code"], cursor: ["cursor"], gemini: ["antigravity"], mantle: ["codex", "claude-code"], bedrock: ["codex", "claude-code"],
 };
 export const entryRuntimes = (entry: Entry): Runtime[] => Object.hasOwn(PROVIDER_RUNTIMES, entry.provider) ? PROVIDER_RUNTIMES[entry.provider] : [];
 export const sameBinding = (a: Binding, b: Binding) => JSON.stringify(a) === JSON.stringify(b);

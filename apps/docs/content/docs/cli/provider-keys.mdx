@@ -1,6 +1,6 @@
 ---
 title: Model provider keys
-description: Manage isolated Codex and Claude Code API keys and legacy Claude providers locally.
+description: Manage API keys for isolated Codex, Claude Code, Cursor, Antigravity and OpenCode, and legacy Claude providers, locally.
 ---
 
 Model provider keys let a CLI profile run Claude Code through AWS Bedrock
@@ -306,6 +306,37 @@ convoy project login a --runtime cursor
 ```
 
 The login prints a link; open it in your PC's browser.
+
+### Gemini API keys for Antigravity
+
+CLI 0.160.0 lets Antigravity run on a Gemini API key instead of the project's
+Google sign-in. Create the key in Google AI Studio. Usage bills to the Google
+Cloud project that owns it:
+
+```bash
+convoy keys add work-gemini --provider gemini --auth api-key
+convoy keys use work-gemini --profile a --runtime antigravity
+```
+
+A Gemini key serves Antigravity only, and Antigravity takes no other key.
+Convoy passes the key to `agy` in its environment as `GEMINI_API_KEY` and
+removes any inherited Google variables, such as `GOOGLE_API_KEY` or
+`GOOGLE_CLOUD_PROJECT`, so they cannot override it. It then tells agy to sign
+in with the key. A key agy refuses fails the run with "Antigravity refused the
+assigned Gemini API key"; it never opens a browser sign-in. A key Google
+refuses later shows Google's error as the agent's reply.
+
+The model selector lists the models the key offers. A key offers Gemini models
+only, so a thread that picked Claude or GPT-OSS under a Google sign-in fails
+with agy's "Unknown model ID" message. Pick another model and send again.
+
+On a VM, rerun `install.py` after upgrading the CLI; older launchers refuse
+Gemini keys. To go back to the project's own Google sign-in:
+
+```bash
+convoy keys unassign --profile a --runtime antigravity --native-login
+convoy project login a --runtime antigravity
+```
 
 ### OpenCode provider keys
 

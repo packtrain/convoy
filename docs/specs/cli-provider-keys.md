@@ -547,6 +547,101 @@ convoy keys unassign --profile a --runtime cursor --native-login
   [cli-project-isolation.md](cli-project-isolation.md#runtime-detection-and-login-cli-01100-os-2166-os-2160)).
   Convoy never copies one project's browser login to another.
 
+## Managed Gemini keys for Antigravity (OS-2476)
+
+A Gemini API key in the managed store lets Antigravity (agy) run on that key
+instead of the project's Google sign-in, in isolated and shared projects. Usage
+bills to the Gemini API project that owns the key. The key reaches Antigravity
+only.
+
+```bash
+convoy keys add work-gemini --provider gemini --auth api-key
+convoy keys use work-gemini --profile a --runtime antigravity
+convoy keys unassign --profile a --runtime antigravity               # Antigravity disabled
+convoy keys unassign --profile a --runtime antigravity --native-login
+```
+
+- `--provider gemini` always means a managed entry and needs `--auth api-key`.
+  It takes no `--region`. The key comes from the masked prompt, `--from-env` or
+  `--stdin`. There is no legacy `config.toml` form.
+- The entry stores `provider: "gemini"`. Bindings live in `antigravityBindings`.
+  An unbound Antigravity uses the project's native sign-in. A store with this
+  field fails closed on older CLIs.
+- Only Antigravity takes a Gemini entry, and Antigravity takes no other entry.
+  Launch refuses hand-edited bindings that cross runtimes. Rotate, rollback,
+  disable, remove and the TUI work as for the other entries.
+- Launch delivers `antigravityAuth: { mode: "managed", secret }` or
+  `{ mode: "disabled" }`. The launcher advertises `credentials-antigravity-v1`.
+  Adding the entry, binding it, service startup and direct connect refuse a
+  launcher without it. A disabled binding fails every Antigravity run before agy
+  starts, with "Antigravity is disabled for this project".
+- The runner puts the key in the `agy acp` child env only, as `GEMINI_API_KEY`.
+  For that child it first removes `GEMINI_API_KEY`, `GOOGLE_API_KEY`,
+  `GOOGLE_APPLICATION_CREDENTIALS`, `GOOGLE_CLOUD_PROJECT`,
+  `GOOGLE_CLOUD_LOCATION`, `GOOGLE_CLOUD_QUOTA_PROJECT`,
+  `GOOGLE_GENAI_USE_VERTEXAI`, `GCLOUD_PROJECT` and `CLOUDSDK_CORE_PROJECT`, so
+  ambient Google settings cannot override the key. This is t3code's list.
+- After `initialize` the runner calls ACP `authenticate` with `gemini-api-key`,
+  then `session/new` or `session/resume`. It never tries the `oauth-personal`
+  fallback, so a refused key never opens a browser. A failed `authenticate`, or
+  `-32000 Authentication required` after it, fails the run with "Antigravity
+  refused the assigned Gemini API key".
+- Detection runs the model inventory with the key, so the model selector lists
+  what the key offers. A disabled binding skips the inventory.
+- Detection reports `provider: "gemini"` on a managed binding. Convex keeps it
+  on the stored runtime, and the web profile card shows
+  `<version> · Gemini API key`. The card shows no Antigravity model count.
+- A backend without this field rejects the registration, so Convex deploys
+  before a CLI that sends it is published.
+- The key joins the upload redaction list. Isolation keeps A's key from project
+  B. A's own agent can read it, since agy passes its env to tool commands.
+- `keys status` shows `work-gemini: Gemini API usage, ...` and a
+  `; Antigravity <mode>, desired N, applied N` part per project. A project with
+  a managed key is not reported as logged out.
+- Network: the key calls `generativelanguage.googleapis.com`. The strict
+  devcontainer firewall does not allow it yet; OS-2477 adds agy's hosts.
+
+What the live check found (agy 1.5.14, 2026-11-21, a scratch HOME with no
+Google sign-in, a syntactically valid but unissued key):
+
+- `authenticate` with `gemini-api-key` answers `{}` without checking the key.
+  Without that call `session/new` fails with `-32000`, even with
+  `GEMINI_API_KEY` set. Print mode ignored the variable in an earlier probe.
+- `session/new` then succeeds and lists models. The prompt reaches the Gemini
+  API, which refuses the key with `API_KEY_INVALID`. agy reports that as an
+  `agent_message_chunk` ("⚠ agent executor error: ... API key not valid") with
+  `stopReason: "end_turn"`, not an RPC error. A key Google refuses therefore
+  shows agy's message as the reply, as the known limitation in
+  [cli-antigravity-runtime.md](cli-antigravity-runtime.md#known-limitations)
+  says for other upstream errors.
+- agy writes the key nowhere under HOME, its logs and crash files included.
+  No `settings.json` is needed. agy records the chosen method,
+  `{"methodId":"gemini-api-key"}`, in
+  `~/.gemini/antigravity-cli/cache/acp-auth-state.json`.
+- That record outlives the binding. With the key removed, `session/new` fails
+  with `-32000` even when the Google sign-in token is still there. The runner's
+  `oauth-personal` fallback signs back in with the token and rewrites the record
+  to `oauth-personal`, so restoring native login needs no manual step. The
+  native inventory runs at worker start, before any run, so when the record
+  still says `gemini-api-key` it calls `authenticate` with `oauth-personal`
+  before `session/new`. Without that record it never calls `authenticate`, so an
+  unattended inventory never starts a Google sign-in. Verified on 1.5.14: the
+  native catalog came back with the sign-in's 9 models.
+- Models: with the unissued key, the session offered 8 models (Gemini 4 Neon,
+  Carbon, Hydrogen and Argon, Gemini 3.8, 3.7 and 3.6 Flash, Gemini 3.1 Pro),
+  and no Claude, GPT-OSS or orchestrator models. The same agy signed in to
+  Google AI Pro offers 9: Gemini 4 Neon, Argon and Hydrogen, Gemini 3.8 Flash,
+  the two Gemini Pro orchestrators, Claude Opus 5.5, Claude Sonnet 5.5 and
+  GPT-OSS 120B. Which of the 8 a real key can call is unverified until a real
+  key is tried. A thread that stored a sign-in-only model fails with agy's
+  `Unknown model ID` message, as for any refused model, and runs again on
+  Default. Four Gemini models overlap, so this is left as is.
+
+Pending, and required before publishing: a completed prompt with an issued
+Gemini key in a HOME without Google sign-in, the models that key can call, the
+key redacted from a thread that prints its env, and the isolated flow on the
+acceptance VM.
+
 ## Managed provider keys for isolated OpenCode (OS-2018)
 
 OpenCode on an isolated profile can run on managed OpenAI and Anthropic API

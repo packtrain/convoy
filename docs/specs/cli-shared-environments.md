@@ -285,9 +285,12 @@ say to restart the service.
 
 The service reads the store with the registrations. Each shared worker's launch
 frame carries only its own assignment, delivered as in isolated mode: Codex
-through ephemeral auth storage, Claude Code and Cursor through their process
-environment, OpenCode through `OPENCODE_CONFIG_CONTENT`. A managed run never
-writes the user's `~/.codex` or `~/.claude` logins. A foreground `connect
+through ephemeral auth storage, Claude Code, Cursor and Antigravity through
+their process environment, OpenCode through `OPENCODE_CONFIG_CONTENT`. A managed
+run never writes the user's `~/.codex` or `~/.claude` logins. A managed
+Antigravity run does record its auth method, `gemini-api-key`, in the account's
+`~/.gemini/antigravity-cli/cache/acp-auth-state.json`, though not the key; see
+[managed Gemini keys](cli-provider-keys.md#managed-gemini-keys-for-antigravity-os-2476). A foreground `connect
 --profile <shared>` reads the same binding and, like an isolated direct
 connect, refuses `--codex-exec` with a managed Codex key. A runtime with a
 managed key is not reported as logged out.

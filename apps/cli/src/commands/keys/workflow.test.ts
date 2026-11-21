@@ -230,3 +230,25 @@ it("lists OpenCode slots, and a project with only OpenCode bound (OS-2018)", asy
   expect(output).toContain("; OpenCode disabled");
   log.mockRestore();
 });
+
+it("lists Antigravity bindings and labels a Gemini key as API usage (OS-2476)", async () => {
+  mocks.request.mockRejectedValueOnce(new ServiceUnavailableError("offline"));
+  mocks.inspect.mockResolvedValueOnce({ registrations: [] });
+  vi.spyOn(CredentialStore.prototype, "read").mockReturnValueOnce({
+    version: 1, generation: 1, bindings: {}, antigravityBindings: { g: { mode: "managed", name: "gemini" } },
+    entries: { gemini: { id: "id", enabled: true, current: 1, provider: "gemini", revisions: [{ revision: 1, secret: "s", createdAt: 1 }] } },
+  });
+  const status = await managedStatus();
+  expect(status.projects.map((p) => p.identity)).toEqual(["g"]);
+  expect(status.entries[0]).toMatchObject({ provider: "gemini", billing: "API usage" });
+  const log = vi.spyOn(console, "log").mockImplementation(() => {});
+  printManagedStatus({
+    ...status,
+    projects: [{ identity: "g", profiles: ["g"], desired: { mode: "native", antigravity: { mode: "managed", name: "gemini", revision: 1 } },
+      state: "online", pending: false, applied: { mode: "native" }, authResult: undefined, verified: false }],
+  });
+  const output = log.mock.calls.flat().join("\n");
+  expect(output).toContain("gemini: Gemini API usage, enabled, revision 1");
+  expect(output).toContain("; Antigravity managed, desired 1, applied none");
+  log.mockRestore();
+});

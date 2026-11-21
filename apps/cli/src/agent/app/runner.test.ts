@@ -272,7 +272,7 @@ describe("agent-runner shutdown lifecycle", () => {
     try {
       const runPromise = runner.run();
       await vi.waitFor(() => expect(createMessageHandlerMock).toHaveBeenCalled());
-      expect(createConvexClientMock).toHaveBeenCalledWith(expect.objectContaining({ secrets: ["claude-token", "codex-token", undefined] }));
+      expect(createConvexClientMock).toHaveBeenCalledWith(expect.objectContaining({ secrets: ["claude-token", "codex-token", undefined, undefined] }));
       await runner.stop();
       await runPromise;
     } finally {
@@ -289,7 +289,7 @@ describe("agent-runner shutdown lifecycle", () => {
     try {
       const runPromise = runner.run();
       await vi.waitFor(() => expect(createMessageHandlerMock).toHaveBeenCalled());
-      expect(createConvexClientMock).toHaveBeenCalledWith(expect.objectContaining({ secrets: ["managed-claude", undefined, undefined] }));
+      expect(createConvexClientMock).toHaveBeenCalledWith(expect.objectContaining({ secrets: ["managed-claude", undefined, undefined, undefined] }));
       expect(detectAvailableClisMock).toHaveBeenCalledWith(expect.objectContaining({ claudeAuth }));
       await runner.stop();
       await runPromise;
@@ -307,11 +307,33 @@ describe("agent-runner shutdown lifecycle", () => {
     try {
       const runPromise = runner.run();
       await vi.waitFor(() => expect(createMessageHandlerMock).toHaveBeenCalled());
-      expect(createConvexClientMock).toHaveBeenCalledWith(expect.objectContaining({ secrets: [undefined, undefined, "managed-cursor"] }));
+      expect(createConvexClientMock).toHaveBeenCalledWith(expect.objectContaining({ secrets: [undefined, undefined, "managed-cursor", undefined] }));
       const runnerFactory = (createMessageHandlerMock.mock.calls[0] as unknown[])[0] as (cliType: string) => unknown;
       runnerFactory("cursor");
       const { createRunnerForCliType } = await import("../runtimes/registry.js");
       expect(createRunnerForCliType).toHaveBeenCalledWith("cursor", expect.objectContaining({ cursorAuth }));
+      await runner.stop();
+      await runPromise;
+    } finally {
+      logSpy.mockRestore();
+    }
+  });
+
+  it("redacts a managed Gemini key and gives it to detection and the Antigravity runner (OS-2476)", async () => {
+    const logSpy = vi.spyOn(console, "log").mockImplementation(() => {});
+    const antigravityAuth = { mode: "managed" as const, secret: "managed-gemini" };
+    const runner = await createAgentRunner({
+      convexUrl: "https://example.convex.cloud", apiKey: "api_test_123", projectId: "project_123", paths: ["/tmp/repo"], antigravityAuth,
+    });
+    try {
+      const runPromise = runner.run();
+      await vi.waitFor(() => expect(createMessageHandlerMock).toHaveBeenCalled());
+      expect(createConvexClientMock).toHaveBeenCalledWith(expect.objectContaining({ secrets: [undefined, undefined, undefined, "managed-gemini"] }));
+      expect(detectAvailableClisMock).toHaveBeenCalledWith(expect.objectContaining({ antigravityAuth }));
+      const runnerFactory = (createMessageHandlerMock.mock.calls[0] as unknown[])[0] as (cliType: string) => unknown;
+      runnerFactory("antigravity");
+      const { createRunnerForCliType } = await import("../runtimes/registry.js");
+      expect(createRunnerForCliType).toHaveBeenCalledWith("antigravity", expect.objectContaining({ antigravityAuth }));
       await runner.stop();
       await runPromise;
     } finally {
@@ -328,7 +350,7 @@ describe("agent-runner shutdown lifecycle", () => {
     try {
       const runPromise = runner.run();
       await vi.waitFor(() => expect(createMessageHandlerMock).toHaveBeenCalled());
-      expect(createConvexClientMock).toHaveBeenCalledWith(expect.objectContaining({ secrets: [undefined, undefined, undefined, "managed-openai", "managed-anthropic", "managed-bedrock"] }));
+      expect(createConvexClientMock).toHaveBeenCalledWith(expect.objectContaining({ secrets: [undefined, undefined, undefined, undefined, "managed-openai", "managed-anthropic", "managed-bedrock"] }));
       expect(detectAvailableClisMock).toHaveBeenCalledWith(expect.objectContaining({ opencodeAuth }));
       const runnerFactory = (createMessageHandlerMock.mock.calls[0] as unknown[])[0] as (cliType: string) => unknown;
       runnerFactory("opencode");
@@ -437,7 +459,7 @@ describe("agent-runner shutdown lifecycle", () => {
     try {
       const failure = await runner.run().catch((error: unknown) => error);
       expect(failure).toBeInstanceOf(ConnectDiagnosticError);
-      expect(failure).toMatchObject({ reason: "runtime-missing", message: expect.stringContaining("Detected for this project: codex. Install Codex, Claude Code, Cursor, OpenCode, Antigravity root-owned") });
+      expect(failure).toMatchObject({ reason: "runtime-missing", message: expect.stringContaining("Detected for this project: codex. Install Codex, Claude Code, Cursor, Antigravity, OpenCode root-owned") });
     } finally { vi.unstubAllEnvs(); await runner.stop(); }
   });
 

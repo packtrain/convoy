@@ -427,6 +427,27 @@ describe("cliSessions", () => {
       });
     });
 
+    test("keeps a managed Gemini key's provider on Antigravity (OS-2476)", async () => {
+      const ctx = createTestContext();
+      const { user, project, asUser, t } = await ctx.setupProject();
+      const apiKeyResult = await asUser.mutation(api.apiKeys.core.create, {
+        name: "CLI Key",
+        expiresAt: Date.now() + 30 * 24 * 60 * 60 * 1000,
+      });
+      const result = await t.mutation(internal.cli.sessions.register, {
+        instanceId: "test-instance-agy",
+        userId: user._id,
+        apiKeyId: apiKeyResult.id,
+        projectId: project._id,
+        hostname: "my-laptop",
+        availableClis: [{ type: "antigravity", version: "1.5.14", provider: "gemini" }],
+      });
+      await t.run(async (runCtx) => {
+        const session = await runCtx.db.get("cliSessions", result.sessionId);
+        expect(session?.availableClis).toEqual([{ type: "antigravity", version: "1.5.14", provider: "gemini" }]);
+      });
+    });
+
     test("allows scoped API key registration only for projects in scope", async () => {
       const ctx = createTestContext();
       const { user, org, project, asUser, t } = await ctx.setupProject();

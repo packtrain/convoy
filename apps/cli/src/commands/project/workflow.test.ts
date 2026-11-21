@@ -36,6 +36,7 @@ import { acquireLock, leasePath } from "../service/paths.js";
 import { projectIdentity } from "./validators.js";
 import { chooseEnvironmentMode } from "../environment/resolution.js";
 import { addProjectGuided, addProject, checkProject, readProjectAccounts, listProjects, loginProject, openProjectShell, removeProject } from "./workflow.js";
+import { CredentialStore } from "../../lib/config/credentials/store.js";
 
 const options = { url: "https://example.convex.cloud", apiKey: "secret", project: "project-a", profileKey: "a", nonInteractive: true };
 beforeEach(() => {
@@ -497,6 +498,16 @@ describe("project check", () => {
     expect(JSON.stringify(result)).not.toContain("secret-key");
     expect(mocks.check).toHaveBeenCalledWith(identity);
   });
+  it("skips the Antigravity login row on a managed Gemini key (OS-2476)", async () => {
+    vi.stubGlobal("fetch", vi.fn(async () => new Response("{}", { status: 400 })));
+    const facts = { state: "ready", home: true, loggedIn: false };
+    mocks.check.mockResolvedValue({ sandbox: null, holder: null, runtimes: { codex: facts, "claude-code": facts, antigravity: facts } });
+    expect((await checkProject("a")).checks.find(check => check.id === "antigravity-login")).toMatchObject({ status: "fail" });
+    vi.spyOn(CredentialStore.prototype, "read").mockReturnValueOnce({ version: 1, generation: 1, bindings: {},
+      antigravityBindings: { [identity]: { mode: "managed", name: "g" } },
+      entries: { g: { id: "id", enabled: true, current: 1, provider: "gemini", revisions: [{ revision: 1, secret: "s", createdAt: 1 }] } } });
+    expect((await checkProject("a")).checks.find(check => check.id === "antigravity-login")).toMatchObject({ status: "skip", label: "Antigravity uses managed credentials" });
+  });
   it("reports an unreachable backend", async () => {
     vi.stubGlobal("fetch", vi.fn(async () => { throw new TypeError("fetch failed"); }));
     expect((await checkProject("a")).checks.find(check => check.id === "backend")?.fix).toMatch(/^Cannot reach the Convoy backend/);
@@ -520,7 +531,7 @@ describe("shared project check (OS-2247)", () => {
     try {
       const result = await checkProject("a");
       expect(mocks.check).not.toHaveBeenCalled();
-      expect(result.checks.map(check => check.id)).toEqual(["codex-installed", "codex-login", "claude-code-installed", "cursor-installed", "opencode-installed", "antigravity-installed", "lease", "backend"]);
+      expect(result.checks.map(check => check.id)).toEqual(["codex-installed", "codex-login", "claude-code-installed", "cursor-installed", "antigravity-installed", "opencode-installed", "lease", "backend"]);
       expect(result.checks.find(check => check.id === "lease")).toMatchObject({ status: "fail", label: "Project lease: held by a foreground connection" });
       expect(result.checks.find(check => check.id === "backend")?.status).toBe("pass");
     } finally { release(); }

@@ -371,6 +371,8 @@ convoy run --environment acceptance --package /path/to/useconvoy-cli-0.76.1.tgz 
 To create the environment from the TUI instead, start it with
 `convoy tui --package /path/to/useconvoy-cli-0.76.1.tgz` (CLI 0.149.0) and use
 Add environment. Review shows the archive in place of `install from npm`.
+From CLI 0.160.0, Update CLI on an existing environment in that TUI installs the
+archive too.
 
 The archive is only used when building a new image. It does not replace an existing
 installation volume. Use a fresh environment name for an unpublished candidate.

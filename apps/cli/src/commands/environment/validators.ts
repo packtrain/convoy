@@ -69,14 +69,15 @@ export type EnvironmentForm = z.infer<typeof environmentFormSchema>;
 export type EnvironmentOperation = "delete" | "status" | "start" | "stop" | "restart" | "update";
 export type EnvironmentProgress = (message: string) => void;
 export type EnvironmentProposal = EnvironmentForm & { version: string; owner?: string; daemon?: string; install: boolean; localPackage?: string };
-export interface UpdateProposal { installed: string; proposed: string }
+/** `localPackage`: install this packed CLI (`convoy tui --package`) instead of the npm release. */
+export interface UpdateProposal { installed: string; proposed: string; localPackage?: string }
 /** "unknown": the offered version could not be resolved, so nothing can be installed. */
 export type RuntimeState = "missing" | "update" | "current" | "newer" | "unknown";
 export interface RuntimeVersion { runtime: LoginRuntime; label: string; installed?: string; offered?: string; state: RuntimeState; error?: string }
 export interface EnvironmentMaintenance {
   status(): Promise<Record<string, unknown>>;
-  release(): Promise<UpdateProposal>;
-  execute(operation: EnvironmentOperation, progress: EnvironmentProgress, options?: { version?: string }): Promise<Record<string, unknown>>;
+  release(localPackage?: string): Promise<UpdateProposal>;
+  execute(operation: EnvironmentOperation, progress: EnvironmentProgress, options?: { version?: string; localPackage?: string }): Promise<Record<string, unknown>>;
   /** Agent runtimes in the container. Spec: docs/specs/cli-tui.md#agent-runtimes-cli-01240-os-2236 */
   runtimes?(): Promise<RuntimeVersion[]>;
   installRuntime?(runtime: LoginRuntime, version: string, progress: EnvironmentProgress): Promise<string>;

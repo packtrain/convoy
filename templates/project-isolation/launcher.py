@@ -460,7 +460,7 @@ def add(config, registry, request):
 
 
 CAPABILITIES = ["credentials-v1", "credentials-aws-v1", "credentials-claude-v1", "credentials-anthropic-v1", "credentials-cursor-v1",
-                "credentials-opencode-v1", "credentials-opencode-v2"]
+                "credentials-opencode-v1", "credentials-opencode-v2", "credentials-antigravity-v1"]
 AWS_REGION = re.compile(r"[a-z]{2}(-[a-z]+)+-[0-9]{1,2}")
 
 
@@ -468,7 +468,8 @@ def validate_credentials(request):
     config = request.get("config", {})
     for field, modes in [("codexAuth", {"managed", "mantle", "bedrock", "disabled", "native"}),
                          ("claudeAuth", {"mantle", "bedrock", "anthropic", "disabled"}),
-                         ("cursorAuth", {"managed", "disabled"})]:
+                         ("cursorAuth", {"managed", "disabled"}),
+                         ("antigravityAuth", {"managed", "disabled"})]:
         if config.get(field) is not None:
             validate_auth(config[field], modes)
     opencode = config.get("opencodeAuth")

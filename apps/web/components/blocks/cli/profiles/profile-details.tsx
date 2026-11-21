@@ -73,10 +73,21 @@ const RUNTIME_PROVIDER_LABELS: Record<string, string> = {
   anthropic: "Claude.ai",
   bedrock: "AWS Bedrock",
   mantle: "AWS Bedrock (Mantle)",
+  gemini: "Gemini API key",
 };
 
 export function getRuntimeProviderLabel(provider: string) {
   return RUNTIME_PROVIDER_LABELS[provider] ?? provider;
+}
+
+/** Version, connection and catalog size; Antigravity's catalog size is not shown. */
+export function formatRuntimeDetail(runtime: CliRuntimeSummary) {
+  const count = runtime.type === "antigravity" ? undefined : runtime.modelCount;
+  return [
+    runtime.version,
+    runtime.provider ? getRuntimeProviderLabel(runtime.provider) : undefined,
+    count !== undefined ? `${count} ${count === 1 ? "model" : "models"}` : undefined,
+  ].filter(Boolean).join(" · ");
 }
 
 function DetailLine({ icon: Icon, label, value }: { icon: typeof Monitor; label: string; value: string }) {
@@ -119,9 +130,7 @@ export function ProfileDetails({ profile, className }: { profile: ProfileDetails
               <div key={`${runtime.type}-${runtime.version}-${index}`} className="flex min-w-0 items-baseline justify-between gap-3 text-xs">
                 <span className="truncate text-foreground">{getProfileRuntimeLabel(runtime.type)}</span>
                 <span className="shrink-0 font-mono text-[11px] text-muted-foreground">
-                  {runtime.version}
-                  {runtime.provider ? ` · ${getRuntimeProviderLabel(runtime.provider)}` : ""}
-                  {runtime.modelCount !== undefined ? ` · ${runtime.modelCount} ${runtime.modelCount === 1 ? "model" : "models"}` : ""}
+                  {formatRuntimeDetail(runtime)}
                 </span>
               </div>
             ))}

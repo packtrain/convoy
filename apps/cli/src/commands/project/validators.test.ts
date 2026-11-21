@@ -41,9 +41,9 @@ describe("shared Docker project paths (OS-2251)", () => {
 });
 
 describe("Antigravity has a login but no managed key yet (OS-2474)", () => {
-  it("logs in Antigravity without letting keys use it", () => {
+  it("logs in Antigravity and lets keys use it (OS-2476)", () => {
     expect(loginRuntimeSchema.safeParse("antigravity").success).toBe(true);
-    expect(keyRuntimeSchema.safeParse("antigravity").success).toBe(false);
+    expect(keyRuntimeSchema.safeParse("antigravity").success).toBe(true);
   });
   it("reads a launcher's Antigravity facts and a service's five runtimes, and still reads older ones without them", () => {
     const facts = { state: "ready", home: true, loggedIn: false };

@@ -261,3 +261,33 @@ describe("managed OpenCode provider keys (OS-2018)", () => {
     expect(() => mutateCredentials({ action: "remove", name: "bedrock" }, v2, store)).toThrow("assigned to a project");
   });
 });
+
+describe("managed Gemini API keys for Antigravity (OS-2476)", () => {
+  const geminiEnvironment = { ...environment, capabilities: ["credentials-v1", "credentials-claude-v1", "credentials-anthropic-v1", "credentials-cursor-v1", "credentials-antigravity-v1"] };
+  const bind = (runtime: "codex" | "claude-code" | "cursor" | "antigravity" | "opencode", name = "work", env = geminiEnvironment) =>
+    mutateCredentials({ action: "bind", profile: "a", runtime, binding: { mode: "managed", name } }, env, store);
+  it("binds a Gemini key to Antigravity only, beside the other runtimes, and guards removal", () => {
+    mutateCredentials({ action: "add", name: "work", secret: "first", provider: "gemini" }, geminiEnvironment, store);
+    expect(() => bind("codex")).toThrow("Codex needs");
+    expect(() => bind("claude-code")).toThrow("Claude Code needs");
+    expect(() => bind("cursor")).toThrow("Cursor needs");
+    expect(() => bind("opencode", "work", { ...geminiEnvironment, capabilities: [...geminiEnvironment.capabilities, "credentials-opencode-v1"] })).toThrow("OpenCode needs");
+    bind("antigravity");
+    expect(store.read().bindings).toEqual({});
+    expect(store.read().antigravityBindings).toEqual({ [identity]: { mode: "managed", name: "work" } });
+    expect(authDescriptor(store.read(), identity)).toMatchObject({ mode: "native", antigravity: { mode: "managed", name: "work", revision: 1 } });
+    expect(() => mutateCredentials({ action: "remove", name: "work" }, geminiEnvironment, store)).toThrow("assigned to a project");
+    mutateCredentials({ action: "bind", profile: "a", runtime: "antigravity", binding: { mode: "native" } }, geminiEnvironment, store);
+    mutateCredentials({ action: "remove", name: "work" }, geminiEnvironment, store);
+  });
+  it("refuses other providers' keys for Antigravity and a launcher without the Antigravity capability", () => {
+    mutateCredentials({ action: "add", name: "openai", secret: "first" }, geminiEnvironment, store);
+    mutateCredentials({ action: "add", name: "cursor", secret: "first", provider: "cursor" }, geminiEnvironment, store);
+    expect(() => bind("antigravity", "openai")).toThrow("Antigravity needs a managed Gemini API key.");
+    expect(() => bind("antigravity", "cursor")).toThrow("Antigravity needs");
+    const older = { ...environment, capabilities: ["credentials-v1", "credentials-cursor-v1"] };
+    expect(() => mutateCredentials({ action: "add", name: "work", secret: "first", provider: "gemini" }, older, store)).toThrow("Managed Gemini keys require an updated launcher");
+    mutateCredentials({ action: "add", name: "work", secret: "first", provider: "gemini" }, geminiEnvironment, store);
+    expect(() => bind("antigravity", "work", older)).toThrow("Managed Antigravity credentials require an updated launcher");
+  });
+});

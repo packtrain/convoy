@@ -26,14 +26,16 @@ const entries: Record<string, { region?: string; provider: string; enabled: bool
   "work-openai": { provider: "openai", enabled: true, revision: 2, retained: [1, 2] },
   "work-old": { provider: "openai", enabled: true, revision: 1, retained: [1] },
 };
-const bindings: Record<string, Record<string, Binding>> = { codex: { a: { mode: "managed", name: "work-openai" }, b: { mode: "managed", name: "work-old" } }, "claude-code": {}, cursor: {} };
+const bindings: Record<string, Record<string, Binding>> = { codex: { a: { mode: "managed", name: "work-openai" }, b: { mode: "managed", name: "work-old" } }, "claude-code": {}, cursor: {}, antigravity: {} };
 const applied = structuredClone(bindings);
 const descriptor = (binding?: Binding) => binding && (binding.mode === "managed" ? { mode: entries[binding.name].enabled ? "managed" as const : "disabled" as const, name: binding.name, revision: entries[binding.name].revision } : { mode: binding.mode });
 const auth = (source: typeof bindings, profile: string) => {
   const claude = descriptor(source["claude-code"][profile]);
   const codex = descriptor(source.codex[profile]);
   const cursor = descriptor(source.cursor[profile]);
-  return claude || cursor ? { ...(codex ?? { mode: "native" as const }), ...(claude ? { claude } : {}), ...(cursor ? { cursor } : {}) } : codex;
+  const antigravity = descriptor(source.antigravity[profile]);
+  return claude || cursor || antigravity
+    ? { ...(codex ?? { mode: "native" as const }), ...(claude ? { claude } : {}), ...(cursor ? { cursor } : {}), ...(antigravity ? { antigravity } : {}) } : codex;
 };
 const status = async (): Promise<ManagedCredentialStatus> => {
   statusReads++;
@@ -219,7 +221,7 @@ try {
       await key(ESC); await until("[ work-openai ▾ ]");
       assert.equal(browser.getSnapshot().credentials, "editing", "Esc closes only the dropdown");
       await key(" ", UP, ENTER); await until("[ Native login (private shell) ▾ ]");
-      await key(TAB, TAB, TAB, ENTER); await until("Pause and log in");
+      await key(TAB, TAB, TAB, TAB, ENTER); await until("Pause and log in");
       assert(frame.includes("Codex's own login"), frame);
       assert.deepEqual(requests, [{ action: "bind", profile: "a", binding: { mode: "native" } }]);
       await key(ESC); await until("Private project shell");
@@ -232,9 +234,27 @@ try {
       await key("c"); await until("[ work-cursor ▾ ]");
       await key(TAB, TAB, ENTER); await until("Cursor credential");
       assert(!frame.includes("> work-openai"), frame);
-      await key(UP, ENTER, TAB, ENTER); await until("Native login: run convoy project login a --runtime cursor in a terminal.");
+      await key(UP, ENTER, TAB, TAB, ENTER); await until("Native login: run convoy project login a --runtime cursor in a terminal.");
       assert(!frame.includes("Pause and log in"), frame);
       assert.deepEqual(requests, [{ action: "bind", profile: "a", runtime: "cursor", binding: { mode: "native" } }]);
+    } else if (scenario === "add-gemini") {
+      await key("n"); await until("Add credential · Fixture");
+      await key("w", "o", "r", "k", "-", "g", TAB, RIGHT, RIGHT, RIGHT, RIGHT, RIGHT, TAB); await until("(●) Gemini API");
+      assert(!frame.includes("AWS Region"), frame);
+      stdin.write(SECRET); await settle(60);
+      await key(TAB, TAB, ENTER); await until("Runtimes: Antigravity · Key: entered, hidden");
+      await key(RIGHT, ENTER); await until("Added work-g.");
+      assert.deepEqual(requests, [{ action: "add", name: "work-g", secret: SECRET, provider: "gemini" }]);
+      await until("work-g · enabled · 0 assigned · rev 1 · Gemini · API key");
+    } else if (scenario === "project-antigravity") {
+      // A Gemini key is offered to the Antigravity row only (OS-2476).
+      entries["work-gemini"] = { provider: "gemini", enabled: true, revision: 1, retained: [1] };
+      await key(ESC, DOWN, DOWN, "a"); await until("Assign or unassign credentials");
+      await key("c"); await until("Credentials · a");
+      await key(TAB, TAB, TAB, ENTER); await until("Antigravity credential");
+      assert(frame.includes("work-gemini") && !frame.includes("> work-openai"), frame);
+      await key(DOWN, ENTER, TAB, ENTER); await until("Saved 1 change for a.");
+      assert.deepEqual(requests, [{ action: "bind", profile: "a", runtime: "antigravity", binding: { mode: "managed", name: "work-gemini" } }]);
     } else if (scenario === "shared-stale") {
       assert(frame.includes("The service predates shared-environment credentials."), frame);
     } else if (scenario === "shared") {
@@ -243,17 +263,17 @@ try {
       await key("c"); await until("Credentials · a");
       await key(ENTER, UP); await until("Native login (this account)");
       assert(!frame.includes("private shell"), frame);
-      await key(ENTER, TAB, TAB, TAB, ENTER); await until("Saved 1 change for a.");
+      await key(ENTER, TAB, TAB, TAB, TAB, ENTER); await until("Saved 1 change for a.");
       assert(frame.includes("[ Reload project ]") && !frame.includes("Pause and log in"), frame);
       assert.deepEqual(requests, [{ action: "bind", profile: "a", binding: { mode: "native" } }]);
     } else if (scenario === "project-saved") {
       await key(ESC, DOWN, DOWN, "a"); await until("Assign or unassign credentials");
       await key("c"); await until("Credentials · a");
-      await key(ENTER, DOWN, ENTER, TAB, TAB, TAB, ENTER); await until("Saved 1 change for a.");
+      await key(ENTER, DOWN, ENTER, TAB, TAB, TAB, TAB, ENTER); await until("Saved 1 change for a.");
       assert(frame.includes("[ Close ]") && frame.includes("[ Reload project ]") && frame.includes("stops active work in a"), frame);
       await key(ENTER); await until("pending reconnect · [u] Reload project");
       assert.equal(browser.getSnapshot().credentials, "editing", "Close keeps the editor");
-      await key(TAB, TAB, ENTER, DOWN, ENTER, TAB, TAB, TAB, ENTER); await until("Saved 1 change for a.");
+      await key(TAB, TAB, ENTER, DOWN, ENTER, TAB, TAB, TAB, TAB, ENTER); await until("Saved 1 change for a.");
       await key(RIGHT, ENTER); await until("✓ Reload requested for a.");
       assert.deepEqual(reconciles, [{ profile: "a", interrupt: true }]);
       assert.deepEqual(requests, [{ action: "bind", profile: "a", binding: { mode: "managed", name: "work-old" } }, { action: "bind", profile: "a", binding: { mode: "disabled" } }]);
@@ -265,7 +285,7 @@ try {
       await key(ENTER, UP, ENTER); await until("unsaved · was work-openai");
       await key("u"); await until("! Save or discard the draft before [u] Reload project.");
       assert.equal(browser.getSnapshot().credentials, "editing");
-      await key(TAB, TAB, TAB, TAB, ENTER); await until("pending reconnect · [u] Reload project");
+      await key(TAB, TAB, TAB, TAB, TAB, ENTER); await until("pending reconnect · [u] Reload project");
       await key("u"); await until("Reload a?");
       await key(RIGHT, ENTER); await until("✓ Reload requested for a.");
       assert.deepEqual(reconciles, [{ profile: "a", interrupt: true }]);

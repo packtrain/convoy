@@ -9,5 +9,6 @@ export function parseAntigravityAvailableCli(
   version: string,
 ): ParseResult<CliRuntimeAvailableCli> {
   const models = toCliCatalogModels(cli.models);
-  return success({ type: "antigravity", version, ...(models ? { models } : {}) });
+  const provider = cli.provider === "gemini" ? { provider: "gemini" as const } : {};
+  return success({ type: "antigravity", version, ...provider, ...(models ? { models } : {}) });
 }

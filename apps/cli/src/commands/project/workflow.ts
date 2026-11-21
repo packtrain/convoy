@@ -265,7 +265,8 @@ export async function checkProject(key: string): Promise<ProjectCheck> {
   const auth = authDescriptor(new CredentialStore().read(), identity);
   const [facts, backend] = await Promise.all([checkLauncher(identity), probeBackend(profile.url, profile.api_key)]);
   return { profile: key, checks: projectChecks(key, facts, backend, {
-    codex: !auth || auth.mode === "native", "claude-code": !auth?.claude, cursor: !auth?.cursor || auth.cursor.mode === "native", opencode: !auth?.opencode, antigravity: true,
+    codex: !auth || auth.mode === "native", "claude-code": !auth?.claude, cursor: !auth?.cursor || auth.cursor.mode === "native",
+    antigravity: !auth?.antigravity || auth.antigravity.mode === "native", opencode: !auth?.opencode,
   }) };
 }
 

@@ -60,7 +60,7 @@ export function Environments({ browser, width, height }: { browser: Browser; wid
     setChosen(control); setProposal(undefined); setError(undefined);
     if (!target.maintenance) { setMessage(["Environment lifecycle is unavailable on this transport. Use its service controls in Actions."]); setStep("result"); return; }
     if (control.operation === "update") {
-      await run(async () => { const release = await target.maintenance!.release(); if (alive.current) setProposal(release); }, "confirm", control.label);
+      await run(async () => { const release = await target.maintenance!.release(browser.localPackage); if (alive.current) setProposal(release); }, "confirm", control.label);
     } else setStep("confirm");
   };
   useEffect(() => {
@@ -76,7 +76,7 @@ export function Environments({ browser, width, height }: { browser: Browser; wid
       if (alive.current) { setCreated(true); setMessage([`Environment ${form.name} is ready.`, "Next: Add project. Projects use the agent runtimes the image provides; Agent runtimes installs more."]); }
       return;
     }
-    const result = await target.maintenance!.execute(chosen.operation, progress, { version: proposal?.proposed });
+    const result = await target.maintenance!.execute(chosen.operation, progress, { version: proposal?.proposed, localPackage: proposal?.localPackage });
     if (result.deleted === true && alive.current) setDeleted(true);
     await browser.refreshEnvironment(result);
     if (alive.current) setMessage([
@@ -127,7 +127,7 @@ export function Environments({ browser, width, height }: { browser: Browser; wid
     lines={state.environment === "create" ? ["Create / resume managed Docker environment", `Target: ${form.name}`, `CLI: ${creation?.version} · ${creation?.install ? creation.localPackage ? `install ${creation.localPackage}` : "install from npm" : "retain installed release"}`,
       ...(creation?.mode === "isolated" ? ["Projects: isolated accounts"] : ["Projects: shared account", `Mount folders: ${creation?.mounts?.join(", ") || "none"}`]), `Internet access: ${creation?.networkMode === "open" ? "Unrestricted" : "Restricted"}`, ...(creation?.networkMode === "open" ? ["Allows web research and downloads from any site."] : [`Deployment: ${creation?.deployment || "none"}`, `Extra domains: ${creation?.domains || "none"}`]), "Builds a local image and retains private data volumes. Requires Linux Docker."] : [
       chosen.label, `Exact target: ${target.name} · ${target.endpoint}`, `Host ${getCliVersion()} / Installed ${proposal?.installed ?? state.observations[state.scope.connection].version ?? "unknown"}`,
-      ...(proposal ? [`Install @useconvoy/cli@${proposal.proposed} from npm.`] : []),
+      ...(proposal ? [proposal.localPackage ? `Install ${proposal.localPackage} (${proposal.proposed}).` : `Install @useconvoy/cli@${proposal.proposed} from npm.`] : []),
       ...(chosen.operation === "delete" ? ["Permanently deletes the container and all saved volumes.", "Includes project files, credentials, configuration and logs.", "This cannot be undone. Remote Convoy projects are not deleted."] : ["May stop all connections and active work on this target. Other clients are affected."]), "Cancel leaves the target unchanged.",
     ]} buttons={[{ label: "Cancel", activate: () => state.environment === "create" ? backToForm() : close() }, { label: state.environment === "create" ? "Create / Resume" : chosen.operation === "update" ? "Update CLI" : chosen.label, activate: () => { void execute(); } }]} />;
   if (step === "busy" || step === "result") return <Dialog inline={state.environment !== "stop" && state.environment !== "delete"} key={step} width={width} height={height} scrollable error={step === "result" ? error : undefined} lines={message} onCancel={close}

@@ -2,7 +2,7 @@ import { randomUUID } from "crypto";
 import * as os from "node:os";
 import * as path from "node:path";
 import chalk from "chalk";
-import { type ClaudeAuth, type CodexAuth, type CursorAuth, type OpencodeAuth } from "../../lib/config/credentials/validators.js";
+import { type ClaudeAuth, type CodexAuth, type CursorAuth, type AntigravityAuth, type OpencodeAuth } from "../../lib/config/credentials/validators.js";
 import { loginRuntimeLabels } from "../../commands/project/validators.js";
 import type { CodexProviderKey } from "../../lib/config/types.js";
 import { api } from "../../convex/_generated/api.js";
@@ -40,6 +40,8 @@ export interface AgentRunnerOptions {
   claudeAuth?: ClaudeAuth;
   /** Managed Cursor key from the project launcher (OS-2017). */
   cursorAuth?: CursorAuth;
+  /** Managed Gemini key for Antigravity from the project launcher (OS-2476). */
+  antigravityAuth?: AntigravityAuth;
   /** Managed OpenCode keys from the project launcher (OS-2018). */
   opencodeAuth?: OpencodeAuth;
   /** Token of the profile's Claude provider key, redacted from uploads. */
@@ -171,7 +173,8 @@ export async function createAgentRunner(options: AgentRunnerOptions): Promise<Ag
    * Register the agent with the backend
    */
   async function registerAgent(): Promise<void> {
-    const availableClis: DetectedCli[] = await detectAvailableClis({ codexProvider: options.codexProvider, claudeAuth: options.claudeAuth, opencodeAuth: options.opencodeAuth });
+    const availableClis: DetectedCli[] = await detectAvailableClis({ codexProvider: options.codexProvider, claudeAuth: options.claudeAuth,
+      antigravityAuth: options.antigravityAuth, opencodeAuth: options.opencodeAuth });
 
     if (!streamFile && availableClis.length === 0) {
       throw new ConnectDiagnosticError(process.env.CONVOY_PROJECT_IDENTITY
@@ -380,6 +383,7 @@ export async function createAgentRunner(options: AgentRunnerOptions): Promise<Ag
           options.claudeProviderToken ?? (options.claudeAuth?.mode === "disabled" ? undefined : options.claudeAuth?.secret),
           codexSecret(options.codexAuth, options.codexProvider),
           options.cursorAuth?.mode === "managed" ? options.cursorAuth.secret : undefined,
+          options.antigravityAuth?.mode === "managed" ? options.antigravityAuth.secret : undefined,
           ...(options.opencodeAuth?.mode === "managed" ? Object.values(options.opencodeAuth.keys).map((key) => typeof key === "string" ? key : key.secret) : []),
         ],
       });
@@ -438,6 +442,7 @@ export async function createAgentRunner(options: AgentRunnerOptions): Promise<Ag
             codexProvider: options.codexProvider,
             claudeAuth: options.claudeAuth,
             cursorAuth: options.cursorAuth,
+            antigravityAuth: options.antigravityAuth,
             opencodeAuth: options.opencodeAuth,
             sandbox,
           }),

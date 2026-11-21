@@ -271,10 +271,15 @@ export function environmentMaintenance(expected: Environment, home?: string): En
   });
   return {
     status,
-    release: async () => {
+    release: async localPackage => {
       const result = await status();
       if (typeof result.serviceVersion !== "string") throw new Error("Installed target version unknown. Start the environment and inspect status before updating.");
-      return { installed: result.serviceVersion, proposed: await publishedVersion(getCliVersion(), result.serviceVersion) };
+      if (localPackage) return { installed: result.serviceVersion, proposed: getCliVersion(), localPackage };
+      const proposed = await publishedVersion(getCliVersion(), result.serviceVersion).catch((error: Error) => {
+        // A source checkout's version is unpublished; name the local-package update instead.
+        throw error.message.includes("not published on npm") ? new Error(`${error.message} To install a local build, run pnpm pack in apps/cli, then convoy tui --package <tgz> or convoy environment update --environment ${expected.name} --package <tgz> --interrupt.`) : error;
+      });
+      return { installed: result.serviceVersion, proposed };
     },
     runtimes: () => withEnvironmentLock(directory, () => controller(() => {}).runtimes(current())),
     installRuntime: (runtime, version, progress) => withEnvironmentLock(directory, () => controller(progress).installRuntime(current(), runtime, version)),
@@ -285,12 +290,13 @@ export function environmentMaintenance(expected: Environment, home?: string): En
         const before = await control.operation(environment, "status");
         if (typeof before.serviceVersion !== "string") throw new Error("Installed target version unknown. Start the environment before updating.");
         if (options.version !== getCliVersion()) throw new Error("Proposed release changed. Check for updates again.");
-        await publishedVersion(options.version, before.serviceVersion);
+        if (!options.localPackage) await publishedVersion(options.version, before.serviceVersion);
       }
       progress(`${operation}: ${environment.name}${options.version ? ` → ${options.version}` : ""}`);
       let result: Record<string, unknown>;
       if (operation === "start") { await control.start(environment); result = await control.operation(environment, "status"); }
-      else result = await control.operation(environment, operation, { ...options, interrupt: true });
+      // The controller takes exactly one of version or localPackage.
+      else result = await control.operation(environment, operation, { ...(options.localPackage ? { localPackage: options.localPackage } : options), interrupt: true });
       if (["start", "restart", "update"].includes(operation) && result.serviceRunning !== true) throw new Error("Service readiness was not confirmed. Inspect status, then Start to recover.");
       if (operation === "update" && result.serviceVersion !== options.version) throw new Error("The installed version does not match the proposed release. Inspect status and recovery before retrying.");
       if (typeof result.serviceVersion === "string") environment.version = packageVersion.parse(result.serviceVersion);

@@ -180,6 +180,22 @@ it("TUI update rechecks npm before executing and saves the observed target versi
     expect(readEnvironment(directory)?.version).toBe(version);
   } finally { rmSync(home, { recursive: true, force: true }); }
 });
+it("TUI update installs the --package build without npm", async () => {
+  const home = mkdtempSync(join(tmpdir(), "convoy-tui-env-"));
+  const directory = environmentDirectory("test", home); saveEnvironment(directory, environment);
+  const request = vi.spyOn(globalThis, "fetch").mockResolvedValue(new Response("", { status: 404 }));
+  const operation = vi.spyOn(EnvironmentController.prototype, "operation").mockImplementation(async (_env, op) =>
+    op === "status" ? { serviceVersion: "0.75.0", serviceRunning: true } : { serviceVersion: getCliVersion(), serviceRunning: true });
+  try {
+    const adapter = environmentMaintenance(environment, home);
+    const release = await adapter.release("/tmp/convoy.tgz");
+    expect(release).toEqual({ installed: "0.75.0", proposed: getCliVersion(), localPackage: "/tmp/convoy.tgz" });
+    await adapter.execute("update", () => {}, { version: release.proposed, localPackage: release.localPackage });
+    expect(request).not.toHaveBeenCalled();
+    expect(operation.mock.calls.at(-1)?.[2]).toEqual({ localPackage: "/tmp/convoy.tgz", interrupt: true });
+    expect(readEnvironment(directory)?.version).toBe(getCliVersion());
+  } finally { rmSync(home, { recursive: true, force: true }); }
+});
 it("TUI update rejects false success when target still reports the old installation", async () => {
   const home = mkdtempSync(join(tmpdir(), "convoy-tui-env-"));
   const directory = environmentDirectory("test", home); saveEnvironment(directory, environment);
@@ -239,6 +255,17 @@ it("returns the inspected installed version with the update proposal", async () 
   vi.spyOn(EnvironmentController.prototype, "operation").mockResolvedValue({ serviceVersion: environment.version, serviceRunning: true });
   try { await expect(environmentMaintenance(environment, home).release()).resolves.toEqual({ installed: environment.version, proposed: getCliVersion() }); }
   finally { rmSync(home, { recursive: true, force: true }); }
+});
+
+it("names the local-package update when the host release is not on npm", async () => {
+  const home = mkdtempSync(join(tmpdir(), "convoy-proposal-"));
+  saveEnvironment(environmentDirectory("test", home), environment);
+  vi.spyOn(globalThis, "fetch").mockResolvedValue(new Response("", { status: 404 }));
+  vi.spyOn(EnvironmentController.prototype, "operation").mockResolvedValue({ serviceVersion: environment.version, serviceRunning: true });
+  try {
+    await expect(environmentMaintenance(environment, home).release()).rejects.toThrow(
+      /not published on npm.*pnpm pack in apps\/cli.*convoy tui --package <tgz> or convoy environment update --environment test --package <tgz> --interrupt/s);
+  } finally { rmSync(home, { recursive: true, force: true }); }
 });
 
 it("prepares the installed release and saved configuration before resume confirmation", async () => {

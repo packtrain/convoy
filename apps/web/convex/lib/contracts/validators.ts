@@ -226,7 +226,9 @@ export function splitAdvertisedCatalogs(
 
   for (const cli of clis) {
     if (isCatalogCli(cli)) {
-      runtimes.push({ type: cli.type, version: cli.version });
+      runtimes.push(cli.type === "antigravity" && cli.provider
+        ? { type: cli.type, version: cli.version, provider: cli.provider }
+        : { type: cli.type, version: cli.version });
       catalogs.push(cli.models ? { cliType: cli.type, models: cli.models } : { cliType: cli.type });
       continue;
     }

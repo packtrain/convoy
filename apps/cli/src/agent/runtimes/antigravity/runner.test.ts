@@ -1,11 +1,11 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { chmodSync, existsSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { chmodSync, existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { tmpdir } from "node:os";
 import { RunnerExecutionError, type ContentChunk } from "../contracts.js";
 import { threadIdentityInstruction } from "../agent-instructions.js";
 import { ANTIGRAVITY_EXECUTABLE_ENV, detectAntigravity } from "./detect.js";
-import { ANTIGRAVITY_SIGN_IN_MESSAGE, createAntigravityRunner } from "./runner.js";
+import { ANTIGRAVITY_DISABLED_MESSAGE, ANTIGRAVITY_KEY_REFUSED_MESSAGE, ANTIGRAVITY_SIGN_IN_MESSAGE, createAntigravityRunner } from "./runner.js";
 
 // Replays agy 1.5.13 ACP shapes recorded for OS-2468 (docs/specs/cli-antigravity-runtime.md).
 const FAKE_AGY = String.raw`
@@ -14,11 +14,12 @@ const readline = require("node:readline");
 const behavior = process.env.FAKE_BEHAVIOR ?? "happy";
 if (process.argv.includes("--version")) { process.stdout.write((process.env.FAKE_VERSION ?? "1.5.13") + "\n"); process.exit(0); }
 const record = (entry) => fs.appendFileSync(process.env.FAKE_RECORD, JSON.stringify(entry) + "\n");
-record({ argv: process.argv.slice(2), env: { thread: process.env.CONVOY_THREAD_ID ?? null, key: process.env.CONVOY_API_KEY ?? null, update: process.env.AGY_CLI_DISABLE_AUTO_UPDATE ?? null } });
+record({ argv: process.argv.slice(2), env: { thread: process.env.CONVOY_THREAD_ID ?? null, key: process.env.CONVOY_API_KEY ?? null, update: process.env.AGY_CLI_DISABLE_AUTO_UPDATE ?? null, ...(process.env.GEMINI_API_KEY || process.env.GOOGLE_API_KEY ? { gemini: process.env.GEMINI_API_KEY ?? null, google: process.env.GOOGLE_API_KEY ?? null } : {}) } });
 const send = (msg) => process.stdout.write(JSON.stringify({ jsonrpc: "2.0", ...msg }) + "\n");
 const update = (sessionId, u) => send({ method: "session/update", params: { sessionId, update: u } });
 let open = [];
 let session = null;
+let keyed = false;
 const answer = (id, result) => { open = open.filter((entry) => entry !== id); send({ id, result }); };
 // agy 1.5.13 advertises thinking levels only for the selected model.
 const CATALOG = { "gemini-3.8-flash": { name: "Gemini 3.8 Flash", levels: ["low", "medium", "high"] }, "gpt-oss-120b-medium": { name: "GPT-OSS 120B (Medium)", levels: [] } };
@@ -43,7 +44,7 @@ readline.createInterface({ input: process.stdin }).on("line", (line) => {
     return send({ id: msg.id, result: { protocolVersion: 1, agentCapabilities: { loadSession: true, ...meta }, agentInfo: { name: "Antigravity ACP Server", version: "1.5.13" } } });
   }
   if (msg.method === "session/new") {
-    if (behavior === "signed-out") return send({ id: msg.id, error: { code: -32000, message: "Authentication required" } });
+    if ((behavior === "signed-out" || behavior === "key-marker") && !keyed) return send({ id: msg.id, error: { code: -32000, message: "Authentication required" } });
     session = "sess-1";
     if (process.env.FAKE_SESSION_FILES) {
       const root = process.env.HOME + "/.gemini/antigravity-cli";
@@ -64,6 +65,10 @@ readline.createInterface({ input: process.stdin }).on("line", (line) => {
     }
     return send({ id: msg.id, result: { configOptions: config() } });
   }
+  // agy 1.5.14 accepts gemini-api-key with any GEMINI_API_KEY; Google checks the key on the first prompt (OS-2476).
+  if (msg.method === "authenticate" && msg.params.methodId === "gemini-api-key" && process.env.GEMINI_API_KEY && behavior !== "key-refused") { keyed = true; return send({ id: msg.id, result: {} }); }
+  // A stored Google token signs in again without a browser once a key's marker is left behind.
+  if (msg.method === "authenticate" && msg.params.methodId === "oauth-personal" && behavior === "key-marker") { keyed = true; return send({ id: msg.id, result: {} }); }
   if (msg.method === "authenticate") return send({ id: msg.id, error: { code: -32603, message: "No browser is available here" } });
   if (msg.method === "session/resume") { session = msg.params.sessionId; return send({ id: msg.id, result: { configOptions: config() } }); }
   if (msg.method === "session/cancel") {
@@ -371,6 +376,37 @@ describe("createAntigravityRunner (fake agy)", () => {
     expect(sent("session/new")).toHaveLength(1);
   });
 
+  it("runs on a managed Gemini key: key in the env, Google variables stripped, gemini-api-key before session/new (OS-2476)", async () => {
+    vi.stubEnv("FAKE_BEHAVIOR", "signed-out");
+    vi.stubEnv("GOOGLE_API_KEY", "ambient-google");
+    vi.stubEnv("GEMINI_API_KEY", "ambient-gemini");
+    const runner = createAntigravityRunner({ antigravityAuth: { mode: "managed", secret: "AIza-managed" } });
+    const { result } = await collect(runner.execute(tmpDir, "hello", { threadId: "thread_1", cliType: "antigravity" }));
+    expect(result).toEqual({ continuationId: "sess-1" });
+    expect(recorded()[0]!.env).toMatchObject({ key: null, gemini: "AIza-managed", google: null });
+    expect(sent("authenticate").map((message) => message.params)).toEqual([{ methodId: "gemini-api-key" }]);
+    const methods = recorded().flatMap((entry) => (entry.in?.method ? [entry.in.method] : []));
+    expect(methods.indexOf("authenticate")).toBeLessThan(methods.indexOf("session/new"));
+  });
+
+  it("fails on a refused managed key with the key message and never tries a browser sign-in (OS-2476)", async () => {
+    vi.stubEnv("FAKE_BEHAVIOR", "key-refused");
+    const runner = createAntigravityRunner({ antigravityAuth: { mode: "managed", secret: "AIza-bad" } });
+    await expect(collect(runner.execute(tmpDir, "hello", { threadId: "thread_1", cliType: "antigravity" }))).rejects.toThrow(
+      ANTIGRAVITY_KEY_REFUSED_MESSAGE
+    );
+    expect(sent("authenticate").map((message) => message.params)).toEqual([{ methodId: "gemini-api-key" }]);
+    expect(sent("session/new")).toHaveLength(0);
+  });
+
+  it("fails a disabled project at the start without spawning agy (OS-2476)", async () => {
+    const runner = createAntigravityRunner({ antigravityAuth: { mode: "disabled" } });
+    await expect(collect(runner.execute(tmpDir, "hello", { threadId: "thread_1", cliType: "antigravity" }))).rejects.toThrow(
+      ANTIGRAVITY_DISABLED_MESSAGE
+    );
+    expect(existsSync(recordFile)).toBe(false);
+  });
+
   it("answers permission requests with allow_once", async () => {
     vi.stubEnv("FAKE_BEHAVIOR", "permission");
     const runner = createAntigravityRunner({});
@@ -644,9 +680,32 @@ describe("detectAntigravity", () => {
     await expect(detectAntigravity()).resolves.toEqual({ type: "antigravity", version: "1.5.13" });
   });
 
+  it("runs the inventory on a managed Gemini key, so the catalog shows what the key unlocks (OS-2476)", async () => {
+    vi.stubEnv("FAKE_BEHAVIOR", "signed-out");
+    const detected = await detectAntigravity({ antigravityAuth: { mode: "managed", secret: "AIza-managed" } });
+    expect(detected?.provider).toBe("gemini");
+    expect(detected?.models?.map((model) => model.slug)).toEqual(["gemini-3.8-flash", "gpt-oss-120b-medium"]);
+    const entries = readFileSync(recordFile, "utf8").trim().split("\n").map((line) => JSON.parse(line) as RecordedEntry);
+    expect(entries.find((entry) => entry.env)?.env).toMatchObject({ gemini: "AIza-managed" });
+    expect(entries.flatMap((entry) => (entry.in?.method === "authenticate" ? [entry.in.params] : []))).toEqual([{ methodId: "gemini-api-key" }]);
+  });
+
+  it("signs the native inventory back in with Google after a managed key left its auth marker (OS-2476)", async () => {
+    vi.stubEnv("FAKE_BEHAVIOR", "key-marker");
+    const cache = join(tmpDir, ".gemini/antigravity-cli/cache");
+    mkdirSync(cache, { recursive: true });
+    writeFileSync(join(cache, "acp-auth-state.json"), JSON.stringify({ methodId: "gemini-api-key" }));
+    const detected = await detectAntigravity();
+    expect(detected?.models?.map((model) => model.slug)).toEqual(["gemini-3.8-flash", "gpt-oss-120b-medium"]);
+    const entries = readFileSync(recordFile, "utf8").trim().split("\n").map((line) => JSON.parse(line) as RecordedEntry);
+    expect(entries.flatMap((entry) => (entry.in?.method === "authenticate" ? [entry.in.params] : []))).toEqual([{ methodId: "oauth-personal" }]);
+  });
+
   // Signed out, `models` stays absent so the stored catalog is left alone.
   it("registers without models when the inventory fails", async () => {
     vi.stubEnv("FAKE_BEHAVIOR", "signed-out");
     await expect(detectAntigravity()).resolves.toEqual({ type: "antigravity", version: "1.5.13" });
+    // Without a key's marker, an unattended inventory never starts a Google sign-in.
+    expect(readFileSync(recordFile, "utf8")).not.toContain('"authenticate"');
   });
 });

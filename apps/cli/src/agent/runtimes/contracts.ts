@@ -1,4 +1,4 @@
-import type { ClaudeAuth, CodexAuth, CursorAuth, OpencodeAuth } from "../../lib/config/credentials/validators.js";
+import type { ClaudeAuth, CodexAuth, CursorAuth, AntigravityAuth, OpencodeAuth } from "../../lib/config/credentials/validators.js";
 import type { CodexProviderKey } from "../../lib/config/types.js";
 /**
  * Thread/message mode. `agent` is the legacy full-access value
@@ -212,6 +212,8 @@ export interface CliRuntimeRunnerFactoryOptions {
   claudeAuth?: ClaudeAuth;
   /** Managed Cursor key; only the cursor-agent child sees it (OS-2017). */
   cursorAuth?: CursorAuth;
+  /** Managed Gemini key; only the agy child sees it (OS-2476). */
+  antigravityAuth?: AntigravityAuth;
   /** Managed OpenCode keys; only the opencode server child sees them (OS-2018). */
   opencodeAuth?: OpencodeAuth;
   /**
@@ -310,6 +312,7 @@ export interface DetectedCli {
 export interface CliRuntimeDetectOptions {
   codexProvider?: CodexProviderKey;
   claudeAuth?: ClaudeAuth;
+  antigravityAuth?: AntigravityAuth;
   opencodeAuth?: OpencodeAuth;
 }
 

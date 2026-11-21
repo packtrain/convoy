@@ -1,6 +1,6 @@
 import * as path from "node:path";
 import { createHash } from "node:crypto";
-import { MANAGED_RUNTIME_LABELS, claudeAuthSchema, codexAuthSchema, cursorAuthSchema, keyRuntimeSchema, opencodeAuthSchema } from "../../lib/config/credentials/validators.js";
+import { MANAGED_RUNTIME_LABELS, antigravityAuthSchema, claudeAuthSchema, codexAuthSchema, cursorAuthSchema, keyRuntimeSchema, opencodeAuthSchema } from "../../lib/config/credentials/validators.js";
 import { z } from "zod";
 
 export const projectRegistrationSchema = z.object({
@@ -17,10 +17,10 @@ export const projectEnvironmentSchema = z.object({
   registrations: z.array(projectRegistrationSchema),
 });
 export type ProjectEnvironment = z.infer<typeof projectEnvironmentSchema>;
-/** Runtimes with a project login; Antigravity has no managed key yet (OS-2474). */
-export const loginRuntimeSchema = z.enum([...keyRuntimeSchema.options, "antigravity"]);
+/** Runtimes the project launcher can log in; it runs each one's own login command. */
+export const loginRuntimeSchema = keyRuntimeSchema;
 export type LoginRuntime = z.infer<typeof loginRuntimeSchema>;
-export const loginRuntimeLabels: Record<LoginRuntime, string> = { ...MANAGED_RUNTIME_LABELS, antigravity: "Antigravity" };
+export const loginRuntimeLabels: Record<LoginRuntime, string> = MANAGED_RUNTIME_LABELS;
 /** Each runtime's own login, run as this account in a shared environment. */
 export const LOGIN_COMMANDS: Record<LoginRuntime, string> = {
   codex: "codex login --device-auth", "claude-code": "claude auth login", cursor: "NO_OPEN_BROWSER=1 cursor-agent login", opencode: "opencode auth login",
@@ -100,7 +100,7 @@ export const workerConfigSchema = z.object({
   connectionName: z.string().optional(), force: z.boolean().optional(),
   concurrency: z.number().int().min(1).max(50).optional(),
   partialStreaming: z.boolean().optional(), isolated: z.boolean().optional(),
-  codexAuth: codexAuthSchema.optional(), claudeAuth: claudeAuthSchema.optional(), cursorAuth: cursorAuthSchema.optional(), opencodeAuth: opencodeAuthSchema.optional(),
+  codexAuth: codexAuthSchema.optional(), claudeAuth: claudeAuthSchema.optional(), cursorAuth: cursorAuthSchema.optional(), antigravityAuth: antigravityAuthSchema.optional(), opencodeAuth: opencodeAuthSchema.optional(),
   codexAppServer: z.boolean().optional(), jsonEvents: z.boolean().optional(),
   /** Set by the service for a shared worker it spawns itself. Spec: docs/specs/cli-shared-environments.md#execution */
   mode: z.literal("shared").optional(),

@@ -102,6 +102,15 @@ class LauncherPolicyTests(unittest.TestCase):
             with self.assertRaises(ValueError):
                 launcher.validate_credentials({"config": {field: auth}})
 
+    def test_managed_gemini_keys_reach_antigravity_only(self):
+        self.assertIn("credentials-antigravity-v1", launcher.CAPABILITIES)
+        for auth in [{"mode": "managed", "secret": "sentinel"}, {"mode": "disabled"}]:
+            launcher.validate_credentials({"config": {"antigravityAuth": auth}})
+        for auth in [{"mode": "managed"}, {"mode": "native"}, {"mode": "anthropic", "secret": "sentinel"},
+                     {"mode": "managed", "secret": "sentinel", "env": {}}, {"mode": "managed", "secret": "x\n"}]:
+            with self.assertRaises(ValueError):
+                launcher.validate_credentials({"config": {"antigravityAuth": auth}})
+
     def tearDown(self):
         self.temp.cleanup()
 

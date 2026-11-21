@@ -78,6 +78,15 @@ it("delivers a Cursor key to a direct worker, exec mode or not (OS-2017)", async
   expect(mocks.launch.mock.calls[0][1].config).toMatchObject({ cursorAuth: { mode: "managed", secret: "dummy" } });
   expect(mocks.launch.mock.calls[0][1].config).not.toHaveProperty("codexAuth");
 });
+it("delivers a Gemini key to a direct Antigravity worker (OS-2476)", async () => {
+  new CredentialStore().mutate((data) => {
+    data.entries.work = { id: "entry", current: 1, enabled: true, provider: "gemini", revisions: [{ revision: 1, secret: "dummy", createdAt: 1 }] };
+    data.antigravityBindings = { [identity]: { mode: "managed", name: "work" } };
+  });
+  await runConnect({ ...config, codexAppServer: false });
+  expect(mocks.launch.mock.calls[0][1].config).toMatchObject({ antigravityAuth: { mode: "managed", secret: "dummy" } });
+  expect(mocks.launch.mock.calls[0][1].config).not.toHaveProperty("codexAuth");
+});
 it("delivers OpenCode keys to a direct worker (OS-2018)", async () => {
   new CredentialStore().mutate((data) => {
     data.entries.work = { id: "entry", current: 1, enabled: true, revisions: [{ revision: 1, secret: "dummy", createdAt: 1 }] };
@@ -127,7 +136,18 @@ describe("shared registrations (OS-2248)", () => {
       await runConnect({ ...config, nonInteractive: true, jsonEvents: true, leaseHolder: "service",
         claudeAuth: { mode: "bedrock", secret: "s", region: "us-east-1" }, codexProvider: { provider: "bedrock", token: "s", region: "us-east-1" } }).catch(() => {});
       const events = write.mock.calls.map(([line]) => JSON.parse(String(line)) as Record<string, unknown>);
-      expect(events).toContainEqual(expect.objectContaining({ status: "connecting", loggedOut: ["cursor", "opencode", "antigravity"] }));
+      expect(events).toContainEqual(expect.objectContaining({ status: "connecting", loggedOut: ["cursor", "antigravity", "opencode"] }));
+    } finally { disableConnectEvents(); }
+  });
+  it("does not report Antigravity as logged out on a managed Gemini key (OS-2476)", async () => {
+    const { disableConnectEvents } = await import("../../lib/connect-events.js");
+    const write = vi.spyOn(process.stdout, "write").mockImplementation(() => true);
+    const out = { installed: true, login: "signed-out" };
+    mocks.states.mockResolvedValue({ codex: out, "claude-code": out, cursor: out, opencode: out, antigravity: out });
+    try {
+      await runConnect({ ...config, nonInteractive: true, jsonEvents: true, leaseHolder: "service", antigravityAuth: { mode: "managed", secret: "s" } }).catch(() => {});
+      const events = write.mock.calls.map(([line]) => JSON.parse(String(line)) as Record<string, unknown>);
+      expect(events).toContainEqual(expect.objectContaining({ status: "connecting", loggedOut: ["codex", "claude-code", "cursor", "opencode"] }));
     } finally { disableConnectEvents(); }
   });
   it("leaves an agy below the floor out of the runtimes it reports (OS-2474)", async () => {

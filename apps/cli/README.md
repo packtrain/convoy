@@ -618,6 +618,7 @@ and recovery are covered in the [managed environment guide](https://docs.convoy.
 Managed OpenAI keys also accept `--environment dev`. Use `keys add` with
 `--provider openai --auth api-key`, then `keys use` with `--runtime codex` and
 `--profile a`. The service stores the key; ordinary host profiles are untouched.
+A Gemini key for Antigravity uses `--provider gemini` and `--runtime antigravity`.
 
 `convoy env` is an alias for `convoy environment`. Every command accepting
 `--environment` also accepts `--env`, with the same defaults and requirements.

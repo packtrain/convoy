@@ -118,8 +118,9 @@ a separate private store. They are not legacy `config.toml` tokens:
 | `keys add <name> --provider anthropic --auth api-key` | The same for an Anthropic API key, for Claude Code and OpenCode |
 | `keys add <name> --provider mantle\|bedrock --auth api-key --region <region>` | The same for an AWS key; Codex or Claude Code runs through that provider and Region |
 | `keys add <name> --provider cursor --auth api-key` | The same for a Cursor account key, for Cursor only; billed to that Cursor account |
-| `keys use <name> --runtime codex\|claude-code\|cursor\|opencode --profile <key>` | Assign a managed key to one runtime of a registered project; Codex takes OpenAI and AWS keys, Claude Code takes Anthropic and AWS keys, Cursor takes Cursor keys, OpenCode takes one OpenAI and one Anthropic key |
-| `keys unassign --runtime codex\|claude-code\|cursor\|opencode --profile <key>` | Disable managed use for that runtime (for OpenCode, both keys); add `--native-login` to explicitly restore private native login |
+| `keys add <name> --provider gemini --auth api-key` | The same for a Gemini API key, for Antigravity only |
+| `keys use <name> --runtime codex\|claude-code\|cursor\|antigravity\|opencode --profile <key>` | Assign a managed key to one runtime of a registered project; Codex takes OpenAI and AWS keys, Claude Code takes Anthropic and AWS keys, Cursor takes Cursor keys, Antigravity takes Gemini keys, OpenCode takes one OpenAI and one Anthropic key |
+| `keys unassign --runtime codex\|claude-code\|cursor\|antigravity\|opencode --profile <key>` | Disable managed use for that runtime (for OpenCode, both keys); add `--native-login` to explicitly restore private native login |
 | `keys status` | Desired/applied revisions and observed request results; `--json` for structured output |
 | `keys rotate <name>` | Replace and enable the key; masked prompt or `--from-env` / `--stdin` |
 | `keys rollback <name> --revision <number>` | Select a retained revision; does not re-enable a disabled key |
@@ -198,8 +199,8 @@ allows overwriting an existing definition. This command writes files, whereas
 | `project add <path>` | Register an isolated workspace and remote project; prompts on the control host |
 | `project list` | List registrations and observed service state; accepts `--json` |
 | `project remove <profile>` | Unregister while retaining files; `--yes` confirms and `--interrupt` separately permits stopping active work |
-| `project shell <profile>` | Open the private HOME/workspace for login and diagnostics; pause its connection first. `--login codex\|claude-code\|cursor\|opencode\|antigravity` runs only that runtime's login |
-| `project login <profile> --runtime codex\|claude-code\|cursor\|opencode\|antigravity` | Pause the project, run the runtime's login in its private shell, reload it and wait until online; `--interrupt` permits stopping active runs |
+| `project shell <profile>` | Open the private HOME/workspace for login and diagnostics; pause its connection first. `--login codex\|claude-code\|cursor\|antigravity\|opencode` runs only that runtime's login |
+| `project login <profile> --runtime codex\|claude-code\|cursor\|antigravity\|opencode` | Pause the project, run the runtime's login in its private shell, reload it and wait until online; `--interrupt` permits stopping active runs |
 | `project check <profile>` | Check the sandbox, each runtime (installed root-owned, config folder, logged in), the project lease and the backend key, with a fix for each failure. Read-only; exits 1 on a failed check. `--json` always exits 0 |
 
 `project add` accepts `--profile-key <key>`, `--project <id-or-alias>` to select

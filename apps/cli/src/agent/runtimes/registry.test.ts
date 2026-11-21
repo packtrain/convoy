@@ -225,7 +225,7 @@ describe("project runtime detection", () => {
     vi.stubEnv("CONVOY_PROJECT_RUNTIMES", "codex");
     const runner = createRunnerForCliType("claude-code", {});
     expect(runner).not.toBeNull();
-    await expect(runner!.execute("/tmp", "hello", { threadId: "a", cliType: "claude-code" }).next()).rejects.toThrow(/claude-code is not available in this project\. Isolated projects run Codex, Claude Code, Cursor, OpenCode, Antigravity installed/);
+    await expect(runner!.execute("/tmp", "hello", { threadId: "a", cliType: "claude-code" }).next()).rejects.toThrow(/claude-code is not available in this project\. Isolated projects run Codex, Claude Code, Cursor, Antigravity, OpenCode installed/);
     expect(createRunnerForCliType("codex", {})).not.toBeNull();
   });
   it("fails closed when the launcher detected no runtime", async () => {

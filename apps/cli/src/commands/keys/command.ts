@@ -109,8 +109,8 @@ async function buildEntry(provider: ProviderKey["provider"], options: { token?: 
 const addCommand = new Command("add")
   .description("Store a local model-provider credential or native login choice")
   .argument("<name>", "Entry name (e.g. work-bedrock, claude-sub)")
-  .option("--provider <provider>", `Provider: ${PROVIDERS.join(", ")}, openai, cursor`)
-  .option("--auth <mode>", "Managed authentication mode: api-key (openai for isolated Codex, anthropic for isolated Claude Code, mantle/bedrock for both, cursor for isolated Cursor; openai, anthropic and bedrock also serve isolated OpenCode)")
+  .option("--provider <provider>", `Provider: ${PROVIDERS.join(", ")}, openai, cursor, gemini`)
+  .option("--auth <mode>", "Managed authentication mode: api-key (openai for isolated Codex, anthropic for isolated Claude Code, mantle/bedrock for both, cursor for isolated Cursor, gemini for isolated Antigravity; openai, anthropic and bedrock also serve isolated OpenCode)")
   .option("--from-env <name>", "Import managed key from an environment variable")
   .option("--stdin", "Read managed key from stdin")
   .option("--token <token>", "API key / bearer token (prompted if omitted; not used by anthropic)")
@@ -124,7 +124,7 @@ const addCommand = new Command("add")
       const aws = provider === "mantle" || provider === "bedrock" ? provider : undefined;
       // Plain `--provider anthropic` stays the credential-free native-login entry.
       const anthropic = provider === "anthropic" && options.auth !== undefined;
-      if (provider === "openai" || provider === "cursor" || anthropic || (aws && options.auth)) {
+      if (provider === "openai" || provider === "cursor" || provider === "gemini" || anthropic || (aws && options.auth)) {
         await runManagedCommand(async () => {
           if (options.auth !== "api-key") throw new Error("Use --auth api-key for managed entries.");
           const input = { fromEnv: options.fromEnv, stdin: options.stdin, token: options.token };
@@ -132,6 +132,11 @@ const addCommand = new Command("add")
             if (options.region) throw new Error("Managed Cursor keys take no --region.");
             const secret = await inputSecret(input, "Cursor API key (billed to its Cursor account)");
             return changeCredentials({ action: "add", name, secret, provider: "cursor" });
+          }
+          if (provider === "gemini") {
+            if (options.region) throw new Error("Managed Gemini keys take no --region.");
+            const secret = await inputSecret(input, "Gemini API key (API usage billing)");
+            return changeCredentials({ action: "add", name, secret, provider: "gemini" });
           }
           if (anthropic) {
             if (options.region) throw new Error("Managed Anthropic keys take no --region.");
@@ -151,7 +156,7 @@ const addCommand = new Command("add")
       }
       if (targeted()) throw new Error("Target keys use --auth api-key with a managed provider. Legacy providers stay in this host's config.");
       if (options.auth || options.fromEnv || options.stdin) {
-        console.error("Managed input flags require --auth api-key with --provider openai, anthropic, mantle, bedrock or cursor.");
+        console.error("Managed input flags require --auth api-key with --provider openai, anthropic, mantle, bedrock, cursor or gemini.");
         process.exitCode = 1;
         return;
       }
@@ -337,7 +342,7 @@ const disableCommand = new Command("disable")
   .action((name) => runManagedCommand(() => changeCredentials({ action: "disable", name })));
 
 export const keysCommand = new Command("keys")
-  .description("Manage local API keys for isolated Codex, Claude Code, Cursor and OpenCode, and Claude providers")
+  .description("Manage local API keys for isolated Codex, Claude Code, Cursor, Antigravity and OpenCode, and Claude providers")
   .addCommand(addCommand)
   .addCommand(listCommand)
   .addCommand(removeCommand)

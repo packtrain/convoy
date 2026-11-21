@@ -336,7 +336,12 @@ Claude Code. Its postinstall puts the native binary at
 not a wrapper. A VM administrator installs it with the same npm command, which
 `project check` prints.
 
-Antigravity (OS-2475) has no managed key yet (OS-2476). The image installs agy
+Managed Gemini keys for Antigravity (OS-2476) send `antigravityAuth: { mode:
+"managed", secret }` or `{ mode: "disabled" }`. The launcher advertises
+`credentials-antigravity-v1` and accepts only those shapes. The worker hands the
+key to the Antigravity runner, which puts it in the `agy` child env only.
+
+Antigravity (OS-2475): the image installs agy
 1.5.14, the build `ANTIGRAVITY_BUILD` in `apps/cli/src/commands/project/formatters.ts`
 pins for a managed install, from the same release tarball and SHA-512 per
 architecture. Its single `antigravity` executable lands root-owned in

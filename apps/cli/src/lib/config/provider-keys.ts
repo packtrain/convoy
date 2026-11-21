@@ -15,7 +15,7 @@ export const PROVIDER_LABELS: Record<ProviderKey["provider"], string> = {
 
 /** Managed store entries (`keys status`, TUI); here `anthropic` is an API key, not the sign-in entry. */
 export const MANAGED_PROVIDER_LABELS: Record<string, string> = {
-  openai: "OpenAI", anthropic: "Anthropic", mantle: PROVIDER_LABELS.mantle, bedrock: PROVIDER_LABELS.bedrock, cursor: "Cursor account key",
+  openai: "OpenAI", anthropic: "Anthropic", mantle: PROVIDER_LABELS.mantle, bedrock: PROVIDER_LABELS.bedrock, cursor: "Cursor account key", gemini: "Gemini",
 };
 
 /** Providers that carry a credential; `anthropic` uses the machine's sign-in. */

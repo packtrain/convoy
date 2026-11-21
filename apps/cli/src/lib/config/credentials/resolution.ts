@@ -11,6 +11,7 @@ import {
   type CodexAuth,
   type ClaudeAuth,
   type CursorAuth,
+  type AntigravityAuth,
   type OpencodeAuth,
   type OpencodeKeys,
   type OpencodeSlot,
@@ -26,7 +27,7 @@ const launcherRequired = (label: string) =>
   `Managed ${label} credentials require an updated launcher. Follow the VM upgrade instructions.`;
 /** Per runtime: where its bindings live, the launcher capability they need, and the entries it takes. */
 const RUNTIME_BINDINGS: Record<ManagedRuntime, {
-  field: "bindings" | "claudeBindings" | "cursorBindings"; capability?: string;
+  field: "bindings" | "claudeBindings" | "cursorBindings" | "antigravityBindings"; capability?: string;
 } & EntryRule> = {
   codex: { field: "bindings", accepts: (e) => !e.provider, refusal: "Codex needs a managed OpenAI, Mantle or Bedrock key." },
   "claude-code": {
@@ -36,6 +37,10 @@ const RUNTIME_BINDINGS: Record<ManagedRuntime, {
   cursor: {
     field: "cursorBindings", capability: "credentials-cursor-v1", accepts: (e) => e.provider === "cursor",
     refusal: "Cursor needs a managed Cursor account key.",
+  },
+  antigravity: {
+    field: "antigravityBindings", capability: "credentials-antigravity-v1", accepts: (e) => e.provider === "gemini",
+    refusal: "Antigravity needs a managed Gemini API key.",
   },
 };
 const OPENCODE_REFUSAL = "OpenCode needs a managed OpenAI, Anthropic or Bedrock key.";
@@ -62,10 +67,12 @@ export function authDescriptor(data: CredentialData, identity: string): AuthDesc
   const codex = data.bindings[identity] && bindingDescriptor(data, data.bindings[identity]);
   const claude = data.claudeBindings?.[identity] && bindingDescriptor(data, data.claudeBindings[identity]);
   const cursor = data.cursorBindings?.[identity] && bindingDescriptor(data, data.cursorBindings[identity]);
+  const antigravity = data.antigravityBindings?.[identity] && bindingDescriptor(data, data.antigravityBindings[identity]);
   const slots = data.opencodeBindings?.[identity];
   const opencode = slots && Object.fromEntries(Object.entries(slots).map(([slot, name]) => [slot, bindingDescriptor(data, { mode: "managed", name })]));
-  if (!claude && !cursor && !opencode) return codex;
-  return { ...(codex ?? { mode: "native" }), ...(claude ? { claude } : {}), ...(cursor ? { cursor } : {}), ...(opencode ? { opencode } : {}) };
+  if (!claude && !cursor && !antigravity && !opencode) return codex;
+  return { ...(codex ?? { mode: "native" }), ...(claude ? { claude } : {}), ...(cursor ? { cursor } : {}),
+    ...(antigravity ? { antigravity } : {}), ...(opencode ? { opencode } : {}) };
 }
 
 /** The bound revision's secret; refuses an entry the runtime cannot take, such as a hand-edited binding. */
@@ -77,7 +84,7 @@ function managedSecret(data: CredentialData, current: { name?: string; revision?
   return { secret, aws: entry.aws };
 }
 
-type LaunchPayload = { codexAuth?: CodexAuth; claudeAuth?: ClaudeAuth; cursorAuth?: CursorAuth; opencodeAuth?: OpencodeAuth };
+type LaunchPayload = { codexAuth?: CodexAuth; claudeAuth?: ClaudeAuth; cursorAuth?: CursorAuth; antigravityAuth?: AntigravityAuth; opencodeAuth?: OpencodeAuth };
 
 /** What a launch delivers for `current`; pure, so the service snapshot can check capabilities. */
 export function launchPayload(data: CredentialData, current: AuthDescriptor | undefined): LaunchPayload {
@@ -100,6 +107,11 @@ export function launchPayload(data: CredentialData, current: AuthDescriptor | un
   else if (cursor?.mode === "managed") {
     result.cursorAuth = { mode: "managed", secret: managedSecret(data, cursor, RUNTIME_BINDINGS.cursor).secret };
   }
+  const antigravity = current?.antigravity;
+  if (antigravity?.mode === "disabled") result.antigravityAuth = { mode: "disabled" };
+  else if (antigravity?.mode === "managed") {
+    result.antigravityAuth = { mode: "managed", secret: managedSecret(data, antigravity, RUNTIME_BINDINGS.antigravity).secret };
+  }
   if (current?.opencode) {
     const keys = Object.fromEntries((Object.entries(current.opencode) as [OpencodeSlot, AuthDescriptor][])
       .filter(([, slot]) => slot.mode === "managed").map(([slot, bound]) => [slot, OPENCODE_SLOTS[slot].key(managedSecret(data, bound, OPENCODE_SLOTS[slot]))])) as OpencodeKeys;
@@ -109,12 +121,13 @@ export function launchPayload(data: CredentialData, current: AuthDescriptor | un
 }
 
 /** Launcher capabilities a payload needs; direct and service launches share it. */
-export function launchCapabilities({ codexAuth, claudeAuth, cursorAuth, opencodeAuth }: LaunchPayload): string[] {
+export function launchCapabilities({ codexAuth, claudeAuth, cursorAuth, antigravityAuth, opencodeAuth }: LaunchPayload): string[] {
   return [
     ...(codexAuth ? [codexAuth.mode === "mantle" || codexAuth.mode === "bedrock" ? "credentials-aws-v1" : "credentials-v1"] : []),
     ...(claudeAuth ? ["credentials-claude-v1"] : []),
     ...(claudeAuth?.mode === "anthropic" ? ["credentials-anthropic-v1"] : []),
     ...(cursorAuth ? ["credentials-cursor-v1"] : []),
+    ...(antigravityAuth ? ["credentials-antigravity-v1"] : []),
     ...(opencodeAuth ? ["credentials-opencode-v1"] : []),
     ...(opencodeAuth?.mode === "managed" ? (Object.keys(opencodeAuth.keys) as OpencodeSlot[]).flatMap((slot) => OPENCODE_SLOTS[slot].capability ?? []) : []),
   ];
@@ -217,6 +230,8 @@ export function mutateCredentials(request: CredentialMutation, environment: Proj
           throw new Error("Managed Anthropic keys require an updated launcher. Follow the VM upgrade instructions.");
         if (request.provider === "cursor" && !supports("credentials-cursor-v1"))
           throw new Error("Managed Cursor keys require an updated launcher. Follow the VM upgrade instructions.");
+        if (request.provider === "gemini" && !supports("credentials-antigravity-v1"))
+          throw new Error("Managed Gemini keys require an updated launcher. Follow the VM upgrade instructions.");
         data.entries[name] = {
           ...(request.aws ? { aws: request.aws } : {}),
           ...(request.provider ? { provider: request.provider } : {}),

@@ -88,8 +88,8 @@ it("names a user npm install for each missing runtime in a shared project (OS-22
   const checks = sharedProjectChecks("a", { holder: null, runtimes: { codex: missing, "claude-code": missing, cursor: missing, opencode: missing, antigravity: missing } }, "ok");
   expect(checks.filter(check => check.id.endsWith("-installed")).map(check => [check.status, check.fix])).toEqual([
     ["fail", "Install it: npm install -g @openai/codex."], ["fail", "Install it: npm install -g @anthropic-ai/claude-code."],
-    ["fail", "Install it: curl https://cursor.com/install -fsS | bash."], ["fail", "Install it: npm install -g opencode-ai@1.19.5."],
-    ["fail", "Install it: curl -fsSL https://antigravity.google/cli/install.sh | bash."]]);
+    ["fail", "Install it: curl https://cursor.com/install -fsS | bash."], ["fail", "Install it: curl -fsSL https://antigravity.google/cli/install.sh | bash."],
+    ["fail", "Install it: npm install -g opencode-ai@1.19.5."]]);
   expect(checks.some(check => check.id.endsWith("-login"))).toBe(false);
 });
 

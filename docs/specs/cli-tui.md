@@ -858,10 +858,13 @@ changes while the form is open.
 Update remote resolves the exact running host release from npm with a 15-second
 lookup deadline. Only stable published host releases are offered. It rejects
 newer targets rather than downgrading them; unpublished releases and network errors
-show retry guidance without an install button. After confirmation it checks the
+show retry guidance without an install button. An unpublished release, as from a
+source checkout, also names the local-package route: `pnpm pack` in `apps/cli`, then
+`convoy tui --package <tgz>` or
+`convoy environment update --environment <name> --package <tgz> --interrupt`. After confirmation it checks the
 installed version and npm availability again under the environment lock, then uses
 the existing exact-version installation, restart, readiness and rollback controller.
-No local archive is used by the TUI. Success requires a running service reporting
+A TUI started with `--package` installs that archive instead (see below). Success requires a running service reporting
 the proposed release. Saved version metadata and displayed service version come
 from actual target results and the reconnect hello.
 
@@ -1020,8 +1023,8 @@ hosts explain why and point to `convoy keys`. Changes need a live connection who
 `credentials-v1`; otherwise the panel names Update CLI.
 
 The entry list shows each name, enabled state, saved assignment count, current
-revision, provider (OpenAI, Anthropic, AWS Bedrock / Mantle with its Region, or
-Cursor account key) and API key auth. A Cursor entry omits "API key"; it bills
+revision, provider (OpenAI, Anthropic, AWS Bedrock / Mantle with its Region,
+Cursor account key or Gemini) and API key auth. A Cursor entry omits "API key"; it bills
 its Cursor account (OS-2017). The selected entry lists its assignments with their delivery. Key values are
 never rendered, and the status read carries none.
 
@@ -1045,7 +1048,7 @@ Operations on the selected entry:
 
 Enter opens a checklist with one row per registered project and supported runtime:
 Codex for OpenAI keys, Claude Code for Anthropic keys, Codex and Claude Code for
-Mantle/Bedrock keys, Cursor for Cursor keys. Space toggles
+Mantle/Bedrock keys, Cursor for Cursor keys, Antigravity for Gemini keys (OS-2476). Space toggles
 the draft. A row whose runtime uses another key shows `replaces <name>`. Unchecking
 a saved row unassigns it, which disables that runtime as `keys unassign` does. A
 disabled entry cannot gain assignments. Save changes sends one bind per changed
@@ -1056,9 +1059,9 @@ Project Actions adds c Assign or unassign credentials. It opens the selected pro
 editor with one row per runtime. Enter or Space opens a dropdown, as in onboarding,
 listing native login, each compatible enabled entry, then unassigned (runtime
 disabled). ↑/↓ moves, Enter chooses into the draft and Esc or Tab closes it. It shares the draft, save and leave prompt
-with the checklist. The editor has a Codex, a Claude Code and a Cursor row. Saving
-native login opens that runtime's login action
-([Runtime login](#runtime-login-cli-01100)). Cursor has no TUI login action, so
+with the checklist. The editor has a Codex, a Claude Code, a Cursor and an
+Antigravity row. Saving native login opens that runtime's login action
+([Runtime login](#runtime-login-cli-01100)); Antigravity's is [y]. Cursor has no TUI login action, so
 saving its native login shows "Native login: run convoy project login <profile>
 --runtime cursor in a terminal." instead. Native subscription login is never copied
 between projects. OpenCode keys (OS-2018) bind one key per provider slot, which
@@ -1410,6 +1413,10 @@ instead of the npm release, so an unpublished host version can be tested. The
 host resolves the path and exits before rendering if it is not a file. The
 package applies only when a container gets built: a new environment, or a saved
 one whose container does not exist. Resuming an existing container ignores it.
+Update remote on an existing environment installs the package too: it proposes
+the host version, skips both npm lookups, shows `Install <path> (<version>).`, and
+runs the controller's `--package` update. Success still requires the service to
+report the host version, so a stale archive fails after install.
 Review shows `CLI: <version> · install <path>` in place of `install from npm`,
 and confirmation skips the npm lookup. The package's version is not checked
 against the host, so start the TUI from the same build that was packed. Without

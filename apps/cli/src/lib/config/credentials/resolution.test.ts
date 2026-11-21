@@ -181,3 +181,28 @@ it("delivers the Bedrock slot's secret and region and needs credentials-opencode
   store.mutate((d) => { d.entries.aws.aws = { provider: "mantle", region: "eu-west-1" }; });
   expect(() => launchAuth(identity, authDescriptor(store.read(), identity), store)).toThrow("OpenCode needs");
 });
+
+it("delivers a Gemini entry to Antigravity only (OS-2476)", () => {
+  const dir = mkdtempSync(join(tmpdir(), "keys-gemini-"));
+  dirs.push(dir);
+  const store = new CredentialStore(dir);
+  const identity = "a".repeat(64);
+  store.mutate((d) => {
+    d.entries.work = { id: "id", enabled: true, current: 1, provider: "gemini", revisions: [{ revision: 1, secret: "AIza-gemini", createdAt: 1 }] };
+    d.antigravityBindings = { [identity]: { mode: "managed", name: "work" } };
+  });
+  const payload = launchAuth(identity, authDescriptor(store.read(), identity), store);
+  expect(payload).toEqual({ antigravityAuth: { mode: "managed", secret: "AIza-gemini" } });
+  expect(launchCapabilities(payload)).toEqual(["credentials-antigravity-v1"]);
+  store.mutate((d) => { d.antigravityBindings = { [identity]: { mode: "disabled" } }; });
+  expect(launchAuth(identity, authDescriptor(store.read(), identity), store)).toEqual({ antigravityAuth: { mode: "disabled" } });
+  // Hand-edited bindings never send a Gemini key to another runtime, or another key to Antigravity.
+  store.mutate((d) => { d.cursorBindings = { [identity]: { mode: "managed", name: "work" } }; });
+  expect(() => launchAuth(identity, authDescriptor(store.read(), identity), store)).toThrow("Cursor needs");
+  store.mutate((d) => {
+    d.cursorBindings = {};
+    d.entries.openai = { id: "id2", enabled: true, current: 1, revisions: [{ revision: 1, secret: "sk", createdAt: 1 }] };
+    d.antigravityBindings = { [identity]: { mode: "managed", name: "openai" } };
+  });
+  expect(() => launchAuth(identity, authDescriptor(store.read(), identity), store)).toThrow("Antigravity needs");
+});

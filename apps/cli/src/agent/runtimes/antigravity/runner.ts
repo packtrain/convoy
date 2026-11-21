@@ -19,7 +19,8 @@ import {
   type AcpContentBlock,
 } from "../acp/client.js";
 import { JsonRpcError } from "../json-rpc.js";
-import { buildAntigravitySubprocessEnv, killProcessGroup, resolveAntigravityExecutablePath } from "./detect.js";
+import type { AntigravityAuth } from "../../../lib/config/credentials/validators.js";
+import { GEMINI_API_KEY_METHOD, buildAntigravitySubprocessEnv, killProcessGroup, resolveAntigravityExecutablePath } from "./detect.js";
 import { createAntigravityInteractions } from "./interactions.js";
 import { compactToolUpdate } from "./streaming.js";
 
@@ -35,6 +36,9 @@ const STDERR_TAIL_LINES = 12;
 
 export const ANTIGRAVITY_SIGN_IN_MESSAGE =
   "Antigravity is not signed in on this machine. Run `agy` in a terminal and sign in, then send the message again.";
+export const ANTIGRAVITY_KEY_REFUSED_MESSAGE =
+  "Antigravity refused the assigned Gemini API key. Rotate it, or unassign it and restore native login.";
+export const ANTIGRAVITY_DISABLED_MESSAGE = "Antigravity is disabled for this project. Assign a key or explicitly restore native login.";
 
 /** Updates nothing reads yet (title, modes, models). */
 const UNFORWARDED_UPDATES = new Set(["session_info_update", "current_mode_update", "config_option_update"]);
@@ -63,22 +67,33 @@ function systemAppend(options: RunnerExecutionOptions): string {
     .join("\n\n");
 }
 
-/** Opens or resumes the run's session; signed out, it tries `oauth-personal` once. */
+const isAuthRequired = (error: unknown) => error instanceof JsonRpcError && error.code === ACP_AUTH_REQUIRED_CODE;
+
+/**
+ * Opens or resumes the run's session. A managed key authenticates first and never falls back
+ * to a browser; signed out without one, it tries `oauth-personal` once.
+ */
 async function openSession(
   acp: AcpClient,
   workingDirectory: string,
   options: RunnerExecutionOptions,
-  meta: Record<string, unknown> | undefined
+  meta: Record<string, unknown> | undefined,
+  managedKey: boolean
 ): Promise<{ sessionId: string; configOptions: AcpConfigOption[] }> {
   const open = async () => {
     if (!options.continuationId) return acp.newSession({ cwd: workingDirectory, _meta: meta });
     const { configOptions } = await acp.resumeSession({ sessionId: options.continuationId, cwd: workingDirectory, _meta: meta });
     return { sessionId: options.continuationId, configOptions };
   };
+  const refused = () => new RunnerExecutionError(ANTIGRAVITY_KEY_REFUSED_MESSAGE, { continuationId: options.continuationId });
+  if (managedKey) {
+    await acp.authenticate(GEMINI_API_KEY_METHOD).catch((error: unknown) => { throw error instanceof JsonRpcError ? refused() : error; });
+    return open().catch((error: unknown) => { throw isAuthRequired(error) ? refused() : error; });
+  }
   try {
     return await open();
   } catch (error) {
-    if (!(error instanceof JsonRpcError) || error.code !== ACP_AUTH_REQUIRED_CODE) throw error;
+    if (!isAuthRequired(error)) throw error;
   }
   try {
     await acp.authenticate("oauth-personal");
@@ -111,8 +126,9 @@ export async function applyModelSelection(
   }
 }
 
-export function createAntigravityRunner(factoryOptions: { partialStreaming?: boolean }): CliRuntimeRunner {
+export function createAntigravityRunner(factoryOptions: { partialStreaming?: boolean; antigravityAuth?: AntigravityAuth }): CliRuntimeRunner {
   const partialStreaming = factoryOptions.partialStreaming ?? false;
+  const auth = factoryOptions.antigravityAuth;
   let aborted = false;
   let activeChild: ChildProcess | null = null;
   let exited: Promise<void> = Promise.resolve();
@@ -139,12 +155,13 @@ export function createAntigravityRunner(factoryOptions: { partialStreaming?: boo
       options: RunnerExecutionOptions
     ): AsyncGenerator<ContentChunk, RunnerExecutionResult, unknown> {
       aborted = false;
+      if (auth?.mode === "disabled") throw new RunnerExecutionError(ANTIGRAVITY_DISABLED_MESSAGE, { continuationId: options.continuationId });
       const executable = await resolveAntigravityExecutablePath();
       // Ask to approve is agy's own `default` session mode; Act is the spawn flag.
       const args = options.cliMode === "default" ? ["acp"] : ["acp", "--dangerously-skip-permissions"];
       const child = spawn(executable.command, args, {
         cwd: workingDirectory,
-        env: buildAntigravitySubprocessEnv(options.threadId),
+        env: buildAntigravitySubprocessEnv(options.threadId, auth),
         stdio: ["pipe", "pipe", "pipe"],
         detached: process.platform !== "win32",
       });
@@ -292,7 +309,7 @@ export function createAntigravityRunner(factoryOptions: { partialStreaming?: boo
         const append = systemAppend(options);
         const meta = isRecord(initialized.agentCapabilities?._meta) ? initialized.agentCapabilities._meta : {};
         const canAppend = isRecord(meta.antigravity) && isRecord(meta.antigravity.systemPrompt) && meta.antigravity.systemPrompt.append === true;
-        const opened = await openSession(acp, workingDirectory, options, canAppend ? { antigravity: { systemPrompt: { append } } } : undefined);
+        const opened = await openSession(acp, workingDirectory, options, canAppend ? { antigravity: { systemPrompt: { append } } } : undefined, auth?.mode === "managed");
         sessionId = opened.sessionId;
         yield {
           type: "convoy/acp_session",

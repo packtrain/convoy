@@ -16,9 +16,9 @@ const workers = [{ profile: "a", identity: "a".repeat(64), status: "online" as c
 it("derives saved bindings per project and runtime, matching by identity or profile key", () => {
   const rows = bindingRows(status, workers);
   expect(rows.map(row => [row.key, row.saved])).toEqual([
-    ["a:codex", { mode: "managed", name: "work-openai" }], ["a:claude-code", { mode: "managed", name: "work-mantle" }], ["a:cursor", { mode: "native" }],
-    ["b:codex", { mode: "disabled" }], ["b:claude-code", { mode: "native" }], ["b:cursor", { mode: "native" }],
-    ["c:codex", { mode: "native" }], ["c:claude-code", { mode: "native" }], ["c:cursor", { mode: "native" }],
+    ["a:codex", { mode: "managed", name: "work-openai" }], ["a:claude-code", { mode: "managed", name: "work-mantle" }], ["a:cursor", { mode: "native" }], ["a:antigravity", { mode: "native" }],
+    ["b:codex", { mode: "disabled" }], ["b:claude-code", { mode: "native" }], ["b:cursor", { mode: "native" }], ["b:antigravity", { mode: "native" }],
+    ["c:codex", { mode: "native" }], ["c:claude-code", { mode: "native" }], ["c:cursor", { mode: "native" }], ["c:antigravity", { mode: "native" }],
   ]);
   expect(assignedRows(rows, "work-mantle").map(row => row.key)).toEqual(["a:claude-code"]);
 });
@@ -26,9 +26,9 @@ it("derives saved bindings per project and runtime, matching by identity or prof
 it("reports service delivery per runtime instead of inferring it from a save", () => {
   const rows = bindingRows(status, workers);
   expect(delivery(rows[0])).toBe("applied");
-  expect(delivery(rows[3])).toBe("pending reconnect · [u] Reload project");
-  expect(delivery(rows[4])).toBe("applied");
-  expect(delivery(rows[6])).toBe("default native login");
+  expect(delivery(rows[4])).toBe("pending reconnect · [u] Reload project");
+  expect(delivery(rows[5])).toBe("applied");
+  expect(delivery(rows[8])).toBe("default native login");
   expect(delivery({ ...rows[0], project: { ...rows[0].project!, pending: undefined, state: "offline" } })).toBe("applied unknown (offline)");
   expect(delivery({ ...rows[0], project: { ...rows[0].project!, authResult: { result: "authentication-failed", at: 1 } } })).toBe("failed: authentication-failed");
 });
@@ -64,10 +64,10 @@ it("offers an Anthropic entry to Claude Code only (OS-2016)", () => {
 it("offers only compatible, enabled entries and keeps a disabled entry from gaining assignments", () => {
   const rows = bindingRows(status, workers);
   // Keys sit next to native login, so one → from the default selects a key.
-  expect(choices(rows[6], status.entries)).toEqual([{ mode: "native" }, { mode: "managed", name: "work-openai" }, { mode: "disabled" }]);
+  expect(choices(rows[8], status.entries)).toEqual([{ mode: "native" }, { mode: "managed", name: "work-openai" }, { mode: "disabled" }]);
   expect(choices(rows[1], status.entries)).toEqual([{ mode: "native" }, { mode: "managed", name: "work-mantle" }, { mode: "disabled" }]);
-  expect(choices(rows[7], status.entries)).toEqual([{ mode: "native" }, { mode: "disabled" }]);
-  expect(choices(rows[7], status.entries, mantle)).toEqual([{ mode: "native" }]);
+  expect(choices(rows[9], status.entries)).toEqual([{ mode: "native" }, { mode: "disabled" }]);
+  expect(choices(rows[9], status.entries, mantle)).toEqual([{ mode: "native" }]);
   expect(choices(rows[1], status.entries, mantle)).toEqual([{ mode: "disabled" }, { mode: "managed", name: "work-mantle" }]);
 });
 
@@ -79,7 +79,7 @@ it("turns only changed draft rows into bind requests and names replacements", ()
     { action: "bind", profile: "c", binding: { mode: "disabled" } },
   ]);
   expect(draftNote(rows[0], { mode: "managed", name: "other" })).toBe("unsaved · replaces work-openai");
-  expect(draftNote(rows[3], { mode: "managed", name: "work-openai" })).toBe("unsaved · was unassigned");
+  expect(draftNote(rows[4], { mode: "managed", name: "work-openai" })).toBe("unsaved · was unassigned");
 });
 
 it("rolls back to the newest retained revision older than the current one", () => {
@@ -100,5 +100,20 @@ it("gives Cursor its own row, offered Cursor keys only (OS-2017)", () => {
   expect(choices(cursorRow, [openai, cursor])).toEqual([{ mode: "native" }, { mode: "managed", name: "work-cursor" }, { mode: "disabled" }]);
   expect(draftMutations([cursorRow], { "a:cursor": { mode: "native" } }).map(change => change.request)).toEqual([
     { action: "bind", profile: "a", runtime: "cursor", binding: { mode: "native" } },
+  ]);
+});
+
+it("gives Antigravity its own row, offered Gemini keys only (OS-2476)", () => {
+  const gemini = { ...openai, name: "work-gemini", provider: "gemini" };
+  expect(entryRuntimes(gemini)).toEqual(["antigravity"]);
+  expect(providerLabel(gemini)).toBe("Gemini");
+  const desired = { mode: "native" as const, antigravity: { mode: "managed" as const, name: "work-gemini", revision: 3 } };
+  const project = { ...status.projects[0], desired, applied: { mode: "native" as const }, pending: true };
+  const [codexRow, , , antigravityRow] = bindingRows({ ...status, entries: [openai, gemini], projects: [project] }, workers.slice(0, 1));
+  expect(antigravityRow.saved).toEqual({ mode: "managed", name: "work-gemini" });
+  expect([delivery(codexRow), delivery(antigravityRow)]).toEqual(["applied", "pending reconnect · [u] Reload project"]);
+  expect(choices(antigravityRow, [openai, gemini])).toEqual([{ mode: "native" }, { mode: "managed", name: "work-gemini" }, { mode: "disabled" }]);
+  expect(draftMutations([antigravityRow], { "a:antigravity": { mode: "disabled" } }).map(change => change.request)).toEqual([
+    { action: "bind", profile: "a", runtime: "antigravity", binding: { mode: "disabled" } },
   ]);
 });

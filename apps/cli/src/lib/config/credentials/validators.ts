@@ -12,16 +12,16 @@ export const secretSchema = z
 export const awsRegionSchema = z.string().regex(/^[a-z]{2}(-[a-z]+)+-\d{1,2}$/);
 /** A Mantle or Bedrock Runtime entry for Codex or Claude Code (OS-2107); absent = OpenAI. */
 export const awsTargetSchema = z.object({ provider: z.enum(["mantle", "bedrock"]), region: awsRegionSchema }).strict();
-/** An Anthropic API key for Claude Code (OS-2016) or a Cursor account key (OS-2017); absent = OpenAI or the `aws` target. */
-export const entryProviderSchema = z.enum(["anthropic", "cursor"]);
+/** An Anthropic API key for Claude Code (OS-2016), a Cursor account key (OS-2017) or a Gemini API key for Antigravity (OS-2476); absent = OpenAI or the `aws` target. */
+export const entryProviderSchema = z.enum(["anthropic", "cursor", "gemini"]);
 const oneProvider = { message: "An entry has either aws or provider, never both." };
 /** Runtimes with one binding per project; their lists and per-runtime rules derive from it. */
-export const managedRuntimeSchema = z.enum(["codex", "claude-code", "cursor"]);
+export const managedRuntimeSchema = z.enum(["codex", "claude-code", "cursor", "antigravity"]);
 export type ManagedRuntime = z.infer<typeof managedRuntimeSchema>;
 /** Every runtime a managed key can serve, each with a project login; OpenCode binds one key per provider slot (OS-2018). */
 export const keyRuntimeSchema = z.enum([...managedRuntimeSchema.options, "opencode"]);
 export type KeyRuntime = z.infer<typeof keyRuntimeSchema>;
-export const MANAGED_RUNTIME_LABELS: Record<KeyRuntime, string> = { codex: "Codex", "claude-code": "Claude Code", cursor: "Cursor", opencode: "OpenCode" };
+export const MANAGED_RUNTIME_LABELS: Record<KeyRuntime, string> = { codex: "Codex", "claude-code": "Claude Code", cursor: "Cursor", antigravity: "Antigravity", opencode: "OpenCode" };
 const revision = z.object({ revision: z.number().int().positive(), secret: secretSchema, createdAt: z.number().nonnegative() }).strict();
 export const bindingSchema = z.discriminatedUnion("mode", [
   z.object({ mode: z.literal("managed"), name: keyNameSchema }).strict(),
@@ -52,6 +52,8 @@ export const credentialStoreSchema = z
     claudeBindings: z.record(z.string().regex(/^[a-f0-9]{64}$/), bindingSchema).optional(),
     /** Cursor bindings (OS-2017). */
     cursorBindings: z.record(z.string().regex(/^[a-f0-9]{64}$/), bindingSchema).optional(),
+    /** Antigravity bindings (OS-2476). */
+    antigravityBindings: z.record(z.string().regex(/^[a-f0-9]{64}$/), bindingSchema).optional(),
     /** OpenCode key name per provider slot (OS-2018); `{}` disables OpenCode, absent = native login. */
     opencodeBindings: z.record(z.string().regex(/^[a-f0-9]{64}$/), z.object({
       openai: keyNameSchema.optional(), anthropic: keyNameSchema.optional(), "amazon-bedrock": keyNameSchema.optional(),
@@ -59,7 +61,7 @@ export const credentialStoreSchema = z
   })
   .strict()
   .superRefine((s, ctx) => {
-    if ([s.entries, s.bindings, s.claudeBindings ?? {}, s.cursorBindings ?? {}, s.opencodeBindings ?? {}].some((record) => Object.keys(record).length > 128))
+    if ([s.entries, s.bindings, s.claudeBindings ?? {}, s.cursorBindings ?? {}, s.antigravityBindings ?? {}, s.opencodeBindings ?? {}].some((record) => Object.keys(record).length > 128))
       ctx.addIssue({ code: "custom", message: "Credential capacity exceeded" });
     for (const e of Object.values(s.entries))
       if (!e.revisions.some((r) => r.revision === e.current) || new Set(e.revisions.map((r) => r.revision)).size !== e.revisions.length)
@@ -78,15 +80,16 @@ const runtimeAuthDescriptorSchema = z
 const opencodeDescriptorSchema = z.object({
   openai: runtimeAuthDescriptorSchema.optional(), anthropic: runtimeAuthDescriptorSchema.optional(), "amazon-bedrock": runtimeAuthDescriptorSchema.optional(),
 }).strict();
-/** Codex's descriptor, with Claude Code's (OS-2108), Cursor's (OS-2017) and OpenCode's (OS-2018) beside it when bound. */
+/** Codex's descriptor, with Claude Code's (OS-2108), Cursor's (OS-2017), Antigravity's (OS-2476) and OpenCode's (OS-2018) beside it when bound. */
 export const authDescriptorSchema = runtimeAuthDescriptorSchema
-  .extend({ claude: runtimeAuthDescriptorSchema.optional(), cursor: runtimeAuthDescriptorSchema.optional(), opencode: opencodeDescriptorSchema.optional() })
+  .extend({ claude: runtimeAuthDescriptorSchema.optional(), cursor: runtimeAuthDescriptorSchema.optional(), antigravity: runtimeAuthDescriptorSchema.optional(), opencode: opencodeDescriptorSchema.optional() })
   .strict();
 export type AuthDescriptor = z.infer<typeof authDescriptorSchema>;
 const RUNTIME_DESCRIPTORS: Record<ManagedRuntime, (descriptor: AuthDescriptor) => z.infer<typeof runtimeAuthDescriptorSchema> | undefined> = {
-  codex: ({ claude: _claude, cursor: _cursor, opencode: _opencode, ...codex }) => codex,
+  codex: ({ claude: _claude, cursor: _cursor, antigravity: _antigravity, opencode: _opencode, ...codex }) => codex,
   "claude-code": (descriptor) => descriptor.claude,
   cursor: (descriptor) => descriptor.cursor,
+  antigravity: (descriptor) => descriptor.antigravity,
 };
 /** One runtime's part of a descriptor; Codex's is the top level. */
 export const runtimeDescriptor = (runtime: ManagedRuntime, descriptor?: AuthDescriptor) => descriptor && RUNTIME_DESCRIPTORS[runtime](descriptor);
@@ -110,6 +113,9 @@ export const cursorAuthSchema = z.discriminatedUnion("mode", [
   z.object({ mode: z.literal("disabled") }).strict(),
 ]);
 export type CursorAuth = z.infer<typeof cursorAuthSchema>;
+/** Antigravity payload: a Gemini API key or disabled; native login sends none (OS-2476). */
+export const antigravityAuthSchema = cursorAuthSchema;
+export type AntigravityAuth = z.infer<typeof antigravityAuthSchema>;
 /** Providers OpenCode takes one managed key for each: OpenAI and Anthropic API keys (OS-2018), Bedrock Runtime keys (OS-2205). */
 export const opencodeSlotSchema = z.enum(["openai", "anthropic", "amazon-bedrock"]);
 export type OpencodeSlot = z.infer<typeof opencodeSlotSchema>;
