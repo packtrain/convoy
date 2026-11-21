@@ -11,7 +11,7 @@ describe("userPreferences", () => {
       const prefs = await asUser.query(api.users.preferences.get, {});
 
       expect(prefs).toEqual({
-        threadSortBy: "created",
+        threadSortBy: "lastActivity",
         threadCompactLayout: true,
         threadGroupDone: true,
         pullRequestCompactLayout: false,
@@ -50,7 +50,7 @@ describe("userPreferences", () => {
       const prefs = await t.query(api.users.preferences.get, {});
 
       expect(prefs).toEqual({
-        threadSortBy: "created",
+        threadSortBy: "lastActivity",
         threadCompactLayout: true,
         threadGroupDone: true,
         pullRequestCompactLayout: false,
@@ -168,7 +168,7 @@ describe("userPreferences", () => {
           .withIndex("by_user", (q) => q.eq("userId", user._id))
           .unique();
 
-        expect(prefs?.threadSortBy).toBe("created");
+        expect(prefs?.threadSortBy).toBe("lastActivity");
         expect(prefs?.threadCompactLayout).toBe(true);
       });
     });

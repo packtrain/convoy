@@ -3,6 +3,13 @@
 This document defines the user-visible defaults and preferences for the
 project thread list.
 
+## Sort Order
+
+- The thread list defaults to **Last activity** for users without a stored
+  sort preference. "Created" is the other option in the settings menu.
+- A stored sort choice is preserved, and the client fallback shown while
+  preferences load matches the backend default.
+
 ## Layout Density
 
 - The thread list defaults to compact layout for users without a stored layout

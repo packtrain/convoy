@@ -86,7 +86,7 @@ export function useUserPreferences() {
   );
 
   return {
-    threadSortBy: preferences?.threadSortBy ?? "created",
+    threadSortBy: preferences?.threadSortBy ?? "lastActivity",
     threadCompactLayout: preferences?.threadCompactLayout ?? true,
     threadGroupDone: preferences?.threadGroupDone ?? true,
     pullRequestCompactLayout: preferences?.pullRequestCompactLayout ?? false,

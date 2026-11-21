@@ -13,7 +13,7 @@ import { buildPatch } from "../lib/shared/patch";
 import { getPreferencesByUser, insertPreferences, updatePreferences, type UserPreferencesPatch } from "./lib/userPreferencesRepo";
 
 const DEFAULTS = {
-  threadSortBy: "created" as const,
+  threadSortBy: "lastActivity" as const,
   threadCompactLayout: true,
   threadGroupDone: true,
   pullRequestCompactLayout: false,

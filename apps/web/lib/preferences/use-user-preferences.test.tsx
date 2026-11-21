@@ -46,3 +46,17 @@ describe("useUserPreferences setter identity (OS-1581)", () => {
     expect(result.current[key]).toBe(before);
   });
 });
+
+describe("useUserPreferences loading fallback", () => {
+  afterEach(() => {
+    mocks.preferences = {};
+    cleanup();
+  });
+
+  test("sorts threads by last activity while preferences load", () => {
+    mocks.preferences = undefined;
+    const { result } = renderHook(() => useUserPreferences());
+
+    expect(result.current.threadSortBy).toBe("lastActivity");
+  });
+});
