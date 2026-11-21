@@ -22,6 +22,14 @@ Use `cn()` for conditional classes.
 - Status colors: `success`, `warning`, `info` and `destructive` tokens. See
   [frontend development](frontend-development.md#product-ui-principles).
 
+## Inline SVG icons
+
+An inline SVG icon that defines a `mask`, `filter`, gradient or `clipPath`
+builds its `id`s from `useId()`, never a fixed string. Every row of a list
+renders the icon, so a fixed `id` is shared across all of them. Hiding one
+copy then invalidates the rest, and the whole list repaints on each hover.
+`components/icons/icons.test.tsx` checks every icon in that folder.
+
 ## Optimistic updates
 
 The `useTasks` hook wraps mutations with optimistic updates via

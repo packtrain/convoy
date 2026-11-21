@@ -13,7 +13,7 @@ describe("CompactThreadRowContent", () => {
     vi.useRealTimers();
   });
 
-  test("adds other-user attribution before the CLI icon and relative date", () => {
+  test("adds other-user attribution before the relative date and CLI icon", () => {
     vi.useFakeTimers();
     vi.setSystemTime(NOW);
 
@@ -40,6 +40,27 @@ describe("CompactThreadRowContent", () => {
     expect(metadata?.textContent).toBe("Robin Hale5d");
     expect(metadata?.querySelector("svg")).toBeTruthy();
     expect(row?.querySelectorAll("svg")).toHaveLength(1);
+  });
+
+  test("orders the trailing metadata as time, agent, CLI icon", () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(NOW);
+
+    render(
+      <CompactThreadRowContent
+        title="My thread"
+        status="completed"
+        cliType="codex"
+        lastActivityAt={NOW.getTime()}
+        agent={{ name: "Reviewer", color: "blue", isDeleted: false }}
+      />
+    );
+
+    const metadata = screen.getByText("now").parentElement;
+    const tags = Array.from(metadata?.children ?? []).map((child) =>
+      child.textContent === "now" ? "time" : child.tagName.toLowerCase() === "svg" ? "cli" : "agent"
+    );
+    expect(tags).toEqual(["time", "agent", "cli"]);
   });
 
   test("keeps hover actions laid out while an action menu is open", () => {

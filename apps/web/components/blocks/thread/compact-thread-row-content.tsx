@@ -102,14 +102,14 @@ export function CompactThreadRowContent({
           )}
         >
           {userName ? <span className="text-xs text-muted-foreground/70">{userName}</span> : null}
-          {agent ? <ThreadAgentChip agent={agent} compact /> : null}
-          {isCliType(cliType) ? renderCliIcon(cliType, "size-3.5 shrink-0 text-muted-foreground") : null}
           {showStatusLabel ? (
             <span className={cn("text-xs font-medium", THREAD_STATUS_META[status].className)}>
               {THREAD_STATUS_META[status].label}
             </span>
           ) : null}
           <span className="text-xs text-muted-foreground/70">{formatCompactRelativeTime(lastActivityAt)}</span>
+          {agent ? <ThreadAgentChip agent={agent} compact /> : null}
+          {isCliType(cliType) ? renderCliIcon(cliType, "size-3.5 shrink-0 text-muted-foreground") : null}
         </span>
         {actions ? (
           <span className="hidden items-center justify-end gap-1.5 group-hover:flex group-has-[[data-state=open]]:flex [&_*]:transition-none">

@@ -255,11 +255,11 @@ freshness** below for the rule that guarantees it.
     detail header additionally shows a **Shared** badge that copies the link
     (`cli-thread-header.md`).
 - Project sidebar rows promote the done toggle into the row's hover controls:
-  - Compact rows swap their whole trailing metadata cluster — agent avatar,
-    CLI runtime icon and relative time — for a text-only **Done** / **Not
-    done** micro-pill followed by `...`, with a deliberate gap between the
-    controls. Nothing from the resting state survives the swap, so no metadata
-    can sit under the hover controls.
+  - Compact rows swap their whole trailing metadata cluster — relative time,
+    agent avatar (bound threads only) and CLI runtime icon, in that order —
+    for a text-only **Done** / **Not done** micro-pill followed by `...`, with
+    a deliberate gap between the controls. Nothing from the resting state
+    survives the swap, so no metadata can sit under the hover controls.
   - The controls sit inline in the row's trailing column and are never painted
     over the title, which simply truncates against whichever layer is showing.
     The swapped-out layer leaves layout entirely, so a resting row spends no
