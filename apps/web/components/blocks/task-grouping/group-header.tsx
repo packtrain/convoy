@@ -67,6 +67,7 @@ export function GroupAddRow({
   create,
   mobile = false,
   onNavigate,
+  onFocusPrevious,
   style,
 }: {
   group: BoardTaskColumn;
@@ -74,6 +75,7 @@ export function GroupAddRow({
   create: (value: string) => boolean;
   mobile?: boolean;
   onNavigate?: (direction: "prev" | "next") => void;
+  onFocusPrevious?: () => void;
 }) {
   const [value, setValue] = useState("");
   const draft = useRef("");
@@ -101,6 +103,10 @@ export function GroupAddRow({
           if (event.key === "ArrowUp" || event.key === "ArrowDown") {
             event.preventDefault();
             onNavigate?.(event.key === "ArrowUp" ? "prev" : "next");
+          }
+          if (event.key === "Backspace" && value === "" && onFocusPrevious) {
+            event.preventDefault();
+            onFocusPrevious();
           }
           if (event.key === "Enter") {
             event.preventDefault();

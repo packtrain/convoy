@@ -245,6 +245,7 @@ export function useTaskGrouping({
       options?: {
         mobile?: boolean;
         onNavigate?: (id: string, direction: "prev" | "next") => void;
+        onFocusPrevious?: (id: string) => void;
       },
     ) => {
       if (row.kind === "section-add")
@@ -276,6 +277,10 @@ export function useTaskGrouping({
             mobile={options?.mobile}
             onNavigate={(direction) =>
               options?.onNavigate?.(row.clientId, direction)
+            }
+            onFocusPrevious={
+              options?.onFocusPrevious &&
+              (() => options.onFocusPrevious?.(row.clientId))
             }
             create={(value) => {
               const task = createDefaultTaskFromInput(value, {

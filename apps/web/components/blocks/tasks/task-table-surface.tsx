@@ -172,7 +172,8 @@ export function TaskTableSurface({
     (isLoading && (tasks.length === 0 || isViewTransitionLoading));
 
   const navigateRow = controller.navigateRow;
-  const renderGroupRow = useCallback((row: import("@/lib/tasks/types").TaskSectionRow) => grouping?.renderHeader(row, { onNavigate: navigateRow }), [grouping, navigateRow]);
+  const focusPreviousRow = controller.focusPreviousRow;
+  const renderGroupRow = useCallback((row: import("@/lib/tasks/types").TaskSectionRow) => grouping?.renderHeader(row, { onNavigate: navigateRow, onFocusPrevious: focusPreviousRow }), [grouping, navigateRow, focusPreviousRow]);
   const collapseTasks = controller.collapseAll;
   const collapseGroups = grouping?.collapseAll;
   const handleCollapseAll = useCallback(() => {

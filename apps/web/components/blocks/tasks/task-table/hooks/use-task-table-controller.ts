@@ -1370,6 +1370,12 @@ export function useTaskTableController({
     return true;
   }, [navigateGroups, baseFlattenedTasks, setSelectedIds, setLastSelectedId]);
 
+  // Backspace in an empty group "Add task..." input, matching the plain list.
+  const focusPreviousGroupedRow = useCallback((id: string) => {
+    const targetId = navigateGroups?.(baseFlattenedTasks, id, "prev");
+    if (targetId) focusInput(targetId, "end");
+  }, [navigateGroups, baseFlattenedTasks, focusInput]);
+
   // P/A/L/D/M open a picker under the first target row's cell; I assigns at once.
   const [propertyShortcut, setPropertyShortcut] = useState<TaskShortcutPickerRequest | null>(null);
   const closePropertyShortcut = useCallback(() => setPropertyShortcut(null), []);
@@ -1575,6 +1581,7 @@ export function useTaskTableController({
     registerRow,
     focusRequest,
     navigateRow: navigateGroupedRows,
+    focusPreviousRow: focusPreviousGroupedRow,
     rowRefs,
     getAdjacentId,
     getPreviousTaskId,

@@ -973,6 +973,7 @@ These shortcuts apply when the cursor is in a task's name input field.
 - `Backspace` on an empty add-task input moves focus to the previous persisted task input
 - For the top-level add-task input, this focuses the end of the last visible task in the table
 - For nested add-task inputs, this focuses the end of the last visible sibling/subtask before that add-task row
+- For a section or group `Add task...` row, this focuses the end of the previous visible task (the group's last task, or the one above the group header when the group is empty)
 - If no previous task exists, no focus change occurs
 
 **Expected Result:**
@@ -980,6 +981,7 @@ These shortcuts apply when the cursor is in a task's name input field.
 |-------|-------|--------|
 | Top-level add-task | "" | Focus end of last visible task |
 | Nested add-task | "" | Focus end of previous visible sibling/subtask |
+| Section/group add-task | "" | Focus end of previous visible task |
 | Any add-task input | Non-empty | Normal backspace behavior |
 
 ### Tab / Shift + Tab

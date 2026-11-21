@@ -513,6 +513,24 @@ test("group header and creation input dispatch arrow navigation", () => {
   expect(onNavigate).toHaveBeenCalledWith("group-add:owner:alice", "prev");
 });
 
+test("backspace in an empty group creation input focuses the previous task", () => {
+  const { result } = setup([]);
+  const onFocusPrevious = vi.fn();
+  render(
+    result.current.renderHeader(
+      { rowType: "section", clientId: "group-add:owner:alice" },
+      { onFocusPrevious },
+    ),
+  );
+  const input = screen.getByPlaceholderText("Add task...");
+  fireEvent.change(input, { target: { value: "x" } });
+  fireEvent.keyDown(input, { key: "Backspace" });
+  expect(onFocusPrevious).not.toHaveBeenCalled();
+  fireEvent.change(input, { target: { value: "" } });
+  fireEvent.keyDown(input, { key: "Backspace" });
+  expect(onFocusPrevious).toHaveBeenCalledWith("group-add:owner:alice");
+});
+
 
 test("refused group drops explain why and remain consumed", () => {
   mocks.role = ProjectRole.VIEWER;
