@@ -343,7 +343,8 @@ export default function ThreadLayout({
     }
   }, [isViewOnly, navigation, organizationSlug, projectAlias]);
 
-  const { isLoading: profilesLoading, hasProfiles } = useCliProfiles(project?._id);
+  // Catalogs stay subscribed across thread navigation, so a just-opened thread never shows a model slug.
+  const { isLoading: profilesLoading, hasProfiles } = useCliProfiles(project?._id, { withModelCatalogs: true });
   const [suppressedAutoReadThreadId, setSuppressedAutoReadThreadId] = useState<Id<"cliThreads"> | undefined>(undefined);
   const threadListCollapse = useThreadListCollapseState();
 

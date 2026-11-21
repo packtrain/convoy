@@ -52,6 +52,7 @@ describe("QuickThreadDialog focus with the real composer", () => {
   beforeEach(() => {
     queryResults.clear();
     queryResults.set("projects/core:getByAlias", { _id: "project_1", alias: "OS" });
+    queryResults.set("cli/profiles:listRuntimeCatalogs", []);
     queryResults.set("agents/projectAgents:listByProject", []);
   });
 

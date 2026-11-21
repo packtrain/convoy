@@ -25,6 +25,9 @@ export function useCliProfiles(
     options?.withModelCatalogs === true && projectId ? { projectId } : "skip"
   );
 
+  // Hold profiles until their catalogs land, or a stored model flashes as its raw slug.
+  const loadedProfiles = options?.withModelCatalogs === true && catalogs === undefined ? undefined : profiles;
+
   const hydratedProfiles = useMemo(() => {
     if (!catalogs?.length || !profiles) {
       return profiles ?? [];
@@ -36,8 +39,8 @@ export function useCliProfiles(
   }, [profiles, catalogs]);
 
   return {
-    profiles: hydratedProfiles,
-    isLoading: profiles === undefined,
-    hasProfiles: (profiles?.length ?? 0) > 0,
+    profiles: loadedProfiles ? hydratedProfiles : [],
+    isLoading: loadedProfiles === undefined,
+    hasProfiles: (loadedProfiles?.length ?? 0) > 0,
   };
 }

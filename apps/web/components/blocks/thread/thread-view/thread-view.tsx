@@ -20,7 +20,6 @@ import type {
   CliRunDiffSummaryPreview,
 } from "@/convex/lib/contracts/validators";
 import { extractLatestAskUserQuestionResponses } from "@/lib/ai-tools/ask-user-question";
-import { hydrateAvailableClis } from "@/convex/lib/contracts/validators";
 import { cliTypeSupportsSteering } from "@/lib/cli-runtime-ui/registry";
 import { mergeUsageLimits, toContextWindowUsage, toUsageLimitUsage } from "@/lib/cli-stream-ui";
 import { appRoute, href, useNavigation, withProjectTaskAndArchive } from "@/lib/navigation";
@@ -63,6 +62,7 @@ import { ThreadForkDivider, ThreadForkHistory } from "./thread-fork-history";
 import { ThreadMessageList } from "./thread-message-list";
 import { useThreadDetailMessageActions } from "./use-thread-detail-message-actions";
 import { useThreadDetailMessageVisibility } from "./use-thread-detail-message-visibility";
+import { useThreadProfileClis } from "./use-thread-profile-clis";
 
 const ThreadViewComposer = memo(function ThreadViewComposer(
   props: ComponentProps<typeof ThreadComposer>
@@ -191,22 +191,11 @@ export function ThreadView({
     attachments: draft?.attachments,
     save: (attachments) => setDraft({ attachments }),
   });
-  const activeProfile = useQuery(api.cli.profiles.get, {
+  const { activeProfile, activeProfileClis } = useThreadProfileClis({
+    projectId: chat.projectId,
     profileId: chat.profileId,
+    readOnly,
   });
-  // Catalogs are no longer on the profile row (OS-1721); only a composer offers
-  // models, so a read-only viewer never subscribes.
-  const runtimeCatalogs = useQuery(
-    api.cli.profiles.listRuntimeCatalogs,
-    readOnly ? "skip" : { projectId: chat.projectId }
-  );
-  const activeProfileClis = useMemo(
-    () =>
-      activeProfile
-        ? hydrateAvailableClis(activeProfile.availableClis, runtimeCatalogs ?? [], chat.profileId)
-        : undefined,
-    [activeProfile, runtimeCatalogs, chat.profileId]
-  );
   // Runtime slash commands the agent advertised on its last run (empty until
   // the first run reports); offered in the composer's `/` autocomplete, so a
   // read-only viewer (which has no composer) never subscribes.

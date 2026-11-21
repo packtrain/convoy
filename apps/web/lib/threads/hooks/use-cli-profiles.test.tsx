@@ -85,6 +85,21 @@ describe("useCliProfiles", () => {
     expect(result.current.profiles[1]?.availableClis).toEqual([{ type: "opencode", version: "1.17.13" }]);
   });
 
+  // Profiles without their catalog would label a stored model by its raw slug for a frame.
+  test("stays loading until the catalogs resolve when the caller offers models", () => {
+    queryState.calls = [];
+    queryState.profiles = [makeProfile("owned")];
+    queryState.catalogs = undefined;
+
+    const { result } = renderHook(() =>
+      useCliProfiles("project-1" as Id<"projects">, { withModelCatalogs: true })
+    );
+
+    expect(result.current.profiles).toEqual([]);
+    expect(result.current.isLoading).toBe(true);
+    expect(result.current.hasProfiles).toBe(false);
+  });
+
   // Project-scoped, so it does not wait for the profile list to resolve — no
   // serial round trip on composer mount.
   test("subscribes to catalogs before the profile list resolves", () => {
