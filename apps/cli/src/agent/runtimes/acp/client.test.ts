@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from "vitest";
 import { PassThrough } from "node:stream";
-import { createAcpClient } from "./client.js";
+import { createAcpClient, parseAcpConfigOptions } from "./client.js";
 
 function createIo() {
   const stdin = new PassThrough();
@@ -23,7 +23,7 @@ describe("createAcpClient", () => {
     await tick();
     expect(written[0]).toEqual({ jsonrpc: "2.0", id: 1, method: "session/new", params: { cwd: "/repo", mcpServers: [], _meta: { a: 1 } } });
     receive({ jsonrpc: "2.0", id: 1, result: { sessionId: "s-1" } });
-    await expect(opened).resolves.toEqual({ sessionId: "s-1" });
+    await expect(opened).resolves.toEqual({ sessionId: "s-1", configOptions: [] });
 
     const prompted = acp.prompt("s-1", "hi");
     await tick();
@@ -34,6 +34,37 @@ describe("createAcpClient", () => {
     acp.cancel("s-1");
     await tick();
     expect(written[2]).toEqual({ jsonrpc: "2.0", method: "session/cancel", params: { sessionId: "s-1" } });
+  });
+
+  it("sets a config option and reads back the updated options", async () => {
+    const { io, written, receive } = createIo();
+    const acp = createAcpClient(io, { onSessionUpdate: vi.fn(), onRequestPermission: vi.fn() }, "Agent");
+
+    const set = acp.setConfigOption("s-1", "model", "gemini-3.8-flash");
+    await tick();
+    expect(written[0]).toMatchObject({ method: "session/set_config_option", params: { sessionId: "s-1", configId: "model", value: "gemini-3.8-flash" } });
+    receive({
+      jsonrpc: "2.0",
+      id: 1,
+      result: { configOptions: [{ id: "thought_level", category: "thought_level", type: "select", currentValue: "medium", options: [{ value: "low", name: "Low" }] }] },
+    });
+    await expect(set).resolves.toEqual([{ id: "thought_level", category: "thought_level", currentValue: "medium", options: [{ value: "low", name: "Low" }] }]);
+  });
+
+  it("flattens grouped config choices and skips malformed options", () => {
+    expect(
+      parseAcpConfigOptions([
+        {
+          id: "model",
+          category: "model",
+          type: "select",
+          options: [{ group: "g", name: "Gemini", options: [{ value: "gemini-4-neon", name: "Gemini 4 Neon" }, { value: "" }] }, { value: "plain" }],
+        },
+        { id: "toggle", type: "boolean", currentValue: true },
+        { type: "select", options: [] },
+      ])
+    ).toEqual([{ id: "model", category: "model", options: [{ value: "gemini-4-neon", name: "Gemini 4 Neon" }, { value: "plain", name: "plain" }] }]);
+    expect(parseAcpConfigOptions(undefined)).toEqual([]);
   });
 
   it("routes session updates and permission requests, and refuses other agent requests", async () => {

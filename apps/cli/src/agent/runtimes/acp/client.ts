@@ -38,6 +38,39 @@ export type AcpPermissionReply = {
   outcome: { outcome: "selected"; optionId: string } | { outcome: "cancelled" };
 };
 
+/** A `select` session config option (model, thought level, mode), with grouped choices flattened. */
+export interface AcpConfigOption {
+  id: string;
+  category?: string;
+  currentValue?: string;
+  options: Array<{ value: string; name: string }>;
+}
+
+/** Keeps well-formed select options; choices nested in `{ group, options }` are flattened. */
+export function parseAcpConfigOptions(value: unknown): AcpConfigOption[] {
+  if (!Array.isArray(value)) return [];
+  const toChoices = (entries: unknown): AcpConfigOption["options"] =>
+    Array.isArray(entries)
+      ? entries.flatMap((entry) => {
+          if (!isRecord(entry)) return [];
+          if (Array.isArray(entry.options)) return toChoices(entry.options);
+          if (typeof entry.value !== "string" || !entry.value) return [];
+          return [{ value: entry.value, name: typeof entry.name === "string" && entry.name ? entry.name : entry.value }];
+        })
+      : [];
+  return value.flatMap((option) => {
+    if (!isRecord(option) || typeof option.id !== "string" || option.type !== "select") return [];
+    return [
+      {
+        id: option.id,
+        ...(typeof option.category === "string" ? { category: option.category } : {}),
+        ...(typeof option.currentValue === "string" ? { currentValue: option.currentValue } : {}),
+        options: toChoices(option.options),
+      },
+    ];
+  });
+}
+
 export const ACP_PERMISSION_CANCELLED: AcpPermissionReply = { outcome: { outcome: "cancelled" } };
 
 /** Null when the tool call id is missing or an option id is empty or repeated. */
@@ -71,8 +104,10 @@ export interface AcpClientHandlers {
 export interface AcpClient {
   initialize(clientCapabilities: Record<string, unknown>): Promise<AcpInitializeResult>;
   authenticate(methodId: string): Promise<void>;
-  newSession(params: { cwd: string; _meta?: Record<string, unknown> }): Promise<{ sessionId: string }>;
-  resumeSession(params: { sessionId: string; cwd: string; _meta?: Record<string, unknown> }): Promise<void>;
+  newSession(params: { cwd: string; _meta?: Record<string, unknown> }): Promise<{ sessionId: string; configOptions: AcpConfigOption[] }>;
+  resumeSession(params: { sessionId: string; cwd: string; _meta?: Record<string, unknown> }): Promise<{ configOptions: AcpConfigOption[] }>;
+  /** Resolves with the session's updated config options. */
+  setConfigOption(sessionId: string, configId: string, value: string): Promise<AcpConfigOption[]>;
   prompt(sessionId: string, text: string): Promise<AcpPromptResult>;
   cancel(sessionId: string): void;
   close(reason?: string): void;
@@ -110,10 +145,15 @@ export function createAcpClient(
       const result = await rpc.request("session/new", { cwd, mcpServers: [], ...(_meta ? { _meta } : {}) });
       const sessionId = isRecord(result) && typeof result.sessionId === "string" ? result.sessionId : "";
       if (!sessionId) throw new Error(`${label} did not return a session id`);
-      return { sessionId };
+      return { sessionId, configOptions: parseAcpConfigOptions(isRecord(result) ? result.configOptions : undefined) };
     },
     async resumeSession({ sessionId, cwd, _meta }) {
-      await rpc.request("session/resume", { sessionId, cwd, mcpServers: [], ...(_meta ? { _meta } : {}) });
+      const result = await rpc.request("session/resume", { sessionId, cwd, mcpServers: [], ...(_meta ? { _meta } : {}) });
+      return { configOptions: parseAcpConfigOptions(isRecord(result) ? result.configOptions : undefined) };
+    },
+    async setConfigOption(sessionId, configId, value) {
+      const result = await rpc.request("session/set_config_option", { sessionId, configId, value });
+      return parseAcpConfigOptions(isRecord(result) ? result.configOptions : undefined);
     },
     async prompt(sessionId, text) {
       const result = await rpc.request("session/prompt", { sessionId, prompt: [{ type: "text", text }] });

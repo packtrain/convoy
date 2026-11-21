@@ -8,16 +8,23 @@ This document specifies Claude Code model selection behavior for CLI thread comp
   - `/threads` new-thread composer
   - `/threads/[threadId]` thread detail composer
 - Runtime-specific model options remain owned by each CLI runtime.
-- OpenCode's model catalog is **dynamic** (advertised per machine, persisted per profile) — see "OpenCode dynamic models" below and `docs/specs/cli-opencode-runtime.md`.
+- OpenCode's and Antigravity's model catalogs are **dynamic** (advertised per machine, persisted per profile) — see "OpenCode dynamic models" and "Antigravity dynamic models" below, `docs/specs/cli-opencode-runtime.md` and `docs/specs/cli-antigravity-runtime.md`.
 
 ## OpenCode dynamic models
 
 - Options come from the selected profile's advertised catalog: the `default` slot plus every advertised `providerID/modelID` model (labels are the advertised model names).
-- The catalog is stored per profile + runtime in `cliRuntimeCatalogs` and read by its own subscription, not carried on `availableClis` (OS-1721). Consumers opt in with `useCliProfiles(projectId, { withModelCatalogs: true })` and re-attach it via `hydrateAvailableClis`; a catalog that has not loaded yet reads as "no models advertised" — the `default` slot only, with remembered selections preserved.
+- The catalog is stored per profile + runtime in `cliRuntimeCatalogs` and read by its own subscription, not carried on `availableClis` (OS-1721). Consumers opt in with `useCliProfiles(projectId, { withModelCatalogs: true })` and re-attach it via `hydrateAvailableClis`; the hook reports its profiles as loading until the catalogs resolve too, so a stored model never renders as its raw slug for a frame before its name arrives.
 - `availableClis` keeps `models` in its **validator** even though nothing writes it any more: the same validator types `cli.sessions.register`'s argument, and published CLIs still send catalogs. Narrowing the stored shape therefore requires moving the split into the HTTP parser first, or the registration of every older CLI fails argument validation.
 - Runtime presence still comes from `availableClis` (freshest online session) → the profile's `lastKnownClis` snapshot (an empty detection never overwrites it), which is what keeps an offline machine selectable.
 - Stored values are `default` or a `provider/model` slug; anything else normalizes away. A stored slug that is no longer advertised still resolves to a labeled option (label = model id segment) and runs as-is — OpenCode reports the error if the model is truly gone.
 - `default` omits the model from the prompt; OpenCode uses the machine's configured default.
+
+## Antigravity dynamic models
+
+- The second dynamic catalog, on the same storage, subscription and hydration as OpenCode's. The runtimes with a catalog are listed once in `CATALOG_CLI_RUNTIME_SLUGS` (`convex/cli/lib/runtimes/contracts.ts`), which the registry, `splitAdvertisedCatalogs` and `hydrateAvailableClis` all read.
+- Options: the `default` slot plus every model the account offers on that machine, labeled with agy's names, in agy's order. agy 1.5.13 sends no option groups, so the list is flat.
+- Stored values are `default` or an agy model id. A stored id that is no longer advertised still resolves to a labeled option (label = the id) and runs as-is, and agy fails the run with `Unknown model ID` if the model is truly gone.
+- `default` sends no model; agy uses the account default.
 
 ## Related Specs
 

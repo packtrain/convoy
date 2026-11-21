@@ -78,6 +78,23 @@ describe("advertised catalog projections", () => {
 
   // Callers batch catalogs for several profiles in one query, so scoping belongs
   // here rather than in a filter each of them has to remember.
+  // Antigravity is the second dynamic catalog (OS-2470): same split, same three states.
+  test("splits and hydrates an Antigravity catalog like OpenCode's", () => {
+    const models = [{ slug: "gemini-3.8-flash", name: "Gemini 3.8 Flash", variants: ["low", "high"] }];
+    expect(splitAdvertisedCatalogs([{ type: "antigravity", version: "1.5.13", models }])).toEqual({
+      runtimes: [{ type: "antigravity", version: "1.5.13" }],
+      catalogs: [{ cliType: "antigravity", models }],
+    });
+    expect(splitAdvertisedCatalogs([{ type: "antigravity", version: "1.5.13" }]).catalogs).toEqual([{ cliType: "antigravity" }]);
+    expect(
+      hydrateAvailableClis(
+        [{ type: "antigravity", version: "1.5.13" }],
+        [{ profileId: PROFILE, cliType: "antigravity", models }],
+        PROFILE,
+      ),
+    ).toEqual([{ type: "antigravity", version: "1.5.13", models }]);
+  });
+
   test("hydration ignores catalogs belonging to another profile", () => {
     expect(
       hydrateAvailableClis(

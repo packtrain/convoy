@@ -1,13 +1,12 @@
 import { v } from "convex/values";
+import { cliCatalogModelValidator } from "../shared/validators";
 
 export const opencodeAdvertisedModelValidator = v.object({
-  slug: v.string(),
-  name: v.string(),
+  ...cliCatalogModelValidator.fields,
   // Optional only so documents written before OS-1721 still validate; nothing
   // reads or writes them — the slug is `providerID/modelID`.
   providerID: v.optional(v.string()),
   modelID: v.optional(v.string()),
-  variants: v.optional(v.array(v.string())),
 });
 
 export const availableOpencodeCliValidator = v.object({

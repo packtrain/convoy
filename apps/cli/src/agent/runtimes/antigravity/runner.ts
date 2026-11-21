@@ -1,7 +1,5 @@
 import { spawn, type ChildProcess } from "node:child_process";
 import { isRecord } from "../../sdk/adapters/adapter-interface.js";
-import { ENV_THREAD_ID } from "../../../lib/constants.js";
-import { withoutClaudeProviderEnv } from "../../../lib/config/provider-keys.js";
 import {
   RunnerExecutionError,
   type CliRuntimeRunner,
@@ -11,9 +9,9 @@ import {
 } from "../contracts.js";
 import { getDebugLevel } from "../debug.js";
 import { threadIdentityInstruction } from "../agent-instructions.js";
-import { ACP_AUTH_REQUIRED_CODE, createAcpClient, type AcpClient } from "../acp/client.js";
+import { ACP_AUTH_REQUIRED_CODE, createAcpClient, type AcpClient, type AcpConfigOption } from "../acp/client.js";
 import { JsonRpcError } from "../json-rpc.js";
-import { resolveAntigravityExecutablePath } from "./detect.js";
+import { buildAntigravitySubprocessEnv, killProcessGroup, resolveAntigravityExecutablePath } from "./detect.js";
 import { createAntigravityInteractions } from "./interactions.js";
 import { compactToolUpdate } from "./streaming.js";
 
@@ -41,27 +39,6 @@ function debugLog(kind: string, payload: string): void {
   if (getDebugLevel() >= 1) console.log(`[Antigravity:${kind}] ${payload.slice(0, 400)}`);
 }
 
-/** agy runs as a launcher around a native binary; signal the whole group. */
-function killProcessGroup(child: ChildProcess, signal: NodeJS.Signals): void {
-  if (process.platform !== "win32" && typeof child.pid === "number") {
-    try {
-      process.kill(-child.pid, signal);
-      return;
-    } catch {
-      // Group already gone; fall through.
-    }
-  }
-  child.kill(signal);
-}
-
-export function buildAntigravitySubprocessEnv(threadId: string): NodeJS.ProcessEnv {
-  const env = withoutClaudeProviderEnv(process.env);
-  delete env.CONVOY_API_KEY;
-  env[ENV_THREAD_ID] = threadId;
-  env.AGY_CLI_DISABLE_AUTO_UPDATE = "1";
-  return env;
-}
-
 function systemAppend(options: RunnerExecutionOptions): string {
   return [options.agentPrompt, threadIdentityInstruction(options.threadId), options.workspaceNotice]
     .filter((part): part is string => typeof part === "string" && part.length > 0)
@@ -74,11 +51,11 @@ async function openSession(
   workingDirectory: string,
   options: RunnerExecutionOptions,
   meta: Record<string, unknown> | undefined
-): Promise<string> {
+): Promise<{ sessionId: string; configOptions: AcpConfigOption[] }> {
   const open = async () => {
-    if (!options.continuationId) return (await acp.newSession({ cwd: workingDirectory, _meta: meta })).sessionId;
-    await acp.resumeSession({ sessionId: options.continuationId, cwd: workingDirectory, _meta: meta });
-    return options.continuationId;
+    if (!options.continuationId) return acp.newSession({ cwd: workingDirectory, _meta: meta });
+    const { configOptions } = await acp.resumeSession({ sessionId: options.continuationId, cwd: workingDirectory, _meta: meta });
+    return { sessionId: options.continuationId, configOptions };
   };
   try {
     return await open();
@@ -90,6 +67,29 @@ async function openSession(
     return await open();
   } catch {
     throw new RunnerExecutionError(ANTIGRAVITY_SIGN_IN_MESSAGE, { continuationId: options.continuationId });
+  }
+}
+
+/**
+ * Applies the thread's model, then its thinking level when the model offers it. Runs on
+ * every new and resumed session, since `session/resume` comes back on the account default.
+ * A value agy refuses rejects with agy's message and fails the run.
+ */
+export async function applyModelSelection(
+  acp: Pick<AcpClient, "setConfigOption">,
+  sessionId: string,
+  configOptions: AcpConfigOption[],
+  options: Pick<RunnerExecutionOptions, "resolvedCliModel" | "resolvedCliEffort">
+): Promise<void> {
+  let current = configOptions;
+  if (options.resolvedCliModel) {
+    const modelId = current.find((option) => option.category === "model")?.id ?? "model";
+    current = await acp.setConfigOption(sessionId, modelId, options.resolvedCliModel);
+  }
+  const effort = options.resolvedCliEffort;
+  const level = current.find((option) => option.category === "thought_level");
+  if (effort && level?.options.some((choice) => choice.value === effort) && level.currentValue !== effort) {
+    await acp.setConfigOption(sessionId, level.id, effort);
   }
 }
 
@@ -233,11 +233,13 @@ export function createAntigravityRunner(factoryOptions: { partialStreaming?: boo
         const append = systemAppend(options);
         const meta = isRecord(initialized.agentCapabilities?._meta) ? initialized.agentCapabilities._meta : {};
         const canAppend = isRecord(meta.antigravity) && isRecord(meta.antigravity.systemPrompt) && meta.antigravity.systemPrompt.append === true;
-        sessionId = await openSession(acp, workingDirectory, options, canAppend ? { antigravity: { systemPrompt: { append } } } : undefined);
+        const opened = await openSession(acp, workingDirectory, options, canAppend ? { antigravity: { systemPrompt: { append } } } : undefined);
+        sessionId = opened.sessionId;
         yield {
           type: "convoy/acp_session",
           data: JSON.stringify({ sessionId, agentVersion: initialized.agentInfo?.version ?? null }),
         };
+        await applyModelSelection(acp, sessionId, opened.configOptions, options);
 
         if (aborted) throw fail("Antigravity run aborted");
         const openedSession = sessionId;

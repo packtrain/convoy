@@ -289,10 +289,10 @@ export interface PreparedRuntimeExecution {
 }
 
 export interface DetectedCliModel {
-  /** `providerID/modelID` run slug — readers split it, so neither part is sent separately. */
+  /** Run value: OpenCode's `providerID/modelID` slug or an agy model id. */
   slug: string;
   name: string;
-  /** Variant keys (provider-specific reasoning effort) for a future picker. */
+  /** Per-model effort values: OpenCode variants, agy thinking levels. */
   variants?: string[];
 }
 
@@ -302,7 +302,7 @@ export interface DetectedCli {
   provider?: string;
   /** AWS Region of an assigned Codex provider (OS-2105). */
   region?: string;
-  /** Dynamic model inventory (OpenCode advertises connected-provider models). */
+  /** Dynamic model inventory (OpenCode, Antigravity). */
   models?: DetectedCliModel[];
   defaultModel?: string;
 }

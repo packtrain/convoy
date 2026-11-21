@@ -73,6 +73,8 @@ describe("parseRegisterAvailableClis", () => {
     // 0.151.0 ignores Ask to approve and would run it with permissions skipped (OS-2469).
     expect(types("0.151.0")).toEqual(["codex"]);
     expect(types(undefined)).toEqual(["codex"]);
-    expect(types("0.152.0")).toEqual(["codex", "antigravity"]);
+    // 0.152.x ignores the selected model and thinking level (OS-2470).
+    expect(types("0.152.1")).toEqual(["codex"]);
+    expect(types("0.153.0")).toEqual(["codex", "antigravity"]);
   });
 });

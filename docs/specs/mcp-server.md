@@ -1273,9 +1273,10 @@ entry per profile the caller owns in the project:
 - `availableClis` — `{ type, version, provider?, cliModels? }` per runtime the
   connected CLI advertises; `type` is the `cliType` argument for thread creation.
   `cliModels` is `{ model, efforts? }[]`: the `cliModel` values that runtime accepts
-  on that machine (opencode slugs, Claude slots), each with the `cliEffort` values
-  valid for it — opencode efforts are per-model variants, so this is the only place
-  an agent can discover them. Display labels are omitted (an opencode catalog is
+  on that machine (OpenCode slugs, Antigravity model ids, Claude slots), each with the
+  `cliEffort` values valid for it. OpenCode efforts are per-model variants and
+  Antigravity's are per-model thinking levels, so this is the only place an agent can
+  discover them. Display labels are omitted (an opencode catalog is
   tens of KB — OS-1721). Omitting `cliModel`/`cliEffort` runs the runtime's defaults
 - `paths` — `{ pathId, path, label, gitRemoteUrl?, kind?, parentPathId?,
   branch? }`; `pathId` is the `pathId` argument, and `kind: "worktree"`

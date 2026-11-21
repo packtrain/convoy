@@ -8,9 +8,9 @@ import { v, type Infer } from "convex/values";
 import type { Id } from "../../_generated/dataModel";
 import { Status } from "../../../lib/tasks/status";
 import { Priority } from "../../../lib/tasks/priority";
-import type { CliRuntimeSlug as RuntimeCliType } from "../../cli/lib/runtimes/contracts";
+import { isCatalogCliType, type CatalogCliRuntimeSlug, type CliRuntimeSlug as RuntimeCliType } from "../../cli/lib/runtimes/contracts";
 import { availableCliValidator, availableGenericCliValidator, cliTypeValidator } from "../../cli/lib/runtimes/validators";
-import type { OpencodeAdvertisedModel } from "../../cli/lib/runtimes/opencode/contracts";
+import { cliCatalogModelValidator, type CliCatalogModel } from "../../cli/lib/runtimes/shared/validators";
 // Type-only: the validator itself stays in the cli domain, since importing it as a
 // value here would close a cycle through the runtime registry.
 import type { CliRuntimeCatalog } from "../../cli/lib/validators";
@@ -134,17 +134,9 @@ export type CliEffort = Infer<typeof cliEffortValidator>;
 
 export { availableGenericCliValidator, availableCliValidator };
 
-/**
- * A model in a stored catalog row (`cliRuntimeCatalogs`): the slug the run needs,
- * the label the picker shows, and the per-model effort variants. Deliberately not
- * `opencodeAdvertisedModelValidator`, whose `providerID`/`modelID` optionals exist
- * only for hot-row documents written before OS-1721.
- */
-export const cliCatalogModelValidator = v.object({
-  slug: v.string(),
-  name: v.string(),
-  variants: v.optional(v.array(v.string())),
-});
+// The stored catalog row's model shape. Not `opencodeAdvertisedModelValidator`, whose
+// `providerID`/`modelID` optionals exist only for hot-row documents written before OS-1721.
+export { cliCatalogModelValidator };
 export type AvailableCli = RuntimeAvailableCli;
 
 /**
@@ -165,7 +157,7 @@ export const cliRuntimeSummaryValidator = v.object({
     v.array(
       v.object({
         model: v.string(),
-        /** The model's `cliEffort` values; opencode efforts are per-model variants. */
+        /** The model's `cliEffort` values; OpenCode and Antigravity efforts are per-model variants. */
         efforts: v.optional(v.array(v.string())),
       })
     )
@@ -173,7 +165,7 @@ export const cliRuntimeSummaryValidator = v.object({
 });
 export type CliRuntimeSummary = Infer<typeof cliRuntimeSummaryValidator>;
 
-/** The `cliModel`/`cliEffort` values an advertised catalog offers: opencode slugs, Claude slots. */
+/** The `cliModel`/`cliEffort` values an advertised catalog offers: OpenCode and Antigravity slugs, Claude slots. */
 function toCliModelValues(cli: AvailableCli): CliRuntimeSummary["cliModels"] {
   if (!("models" in cli) || !cli.models) {
     return undefined;
@@ -212,13 +204,19 @@ export function toRuntimeSummaries(
  */
 export type CliAdvertisedCatalog = {
   cliType: CliType;
-  models?: OpencodeAdvertisedModel[];
+  models?: CliCatalogModel[];
 };
+
+type CatalogAvailableCli = Extract<AvailableCli, { type: CatalogCliRuntimeSlug }>;
+
+function isCatalogCli(cli: AvailableCli): cli is CatalogAvailableCli {
+  return isCatalogCliType(cli.type);
+}
 
 /**
  * Split a registration's advertised runtimes into what the session/profile rows
  * keep and what the catalog table takes (OS-1721). Claude's `models` and
- * opencode's `defaultModel` are dropped: nothing reads them.
+ * OpenCode's `defaultModel` are dropped: nothing reads them.
  */
 export function splitAdvertisedCatalogs(
   clis: readonly AvailableCli[],
@@ -227,7 +225,7 @@ export function splitAdvertisedCatalogs(
   const catalogs: CliAdvertisedCatalog[] = [];
 
   for (const cli of clis) {
-    if (cli.type === "opencode") {
+    if (isCatalogCli(cli)) {
       runtimes.push({ type: cli.type, version: cli.version });
       catalogs.push(cli.models ? { cliType: cli.type, models: cli.models } : { cliType: cli.type });
       continue;
@@ -258,7 +256,7 @@ export function hydrateAvailableClis(
   profileId: Id<"cliProfiles">,
 ): AvailableCli[] {
   return runtimes.map((cli) => {
-    if (cli.type !== "opencode") {
+    if (!isCatalogCli(cli)) {
       return cli;
     }
     const catalog = catalogs.find((entry) => entry.profileId === profileId && entry.cliType === cli.type);

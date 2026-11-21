@@ -10,6 +10,7 @@ import type {
 import { isRecord } from "@/lib/type-guards";
 import {
   CLI_RUNTIME_SLUGS,
+  isCatalogCliType,
   type CliRuntimeEffortOption,
   type CliRuntimeModel,
   type CliRuntimeModelOption,
@@ -21,6 +22,7 @@ import {
 import type { ClaudeCodeAvailableCli } from "./claudeCode/contracts";
 import type { CodexAvailableCli } from "./codex/validators";
 import type { RuntimeSlashCommand } from "./validators";
+import type { AntigravityAvailableCli } from "./antigravity/validators";
 import { antigravityRuntime } from "./antigravity/runtime";
 import { claudeCodeRuntime } from "./claudeCode/runtime";
 import { codexRuntime } from "./codex/runtime";
@@ -30,7 +32,7 @@ import { opencodeRuntime } from "./opencode/runtime";
 export {
   MAX_STORED_CATALOG_MODELS,
   MAX_STORED_CATALOG_VARIANTS,
-} from "./opencode/parseAvailableCli";
+} from "./shared/validators";
 import { createGenericCliRuntime } from "./shared/genericRuntime";
 import { failure } from "./shared/parsing";
 
@@ -38,6 +40,7 @@ export type CliRuntimeAvailableCli =
   | ClaudeCodeAvailableCli
   | CodexAvailableCli
   | OpencodeAvailableCli
+  | AntigravityAvailableCli
   | GenericAvailableCli;
 
 /**
@@ -65,11 +68,6 @@ export type CliRuntimeDefinition = {
    * forever. Spec: `docs/specs/cli-runtime-commands.md`.
    */
   supportsFirstMessageRuntimeCommand?: boolean;
-  /**
-   * Whether this runtime advertises a per-machine model catalog, stored in
-   * `cliRuntimeCatalogs` (OS-1721). Readers skip a lookup that could only miss.
-   */
-  advertisesModelCatalog?: boolean;
   /** Oldest @useconvoy/cli that runs this runtime safely; older CLIs register without it. */
   minAppVersion?: string;
   parseAvailableCli: (
@@ -222,9 +220,9 @@ export function parseAvailableCli(
   return getCliRuntime(cli.type).parseAvailableCli(cli, cli.version);
 }
 
-/** Whether this runtime can have a stored catalog at all (OS-1721). */
+/** Whether this runtime can have a stored catalog at all, so readers skip a lookup that could only miss (OS-1721). */
 export function cliTypeAdvertisesModelCatalog(cliType: CliRuntimeSlug): boolean {
-  return getCliRuntime(cliType).advertisesModelCatalog === true;
+  return isCatalogCliType(cliType);
 }
 
 export function normalizeCliModelForStorage(args: {

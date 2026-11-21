@@ -34,8 +34,9 @@ A backend runtime definition may set `minAppVersion`. Registration then drops
 that runtime from `availableClis` when the CLI is older, so the machine stays
 connected but cannot be offered threads of that runtime. Use it when an older
 CLI would run the runtime unsafely, not merely with fewer features.
-Antigravity sets `0.152.0`: 0.151.0 ignores Ask to approve and skips every
-permission (OS-2469).
+Antigravity sets `0.153.0`: 0.151.0 ignores Ask to approve and skips every
+permission (OS-2469), and 0.152.x ignores the thread's model and thinking level,
+so it would run on agy's default model while the thread shows another (OS-2470).
 
 ## CLI handling
 

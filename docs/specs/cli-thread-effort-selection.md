@@ -19,6 +19,7 @@ Effort slots are registry-owned (`apps/web/convex/cli/lib/runtimes/`), provider-
 | `claude-code` | `default`, `low`, `medium`, `high`, `xhigh`, `ultracode` | Agent SDK `effort` query option (`max` intentionally omitted — model-dependent); `ultracode` sends `effort: "xhigh"` plus `ultracode: true` in the `--settings` JSON (see below) |
 | `codex` | `default`, `low`, `medium`, `high`, `xhigh`; GPT-6.2 Astra, 6.2 Sol, GPT-6 Astra, 6.1 Sol, and GPT-6 Sol also offer `max`, `ultra`; GPT-6 Luna also offers `max` | `codex exec -c model_reasoning_effort="<value>"` or app-server `effort` |
 | `opencode` | **dynamic per model**: `default` + the selected advertised model's variant keys | `promptAsync({ variant })` |
+| `antigravity` | **dynamic per model**: `default` + the selected advertised model's thinking levels (`low`, `medium`, `high`, `xhigh` on 1.5.13) | ACP `session/set_config_option` on the `thought_level` option (see `docs/specs/cli-antigravity-runtime.md`) |
 | `cursor` | **dynamic per model**: `default` + the selected model's tiers (see `docs/specs/cli-cursor-runtime.md`) | `--model` name suffix |
 | all others | none | selector hidden |
 
@@ -37,9 +38,10 @@ Effort slots are registry-owned (`apps/web/convex/cli/lib/runtimes/`), provider-
 - Run resolution without a model uses the base catalog, so it never sends GPT-6-only efforts to an unknown configured model.
 - See `docs/specs/cli-codex-runtime.md` for the catalog sources and transport mapping.
 
-### Dynamic catalogs (OpenCode variants, Cursor tiers)
+### Dynamic catalogs (OpenCode variants, Antigravity thinking levels, Cursor tiers)
 
 - Effort hooks accept an optional context (`{ cliModel, availableClis }`); static catalogs ignore it.
+- Antigravity follows every OpenCode rule below, reading the selected model's advertised thinking levels where OpenCode reads variants. agy is the authority for an unadvertised model, and the runner sets a passed-through level only when agy offers it for that model.
 - OpenCode's Reasoning section appears only when the active runtime's selected model is a concretely advertised model with variants — the `default` model slot and variant-less models show no section. Cursor's appears only for models with tiers.
 - **Validation is context-dependent, and applies at all three points** (support check, option build, run resolution) — a dynamic runtime's `isSupportedEffort` honors the context it is given (OS-1466):
   - **With a model context**, the value must be one the model offers, so a stale effort left over from a model switch is rejected rather than preselected in the pills. OpenCode reads the model's advertised variants; Cursor reads the model's tier list.

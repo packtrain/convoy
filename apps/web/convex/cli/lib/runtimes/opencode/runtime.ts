@@ -34,7 +34,6 @@ import { extractOpencodeCostUsage } from "./costUsage";
 export const opencodeRuntime: CliRuntimeDefinition = {
   type: "opencode",
   label: "OpenCode",
-  advertisesModelCatalog: true,
   parseAvailableCli: (
     cli: Record<string, unknown>,
     version: string,

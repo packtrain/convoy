@@ -22,11 +22,18 @@ export const GENERIC_CLI_RUNTIME_SLUGS = [
   "droid",
   "cursor",
   "gemini",
-  "antigravity",
   "coderabbit",
   "github-copilot",
   "other",
 ] as const;
+
+/** Runtimes that advertise a per-machine model catalog, stored in `cliRuntimeCatalogs` (OS-1721). */
+export const CATALOG_CLI_RUNTIME_SLUGS = ["opencode", "antigravity"] as const;
+export type CatalogCliRuntimeSlug = (typeof CATALOG_CLI_RUNTIME_SLUGS)[number];
+
+export function isCatalogCliType(cliType: string): cliType is CatalogCliRuntimeSlug {
+  return (CATALOG_CLI_RUNTIME_SLUGS as readonly string[]).includes(cliType);
+}
 
 export type GenericCliRuntimeSlug = (typeof GENERIC_CLI_RUNTIME_SLUGS)[number];
 

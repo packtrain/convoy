@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { chmodSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { chmodSync, existsSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { tmpdir } from "node:os";
 import { RunnerExecutionError, type ContentChunk } from "../contracts.js";
@@ -19,6 +19,15 @@ const send = (msg) => process.stdout.write(JSON.stringify({ jsonrpc: "2.0", ...m
 const update = (sessionId, u) => send({ method: "session/update", params: { sessionId, update: u } });
 let promptId = null;
 let session = null;
+// agy 1.5.13 advertises thinking levels only for the selected model.
+const CATALOG = { "gemini-3.8-flash": { name: "Gemini 3.8 Flash", levels: ["low", "medium", "high"] }, "gpt-oss-120b-medium": { name: "GPT-OSS 120B (Medium)", levels: [] } };
+let model = "gemini-3.8-flash";
+let level = "high";
+const config = () => [
+  { id: "model", name: "Model", category: "model", type: "select", currentValue: model, options: Object.entries(CATALOG).map(([value, m]) => ({ value, name: m.name })) },
+  ...(CATALOG[model].levels.length ? [{ id: "thought_level", category: "thought_level", type: "select", currentValue: level, options: CATALOG[model].levels.map((value) => ({ value, name: value })) }] : []),
+  { id: "mode", category: "mode", type: "select", currentValue: "default", options: [{ value: "default", name: "Default" }] },
+];
 const tool = { toolCallId: "call_1", name: "run_command", args: { CommandLine: "ls" }, kind: "execute", title: "ls", rawInput: { CommandLine: "ls" } };
 readline.createInterface({ input: process.stdin }).on("line", (line) => {
   const msg = JSON.parse(line);
@@ -31,10 +40,27 @@ readline.createInterface({ input: process.stdin }).on("line", (line) => {
   if (msg.method === "session/new") {
     if (behavior === "signed-out") return send({ id: msg.id, error: { code: -32000, message: "Authentication required" } });
     session = "sess-1";
-    return send({ id: msg.id, result: { sessionId: session } });
+    if (process.env.FAKE_SESSION_FILES) {
+      const root = process.env.HOME + "/.gemini/antigravity-cli";
+      fs.mkdirSync(root + "/conversations", { recursive: true });
+      fs.mkdirSync(root + "/brain/" + session, { recursive: true });
+      fs.writeFileSync(root + "/conversations/" + session + ".db", "");
+    }
+    return send({ id: msg.id, result: { sessionId: session, configOptions: config() } });
+  }
+  if (msg.method === "session/set_config_option") {
+    const { configId, value } = msg.params;
+    if (configId === "model") {
+      if (!CATALOG[value]) return send({ id: msg.id, error: { code: -32602, message: "Unknown model ID: " + value } });
+      model = value;
+    } else if (configId === "thought_level") {
+      if (!CATALOG[model].levels.includes(value)) return send({ id: msg.id, error: { code: -32602, message: "Thinking level not offered" } });
+      level = value;
+    }
+    return send({ id: msg.id, result: { configOptions: config() } });
   }
   if (msg.method === "authenticate") return send({ id: msg.id, error: { code: -32603, message: "No browser is available here" } });
-  if (msg.method === "session/resume") { session = msg.params.sessionId; return send({ id: msg.id, result: {} }); }
+  if (msg.method === "session/resume") { session = msg.params.sessionId; return send({ id: msg.id, result: { configOptions: config() } }); }
   if (msg.method === "session/cancel") {
     update(session, { sessionUpdate: "tool_call_update", ...tool, status: "failed", rawOutput: { output: "" } });
     return send({ id: promptId, result: { stopReason: "cancelled" } });
@@ -170,6 +196,58 @@ describe("createAntigravityRunner (fake agy)", () => {
     expect(resumed!.params._meta?.antigravity.systemPrompt.append).toContain("thread_1");
   });
 
+  it("sets the resolved model and thinking level before the prompt", async () => {
+    const runner = createAntigravityRunner({});
+    await collect(
+      runner.execute(tmpDir, "hello", {
+        threadId: "thread_1",
+        cliType: "antigravity",
+        resolvedCliModel: "gemini-3.8-flash",
+        resolvedCliEffort: "low",
+      })
+    );
+    expect(sent("session/set_config_option").map((message) => message.params)).toEqual([
+      { sessionId: "sess-1", configId: "model", value: "gemini-3.8-flash" },
+      { sessionId: "sess-1", configId: "thought_level", value: "low" },
+    ]);
+    const methods = recorded().flatMap((entry) => (entry.in?.method ? [entry.in.method] : []));
+    expect(methods.indexOf("session/set_config_option")).toBeLessThan(methods.indexOf("session/prompt"));
+  });
+
+  // session/resume comes back on the account default, so the model is set on every run.
+  it("sets the model again on resume, and skips a level the model does not offer", async () => {
+    const runner = createAntigravityRunner({});
+    await collect(
+      runner.execute(tmpDir, "again", {
+        threadId: "thread_1",
+        cliType: "antigravity",
+        continuationId: "sess-old",
+        resolvedCliModel: "gpt-oss-120b-medium",
+        resolvedCliEffort: "high",
+      })
+    );
+    expect(sent("session/set_config_option").map((message) => message.params)).toEqual([
+      { sessionId: "sess-old", configId: "model", value: "gpt-oss-120b-medium" },
+    ]);
+  });
+
+  it("sends no config change for the default model and level", async () => {
+    const runner = createAntigravityRunner({});
+    await collect(runner.execute(tmpDir, "hello", { threadId: "thread_1", cliType: "antigravity" }));
+    expect(sent("session/set_config_option")).toEqual([]);
+  });
+
+  it("fails the run with agy's message when it refuses the model, keeping the session", async () => {
+    const runner = createAntigravityRunner({});
+    const error = await collect(
+      runner.execute(tmpDir, "hello", { threadId: "thread_1", cliType: "antigravity", resolvedCliModel: "gemini-retired" })
+    ).catch((e: unknown) => e);
+    expect(error).toBeInstanceOf(RunnerExecutionError);
+    expect((error as RunnerExecutionError).message).toContain("Unknown model ID: gemini-retired");
+    expect((error as RunnerExecutionError).continuationId).toBe("sess-1");
+    expect(sent("session/prompt")).toEqual([]);
+  });
+
   it("prepends the instructions to the prompt when agy cannot append a system prompt", async () => {
     vi.stubEnv("FAKE_BEHAVIOR", "no-append");
     const runner = createAntigravityRunner({});
@@ -266,12 +344,18 @@ describe("createAntigravityRunner (fake agy)", () => {
 
 describe("detectAntigravity", () => {
   let tmpDir: string;
+  let recordFile: string;
   beforeEach(() => {
     tmpDir = mkdtempSync(join(tmpdir(), "agy-detect-test-"));
+    recordFile = join(tmpDir, "record.jsonl");
     const file = join(tmpDir, "agy");
     writeFileSync(file, `#!/usr/bin/env node\n${FAKE_AGY}`);
     chmodSync(file, 0o755);
     vi.stubEnv(ANTIGRAVITY_EXECUTABLE_ENV, file);
+    vi.stubEnv("FAKE_RECORD", recordFile);
+    // The inventory deletes the session's files under ~/.gemini; keep them in the test dir.
+    vi.stubEnv("HOME", tmpDir);
+    vi.stubEnv("FAKE_SESSION_FILES", "1");
   });
   afterEach(() => {
     vi.unstubAllEnvs();
@@ -280,8 +364,46 @@ describe("detectAntigravity", () => {
 
   it("advertises agy 1.5.12 and newer only", async () => {
     vi.stubEnv("FAKE_VERSION", "1.5.13");
-    await expect(detectAntigravity()).resolves.toEqual({ type: "antigravity", version: "1.5.13" });
+    await expect(detectAntigravity()).resolves.toMatchObject({ type: "antigravity", version: "1.5.13" });
     vi.stubEnv("FAKE_VERSION", "1.5.11");
     await expect(detectAntigravity()).resolves.toBeNull();
+  });
+
+  it("selects each model once to learn its thinking levels", async () => {
+    await expect(detectAntigravity()).resolves.toEqual({
+      type: "antigravity",
+      version: "1.5.13",
+      models: [
+        { slug: "gemini-3.8-flash", name: "Gemini 3.8 Flash", variants: ["low", "medium", "high"] },
+        { slug: "gpt-oss-120b-medium", name: "GPT-OSS 120B (Medium)" },
+      ],
+    });
+  });
+
+  it("leaves no temp directory and no agy conversation behind", async () => {
+    await detectAntigravity();
+    const [opened] = readFileSync(recordFile, "utf8")
+      .trim()
+      .split("\n")
+      .map((line) => JSON.parse(line) as RecordedEntry)
+      .flatMap((entry) => (entry.in?.method === "session/new" ? [entry.in] : []));
+    const cwd = opened!.params.cwd as string;
+    expect(cwd).toContain("convoy-agy-models-");
+    expect(existsSync(cwd)).toBe(false);
+    expect(existsSync(join(tmpDir, ".gemini/antigravity-cli/conversations/sess-1.db"))).toBe(false);
+    expect(existsSync(join(tmpDir, ".gemini/antigravity-cli/brain/sess-1"))).toBe(false);
+  });
+
+  it("registers without models when the inventory cannot create its temp directory", async () => {
+    const notADirectory = join(tmpDir, "not-a-dir");
+    writeFileSync(notADirectory, "");
+    vi.stubEnv("TMPDIR", notADirectory);
+    await expect(detectAntigravity()).resolves.toEqual({ type: "antigravity", version: "1.5.13" });
+  });
+
+  // Signed out, `models` stays absent so the stored catalog is left alone.
+  it("registers without models when the inventory fails", async () => {
+    vi.stubEnv("FAKE_BEHAVIOR", "signed-out");
+    await expect(detectAntigravity()).resolves.toEqual({ type: "antigravity", version: "1.5.13" });
   });
 });

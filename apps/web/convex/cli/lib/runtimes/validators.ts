@@ -2,6 +2,7 @@ import { v, type Infer } from "convex/values";
 import { availableClaudeCliValidator } from "./claudeCode/validators";
 import { availableCodexCliValidator } from "./codex/validators";
 import { availableOpencodeCliValidator } from "./opencode/validators";
+import { availableAntigravityCliValidator } from "./antigravity/validators";
 
 export const cliTypeValidator = v.union(
   v.literal("claude-code"),
@@ -23,7 +24,6 @@ export const availableGenericCliValidator = v.object({
     v.literal("droid"),
     v.literal("cursor"),
     v.literal("gemini"),
-    v.literal("antigravity"),
     v.literal("coderabbit"),
     v.literal("github-copilot"),
     v.literal("other"),
@@ -35,6 +35,7 @@ export const availableCliValidator = v.union(
   availableClaudeCliValidator,
   availableCodexCliValidator,
   availableOpencodeCliValidator,
+  availableAntigravityCliValidator,
   availableGenericCliValidator,
 );
 

@@ -19,10 +19,10 @@ import {
   resolveCliRunModel,
   supportsResumeLocally,
 } from "./registry";
-import type { OpencodeAdvertisedModel } from "./opencode/contracts";
+import type { CliCatalogModel } from "./shared/validators";
 
 /** The advertised opencode models a parse produced, or [] for any other outcome. */
-function opencodeModels(parsed: ReturnType<typeof parseAvailableCli>): OpencodeAdvertisedModel[] {
+function opencodeModels(parsed: ReturnType<typeof parseAvailableCli>): CliCatalogModel[] {
   if (!parsed.success || parsed.value.type !== "opencode") {
     return [];
   }
@@ -300,6 +300,7 @@ describe("cli runtime registry", () => {
   // answer has to come from the registry rather than a `cliType` branch (OS-1721).
   test("reports which runtimes advertise a model catalog", () => {
     expect(cliTypeAdvertisesModelCatalog("opencode")).toBe(true);
+    expect(cliTypeAdvertisesModelCatalog("antigravity")).toBe(true);
     expect(cliTypeAdvertisesModelCatalog("claude-code")).toBe(false);
     expect(cliTypeAdvertisesModelCatalog("codex")).toBe(false);
   });

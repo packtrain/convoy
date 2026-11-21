@@ -6,6 +6,7 @@ import {
 } from "../contracts.js";
 import { formatUserMessageBlock } from "../message-format.js";
 import { detectAntigravity } from "./detect.js";
+import { isAntigravityModel } from "./models.js";
 import { createAntigravityRunner } from "./runner.js";
 import { antigravityChunkStreamPolicy } from "./streaming.js";
 
@@ -20,7 +21,7 @@ export const antigravityRuntime: CliRuntimeDefinition = {
     options.sandbox
       ? createSandboxUnsupportedRunner("antigravity")
       : createAntigravityRunner({ partialStreaming: options.partialStreaming }),
-  normalizeCliModel: () => undefined,
+  normalizeCliModel: (model) => (isAntigravityModel(model) ? model : undefined),
   isInlineImageAttachment: () => false,
   async prepareRunExecution(input: RuntimeExecutionInput): Promise<PreparedRuntimeExecution> {
     const formattedMessages = input.messages

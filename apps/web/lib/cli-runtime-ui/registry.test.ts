@@ -23,13 +23,14 @@ describe("cli runtime ui registry", () => {
     expect(getDefaultMode("codex")).toBe("agent");
   });
 
-  test("offers Antigravity in the selector with Act only and no model catalog", () => {
+  test("offers Antigravity in the selector with its modes and the Default model slot", () => {
     expect(CLI_TYPE_SELECTOR_ORDER).toContain("antigravity");
     expect(isCliSelectable("antigravity")).toBe(true);
     expect(isCliSelectable("gemini")).toBe(false);
     expect(getCliModes("antigravity").map((mode) => mode.label)).toEqual(["Act", "Ask to approve"]);
     expect(getDefaultMode("antigravity")).toBe("agent");
-    expect(getDefaultCliModel("antigravity")).toBeUndefined();
+    // The account's models come from the per-machine catalog (OS-2470).
+    expect(getDefaultCliModel("antigravity")).toBe("default");
     expect(CLI_TYPE_MAP.antigravity).toBe("Antigravity");
     expect(CLI_TYPE_MAP.gemini).toBe("Gemini CLI");
   });
