@@ -256,7 +256,7 @@ export const KanbanCard = memo(function KanbanCard({
           {visibleLabel ? <TaskLabelChip label={visibleLabel} /> : null}
         </div>
         <div className="flex shrink-0 items-center gap-2">
-          <AgentThreadWorkIndicator entries={task.agentThreadWork} />
+          <AgentThreadWorkIndicator entries={task.agentThreadWork} className="mr-1" />
           {/* Subtasks progress */}
           {shouldShowSubtaskProgress && (
             <span className="inline-flex items-center gap-1.5 text-xs text-muted-foreground">
