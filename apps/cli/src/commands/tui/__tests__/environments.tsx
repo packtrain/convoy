@@ -122,6 +122,7 @@ try {
             assert(frame.includes("✗ Update CLI failed: Readiness failed"), "Failure must lead with a marked error naming the operation");
             assert(!frame.includes("Working."), "A failed result must not still say Working");
           }
+          assert(frame.includes("[ Back ]") && !frame.includes("[ Close ]"), "A result has one Back button: " + frame);
           assert.deepEqual(operations, ["update"]); assert.equal(refreshes, ["failure", "diagnostics"].includes(scenario) ? 0 : 1);
           assert.equal(registrations, 0);
         }

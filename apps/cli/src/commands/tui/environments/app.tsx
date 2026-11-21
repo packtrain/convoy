@@ -37,7 +37,6 @@ export function Environments({ browser, width, height }: { browser: Browser; wid
   const [message, setMessage] = useState<string[]>([]);
   const [error, setError] = useState<string>();
   const [created, setCreated] = useState(false);
-  const [deleted, setDeleted] = useState(false);
   const [discard, setDiscard] = useState(false);
   const alive = useRef(true);
   const working = useRef(false);
@@ -77,13 +76,12 @@ export function Environments({ browser, width, height }: { browser: Browser; wid
       return;
     }
     const result = await target.maintenance!.execute(chosen.operation, progress, { version: proposal?.proposed, localPackage: proposal?.localPackage });
-    if (result.deleted === true && alive.current) setDeleted(true);
     await browser.refreshEnvironment(result);
     if (alive.current) setMessage([
       ...(chosen.operation === "stop" ? [`Environment ${target.name} is stopped.`, result.state === "not-created" ? "No container was created. There is nothing running to stop." : "All projects in this container are stopped.", "Saved data is retained. Use Delete environment to remove it."]
         : chosen.operation === "delete" ? [`Environment ${target.name} deleted.`, "Its container, saved volumes and local record were removed."]
         : [`${chosen.label} completed.`, ...Object.entries(result).map(([key, value]) => `${key}: ${JSON.stringify(value)}`)]),
-      ...(state.onboarding ? ["Project inputs retained. Close this result and explicitly continue registration."] : []),
+      ...(state.onboarding ? ["Project inputs retained. Go back and explicitly continue registration."] : []),
     ]);
   });
   const fields = ["name", "mode", ...(form.mode === "shared" ? ["mounts"] as const : []), "networkMode", ...(form.networkMode === "strict" ? ["deployment", "domains"] as const : [])] as const;
@@ -130,8 +128,9 @@ export function Environments({ browser, width, height }: { browser: Browser; wid
       ...(proposal ? [proposal.localPackage ? `Install ${proposal.localPackage} (${proposal.proposed}).` : `Install @useconvoy/cli@${proposal.proposed} from npm.`] : []),
       ...(chosen.operation === "delete" ? ["Permanently deletes the container and all saved volumes.", "Includes project files, credentials, configuration and logs.", "This cannot be undone. Remote Convoy projects are not deleted."] : ["May stop all connections and active work on this target. Other clients are affected."]), "Cancel leaves the target unchanged.",
     ]} buttons={[{ label: "Cancel", activate: () => state.environment === "create" ? backToForm() : close() }, { label: state.environment === "create" ? "Create / Resume" : chosen.operation === "update" ? "Update CLI" : chosen.label, activate: () => { void execute(); } }]} />;
-  if (step === "busy" || step === "result") return <Dialog inline={state.environment !== "stop" && state.environment !== "delete"} key={step} width={width} height={height} scrollable error={step === "result" ? error : undefined} lines={message} onCancel={close}
-    buttons={step === "busy" ? [] : [{ label: "Close", activate: close }, ...(!created && !deleted ? [{ label: "Back", activate: () => { setIndex(0); if (state.environment === "create") backToForm(); else void choose(chosen); } }] : [])]} />;
+  const inline = state.environment !== "stop" && state.environment !== "delete";
+  if (step === "busy" || step === "result") return <Dialog inline={inline} key={step} width={width} height={height} scrollable error={step === "result" ? error : undefined} lines={message} onCancel={close}
+    buttons={step === "busy" ? [] : [{ label: inline ? "Back" : "Close", activate: () => { if (state.environment === "create" && !created) { setIndex(0); backToForm(); } else close(); } }]} />;
   return <Box width={width} height={height} backgroundColor={palette.base ?? "black"} flexDirection="column" paddingX={2}>
     <Text bold color={palette.text}>Add environment · managed Docker</Text>
     {small ? <Text>Resize to 45×{minHeight}. Esc cancels.</Text> : <>
