@@ -377,6 +377,7 @@ prefix. See [cli-thread-message-links.md](cli-thread-message-links.md).
 | `load_skill` | Load a project Skill by name: its SKILL.md plus its other file paths | Yes* |
 | `read_skill_file` | Read one file inside a project Skill | Yes* |
 | `list_tasks` | List tasks in a project | Yes* |
+| `list_closed_tasks` | List recently closed tasks, newest closed first | Yes* |
 | `search_tasks` | Full-text search with filters and pagination | Yes* |
 | `get_task` | Get a single task by ID or ref | Sometimes** |
 | `get_tasks` | Look up tasks by task IDs or refs | Sometimes** |
@@ -636,6 +637,7 @@ Each task row is an MCP summary with only:
 - `assignee` (hydrated human owner) and `delegatedToAgent` (hydrated executing agent) — see the split assignment model under `create_task`
 - `tags`
 - `labelId` (resolve names/colors via `list_task_labels`)
+- `closedAt` when set ([task-closed-at.md](task-closed-at.md))
 - `taskType: { key, name }`
 - `externalLinks` only when `includeLinks: true`
 
@@ -855,6 +857,22 @@ with a better `oldString`. Failures come back as an MCP error result carrying:
 `old_string_not_found` (with `occurrences: 0`) or `multiple_matches`.
 `replaceAll` defaults to `false`, which requires exactly one match. Anything else
 — a missing file, a bad path, a cap breach — fails the call instead.
+
+#### list_closed_tasks
+
+| Param | Type | Required | Default | Description |
+|-------|------|----------|---------|-------------|
+| `projectId` | string | No* | — | Project ID |
+| `status` | string | No | `"Done"` | `Done` or `Canceled` |
+| `limit` | integer | No | `50` | 1–200 |
+| `since` | string | No | — | Inclusive ISO-8601 lower bound on `closedAt` |
+| `until` | string | No | — | Exclusive ISO-8601 upper bound on `closedAt` |
+
+Calls `tasks.core.listClosed` and returns the `list_tasks` summary shape, newest
+`closedAt` first. Covers every List, archived tasks and subtasks. Tasks closed
+before `closedAt` tracking shipped are not returned. Unparseable dates, open
+statuses and out-of-range limits return `-32602 Invalid params`. Full rules:
+[task-closed-at.md](task-closed-at.md).
 
 #### search_tasks
 

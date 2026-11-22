@@ -27,6 +27,7 @@ Commands covered:
 - `convoy lists create`
 - `convoy lists update <list>`
 - `convoy tasks list`
+- `convoy tasks closed`
 - `convoy tasks search <query>`
 - `convoy tasks get <taskId>`
 - `convoy tasks refs <REF...>`
@@ -290,6 +291,16 @@ caller is missing is `--org`.
   the flag (the API payload is unchanged).
 - Scoped List refs containing `/` fail fast in the CLI.
 - Status values are normalized locally and validated server-side.
+
+### `tasks closed`
+
+- Calls `tasks.core.listClosed`: newest closed first, all Lists, archived
+  tasks and subtasks included.
+- `--status Done|Canceled` (default `Done`), `--limit <n>` (1–200, default 50),
+  `--since <date>` (inclusive) and `--until <date>` (exclusive), both ISO-8601.
+- Unparseable dates fail locally; status and limit are validated server-side.
+- Text rows start with the UTC closed date. Full rules:
+  [task-closed-at.md](task-closed-at.md).
 
 ### `tasks search`
 

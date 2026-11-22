@@ -62,6 +62,7 @@ const CONVOY_TOOL_NAMES = {
   load_skill: true,
   read_skill_file: true,
   list_tasks: true,
+  list_closed_tasks: true,
   search_tasks: true,
   get_task: true,
   get_tasks: true,

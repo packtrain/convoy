@@ -14,7 +14,7 @@ import {
 import { authorizeProjectAccess, getAccessibleProjectsById, requireAuthorizedProject } from "../lib/access/permissions";
 import { ProjectPermission } from "../../lib/authz/permissions";
 import type { Id, Doc } from "../_generated/dataModel";
-import type { Status } from "../../lib/tasks/status";
+import { Status } from "../../lib/tasks/status";
 import { isClosedStatus } from "../../lib/tasks/status-policy";
 import {
   BUILT_IN_TASK_TYPES,
@@ -31,6 +31,7 @@ import { logTaskActivity } from "./lib/activity/logger";
 import { emitEvent, emitEvents } from "../lib/events";
 import type { AppEvent } from "../lib/contracts/appEvents";
 import { REF_QUERY_REGEX, MAX_REFS_PER_CALL } from "./lib/constants";
+import { DEFAULT_CLOSED_TASKS_LIMIT, MAX_CLOSED_TASKS_LIMIT } from "../lib/constants";
 import {
   archiveTasksReturnValidator,
   taskReturnValidator,
@@ -70,6 +71,7 @@ import {
   listActiveTasksInListByStatus,
   listArchivedTasksByProject,
   listArchivedTasksByProjectAndStatus,
+  listClosedTasks,
   paginateArchivedTasksByProject,
   listChildTasks,
   findTaskByRefNumber,
@@ -174,6 +176,41 @@ export const listByProject = query({
     }
 
     return enrichTasksWithUserDetails(ctx, filteredTasks, project);
+  },
+});
+
+/** Last closed tasks, newest first, optionally within `[since, until)` (docs/specs/task-closed-at.md). */
+export const listClosed = query({
+  args: {
+    projectId: v.id("projects"),
+    status: v.optional(v.union(v.literal(Status.DONE), v.literal(Status.CANCELED))),
+    limit: v.optional(v.number()),
+    since: v.optional(v.number()),
+    until: v.optional(v.number()),
+    apiKey: v.optional(v.string()),
+  },
+  returns: v.array(taskReturnValidator),
+  handler: async (ctx, args) => {
+    const limit = args.limit ?? DEFAULT_CLOSED_TASKS_LIMIT;
+    if (!Number.isInteger(limit) || limit < 1 || limit > MAX_CLOSED_TASKS_LIMIT) {
+      throw new ConvexError(`limit must be an integer from 1 to ${MAX_CLOSED_TASKS_LIMIT}`);
+    }
+    const auth = await getOptionalAuthenticatedAccess(ctx, args.apiKey);
+    if (!auth) {
+      return [];
+    }
+    const access = await authorizeProjectAccess(ctx, auth.principal, args.projectId, ProjectPermission.TASK_VIEW);
+    if (!access) {
+      return [];
+    }
+    const tasks = await listClosedTasks(ctx, {
+      projectId: args.projectId,
+      status: args.status ?? Status.DONE,
+      limit,
+      since: args.since,
+      until: args.until,
+    });
+    return enrichTasksWithUserDetails(ctx, tasks, access.project);
   },
 });
 

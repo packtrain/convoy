@@ -36,6 +36,7 @@ import {
 import {
   handleListTasks,
   handleSearchTasks,
+  handleListClosedTasks,
   handleGetTask,
   handleGetTasks,
   handleCreateTask,
@@ -121,6 +122,7 @@ const HANDLERS: Record<ToolName, ToolHandler> = {
   load_skill: handleLoadSkill,
   read_skill_file: handleReadSkillFile,
   search_tasks: handleSearchTasks,
+  list_closed_tasks: handleListClosedTasks,
   get_task: handleGetTask,
   get_tasks: handleGetTasks,
   create_task: handleCreateTask,

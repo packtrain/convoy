@@ -119,6 +119,19 @@ List tasks in a project.
 | `listId` | `string` | No | Raw List ID or bare project-scoped List ref, e.g. `SPRINT-1`. |
 | `includeLinks` | `boolean` | No | Default `false`. Include each task's `externalLinks` array in the summaries. |
 
+### `list_closed_tasks`
+
+List recently closed tasks, newest closed first. Covers every List, archived
+tasks, and subtasks. Use it to summarize what shipped.
+
+| Argument | Type | Required | Notes |
+|---|---|---|---|
+| `projectId` | `string` | When not URL-configured | Project to list from. |
+| `status` | `string` | No | `Done` (default) or `Canceled`. |
+| `limit` | `integer` | No | 1–200, default `50`. |
+| `since` | `string` | No | Inclusive ISO-8601 date or datetime. Dates are UTC midnight. |
+| `until` | `string` | No | Exclusive ISO-8601 date or datetime. |
+
 ### `search_tasks`
 
 Search tasks in a project with pagination and optional filters.

@@ -27,6 +27,7 @@ export const MCP_LIST_TASK_FIELDS = [
   "delegatedToAgent",
   "tags",
   "labelId",
+  "closedAt",
 ] as const;
 
 export const MCP_DETAIL_TASK_STRIPPED_FIELDS = new Set([

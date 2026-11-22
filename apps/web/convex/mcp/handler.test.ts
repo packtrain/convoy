@@ -5562,6 +5562,57 @@ describe("handleMcpRequest update_task_link", () => {
   });
 });
 
+describe("handleMcpRequest list_closed_tasks", () => {
+  function callListClosed(ctx: ActionCtx, args: Record<string, unknown>) {
+    return handleMcpRequest(ctx, "sk_user_test", {
+      jsonrpc: "2.0",
+      id: "closed",
+      method: "tools/call",
+      params: { name: "list_closed_tasks", arguments: { projectId: "project_123", ...args } },
+    });
+  }
+
+  test("parses ISO bounds and returns summaries with closedAt", async () => {
+    const { ctx, runQuery } = createActionCtx([
+      { _id: "task_1", refId: "ABC-1", name: "Shipped", status: "Done", closedAt: 1793491200000, rank: "0|a:" },
+    ]);
+
+    const response = await callListClosed(ctx, {
+      status: "Canceled",
+      limit: 10,
+      since: "2026-11-01",
+      until: "2026-11-15T12:00:00Z",
+    });
+
+    expect(response?.error).toBeUndefined();
+    expect(runQuery).toHaveBeenCalledWith(api.tasks.core.listClosed, {
+      projectId: "project_123",
+      status: "Canceled",
+      limit: 10,
+      since: Date.UTC(2026, 10, 1),
+      until: Date.UTC(2026, 10, 15, 12),
+      apiKey: "sk_user_test",
+    });
+    expect(parseToolContentJson(response)).toEqual([
+      { _id: "task_1", refId: "ABC-1", name: "Shipped", status: "Done", closedAt: 1793491200000 },
+    ]);
+  });
+
+  test.each([
+    [{ since: "last week" }, "since"],
+    [{ status: "To Do" }, "status"],
+    [{ limit: 500 }, "limit"],
+  ])("rejects %o as invalid params", async (args, key) => {
+    const { ctx, runQuery } = createActionCtx([]);
+
+    const response = await callListClosed(ctx, args);
+
+    expect(response?.error?.code).toBe(-32602);
+    expect(response?.error?.message).toContain(key);
+    expect(runQuery).not.toHaveBeenCalled();
+  });
+});
+
 describe("handleMcpRequest list_tasks externalLinks", () => {
   const TASK_WITH_LINKS = {
     _id: "task_1",

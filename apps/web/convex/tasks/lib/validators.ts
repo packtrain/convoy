@@ -107,6 +107,7 @@ export const taskReturnValidator = v.object({
   isArchived: v.boolean(),
   archivedAt: v.optional(v.number()),
   archivedBy: v.optional(v.id("users")),
+  closedAt: v.optional(v.number()),
 });
 
 const taskSearchResultValidator = v.object({

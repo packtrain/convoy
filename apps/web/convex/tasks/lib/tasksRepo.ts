@@ -3,6 +3,7 @@ import type { MutationCtx, QueryCtx } from "../../_generated/server";
 import type { DataModel, Doc, Id } from "../../_generated/dataModel";
 import type { TaskSearchFilters } from "./validators";
 import type { Status } from "@/lib/tasks/status";
+import { isClosedStatus } from "@/lib/tasks/status-policy";
 import { internal } from "../../_generated/api";
 import { TASK_PERMANENT_DELETE_DELAY_MS } from "./constants";
 
@@ -84,6 +85,22 @@ export async function paginateArchivedTasksByProject(
     )
     .order("desc")
     .paginate(paginationOpts);
+}
+
+/** Non-deleted tasks closed with `status` in `[since, until)`, newest closed first. */
+export async function listClosedTasks(
+  ctx: Ctx,
+  args: { projectId: Id<"projects">; status: Status; limit: number; since?: number; until?: number }
+): Promise<Doc<"tasks">[]> {
+  return ctx.db
+    .query("tasks")
+    .withIndex("by_project_and_isDeleted_and_status_and_closedAt", (q) => {
+      // The lower bound also skips unstamped rows: `undefined` sorts below every number.
+      const from = q.eq("projectId", args.projectId).eq("isDeleted", false).eq("status", args.status).gte("closedAt", args.since ?? 0);
+      return args.until === undefined ? from : from.lt("closedAt", args.until);
+    })
+    .order("desc")
+    .take(args.limit);
 }
 
 /** Active (non-deleted, non-archived) tasks for a project, newest first, paginated. */
@@ -237,7 +254,7 @@ export async function deleteTask(ctx: MutationCtx, taskId: Id<"tasks">): Promise
 /**
  * Canonical write chokepoint for the `tasks` table (enforced via eslint
  * `no-restricted-syntax`) so managed fields can't be forgotten: these own
- * `createdAt`/`updatedAt` and default `isDeleted`/`isArchived`.
+ * `createdAt`/`updatedAt`/`closedAt` and default `isDeleted`/`isArchived`.
  *
  * They take a mutation context in production and still accept the raw database
  * writer used by test setup/builders.
@@ -245,11 +262,11 @@ export async function deleteTask(ctx: MutationCtx, taskId: Id<"tasks">): Promise
 type TaskWriteDb = GenericDatabaseWriter<DataModel>;
 type TaskWriteTarget = MutationCtx | TaskWriteDb;
 
-type TaskInsertFields = Omit<WithoutSystemFields<Doc<"tasks">>, "createdAt" | "updatedAt" | "isDeleted" | "isArchived"> & {
+type TaskInsertFields = Omit<WithoutSystemFields<Doc<"tasks">>, "createdAt" | "updatedAt" | "closedAt" | "isDeleted" | "isArchived"> & {
   isDeleted?: boolean;
   isArchived?: boolean;
 };
-type TaskPatchFields = Omit<Partial<WithoutSystemFields<Doc<"tasks">>>, "updatedAt">;
+type TaskPatchFields = Omit<Partial<WithoutSystemFields<Doc<"tasks">>>, "updatedAt" | "closedAt">;
 
 /** Insert a task, stamping `createdAt`/`updatedAt` and defaulting `isDeleted`/`isArchived`. */
 function getTaskWriteDb(target: TaskWriteTarget): TaskWriteDb {
@@ -263,6 +280,7 @@ export async function insertTask(target: TaskWriteTarget, fields: TaskInsertFiel
     ...fields,
     isDeleted: fields.isDeleted ?? false,
     isArchived: fields.isArchived ?? false,
+    ...(isClosedStatus(fields.status) && { closedAt: now }),
     createdAt: now,
     updatedAt: now,
   });
@@ -280,7 +298,21 @@ export async function patchTask(
   opts?: { bumpUpdatedAt?: boolean }
 ): Promise<void> {
   const db = getTaskWriteDb(target);
-  await db.patch("tasks", id, opts?.bumpUpdatedAt === false ? patch : { ...patch, updatedAt: Date.now() });
+  const closedAtPatch = await resolveClosedAtPatch(db, id, patch.status);
+  const fullPatch = { ...patch, ...closedAtPatch };
+  await db.patch("tasks", id, opts?.bumpUpdatedAt === false ? fullPatch : { ...fullPatch, updatedAt: Date.now() });
+}
+
+/** Stamp `closedAt` on a status change into a closed status, clear it on reopen (docs/specs/task-closed-at.md). */
+async function resolveClosedAtPatch(
+  db: TaskWriteDb,
+  id: Id<"tasks">,
+  status: Status | undefined
+): Promise<{ closedAt?: number | undefined }> {
+  if (status === undefined) return {};
+  const current = await db.get("tasks", id);
+  if (current?.status === status) return {};
+  return { closedAt: isClosedStatus(status) ? Date.now() : undefined };
 }
 
 /**

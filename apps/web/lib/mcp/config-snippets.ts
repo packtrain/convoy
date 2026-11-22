@@ -34,6 +34,7 @@ export const CODEX_APPROVAL_TOOLS = [
   "load_skill",
   "read_skill_file",
   "list_tasks",
+  "list_closed_tasks",
   "search_tasks",
   "get_task",
   "get_tasks",

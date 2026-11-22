@@ -633,6 +633,8 @@ export default defineSchema({
     isArchived: v.boolean(),
     archivedAt: v.optional(v.number()),
     archivedBy: v.optional(v.id("users")),
+    // When the task entered its current closed status (docs/specs/task-closed-at.md).
+    closedAt: v.optional(v.number()),
   })
     .index("by_project_and_isDeleted", ["projectId", "isDeleted"])
     .index("by_project_and_isDeleted_and_rank", ["projectId", "isDeleted", "rank"])
@@ -649,6 +651,7 @@ export default defineSchema({
     // No isDeleted/isArchived here: label delete resolution must reach ALL
     // referencing tasks, including soft-deleted and archived ones.
     .index("by_project_and_labelId", ["projectId", "labelId"])
+    .index("by_project_and_isDeleted_and_status_and_closedAt", ["projectId", "isDeleted", "status", "closedAt"])
     .index("by_sectionId", ["sectionId"])
     .searchIndex("search_text", {
       searchField: "searchText",

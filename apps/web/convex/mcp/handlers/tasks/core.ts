@@ -21,7 +21,8 @@ import {
   parseSearchTaskFilters,
   parseTaskAssigneeSplitArgs,
 } from "../../lib/tasks/parsers";
-import { ALL_TASK_STATUSES } from "@/lib/tasks/status-policy";
+import { ALL_TASK_STATUSES, CLOSED_TASK_STATUSES } from "@/lib/tasks/status-policy";
+import { MAX_CLOSED_TASKS_LIMIT } from "../../../lib/constants";
 import {
   resolveTaskIdOrRef,
   resolveTasksByIdentifiers,
@@ -65,6 +66,28 @@ export const handleListTasks: ToolHandler = async ({
     apiKey,
   });
   return projectTaskListResult(result, { includeLinks });
+};
+
+export const handleListClosedTasks: ToolHandler = async ({
+  ctx,
+  apiKey,
+  args,
+  getProjectId,
+}) => {
+  const status = should.beOptionalEnum(args, "status", CLOSED_TASK_STATUSES);
+  const limit = should.beOptionalInteger(args, "limit", 1, MAX_CLOSED_TASKS_LIMIT);
+  const since = should.beOptionalIsoDate(args, "since");
+  const until = should.beOptionalIsoDate(args, "until");
+  const projectId = await getProjectId();
+  const result = await ctx.runQuery(api.tasks.core.listClosed, {
+    projectId,
+    ...(status !== undefined && { status: status as "Done" | "Canceled" }),
+    ...(limit !== undefined && { limit }),
+    ...(since !== undefined && { since }),
+    ...(until !== undefined && { until }),
+    apiKey,
+  });
+  return projectTaskListResult(result);
 };
 
 export const handleSearchTasks: ToolHandler = async ({

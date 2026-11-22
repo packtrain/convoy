@@ -343,6 +343,18 @@ as an alias.
 | `--archived` | List archived tasks |
 | `--include-links` | Print each task's external links in text output |
 
+### `convoy tasks closed`
+
+List recently closed tasks, newest closed first, across every List, archived
+tasks included.
+
+| Flag | Purpose |
+|---|---|
+| `--status <status>` | `Done` (default) or `Canceled` |
+| `--limit <n>` | Maximum tasks, 1–200 (default: 50) |
+| `--since <date>` | Closed at or after this ISO-8601 date or datetime (dates are UTC midnight) |
+| `--until <date>` | Closed before this ISO-8601 date or datetime |
+
 ### `convoy tasks search <query>`
 
 | Flag | Purpose |

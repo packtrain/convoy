@@ -173,6 +173,21 @@ export function parseOptionalDueDate(
   return parsed;
 }
 
+/** ISO-8601 date or datetime → Unix ms; `flag` names the option in errors. */
+export function parseOptionalIsoDate(
+  value: string | undefined,
+  flag: string,
+): number | undefined {
+  if (value === undefined) {
+    return undefined;
+  }
+  const parsed = Date.parse(value);
+  if (!Number.isFinite(parsed)) {
+    throw new Error(`Invalid ${flag} "${value}". Use an ISO-8601 date or datetime.`);
+  }
+  return parsed;
+}
+
 export function validateNoConflict(
   enabledFlag: boolean,
   hasValue: boolean,

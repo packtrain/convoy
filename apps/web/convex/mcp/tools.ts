@@ -12,7 +12,8 @@ import {
   DEFAULT_VIEW_MODES,
 } from "./lib/tasks/lists/defaultView";
 import type { Status as TaskStatus } from "../../lib/tasks/status";
-import { ALL_TASK_STATUSES } from "../../lib/tasks/status-policy";
+import { ALL_TASK_STATUSES, CLOSED_TASK_STATUSES } from "../../lib/tasks/status-policy";
+import { DEFAULT_CLOSED_TASKS_LIMIT, MAX_CLOSED_TASKS_LIMIT } from "../lib/constants";
 import { getBuiltInTaskTypeKeys } from "../../lib/tasks/task-types";
 
 export type ToolName =
@@ -49,6 +50,7 @@ export type ToolName =
   | "load_skill"
   | "read_skill_file"
   | "list_tasks"
+  | "list_closed_tasks"
   | "search_tasks"
   | "get_task"
   | "get_tasks"
@@ -1013,6 +1015,41 @@ export function getToolDefinitions(
             type: "boolean",
             description:
               "Include each task's externalLinks array (commits, branches, PRs, URLs) in the summaries (default: false)",
+          },
+        },
+      },
+    },
+    {
+      name: "list_closed_tasks",
+      description:
+        "List recently closed tasks, newest closed first, e.g. to summarize what shipped. " +
+        "Covers every List, archived tasks, and subtasks. Tasks closed before closedAt tracking started are not returned.",
+      inputSchema: {
+        type: "object",
+        properties: {
+          projectId: {
+            type: "string",
+            description:
+              "The project ID to list tasks from. Optional if configured via ?project= URL parameter.",
+          },
+          status: {
+            type: "string",
+            enum: CLOSED_TASK_STATUSES,
+            description: "Closed status to list (default: Done)",
+          },
+          limit: {
+            type: "integer",
+            minimum: 1,
+            maximum: MAX_CLOSED_TASKS_LIMIT,
+            description: `Maximum tasks to return, from 1 to ${MAX_CLOSED_TASKS_LIMIT} (default: ${DEFAULT_CLOSED_TASKS_LIMIT})`,
+          },
+          since: {
+            type: "string",
+            description: "Inclusive ISO-8601 lower bound on closedAt, e.g. '2026-11-01' (UTC midnight)",
+          },
+          until: {
+            type: "string",
+            description: "Exclusive ISO-8601 upper bound on closedAt",
           },
         },
       },

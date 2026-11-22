@@ -1,5 +1,6 @@
 import { Command } from "commander";
 import { listTasksCommand } from "./list.js";
+import { closedTasksCommand } from "./closed.js";
 import { searchTasksCommand } from "./search.js";
 import { getTaskCommand } from "./get.js";
 import { refsTasksCommand } from "./refs.js";
@@ -18,6 +19,7 @@ export const tasksCommand = new Command("tasks")
   .alias("task")
   .description("Task commands")
   .addCommand(listTasksCommand)
+  .addCommand(closedTasksCommand)
   .addCommand(searchTasksCommand)
   .addCommand(getTaskCommand)
   .addCommand(refsTasksCommand)

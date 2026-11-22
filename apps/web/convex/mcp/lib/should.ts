@@ -154,6 +154,17 @@ export const should = {
     return value;
   },
 
+  /** ISO-8601 date or datetime string → Unix ms. */
+  beOptionalIsoDate(args: Args, key: string): number | undefined {
+    const value = should.beOptionalString(args, key);
+    if (value === undefined) return undefined;
+    const ms = Date.parse(value);
+    if (!Number.isFinite(ms)) {
+      throwInvalidParams(`${key} must be an ISO-8601 date or datetime`);
+    }
+    return ms;
+  },
+
   // ---------------------------------------------------------------------------
   // Nullable (null preserved, undefined if absent)
   // ---------------------------------------------------------------------------
