@@ -257,6 +257,9 @@ export const appRoute = {
   authSignUp: (redirectUrl?: string | null) =>
     withQuery("/auth/sign-up", { redirect_url: redirectUrl }),
   authVerifyEmail: () => routeTarget("/auth/verify-email"),
+  authForgotPassword: (redirectUrl?: string | null) =>
+    withQuery("/auth/forgot-password", { redirect_url: redirectUrl }),
+  authResetPassword: () => routeTarget("/auth/reset-password"),
   authInvite: (token: string) => routeTarget(`/auth/invite/${token}`),
   playground: () => routeTarget("/playground"),
 } as const;

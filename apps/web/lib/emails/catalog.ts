@@ -3,6 +3,8 @@ export const EMAIL_TEMPLATE_IDS = [
   "welcome-onboarding",
   "project-invitation",
   "verify-email",
+  "reset-password",
+  "password-changed",
 ] as const;
 
 export type EmailTemplateId = (typeof EMAIL_TEMPLATE_IDS)[number];
@@ -61,6 +63,17 @@ export interface VerifyEmailEmailData {
   verifyUrl: string;
   // How long the link works, e.g. "1 hour".
   expiresIn: string;
+}
+
+export interface ResetPasswordEmailData {
+  resetUrl: string;
+  // How long the link works, e.g. "10 minutes".
+  expiresIn: string;
+}
+
+export interface PasswordChangedEmailData {
+  // The forgot-password page, to take the account back.
+  resetUrl: string;
 }
 
 export interface EmailPreviewEntry {
@@ -199,6 +212,58 @@ export function buildVerifyEmailEmail(
   };
 }
 
+/** The Convex Auth password reset link, sent from `deliverAuthEmail` in convex/auth.ts. */
+export function buildResetPasswordEmail(
+  data: ResetPasswordEmailData
+): EmailTemplateDocument {
+  return {
+    id: "reset-password",
+    label: "Reset password",
+    headerTag: "Reset password",
+    subject: "Reset your password",
+    preheader: "Set a new password for your Convoy account.",
+    title: "Reset your password",
+    intro: "Open the link below to set a new password for your Convoy account.",
+    details: [],
+    body: [
+      `The link works for ${data.expiresIn}, and only in the browser where you asked for it.`,
+    ],
+    action: {
+      label: "Reset password",
+      url: data.resetUrl,
+    },
+    footer: [
+      "If you didn't ask to reset your password, you can ignore this email.",
+    ],
+  };
+}
+
+/** The Convex Auth notice after a password change, sent from `deliverAuthEmail` in convex/auth.ts. */
+export function buildPasswordChangedEmail(
+  data: PasswordChangedEmailData
+): EmailTemplateDocument {
+  return {
+    id: "password-changed",
+    label: "Password changed",
+    headerTag: "Password changed",
+    subject: "Your password was changed",
+    preheader: "The password of your Convoy account was changed.",
+    title: "Your password was changed",
+    intro: "The password of your Convoy account was just changed, and your other sessions were signed out.",
+    details: [],
+    body: [
+      "If you didn't change it, reset your password now.",
+    ],
+    action: {
+      label: "Reset password",
+      url: data.resetUrl,
+    },
+    footer: [
+      "If you changed it yourself, you can ignore this email.",
+    ],
+  };
+}
+
 export function getEmailPreviewEntries(): EmailPreviewEntry[] {
   return [
     {
@@ -245,6 +310,23 @@ export function getEmailPreviewEntries(): EmailPreviewEntry[] {
       template: buildVerifyEmailEmail({
         verifyUrl: "https://app.convoy.build/auth/verify-email?code=fixture_code",
         expiresIn: "1 hour",
+      }),
+    },
+    {
+      key: "reset-password",
+      fixtureLabel: "Reset password",
+      description: "The Convex Auth password reset link. Clerk sends its own.",
+      template: buildResetPasswordEmail({
+        resetUrl: "https://app.convoy.build/auth/reset-password?code=fixture_code",
+        expiresIn: "10 minutes",
+      }),
+    },
+    {
+      key: "password-changed",
+      fixtureLabel: "Password changed",
+      description: "Convex Auth's notice after a password reset. Clerk sends its own.",
+      template: buildPasswordChangedEmail({
+        resetUrl: "https://app.convoy.build/auth/forgot-password",
       }),
     },
   ];

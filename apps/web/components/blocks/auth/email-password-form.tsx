@@ -15,14 +15,16 @@ export type EmailPasswordCredentials = { email: string; password: string };
 const PASSWORD_MISMATCH = "Passwords don't match.";
 
 /**
- * Full-page halftone with the wordmark over a card holding an email and password form, shared by the Convex Auth sign-in
- * and sign-up screens. A new password also gets a length hint and a confirmation field.
+ * Full-page halftone with the wordmark over a card holding the Convex Auth forms. Without `askEmail` or with a null
+ * `passwordAutoComplete` that field is left out. A new password also gets a length hint and a confirmation field.
  */
 export function EmailPasswordForm({
   title,
   description,
   submitLabel,
+  askEmail = true,
   passwordAutoComplete,
+  passwordLabelAside,
   error,
   pending,
   footer,
@@ -31,10 +33,13 @@ export function EmailPasswordForm({
   title: string;
   description: string;
   submitLabel: string;
-  passwordAutoComplete: "current-password" | "new-password";
+  askEmail?: boolean;
+  passwordAutoComplete: "current-password" | "new-password" | null;
+  /** Shown to the right of the password label, e.g. a "Forgot password?" link. */
+  passwordLabelAside?: ReactNode;
   error: string | null;
   pending: boolean;
-  footer: ReactNode;
+  footer?: ReactNode;
   onSubmit: (credentials: EmailPasswordCredentials) => void;
 }) {
   const [email, setEmail] = useState("");
@@ -55,57 +60,71 @@ export function EmailPasswordForm({
     <AuthCardPage>
       <form onSubmit={handleSubmit} className="flex flex-col gap-6">
         <AuthCardHeading title={title} description={description} />
-        <div className="grid gap-2">
-          <Label htmlFor="email">Email</Label>
-          <Input
-            id="email"
-            type="email"
-            autoComplete="username"
-            placeholder="m@example.com"
-            required
-            value={email}
-            onChange={(event) => setEmail(event.target.value)}
-            disabled={pending}
-          />
-        </div>
-        <div className="grid gap-2">
-          <Label htmlFor="password">Password</Label>
-          <Input
-            id="password"
-            type="password"
-            autoComplete={passwordAutoComplete}
-            minLength={isNewPassword ? DEFAULT_MIN_PASSWORD_LENGTH : undefined}
-            aria-describedby={isNewPassword ? "password-hint" : undefined}
-            required
-            value={password}
-            onChange={(event) => setPassword(event.target.value)}
-            disabled={pending}
-          />
-          {isNewPassword && <FieldDescription id="password-hint">At least {DEFAULT_MIN_PASSWORD_LENGTH} characters.</FieldDescription>}
-        </div>
-        {isNewPassword && (
-          <div className="grid gap-2">
-            <Label htmlFor="password-confirmation">Confirm password</Label>
-            <Input
-              id="password-confirmation"
-              type="password"
-              autoComplete="new-password"
-              required
-              value={confirmation}
-              onChange={(event) => setConfirmation(event.target.value)}
-              disabled={pending}
-            />
+        {/* The error sits close under the fields, not a full form gap away. */}
+        <div className="flex flex-col gap-2">
+          <div className="flex flex-col gap-6">
+            {askEmail && (
+              <div className="grid gap-2">
+                <Label htmlFor="email">Email</Label>
+                <Input
+                  id="email"
+                  type="email"
+                  autoComplete="username"
+                  placeholder="m@example.com"
+                  required
+                  value={email}
+                  onChange={(event) => setEmail(event.target.value)}
+                  disabled={pending}
+                />
+              </div>
+            )}
+            {passwordAutoComplete && (
+              <div className="grid gap-2">
+                <div className="flex items-center justify-between gap-2">
+                  <Label htmlFor="password">Password</Label>
+                  {passwordLabelAside}
+                </div>
+                <Input
+                  id="password"
+                  type="password"
+                  autoComplete={passwordAutoComplete}
+                  minLength={isNewPassword ? DEFAULT_MIN_PASSWORD_LENGTH : undefined}
+                  aria-describedby={isNewPassword ? "password-hint" : undefined}
+                  required
+                  value={password}
+                  onChange={(event) => setPassword(event.target.value)}
+                  disabled={pending}
+                />
+                {isNewPassword && (
+                  <FieldDescription id="password-hint">At least {DEFAULT_MIN_PASSWORD_LENGTH} characters.</FieldDescription>
+                )}
+              </div>
+            )}
+            {isNewPassword && (
+              <div className="grid gap-2">
+                <Label htmlFor="password-confirmation">Confirm password</Label>
+                <Input
+                  id="password-confirmation"
+                  type="password"
+                  autoComplete="new-password"
+                  required
+                  value={confirmation}
+                  onChange={(event) => setConfirmation(event.target.value)}
+                  disabled={pending}
+                />
+              </div>
+            )}
           </div>
-        )}
-        {shownError && (
-          <p role="alert" className="text-sm text-destructive">
-            {shownError}
-          </p>
-        )}
+          {shownError && (
+            <p role="alert" className="text-sm text-destructive">
+              {shownError}
+            </p>
+          )}
+        </div>
         <ActionButton busy={pending} showIcon={false} className="w-full">
           {submitLabel}
         </ActionButton>
-        <p className="text-center text-sm text-muted-foreground">{footer}</p>
+        {footer && <p className="text-center text-sm text-muted-foreground">{footer}</p>}
       </form>
     </AuthCardPage>
   );

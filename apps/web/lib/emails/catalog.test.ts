@@ -3,6 +3,8 @@ import {
   buildOrganizationInvitationEmail,
   buildProjectInvitationEmail,
   buildVerifyEmailEmail,
+  buildResetPasswordEmail,
+  buildPasswordChangedEmail,
   buildWelcomeOnboardingEmail,
   getEmailPreviewEntries,
 } from "./catalog";
@@ -73,6 +75,26 @@ describe("email catalog", () => {
     expect(template.body.join(" ")).toContain("1 hour");
   });
 
+  test("builds the password reset email around the link", () => {
+    const template = buildResetPasswordEmail({
+      resetUrl: "https://example.com/auth/reset-password?code=abc",
+      expiresIn: "10 minutes",
+    });
+
+    expect(template.id).toBe("reset-password");
+    expect(template.subject).toBe("Reset your password");
+    expect(template.action?.url).toBe("https://example.com/auth/reset-password?code=abc");
+    expect(template.body.join(" ")).toContain("10 minutes");
+  });
+
+  test("the password changed notice links to a new reset", () => {
+    const template = buildPasswordChangedEmail({ resetUrl: "https://example.com/auth/forgot-password" });
+
+    expect(template.id).toBe("password-changed");
+    expect(template.subject).toBe("Your password was changed");
+    expect(template.action?.url).toBe("https://example.com/auth/forgot-password");
+  });
+
   test("returns preview entries for every supported template", () => {
     const entries = getEmailPreviewEntries();
 
@@ -81,6 +103,8 @@ describe("email catalog", () => {
       "welcome-onboarding",
       "project-invitation",
       "verify-email",
+      "reset-password",
+      "password-changed",
     ]);
     expect(entries.map((entry) => entry.key)).toContain("project-invitation");
   });

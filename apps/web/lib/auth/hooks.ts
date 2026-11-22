@@ -47,6 +47,10 @@ export type AuthAdapter = {
   SignUpScreen: ComponentType;
   /** Landing page of the emailed sign-up link. */
   VerifyEmailScreen: ComponentType;
+  /** Asks for the address to email a reset link to. */
+  ForgotPasswordScreen: ComponentType;
+  /** Landing page of the emailed reset link. */
+  ResetPasswordScreen: ComponentType;
   useAuth: () => AppAuthState;
   useUser: () => AppUserState;
   useSignOut: () => AppSignOut;
@@ -70,6 +74,8 @@ export const AuthProvider = adapter.Provider;
 export const SignInScreen = adapter.SignInScreen;
 export const SignUpScreen = adapter.SignUpScreen;
 export const VerifyEmailScreen = adapter.VerifyEmailScreen;
+export const ForgotPasswordScreen = adapter.ForgotPasswordScreen;
+export const ResetPasswordScreen = adapter.ResetPasswordScreen;
 export const supportsSignOut = adapter.supportsSignOut;
 export const emailChangeHint = adapter.emailChangeHint;
 export const useAppAuth = adapter.useAuth;

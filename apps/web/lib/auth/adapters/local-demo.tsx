@@ -86,6 +86,8 @@ export const localDemoAdapter: AuthAdapter = {
   SignInScreen: NoScreen,
   SignUpScreen: NoScreen,
   VerifyEmailScreen: NoScreen,
+  ForgotPasswordScreen: NoScreen,
+  ResetPasswordScreen: NoScreen,
   useAuth: () => LOCAL_DEMO_AUTH_STATE,
   useUser: useConvexUser,
   useSignOut: useLocalDemoSignOut,

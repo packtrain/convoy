@@ -98,6 +98,9 @@ export const clerkAdapter: AuthAdapter = {
   SignUpScreen: ClerkSignUpScreen,
   // Clerk verifies email inside its own sign-up screen.
   VerifyEmailScreen: () => null,
+  // Clerk's sign-in screen has its own "Forgot password?".
+  ForgotPasswordScreen: () => null,
+  ResetPasswordScreen: () => null,
   useAuth: useClerkAppAuth,
   useUser: useClerkAppUser,
   useSignOut: useClerkSignOut,

@@ -224,6 +224,39 @@ describe("Convex Auth email and password, verification required", () => {
     expect(result.status === "complete" && result.tokens.userId).toBe(userId);
   });
 
+  test("a recovery link sets a new password, signs in, and ends the other sessions", async () => {
+    vi.stubEnv("AUTH_EMAIL_VERIFICATION", "off");
+    const t = client();
+    const old = await signUp(t, "robin@example.com");
+    vi.stubEnv("AUTH_EMAIL_VERIFICATION", "required");
+    const NEW_PASSWORD = "another horse battery staple";
+
+    const started = await t.mutation(api.auth.startPasswordRecovery, { email: "Robin@Example.com" });
+    if (!started.success) throw new Error(started.userError.error);
+    expect(started.sentTo).toBe("robin@example.com");
+    const [email] = await sentEmails(t);
+    const link = email.text?.match(/https?:\/\/\S+/)?.[0] ?? "";
+    expect(link.startsWith(`${getAppUrlBase()}/auth/reset-password?`)).toBe(true);
+    expect(email.subject).toBe("Reset your password");
+    expect(email.html).toContain(`href="${link}"`);
+    expect(email.html).toContain("10 minutes");
+    const recovery = { emailCode: new URL(link).searchParams.get("code") ?? "", browserSecret: started.browserSecret };
+
+    expect(await t.query(api.auth.checkPasswordRecovery, recovery)).toEqual({ success: true });
+    const completed = await t.mutation(api.auth.completePasswordRecovery, { ...recovery, newPassword: NEW_PASSWORD });
+    if (completed.status !== "complete") throw new Error(completed.userError.error);
+    expect(completed.tokens.userId).toBe(old.userId);
+    const notice = (await sentEmails(t)).find((sent) => sent.subject === "Your password was changed");
+    expect(notice?.html).toContain(`href="${getAppUrlBase()}/auth/forgot-password"`);
+
+    expect(await asSession(t, old.accessToken).query(api.users.core.current, {})).toBeNull();
+    expect(await asSession(t, completed.tokens.accessToken).query(api.users.core.current, {})).toMatchObject({ _id: old.userId });
+    const withOld = await t.mutation(api.auth.signInWithEmailPassword, { email: "robin@example.com", password: PASSWORD });
+    expect(withOld).toEqual({ status: "error", userError: { error: "INVALID_CREDENTIALS" } });
+    const withNew = await t.mutation(api.auth.signInWithEmailPassword, { email: "robin@example.com", password: NEW_PASSWORD });
+    expect(withNew.status === "complete" && withNew.tokens.userId).toBe(old.userId);
+  });
+
   test("without a Resend key, sign-up fails plainly and creates nothing", async () => {
     vi.stubEnv("RESEND_API_KEY", "");
     const t = client();
@@ -234,6 +267,14 @@ describe("Convex Auth email and password, verification required", () => {
     expect(await t.run((ctx) => ctx.db.query("users").collect())).toEqual([]);
     expect(await sentEmails(t)).toEqual([]);
   });
+});
+
+test("getSettings reports email as on unless verification is off", async () => {
+  const { t } = createTestContext();
+  expect(await t.query(api.auth.getSettings, {})).toEqual({ emailEnabled: true });
+  vi.stubEnv("AUTH_EMAIL_VERIFICATION", "off");
+  expect(await t.query(api.auth.getSettings, {})).toEqual({ emailEnabled: false });
+  vi.unstubAllEnvs();
 });
 
 describe("unified auth", () => {

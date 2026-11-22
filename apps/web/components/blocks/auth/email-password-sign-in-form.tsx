@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import { useQuery } from "convex/react";
 import { useSignInWithEmailPassword, type SignInResult } from "@convex-dev/auth/methods/email-password/react";
 import { api } from "@/convex/_generated/api";
 import { AppLink, appRoute, useNavigation } from "@/lib/navigation";
@@ -24,6 +25,7 @@ const SIGN_IN_ERRORS: Record<SignInErrorCode, string> = {
 /** Convex Auth sign-in. On success the auth page wrapper forwards to /auth/callback. */
 export function EmailPasswordSignInForm() {
   const { signIn, pending } = useSignInWithEmailPassword(api.auth);
+  const settings = useQuery(api.auth.getSettings, {});
   const [error, setError] = useState<string | null>(null);
   const redirectUrl = new URLSearchParams(useNavigation().location.search).get(AUTH_REDIRECT_PARAM);
 
@@ -39,6 +41,14 @@ export function EmailPasswordSignInForm() {
       description="Welcome back. Sign in with your email and password."
       submitLabel="Sign in"
       passwordAutoComplete="current-password"
+      passwordLabelAside={
+        // Recovery needs a mailbox; see docs/specs/auth-adapters.md#forgotten-password.
+        settings?.emailEnabled && (
+          <AppLink href={appRoute.authForgotPassword(redirectUrl)} className="text-sm text-muted-foreground underline-offset-4 hover:underline">
+            Forgot password?
+          </AppLink>
+        )
+      }
       error={error}
       pending={pending}
       onSubmit={handleSubmit}

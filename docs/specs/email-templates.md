@@ -20,11 +20,13 @@ This document defines the email-template subsystem used for Convoy outbound emai
 | `welcome-onboarding` | Welcome a user after joining an organization | Live |
 | `project-invitation` | Notify a user after being added to a project | Live |
 | `verify-email` | Convex Auth sign-up link | Live |
+| `reset-password` | Convex Auth password reset link | Live |
+| `password-changed` | Convex Auth notice after a password reset | Live |
 
 ### Explicit exclusions
 
 - Clerk-managed auth emails remain out of scope.
-- Other Convex Auth emails (email change, password reset) are not sent yet; the package's plain text would go out unchanged. The sign-up link is `verify-email`, see [auth-adapters.md](auth-adapters.md#email-verification).
+- Convex Auth email change is not sent yet. When it is, it gets a template here; no email goes out as the package's plain text alone.
 - Task assignment, comment/mention, status-change, and due-date reminder emails remain out of scope.
 
 ## Rendering Rules
@@ -45,6 +47,7 @@ This document defines the email-template subsystem used for Convoy outbound emai
 - `project-invitation` is sent from `projectMembers.add` only after a new project membership is created successfully.
 - `project-invitation` follows the existing project-member eligibility rules; no separate email-only eligibility branch exists.
 - `verify-email` is sent from `auth.deliverAuthEmail` when Convex Auth starts a sign-up with verification required.
+- `reset-password` and `password-changed` are sent from `auth.deliverAuthEmail` for a forgotten password ([auth-adapters.md](auth-adapters.md#forgotten-password)). The package's text stays the plain-text part.
 - All live templates use the shared renderer and therefore the same layout.
 
 ## Support Address

@@ -1,6 +1,6 @@
 # Auth adapters
 
-Status: S1 (OS-2492), S2 (OS-2493) and S1b (OS-2495) implemented. Parent plan: OS-2491.
+Status: S1 (OS-2492), S2 (OS-2493), S1b (OS-2495) and S3 (OS-2496) implemented. Parent plan: OS-2491.
 
 Convoy signs people in through one of three adapters, chosen at build time:
 
@@ -20,7 +20,8 @@ and the CLI keeps authenticating with API keys.
 
 `apps/web/lib/auth/hooks.ts` holds an exhaustive `Record<AuthMode, AuthAdapter>`
 and exports the selected adapter's parts under fixed names. Product code imports
-only these: `AuthProvider`, `SignInScreen`, `SignUpScreen`, `VerifyEmailScreen`, `useAppAuth`,
+only these: `AuthProvider`, `SignInScreen`, `SignUpScreen`, `VerifyEmailScreen`,
+`ForgotPasswordScreen`, `ResetPasswordScreen`, `useAppAuth`,
 `useAppUser`, `useAppSignOut`, `useAppUpdateProfileName`, `useAppConvexAuth`,
 `supportsSignOut` and `emailChangeHint`.
 
@@ -36,8 +37,9 @@ Each adapter lives in `apps/web/lib/auth/adapters/`:
 - `local-demo.tsx` renders a plain `ConvexProvider` behind the demo bootstrap
   gate. Its sign-in screens render nothing, because the auth pages redirect a
   signed-in user away.
-- `VerifyEmailScreen` renders nothing in Clerk and local-demo mode. Clerk
-  verifies the address inside its own sign-up screen.
+- `VerifyEmailScreen`, `ForgotPasswordScreen` and `ResetPasswordScreen` render
+  nothing in Clerk and local-demo mode. Clerk verifies the address and resets
+  passwords inside its own screens.
 - `convex.tsx` renders `ConvexAuthProvider`. Sign-out calls
   `useAuthActions().signOut` and then loads `redirectUrl`, or the sign-in page.
 - `convex-user.ts` holds the profile hooks backed by our `users` row
@@ -108,7 +110,8 @@ started from an invitation still ends on the invitation.
 
 Until S4 there is no server-side gate in Convex mode. `SignedOutRedirect`, inside
 the Convex adapter's provider, sends a signed-out visitor of any page other than
-`/auth/sign-in`, `/auth/sign-up` and `/auth/verify-email` to the sign-in page with `redirect_url` set
+`/auth/sign-in`, `/auth/sign-up`, `/auth/verify-email`, `/auth/forgot-password` and
+`/auth/reset-password` to the sign-in page with `redirect_url` set
 to the page they asked for. It reloads the page instead of using client
 navigation, because the provider sits outside `NavigationProvider`. Sign-out
 navigates itself, so the gate stands down while it runs. Otherwise the gate
@@ -144,13 +147,14 @@ for this, and the `withIdentity` test calls keep working.
 deployment. Their tables stay empty outside Convex mode. `convex/auth.ts` loads
 on every deployment too, so it must not require an env var. It exports
 `signOut`, `refreshSession`, `isAuthenticated`, `signUpWithEmailPassword`,
-`completeSignUpWithEmailPassword`, `signInWithEmailPassword` and
-`signUpWithoutEmailVerification`. Change-password, recovery and change-email arrive in
-later slices.
+`completeSignUpWithEmailPassword`, `signInWithEmailPassword`,
+`signUpWithoutEmailVerification`, `startPasswordRecovery`, `checkPasswordRecovery`,
+`completePasswordRecovery` and the `getSettings` query. Change-password and change-email
+are not exported.
 
 The email method needs three absolute landing URLs at setup. They are built from
 `getAppUrlBase()`: `/auth/verify-email`, `/auth/change-email` and
-`/auth/reset-password`. Only `/auth/verify-email` exists so far. The package checks them
+`/auth/reset-password`. `/auth/change-email` has no page yet. The package checks them
 when the module loads, so a `NEXT_PUBLIC_APP_URL` without a scheme, such as
 `localhost:3000`, fails `convex deploy` in every mode.
 
@@ -216,11 +220,13 @@ sends, so the package setup holds neither. Without `RESEND_API_KEY` it throws
 "Email sending is not configured on this deployment". The throw rolls back the
 whole sign-up, user row included, and the form shows the text. The package
 sets the link lifetime and writes a plain-text email; we can't change either.
-For a sign-up link `deliverAuthEmail` adds our own subject and HTML, the
-`verify-email` template in [email-templates.md](email-templates.md), and
-keeps the package text as the plain-text part. It reads the link and the
-lifetime out of that text. If the text stops matching (a package update), the
-email goes out as the package's plain text alone.
+`deliverAuthEmail` adds our own subject and HTML from
+[email-templates.md](email-templates.md) and keeps the package text as the
+plain-text part: `verify-email` for a sign-up link, `reset-password` for a
+recovery link, and `password-changed` for the notice with subject "Your
+password was changed". It reads the link, its landing page and the lifetime out
+of that text. If the text stops matching (a package update), the email goes out
+as the package's plain text alone.
 
 With verification off it sends nothing:
 
@@ -249,6 +255,57 @@ There is one account type in both settings. An account made with verification
 off has a verified address in `authEmail`, so it keeps signing in after an
 instance turns verification on. Sign-in only finds verified addresses, so an
 account whose link was never opened gets "Wrong email or password."
+
+## Forgotten password
+
+Password reset needs a mailbox, so it exists only while verification is
+required. With it off, the stand-in sender drops recovery links (see above).
+
+`auth.getSettings` is a public query that reports the deployment's auth
+configuration: `{ emailEnabled }`, false only when `AUTH_EMAIL_VERIFICATION=off`.
+The sign-in form shows "Forgot password?" next to the password label only while
+it is true, and carries `redirect_url` to the next page.
+
+`/auth/forgot-password` renders `ForgotPasswordForm`, inside `AuthPageWrapper`
+like sign-in. It asks for the email and calls the package's
+`useStartPasswordRecovery`, which runs `startPasswordRecovery` and keeps the
+browser secret in the auth client's storage. On success the card says "Check
+your email", names the address the package returns as `sentTo`, and says to
+open the link in this browser within 10 minutes. Errors map through an
+exhaustive `Record`. An unknown address says "No account uses this email." The
+package reports it, and sign-up's `EMAIL_TAKEN` reveals the same, under the same
+per-IP limit. A `ConvexError` such as "Email sending is not configured on this
+deployment" shows its text. The form appears only once `getSettings` says email
+is on; until then the card shows a spinner. With email off the page says
+password reset is off, for anyone who opens the URL directly, and that wins over
+an earlier "Check your email": the stand-in sender drops the link.
+
+The package writes the recovery email as plain text: subject "Reset your
+password", the link, and its 10-minute lifetime. `deliverAuthEmail` sends it in
+our `reset-password` template.
+
+`/auth/reset-password` renders `ResetPasswordForm`. `useCompletePasswordRecovery`
+subscribes to `checkPasswordRecovery` with the link's `code` and the kept secret,
+so the page asks for a password only for a live link. The form has "Password"
+with the length hint and "Confirm password", no email. A rejected password
+(too short, too common) shows its message and keeps the form, because the
+package checks it before it claims the link. On success the package sets the
+password, revokes every session of the account, this browser's old one
+included, and returns a new session. The page then replaces itself with
+`/auth/callback`. The package also emails the primary address that the password
+changed, sent in our `password-changed` template with a "Reset password" button
+to `/auth/forgot-password`.
+
+Link errors end the flow: a link opened in another browser (`MISSING_SECRET`)
+says to open it where you asked for it, and an expired or used link says to ask
+for a new one. Both offer "Get a new link" to `/auth/forgot-password`.
+
+The emailed link carries no `redirect_url`, so a reset always ends in
+`/auth/callback`'s default target, the first workspace. Someone who came from an
+invitation opens the invitation link again.
+
+`completePasswordRecovery` mints a session, so it joins the sign-in allowlist
+when S4 lands.
 
 ## Switching auth mode
 
@@ -286,8 +343,9 @@ The deployment signs its own tokens, so there are no auth secrets.
 
 ## Not covered yet
 
-The self-hosted script (S7a, which also asks for the Resend key), forgotten
-passwords (S3), resending a verification link, the cookie session and server-side redirect (S4), agent browser
+The self-hosted script (S7a, which also asks for the Resend key), password reset
+with verification off, change password and change email while signed in,
+resending a verification link, the cookie session and server-side redirect (S4), agent browser
 login (S5, `app/api/agent/browser-login` still calls Clerk), and Google (S6).
 
 ## Testing
@@ -301,13 +359,17 @@ dropping recovery and change-email links, and sign-up failing without
 `AUTH_MODE=convex`. With verification required it covers the one-transaction
 mutation answering `emailVerificationRequired`, the emailed link completing
 the sign-up and sign-in, sign-in refused before the link is opened, an account
-made with verification off still signing in, and sign-up refused without
-`RESEND_API_KEY`. It records email through the package's Resend stub
+made with verification off still signing in, sign-up refused without
+`RESEND_API_KEY`, and a recovery link that sets the new password, ends the old
+session and refuses the old password. It also covers `getSettings`. It records email through the package's Resend stub
 (`registerResendStub`, `sentEmails`). `convex/organizations/invitations.test.ts`
 covers accepting an invitation as a Convex Auth session, the wrong-account
 reply, and inviting an address two users share. `convex/users/localDemo.test.ts`
 covers anonymous `onboard` in local-demo. `lib/auth/adapters/convex.test.tsx`
 covers the route gate and sign-out,
+`components/blocks/auth/email-password-sign-in-form.test.tsx` the
+"Forgot password?" link, `forgot-password-form.test.tsx` and
+`reset-password-form.test.tsx` the two recovery pages,
 `components/blocks/auth/email-password-sign-up-form.test.tsx` covers the
 form's messages and the "Check your email" card, and
 `components/blocks/auth/verify-email-screen.test.tsx` covers the landing page.

@@ -128,6 +128,13 @@ These apply to every task, no exceptions.
     and has no shell, but don't treat it as a full replacement: MCP can't
     upload local files or read the working tree, and every tool adds to the
     agent's context.
+20. **Send every email in our template, never as plain text.** Add a builder to
+    `apps/web/lib/emails/catalog.ts` and send it through `buildResendEmail`
+    (`apps/web/convex/lib/notifications/email.ts`), which renders the shared
+    HTML layout. A package that writes its own email
+    text (Convex Auth) keeps that text only as the plain-text part. Add the
+    template to the playground preview list. See
+    [Email templates](docs/specs/email-templates.md).
 
 ## Working on Convoy tasks
 

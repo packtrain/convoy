@@ -8,9 +8,16 @@ import type { FunctionReference } from "convex/server";
 import { ConvexError, v, type Infer } from "convex/values";
 import { api, components, internal } from "./_generated/api";
 import type { Id } from "./_generated/dataModel";
-import { env, internalMutation, mutation } from "./_generated/server";
+import { env, internalMutation, mutation, query } from "./_generated/server";
 import { buildResendEmail, getEmailFrom } from "./lib/notifications/email";
-import { buildVerifyEmailEmail } from "../lib/emails/catalog";
+import {
+  buildPasswordChangedEmail,
+  buildResetPasswordEmail,
+  buildVerifyEmailEmail,
+  type EmailTemplateDocument,
+} from "../lib/emails/catalog";
+import { appRoute } from "../lib/navigation/routes";
+import { href } from "../lib/navigation/target";
 import { getAppUrlBase } from "./lib/shared/appUrl";
 import { normalizeEmail } from "./lib/shared/strings";
 import { takePendingSignUpCode, upsertPendingSignUpCode } from "./users/lib/pendingSignUpCodesRepo";
@@ -28,6 +35,7 @@ const LANDING_URLS = {
   changeEmail: `${appUrl}/auth/change-email`,
   recovery: `${appUrl}/auth/reset-password`,
 };
+const FORGOT_PASSWORD_URL = `${appUrl}${href(appRoute.authForgotPassword())}`;
 
 const EMAIL_NOT_CONFIGURED = "Email sending is not configured on this deployment";
 
@@ -44,8 +52,14 @@ type SendEmailRef = typeof components.resend.lib.sendEmail;
 // Stand-in for Resend's `lib.sendEmail`, same args: it forwards or keeps the code by setting.
 const deliverAuthEmailRef = internal.auth.deliverAuthEmail as unknown as SendEmailRef;
 
-export const { signUpWithEmailPassword, completeSignUpWithEmailPassword, signInWithEmailPassword } =
-  setupEmailPassword(auth, {
+export const {
+  signUpWithEmailPassword,
+  completeSignUpWithEmailPassword,
+  signInWithEmailPassword,
+  startPasswordRecovery,
+  checkPasswordRecovery,
+  completePasswordRecovery,
+} = setupEmailPassword(auth, {
     component: components.authEmail,
     passwordComponent: components.authPassword,
     emailSender: {
@@ -61,8 +75,15 @@ export const { signUpWithEmailPassword, completeSignUpWithEmailPassword, signInW
     onSignIn: onAuthSignIn,
   });
 
+/** The deployment's auth configuration, for the sign-in screens. Email is on unless verification is off. */
+export const getSettings = query({
+  args: {},
+  returns: v.object({ emailEnabled: v.boolean() }),
+  handler: async () => ({ emailEnabled: !isEmailVerificationOff() }),
+});
+
 /**
- * Stand-in email sender. With verification required it forwards to Resend. With it off
+ * Stand-in email sender. With verification required it forwards to Resend in our templates. With it off
  * it keeps the code of a sign-up link and sends nothing; other links are dropped.
  */
 export const deliverAuthEmail = internalMutation({
@@ -87,11 +108,11 @@ export const deliverAuthEmail = internalMutation({
         ...args,
         options: { ...args.options, apiKey },
         from: getEmailFrom(),
-        ...signUpEmailFromText(args.text),
+        ...styledEmail(args.subject, args.text),
       });
     }
-    const link = signUpLinkFromText(args.text);
-    const code = link && new URL(link).searchParams.get("code");
+    const landing = landingLinkFromText(args.text);
+    const code = landing?.page === "signUp" ? new URL(landing.link).searchParams.get("code") : null;
     const to = args.to[0];
     if (code === null || to === undefined) {
       return "dropped";
@@ -102,23 +123,44 @@ export const deliverAuthEmail = internalMutation({
   },
 });
 
-/** The link in the email text, only if it is our sign-up landing URL with a `code`. */
-function signUpLinkFromText(text: string | undefined): string | null {
+type LandingPage = keyof typeof LANDING_URLS;
+
+/** The link in the email text and its landing page, only if it is one of ours with a `code`. */
+function landingLinkFromText(text: string | undefined): { page: LandingPage; link: string } | null {
   const link = text?.match(/https?:\/\/\S+/)?.[0];
   if (!link) return null;
   const url = new URL(link);
   const code = url.searchParams.get("code");
   url.searchParams.delete("code");
-  return code && url.toString() === new URL(LANDING_URLS.signUp).toString() ? link : null;
+  const page = (Object.keys(LANDING_URLS) as LandingPage[]).find(
+    (key) => new URL(LANDING_URLS[key]).toString() === url.toString()
+  );
+  return code && page ? { page, link } : null;
 }
 
-/** Our subject and HTML for the package's sign-up email; its text stays the plain-text part. */
-function signUpEmailFromText(text: string | undefined): { subject: string; html: string } | null {
-  const verifyUrl = signUpLinkFromText(text);
+// Our template per landing page; null sends the package's plain text (email change isn't offered yet).
+const LINK_EMAILS: Record<LandingPage, ((url: string, expiresIn: string) => EmailTemplateDocument) | null> = {
+  signUp: (verifyUrl, expiresIn) => buildVerifyEmailEmail({ verifyUrl, expiresIn }),
+  recovery: (resetUrl, expiresIn) => buildResetPasswordEmail({ resetUrl, expiresIn }),
+  changeEmail: null,
+};
+// The package's notice after a password change or reset, matched by its subject.
+const PASSWORD_CHANGED_SUBJECT = "Your password was changed";
+
+/** Our subject and HTML for the package's emails we have a template for; its text stays the plain-text part. */
+function styledEmail(subject: string | undefined, text: string | undefined): { subject: string; html: string } | null {
+  const template = authEmailTemplate(subject, text);
+  if (!template) return null;
+  const { subject: styledSubject, html } = buildResendEmail(template);
+  return { subject: styledSubject, html };
+}
+
+function authEmailTemplate(subject: string | undefined, text: string | undefined): EmailTemplateDocument | null {
+  if (subject === PASSWORD_CHANGED_SUBJECT) return buildPasswordChangedEmail({ resetUrl: FORGOT_PASSWORD_URL });
+  const landing = landingLinkFromText(text);
   const expiresIn = text?.match(/stops working after ([^,]+),/)?.[1];
-  if (!verifyUrl || !expiresIn) return null;
-  const { subject, html } = buildResendEmail(buildVerifyEmailEmail({ verifyUrl, expiresIn }));
-  return { subject, html };
+  const build = landing && LINK_EMAILS[landing.page];
+  return build && expiresIn ? build(landing.link, expiresIn) : null;
 }
 
 type SignUpErrorCode = Extract<SignUpResult, { success: false }>["userError"]["error"];
