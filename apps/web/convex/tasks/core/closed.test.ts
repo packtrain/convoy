@@ -22,18 +22,23 @@ async function readClosedAt(ctx: ReturnType<typeof createTestContext>, id: Id<"t
 
 describe("closedAt (docs/specs/task-closed-at.md)", () => {
   test("update stamps on close, keeps on same-status writes, re-stamps on Canceled, clears on reopen", async () => {
+    // Setup commits before T0, so convex-test doesn't bump the clock of the close.
+    vi.setSystemTime(T0 - 1000);
     const ctx = createTestContext();
     const { project, user, asUser } = await ctx.setupProject();
     const task = await ctx.task(project._id, user._id, { status: "To Do" });
     expect(await readClosedAt(ctx, task._id)).toBeNull();
+    vi.setSystemTime(T0);
 
+    await asUser.mutation(api.tasks.core.update, { id: task._id, status: "Done" });
+    expect(await readClosedAt(ctx, task._id)).toBe(T0);
+
+    vi.setSystemTime(T0 + DAY - 1000);
+    await asUser.mutation(api.tasks.core.update, { id: task._id, name: "Renamed" });
     await asUser.mutation(api.tasks.core.update, { id: task._id, status: "Done" });
     expect(await readClosedAt(ctx, task._id)).toBe(T0);
 
     vi.setSystemTime(T0 + DAY);
-    await asUser.mutation(api.tasks.core.update, { id: task._id, name: "Renamed" });
-    await asUser.mutation(api.tasks.core.update, { id: task._id, status: "Done" });
-    expect(await readClosedAt(ctx, task._id)).toBe(T0);
 
     await asUser.mutation(api.tasks.core.update, { id: task._id, status: "Canceled" });
     expect(await readClosedAt(ctx, task._id)).toBe(T0 + DAY);
@@ -60,9 +65,11 @@ describe("closedAt (docs/specs/task-closed-at.md)", () => {
   });
 
   test("bulk status update stamps closedAt", async () => {
+    vi.setSystemTime(T0 - 1000);
     const ctx = createTestContext();
     const { project, user, asUser } = await ctx.setupProject();
     const [a, b] = await ctx.tasks(project._id, user._id, 2, { status: "To Do" });
+    vi.setSystemTime(T0);
 
     await asUser.mutation(api.tasks.core.bulk.update, { ids: [a._id, b._id], status: "Done" });
 

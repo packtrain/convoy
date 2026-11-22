@@ -3875,10 +3875,12 @@ describe("tasks.updateExternalLink (OS-760)", () => {
   });
 
   test("upsert with an existing id replaces in place, preserving createdAt and order", async () => {
-    vi.useFakeTimers({ now: 1_000_000 });
+    // Setup commits at an earlier ms, so convex-test doesn't bump the first upsert's clock.
+    vi.useFakeTimers({ now: 500_000 });
     const ctx = createTestContext();
     const { user, project, asUser } = await ctx.setupProject();
     const task = await ctx.task(project._id, user._id);
+    vi.setSystemTime(1_000_000);
 
     await asUser.mutation(api.tasks.core.updateExternalLink, {
       taskId: task._id,

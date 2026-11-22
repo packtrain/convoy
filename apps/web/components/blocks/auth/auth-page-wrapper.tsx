@@ -4,7 +4,7 @@ import { useEffect, useMemo, ReactNode } from "react";
 import { useAppAuth } from "@/lib/auth/hooks";
 import {
   AUTH_REDIRECT_PARAM,
-  sanitizeAuthRedirectUrl,
+  buildAuthCallbackPath,
 } from "@/lib/routing/auth-redirects";
 import {
   targetFromHref,
@@ -25,14 +25,11 @@ export function AuthPageWrapper({ children }: AuthPageWrapperProps) {
     [navigation.location.search]
   );
 
+  // Signed in (already, or just now on this page): go through /auth/callback,
+  // which onboards a new user and then forwards to redirect_url.
   useEffect(() => {
     if (isLoaded && isSignedIn) {
-      const redirectUrl =
-        sanitizeAuthRedirectUrl(
-          searchParams.get(AUTH_REDIRECT_PARAM),
-          window.location.origin
-        ) || "/auth/callback";
-      navigation.replace(targetFromHref(redirectUrl));
+      navigation.replace(targetFromHref(buildAuthCallbackPath(searchParams.get(AUTH_REDIRECT_PARAM))));
     }
   }, [isLoaded, isSignedIn, navigation, searchParams]);
 

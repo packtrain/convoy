@@ -1,9 +1,19 @@
-import { mutation, query, type MutationCtx } from "../_generated/server";
-import type { Id } from "../_generated/dataModel";
+import { internalMutation, mutation, query, type MutationCtx } from "../_generated/server";
+import { components } from "../_generated/api";
+import type { Doc, Id } from "../_generated/dataModel";
+import type { UserIdentity } from "convex/server";
 import { v } from "convex/values";
 import { ConvexError } from "convex/values";
-import { getAuthenticatedUser, getOptionalAuthenticatedUser } from "../lib/access/auth";
-import { isLocalDemoDeployment, LOCAL_DEMO_TOKEN_IDENTIFIER, LOCAL_DEMO_USER_EMAIL, LOCAL_DEMO_USER_NAME } from "../lib/access/localDemo";
+import {
+  getAuthenticatedUser,
+  getOptionalAuthenticatedUser,
+  isConvexAuthDeployment,
+  isConvexAuthIdentity,
+  resolveIdentityUser,
+} from "../lib/access/auth";
+import { normalizeEmail } from "../lib/shared/strings";
+import { emailPasswordMethodValidator } from "./lib/validators";
+import { getLocalDemoUser, isLocalDemoDeployment, LOCAL_DEMO_TOKEN_IDENTIFIER, LOCAL_DEMO_USER_EMAIL, LOCAL_DEMO_USER_NAME } from "../lib/access/localDemo";
 import { OrgRole, ProjectRole } from "../../lib/authz/roles";
 import { getOrganizationById, getOrganizationBySlug, insertOrganization } from "../organizations/lib/organizationsRepo";
 import {
@@ -13,7 +23,7 @@ import {
 import { insertProject, initializeProjectLists } from "../projects/lib/projectsRepo";
 import { insertMembership as insertProjectMembership } from "../projects/lib/membersRepo";
 import { createInboxList } from "../tasks/lib/taskListsRepo";
-import { getUserByTokenIdentifier, insertUser, updateUserProfile, upsertUserFromIdentity } from "./lib/usersRepo";
+import { getUserById, getUserByTokenIdentifier, insertUser, updateUserProfile, upsertUserFromIdentity } from "./lib/usersRepo";
 import { notAuthenticatedError } from "./errors";
 
 function generateSlug(name: string): string {
@@ -33,6 +43,24 @@ function generateRandomSuffix(): string {
   return result;
 }
 
+/**
+ * The caller's user row. Clerk identities are upserted from their claims; a Convex
+ * Auth user already exists, created by `createAuthUser` at sign-up.
+ */
+async function ensureIdentityUser(
+  ctx: MutationCtx,
+  identity: UserIdentity
+): Promise<{ user: Doc<"users">; isNewUser: boolean }> {
+  if (!isConvexAuthIdentity(identity)) {
+    return upsertUserFromIdentity(ctx, identity);
+  }
+  const user = await resolveIdentityUser(ctx, identity);
+  if (!user) {
+    throw notAuthenticatedError();
+  }
+  return { user, isNewUser: false };
+}
+
 export const store = mutation({
   args: {},
   returns: v.id("users"),
@@ -42,7 +70,7 @@ export const store = mutation({
       throw notAuthenticatedError();
     }
 
-    const { user } = await upsertUserFromIdentity(ctx, identity);
+    const { user } = await ensureIdentityUser(ctx, identity);
     return user._id;
   },
 });
@@ -111,11 +139,51 @@ export const onboard = mutation({
   handler: async (ctx) => {
     const identity = await ctx.auth.getUserIdentity();
     if (!identity) {
-      throw notAuthenticatedError();
+      // Local-demo has no JWT, and /auth/callback runs onboard in every mode.
+      const demoUser = await getLocalDemoUser(ctx);
+      if (!demoUser) {
+        throw notAuthenticatedError();
+      }
+      return onboardUser(ctx, demoUser._id, demoUser.name, false);
     }
 
-    const { user, isNewUser } = await upsertUserFromIdentity(ctx, identity);
-    return onboardUser(ctx, user._id, identity.name ?? "User", isNewUser);
+    const { user, isNewUser } = await ensureIdentityUser(ctx, identity);
+    return onboardUser(ctx, user._id, user.name || "User", isNewUser);
+  },
+});
+
+/**
+ * Convex Auth `createUser`: runs when sign-up starts, before the address is known
+ * here. `onAuthSignIn` fills in the email and name.
+ */
+export const createAuthUser = internalMutation({
+  args: { method: emailPasswordMethodValidator },
+  returns: v.id("users"),
+  handler: async (ctx) => {
+    if (!isConvexAuthDeployment()) {
+      throw new ConvexError("Convex Auth sign-up is not enabled on this deployment");
+    }
+    const user = await insertUser(ctx, { email: "", name: "" });
+    return user._id;
+  },
+});
+
+/**
+ * Convex Auth `onSignIn`: copies the verified address into `users.email`, which member
+ * lists and `by_email` read. The name defaults to the address's local part.
+ */
+export const onAuthSignIn = internalMutation({
+  args: { method: emailPasswordMethodValidator, userId: v.id("users") },
+  returns: v.null(),
+  handler: async (ctx, { userId }) => {
+    const user = await getUserById(ctx, userId);
+    const verified = await ctx.runQuery(components.authEmail.verifiedEmails.getPrimaryEmail, { userId });
+    const email = verified === null ? null : normalizeEmail(verified);
+    if (!user || email === null || (email === user.email && user.name)) {
+      return null;
+    }
+    await updateUserProfile(ctx, userId, { email, name: user.name || email.split("@")[0] });
+    return null;
   },
 });
 
@@ -153,7 +221,7 @@ export const current = query({
     v.object({
       _id: v.id("users"),
       _creationTime: v.number(),
-      tokenIdentifier: v.string(),
+      tokenIdentifier: v.optional(v.string()),
       email: v.string(),
       name: v.string(),
       avatarUrl: v.optional(v.string()),

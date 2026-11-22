@@ -2466,6 +2466,8 @@ describe("markDone", () => {
     const profile = await ctx.cliProfile(user._id, project._id);
     const thread = await ctx.cliThread(user._id, project._id, profile._id, { status });
     const { key } = await asUser.mutation(api.apiKeys.core.create, { name: "CLI", expiresAt: Date.now() + 60_000 });
+    // convex-test bumps a transaction's clock past earlier commits in the same frozen ms.
+    vi.setSystemTime(Date.now() + 1000);
     await t.mutation(api.cli.threads.core.markDone, { threadId: thread._id, apiKey: key });
     const result = await t.run((dbCtx) => dbCtx.db.get("cliThreads", thread._id));
     expect(result).toMatchObject({ doneAt: Date.now(), isMarkedDone: true, statusProjection: { isDone: true } });
@@ -2487,6 +2489,8 @@ describe("markDone", () => {
     const { user, project, asUser, t } = await ctx.setupProject();
     const profile = await ctx.cliProfile(user._id, project._id);
     const thread = await ctx.cliThread(user._id, project._id, profile._id, { status: "streaming", ...pause });
+    // convex-test bumps a transaction's clock past earlier commits in the same frozen ms.
+    vi.setSystemTime(Date.now() + 1000);
     await asUser.mutation(api.cli.threads.core.markDone, { threadId: thread._id });
     expect((await t.run((dbCtx) => dbCtx.db.get("cliThreads", thread._id)))?.doneAt).toBe(Date.now());
   });
@@ -2497,6 +2501,8 @@ describe("markDone", () => {
     const profile = await ctx.cliProfile(user._id, project._id);
     const thread = await ctx.cliThread(user._id, project._id, profile._id, { status: "failed", lastActivityAt: Date.now() - 1000 });
     const { key } = await asUser.mutation(api.apiKeys.core.create, { name: "CLI", expiresAt: Date.now() + 60_000 });
+    // convex-test bumps a transaction's clock past earlier commits in the same frozen ms.
+    vi.setSystemTime(Date.now() + 1000);
     await t.mutation(api.cli.threads.core.markDone, { threadId: thread._id, apiKey: key });
     const result = await t.run((dbCtx) => dbCtx.db.get("cliThreads", thread._id));
     expect(result).toMatchObject({ doneAt: Date.now(), readAt: Date.now(), attentionAcknowledgedAt: Date.now(), status: "failed", lastActivityAt: thread.lastActivityAt });
@@ -2511,6 +2517,8 @@ describe("markDone", () => {
     const child = await ctx.cliThread(user._id, project._id, profile._id, {
       parentThreadId: group._id, status: "completed", lastActivityAt: Date.now() - 1000,
     });
+    // convex-test bumps a transaction's clock past earlier commits in the same frozen ms.
+    vi.setSystemTime(Date.now() + 1000);
     await asUser.mutation(api.cli.threads.core.markDone, { threadId: group._id });
     expect((await t.run((dbCtx) => dbCtx.db.get("cliThreads", child._id)))?.doneAt).toBe(Date.now());
     await t.run((dbCtx) => dbCtx.db.patch("cliThreads", child._id, { lastActivityAt: Date.now() + 1000 }));
@@ -2570,6 +2578,8 @@ describe("markNotDone", () => {
     const profile = await ctx.cliProfile(user._id, project._id);
     const thread = await ctx.cliThread(user._id, project._id, profile._id, { status: "completed" });
     const { key } = await asUser.mutation(api.apiKeys.core.create, { name: "CLI", expiresAt: Date.now() + 60_000 });
+    // convex-test bumps a transaction's clock past earlier commits in the same frozen ms.
+    vi.setSystemTime(Date.now() + 1000);
     await t.mutation(api.cli.threads.core.markDone, { threadId: thread._id, apiKey: key });
     await t.mutation(api.cli.threads.core.markNotDone, { threadId: thread._id, apiKey: key });
     const result = await t.run((dbCtx) => dbCtx.db.get("cliThreads", thread._id));

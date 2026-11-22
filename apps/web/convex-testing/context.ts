@@ -1,5 +1,8 @@
 import { convexTest } from "convex-test";
 import migrations from "@convex-dev/migrations/test";
+import authCore from "@convex-dev/auth/test";
+import authEmail from "@convex-dev/auth/components/email/test";
+import authPassword from "@convex-dev/auth/components/password/test";
 import schema from "../convex/schema";
 import { Id } from "../convex/_generated/dataModel";
 import {
@@ -44,6 +47,9 @@ export function createTestContext(options: { transactionLimits?: Partial<Transac
   resetGenerators();
   const t = convexTest({ schema, modules, ...options });
   migrations.register(t);
+  authCore.registerCore(t);
+  authEmail.registerEmail(t);
+  authPassword.registerPassword(t);
 
   const ctx = {
     t,

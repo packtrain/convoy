@@ -78,4 +78,13 @@ describe("buildAuthCallbackPath", () => {
     expect(buildAuthCallbackPath(null)).toBe("/auth/callback");
     expect(buildAuthCallbackPath("")).toBe("/auth/callback");
   });
+
+  // The callback page processes once per mount, so a nested callback never onboards.
+  test("does not nest a redirect_url that is already the callback", () => {
+    expect(buildAuthCallbackPath("/auth/callback?redirect_url=%2F")).toBe("/auth/callback?redirect_url=%2F");
+    expect(buildAuthCallbackPath("http://app.example/auth/callback?redirect_url=%2F")).toBe(
+      "/auth/callback?redirect_url=%2F"
+    );
+    expect(buildAuthCallbackPath("http://[bad")).toBe("/auth/callback?redirect_url=http%3A%2F%2F%5Bbad");
+  });
 });

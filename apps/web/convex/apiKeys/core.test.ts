@@ -5,6 +5,11 @@ import { hashApiKey } from "../lib/access/apiKeys";
 import { mintApiKey } from "../lib/access/mintApiKey";
 import type { MutationCtx } from "../_generated/server";
 
+/** convex-test bumps a transaction's clock past earlier commits in the same ms; let real time pass it. */
+function tickPastLastCommit() {
+  return new Promise((resolve) => setTimeout(resolve, 2));
+}
+
 const FIRST_PAGE = { numItems: 100, cursor: null };
 /** Index names of every query `c.db` runs while recording; full-table scans record "(scan)". */
 function recordQueries(c: MutationCtx) {
@@ -929,6 +934,7 @@ describe("apiKeys", () => {
       });
 
       // Record usage
+      await tickPastLastCommit();
       const beforeUsage = Date.now();
       await t.mutation(internal.apiKeys.core.recordUsage, {
         apiKeyId: result.id,
@@ -964,6 +970,7 @@ describe("apiKeys", () => {
       });
 
       // Record usage by raw key
+      await tickPastLastCommit();
       const beforeUsage = Date.now();
       await t.mutation(internal.apiKeys.core.recordUsageByKey, {
         apiKey: result.key,
@@ -1001,6 +1008,7 @@ describe("apiKeys", () => {
         expiresAt,
       });
 
+      await tickPastLastCommit();
       const beforeUsage = Date.now();
       await t.mutation(internal.apiKeys.core.recordUsageIfStale, {
         apiKeyId: result.id,
@@ -1061,6 +1069,7 @@ describe("apiKeys", () => {
         });
       });
 
+      await tickPastLastCommit();
       const beforeUsage = Date.now();
       await t.mutation(internal.apiKeys.core.recordUsageIfStale, {
         apiKeyId: result.id,
@@ -1089,6 +1098,7 @@ describe("apiKeys", () => {
         expiresAt,
       });
 
+      await tickPastLastCommit();
       const beforeUsage = Date.now();
       await t.mutation(internal.apiKeys.core.recordUsageByKeyIfStale, {
         apiKey: result.key,
@@ -1149,6 +1159,7 @@ describe("apiKeys", () => {
         });
       });
 
+      await tickPastLastCommit();
       const beforeUsage = Date.now();
       await t.mutation(internal.apiKeys.core.recordUsageByKeyIfStale, {
         apiKey: result.key,

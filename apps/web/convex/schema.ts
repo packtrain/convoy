@@ -91,7 +91,8 @@ import {
 export default defineSchema({
   // Users (synced from Clerk)
   users: defineTable({
-    tokenIdentifier: v.string(),
+    // Clerk and local-demo only. Convex Auth users are matched by id (docs/specs/auth-adapters.md).
+    tokenIdentifier: v.optional(v.string()),
     email: v.string(),
     name: v.string(),
     avatarUrl: v.optional(v.string()),
@@ -100,6 +101,13 @@ export default defineSchema({
   })
     .index("by_token", ["tokenIdentifier"])
     .index("by_email", ["email"]),
+
+  // Convex Auth sign-up code while email verification is off. Written and deleted inside
+  // one sign-up transaction; see docs/specs/auth-adapters.md#email-verification.
+  pendingSignUpCodes: defineTable({
+    email: v.string(),
+    code: v.string(),
+  }).index("by_email", ["email"]),
 
   // Organizations
   organizations: defineTable({

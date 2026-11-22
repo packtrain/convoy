@@ -31,3 +31,8 @@ export function countStringOccurrences(content: string, searchString: string): n
 export function isSafeFileName(fileName: string): boolean {
   return /^(?!\.{1,2}$)[^/\\\u0000-\u001f\u007f]{1,255}$/.test(fileName);
 }
+
+/** The one form we store and match email addresses in: trimmed, lowercase, NFC (as Convex Auth matches them). */
+export function normalizeEmail(email: string): string {
+  return email.trim().toLowerCase().normalize("NFC");
+}

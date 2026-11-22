@@ -1,6 +1,6 @@
 import { clerkMiddleware, createRouteMatcher } from "@clerk/nextjs/server";
-import { NextResponse, type NextRequest } from "next/server";
-import { isLocalDemoAuthMode } from "@/lib/auth/auth-mode";
+import { NextResponse, type NextRequest, type NextProxy } from "next/server";
+import { authMode, type AuthMode } from "@/lib/auth/auth-mode";
 
 const APP_TITLE = "Convoy";
 const APP_DESCRIPTION = "Convoy is a platform for managing your tasks and projects.";
@@ -47,19 +47,19 @@ export function createGenericLinkPreviewResponse(): Response {
   );
 }
 
-// Local-demo mode (OS-1230): no Clerk keys exist, so clerkMiddleware cannot
-// run. Auth is ambient (backend resolves anonymous calls to the demo user);
-// only the link-preview handling is kept.
-function localDemoMiddleware(request: NextRequest): Response {
+// Local-demo (OS-1230) and Convex Auth: no Clerk keys exist, so clerkMiddleware
+// cannot run. Only the link-preview handling is kept. Local-demo auth is ambient;
+// Convex Auth gates routes in the browser until S4 (docs/specs/auth-adapters.md).
+function passThroughMiddleware(request: NextRequest): Response {
   if (isLinkPreviewCrawler(request.headers.get("user-agent"))) {
     return createGenericLinkPreviewResponse();
   }
   return NextResponse.next();
 }
 
-// A builder (not a module-scope constant) so the clerkMiddleware factory is
-// only invoked in Clerk builds — local-demo builds have no Clerk keys.
-function buildClerkAuthMiddleware() {
+// Builders (not module-scope constants) so the clerkMiddleware factory is
+// only invoked in Clerk builds — other builds have no Clerk keys.
+function buildClerkAuthMiddleware(): NextProxy {
   return clerkMiddleware(
     async (auth, request) => {
       if (!isPublicRoute(request) && isLinkPreviewCrawler(request.headers.get("user-agent"))) {
@@ -77,7 +77,13 @@ function buildClerkAuthMiddleware() {
   );
 }
 
-export default isLocalDemoAuthMode ? localDemoMiddleware : buildClerkAuthMiddleware();
+const PROXY_BUILDERS: Record<AuthMode, () => NextProxy> = {
+  clerk: buildClerkAuthMiddleware,
+  "local-demo": () => passThroughMiddleware,
+  convex: () => passThroughMiddleware,
+};
+
+export default PROXY_BUILDERS[authMode]();
 
 export const config = {
   matcher: [

@@ -6,6 +6,9 @@
 
 import { afterEach, vi } from "vitest";
 
+// Convex sets this on every deployment; Convex Auth token issuers derive from it.
+process.env.CONVEX_CLOUD_URL ??= "https://some-deployment.convex.cloud";
+
 // Captured before any vi.useFakeTimers() so the flush below never hangs.
 const realSetTimeout = globalThis.setTimeout;
 

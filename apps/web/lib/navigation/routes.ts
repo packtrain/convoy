@@ -254,6 +254,8 @@ export const appRoute = {
   ) => routeTarget(`/o/${organizationSlug}/${projectAlias}/artifacts/${artifactId}`),
   authSignIn: (redirectUrl?: string | null) =>
     withQuery("/auth/sign-in", { redirect_url: redirectUrl }),
+  authSignUp: (redirectUrl?: string | null) =>
+    withQuery("/auth/sign-up", { redirect_url: redirectUrl }),
   authInvite: (token: string) => routeTarget(`/auth/invite/${token}`),
   playground: () => routeTarget("/playground"),
 } as const;

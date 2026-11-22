@@ -105,6 +105,23 @@ container inherits the host's (prod, for the firewall allowlist). And
 otherwise prints names only, and the copy sets no values. CLIs older than
 1.49 reject the flag, so setup retries without it; they print values anyway.
 
+## Convex Auth mode
+
+A preview can run the `convex` auth mode ([auth-adapters.md](auth-adapters.md)).
+Until S5 (OS-2499) the setup script does not do this for you:
+
+1. Add `NEXT_PUBLIC_AUTH_MODE=convex` to the worktree's `apps/web/.env.local`.
+2. Set `AUTH_MODE=convex` and `AUTH_EMAIL_VERIFICATION=off` on the preview
+   deployment with `npx convex env set --deployment <preview-name> <NAME> <value>`,
+   using the preview deploy key and no inherited `CONVEX_DEPLOYMENT`.
+3. Restart `pnpm worktree:dev` and sign up with a new address.
+
+The preview needs no auth secrets, because the deployment signs its own tokens.
+The copied `CLERK_JWT_ISSUER_DOMAIN` stays as it is. Users copied from dev have
+no Convex Auth password, and a new account does not see the copied
+organizations. The agent browser login still uses Clerk, so it does not work in
+this mode yet.
+
 ## Lifecycle & Limitations
 
 - `wt remove` runs a `pre-remove` hook that kills any process still running

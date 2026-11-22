@@ -74,3 +74,6 @@ dist/
 
 # Python test bytecode
 __pycache__/
+
+# playwright-cli session logs and snapshots
+.playwright-cli/

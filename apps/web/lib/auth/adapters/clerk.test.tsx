@@ -28,15 +28,16 @@ vi.mock("./convex-clerk-provider", () => ({
   ConvexClerkProvider: ({ children }: { children: ReactNode }) => <>{children}</>,
 }));
 
-import { ConvexClientProvider } from "./convex-client-provider";
+import type { ConvexReactClient } from "convex/react";
+import { clerkAdapter } from "./clerk";
 
 function renderWithTheme(resolvedTheme: string | undefined) {
   mocks.resolvedTheme = resolvedTheme;
-  render(<ConvexClientProvider>child</ConvexClientProvider>);
+  render(<clerkAdapter.Provider client={{} as ConvexReactClient}>child</clerkAdapter.Provider>);
   return mocks.appearance as { variables?: Record<string, string> } | undefined;
 }
 
-describe("ConvexClientProvider Clerk appearance", () => {
+describe("Clerk adapter provider appearance", () => {
   afterEach(() => {
     cleanup();
     mocks.appearance = undefined;

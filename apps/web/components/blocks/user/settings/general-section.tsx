@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect } from "react";
-import { useAppUpdateProfileName, useAppUser } from "@/lib/auth/hooks";
+import { emailChangeHint, useAppUpdateProfileName, useAppUser } from "@/lib/auth/hooks";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod/v3";
@@ -122,9 +122,7 @@ export function GeneralSection() {
           <div className="space-y-2">
             <Label htmlFor="email">Email</Label>
             <Input id="email" value={email} disabled className="bg-muted/50" />
-            <p className="text-sm text-muted-foreground">
-              Email changes are managed through your account settings.
-            </p>
+            {emailChangeHint && <p className="text-sm text-muted-foreground">{emailChangeHint}</p>}
           </div>
 
           {/* Save Button */}

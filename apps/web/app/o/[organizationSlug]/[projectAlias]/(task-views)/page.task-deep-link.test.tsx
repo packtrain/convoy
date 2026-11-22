@@ -37,8 +37,9 @@ vi.mock("next/navigation", () => ({
   useSearchParams: () => new URLSearchParams(),
 }));
 
-vi.mock("@clerk/nextjs", () => ({
-  useAuth: () => ({ isLoaded: true, isSignedIn: true }),
+vi.mock("@/lib/auth/hooks", () => ({
+  useAppAuth: () => ({ isLoaded: true, isSignedIn: true, userId: null }),
+  useAppConvexAuth: () => ({ isLoading: false, isAuthenticated: true }),
 }));
 
 vi.mock("convex/react", () => ({

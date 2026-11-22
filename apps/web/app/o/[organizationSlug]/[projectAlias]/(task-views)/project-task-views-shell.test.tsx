@@ -33,8 +33,9 @@ const taskListResultsController = {
   loadMore: vi.fn(),
 };
 
-vi.mock("@clerk/nextjs", () => ({
-  useAuth: () => ({ isLoaded: true, isSignedIn: true, userId: "user-1" }),
+vi.mock("@/lib/auth/hooks", () => ({
+  useAppAuth: () => ({ isLoaded: true, isSignedIn: true, userId: "user-1" }),
+  useAppConvexAuth: () => ({ isLoading: false, isAuthenticated: true }),
 }));
 
 const projectLoadStateMock = vi.hoisted(() => ({ loading: false }));

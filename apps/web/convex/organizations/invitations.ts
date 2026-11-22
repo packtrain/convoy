@@ -24,6 +24,7 @@ import {
 import { ensure } from "../lib/shared/ensure";
 import { join } from "../lib/shared/join";
 import { errors } from "./errors";
+import { normalizeEmail } from "../lib/shared/strings";
 
 const invitationTokenAccessValidator = v.union(
   v.object({
@@ -63,10 +64,6 @@ function maskEmail(email: string): string {
   const tld = domainParts.slice(1).join(".");
 
   return `${maskPart(localPart)}@${maskedDomainName}.${tld}`;
-}
-
-function normalizeEmail(email: string): string {
-  return email.trim().toLowerCase();
 }
 
 /**

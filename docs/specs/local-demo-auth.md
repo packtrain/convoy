@@ -9,12 +9,12 @@ everywhere) is unchanged.
 
 ## Mode wiring
 
-One logical flag, `clerk | local-demo`, in three places kept in sync by
-`self-hosted/start.sh`:
+One logical flag in three places kept in sync by `self-hosted/start.sh`. The
+web bundle also accepts `convex`; see [auth-adapters.md](auth-adapters.md).
 
 | Surface | Mechanism | Consumed by |
 | --- | --- | --- |
-| Web bundle | `NEXT_PUBLIC_AUTH_MODE` build ARG (`self-hosted/web.Dockerfile`), default `clerk` | `apps/web/lib/auth/auth-mode.ts` (`isLocalDemoAuthMode`) |
+| Web bundle | `NEXT_PUBLIC_AUTH_MODE` build ARG (`self-hosted/web.Dockerfile`), default `clerk` | `apps/web/lib/auth/auth-mode.ts` (`authMode`, `isLocalDemoAuthMode`) |
 | Convex deployment | `AUTH_MODE` deployment env var (`npx convex env set AUTH_MODE local-demo`) | `apps/web/convex/lib/access/localDemo.ts` (`isLocalDemoDeployment`) |
 | Compose/.env | `AUTH_MODE` in `self-hosted/.env` | `start.sh`, compose build arg |
 
@@ -63,14 +63,11 @@ local-demo deployment.
 
 ## Frontend behavior
 
-- `lib/auth/auth-mode.ts` exposes the build-time flag; `lib/auth/hooks.ts` is
-  the app-auth adapter. Product code must use these instead of Clerk hooks:
-  `useAppAuth`, `useAppUser`, `useAppSignOut`, `useAppUpdateProfileName`,
-  `useAppConvexAuth`, and the `supportsSignOut` constant. Direct
-  `@clerk/nextjs` imports are allowed only in the adapter itself, the Convex
-  client provider, the sign-in/sign-up pages, `proxy.ts`, and the agent
-  browser-login route.
-- `providers/convex-client-provider.tsx`: local-demo renders plain
+- `lib/auth/auth-mode.ts` exposes the build-time flag; `lib/auth/hooks.ts`
+  selects the adapter. Product code uses its exports instead of Clerk hooks.
+  [auth-adapters.md](auth-adapters.md) lists them and the files allowed to
+  import `@clerk/nextjs`.
+- `lib/auth/adapters/local-demo.tsx`: the provider renders plain
   `ConvexProvider` (no ClerkProvider) and gates the app behind an
   `onboardLocalDemo` call so first-load queries see an onboarded workspace.
 - `proxy.ts`: local-demo skips `clerkMiddleware` (which requires keys) and
