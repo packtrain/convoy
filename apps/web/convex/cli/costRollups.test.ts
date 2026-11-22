@@ -28,7 +28,7 @@ function claudeResultChunk(costUsd: number) {
 /** A claimed thread with one started run, ready for appendRunContent. */
 async function setupClaimedRun(options?: {
   associatedTaskId?: Id<"tasks">;
-  cliType?: "codex" | "opencode";
+  cliType?: "codex" | "opencode" | "antigravity";
   cliModel?: string;
 }) {
   const ctx = createTestContext();
@@ -568,6 +568,42 @@ describe("cost estimation integration", () => {
       expect(rows[0]?.costMetadata).toEqual(threadSummary.costMetadata);
       expect(rows[0]?.costUsd).toBe(threadSummary.totalCostUsd);
     }
+  });
+});
+
+describe("Antigravity estimates (OS-2481)", () => {
+  beforeEach(() => vi.useFakeTimers());
+  afterEach(() => vi.useRealTimers());
+
+  const usage = { inputTokens: 1000, outputTokens: 200, cachedReadTokens: 400, cachedWriteTokens: 0, thoughtTokens: 150, totalTokens: 1600 };
+  async function runWith(model: string | undefined) {
+    const base = await setupClaimedRun({ cliType: "antigravity" });
+    await base.t.mutation(api.cli.messages.appendRunContent, {
+      messageId: base.started.assistantMessageId, sessionId: base.session._id, apiKey: base.apiKeyResult.key,
+      chunks: [{ type: "convoy/acp_prompt_result", data: JSON.stringify({ sessionId: "s1", stopReason: "end_turn", usage, ...(model ? { model } : {}) }) }],
+    });
+    vi.advanceTimersByTime(1);
+    await base.t.finishInProgressScheduledFunctions();
+    return base.asUser.query(api.costs.core.getThreadCostSummary, { threadId: base.chat._id });
+  }
+
+  test("prices the effective Gemini model at its catalog rate", async () => {
+    const summary = await runWith("gemini-3.8-flash");
+    expect(summary.byModel[0]).toMatchObject({ model: "gemini-3.8-flash", inputTokens: 1000, cacheReadTokens: 400, outputTokens: 200 });
+    expect(summary.costMetadata).toMatchObject({ hasEstimated: true, hasUnpriced: false });
+    // LiteLLM gemini/gemini-3.8-flash: input $0.75/M, cache reads $0.075/M, output $3.75/M.
+    expect(summary.totalCostUsd).toBeCloseTo(1000 * 7.5e-7 + 400 * 7.5e-8 + 200 * 3.75e-6, 12);
+  });
+
+  test("prices Claude Sonnet 5.5 through agy at the Sonnet rate", async () => {
+    const summary = await runWith("claude-sonnet-5-5");
+    expect(summary.totalCostUsd).toBeCloseTo(1000 * 2e-6 + 400 * 1e-7 + 200 * 1e-5, 12);
+  });
+
+  test.each(["gemini-pro-orchestrator-neon", undefined])("leaves model %s unpriced rather than free", async (model) => {
+    const summary = await runWith(model);
+    expect(summary.byModel[0]?.outputTokens).toBe(200);
+    expect(summary.costMetadata).toMatchObject({ hasEstimated: false, hasUnpriced: true });
   });
 });
 

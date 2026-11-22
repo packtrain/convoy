@@ -1,5 +1,6 @@
 import type { CliRuntimeModel, ParseResult, RawCliChunk } from "../contracts";
 import type { CliRuntimeAvailableCli, CliRuntimeDefinition, CliRuntimeEffortContext } from "../registry";
+import { extractAntigravityCostUsage } from "./costUsage";
 import { getAcpContinuationIdFromIncomingChunks, isAcpEphemeralChunk } from "../acp/normalizeChunk";
 import {
   getAntigravityEffortOptions,
@@ -52,6 +53,10 @@ export const antigravityRuntime: CliRuntimeDefinition = {
   isEphemeralChunk: (chunk: RawCliChunk) => isAcpEphemeralChunk(chunk),
   extractContinuationIdFromChunks: (chunks: RawCliChunk[]) => getAcpContinuationIdFromIncomingChunks(chunks),
   extractSlashCommandsFromChunks: (chunks: RawCliChunk[]) => getAntigravitySlashCommandsFromIncomingChunks(chunks),
+  extractCostUsageFromChunks: (chunks: RawCliChunk[]) => {
+    const usage = extractAntigravityCostUsage(chunks);
+    return usage ? { usage } : null;
+  },
   // The ACP session id is an agy conversation id (verified on 1.5.13).
   buildResumeCommand: (continuationId: string) => `agy --conversation ${continuationId}`,
 };

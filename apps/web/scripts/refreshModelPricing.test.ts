@@ -47,6 +47,34 @@ describe("catalog coverage", () => {
     }
   });
 
+  it("classifies every model agy offered on a Google AI Pro account (OS-2481)", () => {
+    const agyModels = [
+      "gemini-4-neon",
+      "gemini-4-argon",
+      "gemini-4-hydrogen",
+      "gemini-3.8-flash",
+      "gemini-pro-orchestrator-neon",
+      "gemini-pro-orchestrator-g1-pro",
+      "claude-opus-5-5",
+      "claude-sonnet-5-5",
+      "gpt-oss-120b-medium",
+    ];
+    expect(Object.fromEntries(agyModels.map((id) => [id, resolveModelPricing(id).status]))).toEqual({
+      "gemini-4-neon": "resolved",
+      "gemini-4-argon": "resolved",
+      "gemini-4-hydrogen": "resolved",
+      "gemini-3.8-flash": "resolved",
+      // One usage total for several models: no single rate applies.
+      "gemini-pro-orchestrator-neon": "unpriced",
+      "gemini-pro-orchestrator-g1-pro": "unpriced",
+      "claude-opus-5-5": "resolved",
+      "claude-sonnet-5-5": "resolved",
+      "gpt-oss-120b-medium": "unpriced",
+    });
+    expect(resolveModelPricing("gemini-3.8-flash")).toMatchObject({ modelKey: "gemini/gemini-3.8-flash", match: "alias" });
+    expect(pricingCatalog.snapshotVersion).toMatch(/^litellm-v3-/);
+  });
+
   it("contains finite nonnegative rates and pinned provenance", () => {
     expect(pricingCatalog.sourceRevision).toMatch(/^[a-f0-9]{40}$/);
     expect(pricingCatalog.sourceSha256).toMatch(/^[a-f0-9]{64}$/);
@@ -85,6 +113,23 @@ describe("catalog refresh", () => {
       "global.openai.gpt-6-sol",
       "us.anthropic.claude-sonnet-4-5-20250929-v1:0",
     ]);
+  });
+
+  it("keeps direct Gemini API rows, but no Vertex, TTS or computer-use rows", () => {
+    const gemini = { ...model, litellm_provider: "gemini", mode: "chat" };
+    const source = {
+      "gemini/gemini-4-neon": gemini,
+      "gemini/gemini-3.8-flash": gemini,
+      "gemini/gemini-2.5-pro-preview-tts": gemini,
+      "gemini/gemini-2.5-computer-use-preview-10-2025": gemini,
+      "gemini/gemini-embedding-001": { ...gemini, mode: "embedding" },
+      "gemini/gemma-3-27b-it": gemini,
+      "gemini-3.8-flash": { ...gemini, litellm_provider: "vertex_ai-language-models" },
+      "vertex_ai/gemini-3.5-flash-lite": { ...gemini, litellm_provider: "vertex_ai-language-models" },
+    };
+    const catalog = buildPricingCatalog(JSON.stringify(source), revision, retrievedOn);
+    expect(Object.keys(catalog.models)).toEqual(["gemini/gemini-3.8-flash", "gemini/gemini-4-neon"]);
+    expect(catalog.snapshotVersion).toBe(`litellm-v3-${revision}`);
   });
 
   it("keeps only base direct-provider rates, preserving zeros and missing prices", () => {

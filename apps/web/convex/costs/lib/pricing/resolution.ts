@@ -34,6 +34,11 @@ export const modelAliases: Readonly<Record<string, string>> = {
   "anthropic/claude-sonnet-4-5-20250929": "claude-sonnet-4-5-20250929",
   "anthropic.claude-sonnet-4-5-20250929-v1:0": "claude-sonnet-4-5-20250929",
   "vertex_ai/claude-sonnet-4-5@20250929": "claude-sonnet-4-5-20250929",
+  // Antigravity reports bare Gemini IDs (OS-2481); the catalog keeps the direct Gemini API rows.
+  "gemini-4-neon": "gemini/gemini-4-neon",
+  "gemini-4-argon": "gemini/gemini-4-argon",
+  "gemini-4-hydrogen": "gemini/gemini-4-hydrogen",
+  "gemini-3.8-flash": "gemini/gemini-3.8-flash",
 };
 
 export function resolveModelPricing(model: string, catalog: PricingCatalog = pricingCatalog) {

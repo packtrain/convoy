@@ -2,7 +2,7 @@
 
 This spec covers how the `antigravity` runtime runs Antigravity CLI (`agy`) in Convoy. The transport is the Agent Client Protocol (ACP), JSON-RPC 2.0 over newline-delimited stdio. Each run spawns its own `agy acp` process.
 
-Status: slices 1 to 10 and 12 of the epic OS-2464 (OS-2468 to OS-2477, OS-2479). A thread runs in Act or Ask to approve mode on the model and thinking level picked in the composer. It streams text, reasoning and tool calls, shows approval and question cards, follows up in the same agy session and stops on Stop. It offers agy's slash commands, fills the context meter, sends images as images and offers a local resume command. A message sent mid-run steers the run, and a run waits for the commands agy moves to the background. `convoy init` sets up agy's MCP server and skill, shared projects, managed environments and isolated projects detect, install and sign in agy, a project can bind a managed Gemini API key, and the devcontainer templates install agy. The public docs, the landing page and the READMEs name Antigravity. Still open: the desktop app's onboarding (OS-2478) and cost estimates (OS-2481).
+Status: slices 1 to 10, 12 and 13 of the epic OS-2464 (OS-2468 to OS-2477, OS-2479, OS-2481). A thread runs in Act or Ask to approve mode on the model and thinking level picked in the composer. It streams text, reasoning and tool calls, shows approval and question cards, follows up in the same agy session and stops on Stop. It offers agy's slash commands, fills the context meter, sends images as images and offers a local resume command. A message sent mid-run steers the run, and a run waits for the commands agy moves to the background. `convoy init` sets up agy's MCP server and skill, shared projects, managed environments and isolated projects detect, install and sign in agy, a project can bind a managed Gemini API key, and the devcontainer templates install agy. The public docs, the landing page and the READMEs name Antigravity. A run shows an estimated API-equivalent cost. Still open: the desktop app's onboarding (OS-2478).
 
 Every fact below is marked **verified** when it comes from traffic recorded on agy 1.5.13 or 1.5.14 (signed in, Linux container, 2026-11-20 and later) or **t3code** when it only comes from t3code's source in `reference/t3code`.
 
@@ -71,7 +71,7 @@ Other agent requests, such as `fs/*` or `terminal/*`, get a method-not-found err
 | `convoy/acp_session` | `{ sessionId, agentVersion }`, sent after new or resume. The continuation id comes from here |
 | `session/update` | the notification params as agy sent them, with tool updates compacted (below) |
 | `convoy/acp_text`, `convoy/acp_reasoning` | `{ sessionId, text }`, the accumulated text of one segment. Sent when an update of another kind arrives or the prompt ends |
-| `convoy/acp_prompt_result` | `{ sessionId, stopReason, usage }`, once per run when the last open prompt answers. `usage` sums the numeric fields of every prompt response in the run |
+| `convoy/acp_prompt_result` | `{ sessionId, stopReason, usage, model }`, once per run when the last open prompt answers. `usage` sums the numeric fields of every prompt response in the run. `model` is the effective model, see [Usage](#usage) |
 | `convoy/antigravity_compaction` | `{ sessionId, phase }` on a `/compact` run: `started` before the prompt, then `completed` on `end_turn` or `failed` otherwise. See [Slash commands](#slash-commands) |
 
 - ACP sends text only as `agent_message_chunk` and `agent_thought_chunk` deltas, never as a whole message (verified). These are forwarded as `session/update` chunks only when partial streaming is on. The backend marks them ephemeral, and the flush buffer merges consecutive chunks of one kind.
@@ -219,7 +219,19 @@ The ACP session id is the `continuationId`. A follow-up spawns a new process and
 
 agy sends `usage_update` with `used` (tokens in context) and `size` (window size) right after a session opens and at the end of every reply (verified: `used: 0` first, then `used: 8950, size: 1048576` on Gemini). Positive values normalize to `context-window`, anything else to silent metadata. The shared fold stores the last snapshot on the thread (see [cli-thread-context-window-meter.md](cli-thread-context-window-meter.md#antigravity-rules)).
 
-The prompt result's `usage` (`inputTokens`, `outputTokens`, `cachedReadTokens`, `cachedWriteTokens`, `thoughtTokens`, `totalTokens`) stays in the chunk as metadata. No cost is recorded, see [Known limitations](#known-limitations).
+## Usage
+
+The `session/prompt` response carries `usage` with `inputTokens`, `outputTokens`, `cachedReadTokens`, `cachedWriteTokens`, `thoughtTokens` and `totalTokens`. On agy 1.5.14, `totalTokens` equaled `inputTokens + outputTokens + cachedReadTokens` on every response recorded on Gemini 3.8 Flash, Claude Sonnet 5.5 and an orchestrator (verified, 2026-11-21). So `inputTokens` excludes cache reads and `outputTokens` already includes `thoughtTokens` (22 of 23 output tokens on a one-word reply). `cachedWriteTokens` was 0 on every response, Claude Sonnet included, and Convoy prices it as reported.
+
+**Effective model.** The runner reads the model option's `currentValue` after it applies the thread's model, or from the `session/new` or `session/resume` options when the thread is on Default, and puts it in `convoy/acp_prompt_result` as `model` (CLI 0.161.0). `convoy/acp_session` cannot carry it, because the runner sends that chunk before it sets the model.
+
+**Cost.** The backend extractor (`convex/cli/lib/runtimes/antigravity/costUsage.ts`) records the prompt result's summed `usage` under that model with no reported cost, and the cost recorder estimates it from the pricing catalog. See [cost-tracking.md](cost-tracking.md#recording-pipeline). Gemini ids resolve to LiteLLM's direct Gemini API rows, and agy's Claude ids are catalog rows already. The amount is a standard API-equivalent estimate, not the Google subscription charge. The thinking level changes the token count, not the rate. A run is unpriced, with its tokens kept, when:
+
+- the model is an orchestrator (`gemini-pro-orchestrator-*`), whose `usage` is one total for several models,
+- the model has no catalog row, such as `gpt-oss-120b-medium`,
+- the chunk has no `model`, which is the case for a CLI older than 0.161.0. `minAppVersion` does not move for this.
+
+**Gap.** A reply agy sends after a backgrounded command has no prompt response. Its only usage signal is `usage_update`, which reports context size and no token counts (verified on 1.5.14: the reply after `sleep 12; echo finished` sent `tool_call_update`, message chunks and `usage_update` with `used` 9877, nothing else). Its tokens are not counted.
 
 ## Attachments
 
@@ -277,7 +289,7 @@ OS-2477. Spec: [devcontainer-template.md](devcontainer-template.md#template-requ
 - A late reply that pauses more than 500 ms between a step's `usage_update` and its next `tool_call` is cut there. agy sent the two together in every recorded step.
 - A message sent while the run waits for a backgrounded command does not steer. It waits for the next run, which starts after the wait.
 - Upstream API errors that agy reports as a normal reply are not detected. t3code reads agy's session database for this.
-- No cost rollups. The pricing catalog has no Gemini models and Antigravity bills by subscription.
+- Cost estimates miss the tokens of a reply after a backgrounded command, and orchestrator runs stay unpriced. See [Usage](#usage).
 
 ## Related specs
 

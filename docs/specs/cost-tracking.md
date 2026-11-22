@@ -103,9 +103,18 @@ summaries).
      output and is not added again. Preserve absent cache-write fields as
      unknown. Missing required input/read/output counters or malformed payloads
      leave accounting and the cursor unchanged.
-   - **Antigravity** records nothing. Its prompt result carries tokens, but
-     the pricing catalog has no Gemini models and agy bills by subscription
-     (OS-2481 owns estimates).
+   - **Antigravity** reports tokens, with `costUsd: 0` and `reportedCost: false`
+     (OS-2481). The last `convoy/acp_prompt_result` of an append call carries
+     the run's `usage`, summed by the CLI over every prompt response of the run,
+     and the effective `model` agy ran. `inputTokens` is uncached input,
+     `cachedReadTokens` and `cachedWriteTokens` are the cache split, and
+     `outputTokens` already includes `thoughtTokens`. On agy 1.5.14,
+     `totalTokens` equaled input plus output plus cache reads on every recorded
+     response. A chunk without `model` (CLI older than 0.161.0) records the
+     tokens under `unknown`, so the run stays unpriced. The recorder estimates
+     the cost like any other unreported usage. A subscription run still gets
+     the API-equivalent estimate; it is not the user's Google charge. Gaps are
+     in [cli-antigravity-runtime.md](cli-antigravity-runtime.md#usage).
    - Runtimes without the capability (generic types) record nothing.
 2. `appendRunContent` (`convex/cli/messages.ts`, assistant branch) calls the
    registry extractor and, when spend is found, schedules
@@ -220,9 +229,13 @@ attribution together with pricing and source/completeness metadata.
 
 `convex/costs/lib/pricing/catalog.json` is a checked-in, pruned LiteLLM
 snapshot. Convex never fetches prices at runtime. The current snapshot uses
-[upstream revision 5231680](https://github.com/BerriAI/litellm/blob/52316808d9befffe79c099f834d97e09c8358a26/model_prices_and_context_window.json),
-retrieved on 2026-11-17. It contains 112 direct OpenAI and Anthropic model
-entries and 144 AWS Bedrock entries. This revision (OS-2420) adds GPT-6.2
+[upstream revision 1b101e8](https://github.com/BerriAI/litellm/blob/1b101e8a61c2fb9e3477f15bf2cb5872d68dbd6d/model_prices_and_context_window.json),
+retrieved on 2026-11-21. It contains 112 direct OpenAI and Anthropic model
+entries, 144 AWS Bedrock entries and 17 direct Gemini API entries. This
+revision (OS-2481) adds the Gemini rows for Antigravity. Upstream also cut
+`gpt-6-rosalind` from $15 input and $75 output to $10 and $50 per million
+tokens, with its cache rates scaled the same way; every other prior rate is
+unchanged. The previous revision (5231680, 2026-11-17, OS-2420) added GPT-6.2
 Astra and Sol (direct, `global.`, `us.` and Mantle rows), `gpt-6.2-astra-law`,
 Mythos 5.2, Bedrock GPT-5.6 Cyber, and Mantle rows for older Claude models.
 Upstream also added the 10% Mantle uplift to Haiku 4.5; every other prior rate
@@ -249,10 +262,18 @@ models it lists in full. Region-pinned spellings (`us-gov.`,
 `bedrock/<region>/`, `bedrock_mantle/<region>/`) and in-region bare IDs are
 not kept.
 
+Format `v3` (OS-2481) also keeps direct Gemini API rows: `gemini/gemini-<n>…`
+keys with provider `gemini` and mode `chat`, excluding TTS, computer-use,
+image, live, audio, realtime and search variants. Vertex rows (bare
+`gemini-…` and `vertex_ai/` keys) are not kept. Gemini rows carry input,
+cache read and output rates and no cache write rate. Each model has one row
+for every thinking level; LiteLLM prices reasoning tokens at the output rate,
+so the level changes the token count, not the rate.
+
 Metadata records the immutable source URL, full revision, source SHA-256,
 retrieval date, snapshot version, `USD/token` units, and tariff basis
 `standard-short-context-api-equivalent`. The format/selection version is
-`v2`; change that version when changing the catalog's derivation rules.
+`v3`; change that version when changing the catalog's derivation rules.
 
 This is a standard short-context API-equivalent estimate. It does not predict
 subscription spending or invoices. Base text-token fields exclude batch,
@@ -296,6 +317,16 @@ long-context tariff from tokens aggregated across calls or runs.
 - `anthropic/claude-sonnet-4-5-20250929`,
   `anthropic.claude-sonnet-4-5-20250929-v1:0` and
   `vertex_ai/claude-sonnet-4-5@20250929`.
+- Antigravity's bare Gemini IDs `gemini-4-neon`, `gemini-4-argon`,
+  `gemini-4-hydrogen` and `gemini-3.8-flash` resolve to their `gemini/` rows
+  (OS-2481). Per million tokens, Gemini 4 Neon is $3 input, $15 output and
+  $0.15 cache read; Argon $2, $10 and $0.10; Hydrogen $1.50, $7.50 and
+  $0.075; Gemini 3.8 Flash $0.75, $3.75 and $0.075 (LiteLLM). agy's
+  `claude-opus-5-5` and `claude-sonnet-5-5` are catalog rows already. The
+  orchestrators (`gemini-pro-orchestrator-*`) report one usage total for
+  several models, so they have no alias and stay unpriced, as does
+  `gpt-oss-120b-medium`, which has no direct row. A coverage test classifies
+  every model agy 1.5.14 offered on a Google AI Pro account.
 
 Other aliases identify the direct API baseline and do not apply a vendor's
 billable tariff. Bare `anthropic.` IDs are in-region Bedrock spellings; they
@@ -484,7 +515,7 @@ checks with deterministic local responses, not live provider billing evidence.
   (`components/blocks/thread/cost-indicators.tsx`): one chip rendered in
   the thread composer footer next to the context window meter. Shows the
   task total and thread total as "$5.00 / $1.00" when both exist and
-  differ in amount, source or coverage, otherwise a single value; hidden only
+  show different amounts, otherwise a single value; hidden only
   when nothing was recorded. Recorded zero and unpriced usage remain visible. Click
   opens a popover with both available scopes and their per-model breakdowns
   of token count, share of total tokens and cost. Per-message footer chips
@@ -498,6 +529,10 @@ checks with deterministic local responses, not live provider billing evidence.
   by that count. The average carries the same source and coverage labels as the total.
 - **Project usage page** (`app/o/[organizationSlug]/[projectAlias]/usage/`,
   dashboard in `components/blocks/project/usage/project-usage-dashboard.tsx`):
+  an (i) button after the page description opens Cost details in a popover.
+  The settings shell renders an empty slot there
+  (`PROJECT_USAGE_INFO_SLOT_ID`) and the dashboard portals the button into it,
+  since only the dashboard has the range's cost metadata. Then
   stat tiles (total spend with prior-period delta and sparkline, month to
   date, avg per active day, agent runs), daily spend stacked by model with
   hover breakdown, tokens by model (top four by tokens; the rest behind a
@@ -525,47 +560,29 @@ checks with deterministic local responses, not live provider billing evidence.
 ### Source and coverage display, OS-1531
 
 `lib/costs/cost-summary.ts` owns the wording for every aggregate cost display.
-Sources and coverage combine independently, without inferring evidence from a
-positive or zero amount:
+A visible cost label is the amount alone, `$10.00` or `$0.00`, whatever its
+source or coverage. The one exception is usage with no known cost at all
+(only unpriced usage or excluded history, and a zero sum), which reads
+`Not priced` so it never looks free. Labels carry no `known`, `estimated` or
+`source unknown` qualifier; they made every mixed total read as a caveat.
+Sources and coverage still combine independently in each value's description,
+without inferring evidence from a positive or zero amount. The description is
+the value's tooltip and part of its accessible label, and the dashboard's Cost
+details shows it in full.
 
-| Evidence | Example label |
-| --- | --- |
-| Runtime-reported positive or zero | `$10.00` or `$0.00` |
-| Estimated only | `$2.00 estimated` |
-| Reported and estimated | `$12.00` |
-| All unpriced | `Not priced` |
-| Known and unpriced | `$10.00 known` |
-| Legacy provenance | `$10.00 source unknown` |
-| Known subtotal with excluded history | `$10.00 known` |
-
-Combined states retain each qualifier, except that an estimate mixed with
-reported or legacy cost gets no visible estimate label; Cost details and
-accessible descriptions still disclose it. For example, an estimate mixed with
-unpriced usage and legacy history reads `$4.00 known source unknown`. Known zero mixed with unpriced
-usage reads `$0.00 known`, without claiming all usage was free.
-
-Cost details explain reported amounts as runtime evidence, not verified
+Descriptions explain reported amounts as runtime evidence, not verified
 provider invoices. Estimated amounts use standard short-context API-equivalent
 token rates, excluding provider adjustments and non-token fees; they do not
 represent subscription charges. Pricing snapshot metadata is retained.
-Compact labels use words, with accessible descriptions and cost details;
-color and symbols never carry the meaning alone.
 
 The same rules apply to project, UTC month, per-active-day and per-run averages,
 model/member/CLI/task rows, thread/task headers and popover model breakdowns.
 Month sums merge metadata for the included days only. Recorded usage, rather
 than positive spend, determines whether the indicator and dashboard exist.
-The header popover keeps task and thread breakdowns available even when their
-headline amounts happen to match. In the thread/task cost indicator, estimate
-wording appears only beside the total at the top of each popover section.
-The closed trigger and per-model rows omit `estimated`.
-The trigger, popover totals and per-model rows omit `source unknown` while
-retaining cost metadata and known/unpriced labels. The popover has no pricing explanation
-paragraph or catalog snapshot; only brief unpriced, incomplete-allocation or
-excluded-history notices appear when applicable. Full explanations remain in
-the project dashboard's Cost details. The project dashboard also omits
-`source unknown` from visible labels; legacy provenance stays in Cost details
-and accessible descriptions.
+The header trigger shows `task / thread` only when the two labels differ, and
+the popover keeps both breakdowns either way. The popover has no pricing
+explanation paragraph or catalog snapshot; only brief unpriced,
+incomplete-allocation or excluded-history notices appear when applicable.
 
 Comparisons are suppressed when either period has unpriced, legacy or excluded
 history; the total tile then shows no comparison line. Complete totals remain comparable when only model allocation is
@@ -603,6 +620,9 @@ creates no gap markers and does not guess a cutover timestamp.
 - Retried runs count each run's spend (both runs consumed tokens).
 - Retry deletes the failed assistant message's chunks but recorded rollups
   are kept — by design.
+- Antigravity estimates miss replies agy sends after a backgrounded command,
+  which have no prompt response. See
+  [cli-antigravity-runtime.md](cli-antigravity-runtime.md#usage).
 - Codex USD estimation requires catalog pricing and complete model/token evidence.
   Codex app-server batches without a
   `thread/tokenUsage/updated` payload record nothing.

@@ -334,6 +334,17 @@ describe("createAntigravityRunner (fake agy)", () => {
     ]);
   });
 
+  // The backend prices the run's usage at this model (OS-2481).
+  it("names the effective model in the prompt result, the account default when none is set", async () => {
+    const runner = createAntigravityRunner({});
+    const promptModel = async (resolvedCliModel?: string) => {
+      const { chunks } = await collect(runner.execute(tmpDir, "hello", { threadId: "thread_1", cliType: "antigravity", resolvedCliModel }));
+      return parse(chunks.find((chunk) => chunk.type === "convoy/acp_prompt_result")!).model;
+    };
+    expect(await promptModel()).toBe("gemini-3.8-flash");
+    expect(await promptModel("gpt-oss-120b-medium")).toBe("gpt-oss-120b-medium");
+  });
+
   it("sends no config change for the default model and level", async () => {
     const runner = createAntigravityRunner({});
     await collect(runner.execute(tmpDir, "hello", { threadId: "thread_1", cliType: "antigravity" }));
@@ -497,7 +508,7 @@ describe("createAntigravityRunner (fake agy)", () => {
     ]);
     expect(textOf(chunks)).toEqual(["Steered."]);
     const results = chunks.filter((chunk) => chunk.type === "convoy/acp_prompt_result").map(parse);
-    expect(results).toEqual([{ sessionId: "sess-1", stopReason: "end_turn", usage: { inputTokens: 12, outputTokens: 5 } }]);
+    expect(results).toEqual([{ sessionId: "sess-1", stopReason: "end_turn", usage: { inputTokens: 12, outputTokens: 5 }, model: "gemini-3.8-flash" }]);
     expect(chunks.at(-1)!.type).toBe("convoy/acp_prompt_result");
     expect(await runner.steer!({ prompt: "late", inputFormat: "prompt" })).toBe(false);
   });

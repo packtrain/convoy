@@ -175,6 +175,9 @@ export const PROJECT_SETTINGS_SECTION_LABELS = Object.fromEntries(
   PROJECT_SETTINGS_SECTION_CONFIG.map((section) => [section.id, section.label])
 ) as Record<SectionId, string>;
 
+/** Element after the Usage description; the dashboard portals its cost details (i) into it. */
+export const PROJECT_USAGE_INFO_SLOT_ID = "project-usage-info-slot";
+
 export const PROJECT_SETTINGS_SECTION_DESCRIPTIONS = Object.fromEntries(
   PROJECT_SETTINGS_SECTION_CONFIG.map((section) => [section.id, section.description])
 ) as Record<SectionId, string | undefined>;

@@ -8,6 +8,8 @@ function isRecord(value: unknown): value is Record<string, unknown> {
 }
 
 const BEDROCK_KEY = /^((global|us|eu|apac|au|jp)\.|bedrock_mantle\/)(anthropic\.claude-|openai\.gpt-\d)[^/ ]*$/;
+// Direct Gemini API rows (OS-2481), priced for Antigravity runs.
+const GEMINI_KEY = /^gemini\/gemini-\d[^/ :]*$/;
 
 export function pricingSourceUrl(revision: string) {
   if (!/^[a-f0-9]{40}$/.test(revision)) throw new Error("A full upstream commit SHA is required");
@@ -30,20 +32,21 @@ export function buildPricingCatalog(sourceText: string, revision: string, retrie
     const direct = /^(claude-|gpt-\d|o\d|codex-)/.test(key) && !/[/ :]|audio|realtime|search/.test(key);
     // AWS rows (OS-2105): geo/global inference profiles and Mantle, never region-pinned spellings.
     const bedrock = BEDROCK_KEY.test(key) && !/audio|realtime|search/.test(key);
-    if (!direct && !bedrock) continue;
+    const gemini = GEMINI_KEY.test(key) && !/audio|realtime|search|tts|computer-use|image|live/.test(key);
+    if (!direct && !bedrock && !gemini) continue;
     const entry = source[key];
     // Pointer rows (`claude-fable-latest`) carry no rates; the target row does.
     if (isRecord(entry) && "alias_of" in entry) continue;
     if (!isRecord(entry) || typeof entry.litellm_provider !== "string" || typeof entry.mode !== "string") {
       throw new Error(`Invalid model entry: ${key}`);
     }
-    const providers = direct ? ["openai", "anthropic"] : ["bedrock_converse", "bedrock_mantle"];
+    const providers = direct ? ["openai", "anthropic"] : gemini ? ["gemini"] : ["bedrock_converse", "bedrock_mantle"];
     if (!providers.includes(entry.litellm_provider) || !["chat", "responses"].includes(entry.mode)) continue;
     models[key] = toPricingRates(entry);
   }
   if (Object.keys(models).length === 0) throw new Error("No supported models in source");
   return {
-    snapshotVersion: `litellm-v2-${revision}`,
+    snapshotVersion: `litellm-v3-${revision}`,
     sourceUrl,
     sourceRevision: revision,
     sourceSha256: createHash("sha256").update(sourceText).digest("hex"),

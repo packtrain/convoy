@@ -104,16 +104,16 @@ async function openSession(
 }
 
 /**
- * Applies the thread's model, then its thinking level when the model offers it. Runs on
- * every new and resumed session, since `session/resume` comes back on the account default.
- * A value agy refuses rejects with agy's message and fails the run.
+ * Applies the thread's model, then its thinking level when the model offers it, and returns
+ * the model agy will run. Runs on every session, since `session/resume` comes back on the
+ * account default. A value agy refuses rejects with agy's message and fails the run.
  */
 export async function applyModelSelection(
   acp: Pick<AcpClient, "setConfigOption">,
   sessionId: string,
   configOptions: AcpConfigOption[],
   options: Pick<RunnerExecutionOptions, "resolvedCliModel" | "resolvedCliEffort">
-): Promise<void> {
+): Promise<string | undefined> {
   let current = configOptions;
   if (options.resolvedCliModel) {
     const modelId = current.find((option) => option.category === "model")?.id ?? "model";
@@ -124,6 +124,7 @@ export async function applyModelSelection(
   if (effort && level?.options.some((choice) => choice.value === effort) && level.currentValue !== effort) {
     await acp.setConfigOption(sessionId, level.id, effort);
   }
+  return current.find((option) => option.category === "model")?.currentValue || undefined;
 }
 
 export function createAntigravityRunner(factoryOptions: { partialStreaming?: boolean; antigravityAuth?: AntigravityAuth }): CliRuntimeRunner {
@@ -315,7 +316,7 @@ export function createAntigravityRunner(factoryOptions: { partialStreaming?: boo
           type: "convoy/acp_session",
           data: JSON.stringify({ sessionId, agentVersion: initialized.agentInfo?.version ?? null }),
         };
-        await applyModelSelection(acp, sessionId, opened.configOptions, options);
+        const effectiveModel = await applyModelSelection(acp, sessionId, opened.configOptions, options);
 
         if (aborted) throw fail("Antigravity run aborted");
         const openedSession = sessionId;
@@ -339,7 +340,8 @@ export function createAntigravityRunner(factoryOptions: { partialStreaming?: boo
               closeSegment();
               if (compacting) push(compaction(result.stopReason === "end_turn" ? "completed" : "failed"));
               const summed = Object.keys(usage).length > 0 ? { usage } : {};
-              push({ type: "convoy/acp_prompt_result", data: JSON.stringify({ sessionId, ...result, ...summed }) });
+              const model = effectiveModel ? { model: effectiveModel } : {};
+              push({ type: "convoy/acp_prompt_result", data: JSON.stringify({ sessionId, ...result, ...summed, ...model }) });
               failure = null;
               if (aborted) finish();
               else settle();

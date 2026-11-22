@@ -1,6 +1,10 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useMemo, useState, useSyncExternalStore } from "react";
+import { createPortal } from "react-dom";
+import { Info } from "lucide-react";
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
+import { PROJECT_USAGE_INFO_SLOT_ID } from "@/components/blocks/project/settings/project-settings-config";
 import { useQuery } from "convex/react";
 import { Coins } from "lucide-react";
 import { api } from "@/convex/_generated/api";
@@ -31,8 +35,6 @@ import { cn } from "@/lib/utils";
 
 const RANGE_OPTIONS = [30, 90, 180] as const;
 const MODEL_ROWS_COLLAPSED = 4;
-// Legacy provenance stays in Cost details and accessible descriptions.
-const LABEL_OPTIONS = { showLegacyLabel: false };
 
 // Fixed CLI → categorical slot assignment (known, stable set).
 const CLI_COLORS: Record<string, string> = {
@@ -51,39 +53,41 @@ function formatDay(dayStartMs: number): string {
   });
 }
 
-/** `stacked` puts qualifiers on their own line so amounts align in columns. */
-function CostValue({
-  cost,
-  stacked = false,
-}: {
-  cost: CostTotal;
-  stacked?: boolean;
-}) {
-  const { label, description } = describeCost(cost, LABEL_OPTIONS);
-  const [amount, ...qualifiers] = label.split(" ");
+function CostValue({ cost }: { cost: CostTotal }) {
+  const { label, description } = describeCost(cost);
   return (
     <span title={description} aria-label={`${label}. ${description}`}>
-      {label.startsWith("$") ? (
-        <>
-          {amount}
-          {qualifiers.length > 0 ? (
-            <>
-              {" "}
-              <span
-                className={cn(
-                  "text-xs font-normal leading-tight text-muted-foreground",
-                  stacked ? "block" : "inline-block"
-                )}
-              >
-                {qualifiers.join(" ")}
-              </span>
-            </>
-          ) : null}
-        </>
-      ) : (
-        label
-      )}
+      {label}
     </span>
+  );
+}
+
+const noSubscription = () => () => {};
+
+/** The (i) beside the page description; the settings shell renders the slot. */
+function CostDetails({ description }: { description: string }) {
+  const slot = useSyncExternalStore(
+    noSubscription,
+    () => document.getElementById(PROJECT_USAGE_INFO_SLOT_ID),
+    () => null
+  );
+  if (!slot || !description) return null;
+  return createPortal(
+    <Popover>
+      <PopoverTrigger asChild>
+        <button
+          type="button"
+          aria-label="Cost details"
+          className="flex size-5 cursor-pointer items-center justify-center rounded-md text-muted-foreground hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+        >
+          <Info className="size-3.5" aria-hidden="true" />
+        </button>
+      </PopoverTrigger>
+      <PopoverContent align="start" className="w-80 text-xs leading-relaxed text-muted-foreground">
+        {description}
+      </PopoverContent>
+    </Popover>,
+    slot
   );
 }
 
@@ -215,7 +219,7 @@ export function ProjectUsageDashboard({
     const dayStartMs = today - (rangeDays - 1 - i) * DAY_MS;
     const day = byDayMap.get(dayStartMs);
     const cost = day
-      ? describeCost(day, LABEL_OPTIONS)
+      ? describeCost(day)
       : { label: "No usage", description: "" };
     return {
       x: dayStartMs,
@@ -233,7 +237,7 @@ export function ProjectUsageDashboard({
               );
               return [
                 series.key,
-                entry ? describeCost(entry, LABEL_OPTIONS).label : "No usage",
+                entry ? describeCost(entry).label : "No usage",
               ];
             })
           ),
@@ -367,7 +371,7 @@ export function ProjectUsageDashboard({
           value={`${dashboard.totalRuns}`}
           note={
             dashboard.totalRuns > 0
-              ? `${describeCost({ ...total, costUsd: totalCostUsd / dashboard.totalRuns }, LABEL_OPTIONS).label} avg per run`
+              ? `${describeCost({ ...total, costUsd: totalCostUsd / dashboard.totalRuns }).label} avg per run`
               : undefined
           }
         />
@@ -379,10 +383,7 @@ export function ProjectUsageDashboard({
           data gap.
         </p>
       ) : null}
-      <details className="text-xs text-muted-foreground">
-        <summary className="w-fit cursor-pointer">Cost details</summary>
-        <p className="mt-1 max-w-3xl">{describeCost(total).description}</p>
-      </details>
+      <CostDetails description={describeCost(total).description} />
 
       <div className="grid gap-3 lg:grid-cols-3">
         <SectionCard
@@ -390,7 +391,7 @@ export function ProjectUsageDashboard({
           hint={
             allocationIncomplete
               ? "Daily totals · UTC days · Model breakdown is incomplete"
-              : "Known costs stacked by model · UTC days"
+              : "Costs stacked by model · UTC days"
           }
           className="lg:col-span-2"
         >
@@ -446,7 +447,7 @@ export function ProjectUsageDashboard({
         </SectionCard>
         <SectionCard
           title="Spend by CLI"
-          hint="Runtime attribution · share of known cost"
+          hint="Runtime attribution · share of cost"
         >
           <CompositionBar
             segments={dashboard.byCli.map((entry) => ({
@@ -541,7 +542,7 @@ export function ProjectUsageDashboard({
                           />
                         </div>
                         <span className="w-28 shrink-0 text-right tabular-nums">
-                          <CostValue cost={task} stacked />
+                          <CostValue cost={task} />
                         </span>
                       </div>
                     </td>

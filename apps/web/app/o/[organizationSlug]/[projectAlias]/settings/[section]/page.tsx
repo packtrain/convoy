@@ -1,6 +1,7 @@
 import {
   PROJECT_SETTINGS_SECTION_DESCRIPTIONS,
   PROJECT_SETTINGS_SECTION_LABELS,
+  PROJECT_USAGE_INFO_SLOT_ID,
 } from "@/components/blocks/project/settings/project-settings-config";
 import {
   SettingsPageContainer,
@@ -36,7 +37,16 @@ export default async function ProjectSettingsPage({
         />
         <SettingsPageHeader
           title={PROJECT_SETTINGS_SECTION_LABELS[section]}
-          description={PROJECT_SETTINGS_SECTION_DESCRIPTIONS[section]}
+          description={
+            section === "usage" ? (
+              <>
+                {PROJECT_SETTINGS_SECTION_DESCRIPTIONS[section]}{" "}
+                <span id={PROJECT_USAGE_INFO_SLOT_ID} className="inline-flex align-middle" />
+              </>
+            ) : (
+              PROJECT_SETTINGS_SECTION_DESCRIPTIONS[section]
+            )
+          }
           className="mb-8 hidden md:block"
         />
         <ProjectSettingsPageContent

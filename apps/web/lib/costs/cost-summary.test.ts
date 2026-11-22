@@ -134,7 +134,7 @@ const emptyMetadata = {
 test.each([
   [{ hasReported: true }, 0, "$0.00", "Reported by the runtime"],
   [{ hasReported: true }, 10, "$10.00", "not verified"],
-  [{ hasEstimated: true }, 2, "$2.00 estimated", "API-equivalent"],
+  [{ hasEstimated: true }, 2, "$2.00", "API-equivalent"],
   [
     { hasReported: true, hasEstimated: true },
     12,
@@ -145,24 +145,24 @@ test.each([
   [
     { hasReported: true, hasUnpriced: true },
     10,
-    "$10.00 known",
+    "$10.00",
     "only known costs",
   ],
   [
     { hasReported: true, hasUnpriced: true },
     0,
-    "$0.00 known",
+    "$0.00",
     "Some usage is not priced",
   ],
-  [{ hasLegacy: true }, 0, "$0.00 source unknown", "coverage are unknown"],
+  [{ hasLegacy: true }, 0, "$0.00", "coverage are unknown"],
   [
     { hasLegacy: true, hasEstimated: true },
     4,
-    "$4.00 source unknown",
+    "$4.00",
     "API-equivalent",
   ],
   [{ hasDataGap: true }, 0, "Not priced", "Historical usage was excluded"],
-  [{ hasReported: true, hasDataGap: true }, 10, "$10.00 known", "data gap"],
+  [{ hasReported: true, hasDataGap: true }, 10, "$10.00", "data gap"],
 ])(
   "describes independent source and coverage flags %j",
   (flags, costUsd, label, explanation) => {
@@ -176,8 +176,8 @@ test.each([
 );
 
 test("legacy absence never establishes reported cost, including positive amounts", () => {
-  expect(describeCost({ costUsd: 3 }).label).toBe("$3.00 source unknown");
-  expect(describeCost({ costUsd: 0 }).label).toBe("$0.00 source unknown");
+  expect(describeCost({ costUsd: 3 }).label).toBe("$3.00");
+  expect(describeCost({ costUsd: 0 }).label).toBe("$0.00");
 });
 
 test("complete aggregate cost remains comparable even with incomplete model allocation", () => {
@@ -201,17 +201,16 @@ test("month merges preserve history gaps alongside known numeric totals", () => 
     { costUsd: 5, costMetadata: { ...emptyMetadata, hasReported: true } },
   ]);
   expect(total.costUsd).toBe(5);
-  expect(describeCost(total).label).toBe("$5.00 known");
+  expect(describeCost(total).label).toBe("$5.00");
   expect(describeCost(total).description).toContain(
     "Historical usage was excluded"
   );
 });
 
 
-test.each([false, true])("compact estimate labels preserve known coverage, reported=%s", (hasReported) => {
-  const cost = { costUsd: 0, costMetadata: { ...emptyMetadata, hasEstimated: true, hasReported, hasUnpriced: true } };
-  const compact = describeCost(cost, { showEstimateLabel: false });
-  expect(compact.label).toBe("$0.00 known");
-  expect(compact.description).toBe(describeCost(cost).description);
-  expect(describeCost(cost).label).toBe(hasReported ? "$0.00 known" : "$0.00 known estimated");
+// Labels show the amount only; source and coverage live in the description.
+test.each([false, true])("labels carry no source or coverage qualifiers, reported=%s", (hasReported) => {
+  const cost = { costUsd: 0, costMetadata: { ...emptyMetadata, hasEstimated: true, hasReported, hasUnpriced: true, hasLegacy: true } };
+  expect(describeCost(cost).label).toBe("$0.00");
+  expect(describeCost(cost).description).toContain("Some usage is not priced");
 });

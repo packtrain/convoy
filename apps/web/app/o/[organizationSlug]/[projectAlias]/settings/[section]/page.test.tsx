@@ -5,6 +5,7 @@ import { cleanup, render, screen } from "@testing-library/react";
 import { describe, expect, test, vi } from "vitest";
 
 import ProjectSettingsPage from "./page";
+import { PROJECT_USAGE_INFO_SLOT_ID } from "@/components/blocks/project/settings/project-settings-config";
 
 vi.mock("./settings-mobile-header", () => ({
   ProjectSettingsMobileHeader: () => <div>Mobile navigation</div>,
@@ -39,6 +40,18 @@ describe("ProjectSettingsPage", () => {
       expect(screen.getByText(description)).toBeDefined();
     }
     expect(screen.getByText(`Project settings content: ${section}`)).toBeDefined();
+    cleanup();
+  });
+
+  test("the usage description ends in the slot for the dashboard's cost details", async () => {
+    const page = await ProjectSettingsPage({
+      params: Promise.resolve({ organizationSlug: "acme", projectAlias: "WEB", section: "usage" }),
+    });
+
+    render(page);
+
+    const slot = document.getElementById(PROJECT_USAGE_INFO_SLOT_ID);
+    expect(slot?.parentElement?.textContent).toContain("Agent token spend recorded from CLI threads.");
     cleanup();
   });
 

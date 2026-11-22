@@ -68,6 +68,7 @@ import type * as cli_lib_parkedWindDown from "../cli/lib/parkedWindDown.js";
 import type * as cli_lib_paths from "../cli/lib/paths.js";
 import type * as cli_lib_permissions from "../cli/lib/permissions.js";
 import type * as cli_lib_runtimes_acp_normalizeChunk from "../cli/lib/runtimes/acp/normalizeChunk.js";
+import type * as cli_lib_runtimes_antigravity_costUsage from "../cli/lib/runtimes/antigravity/costUsage.js";
 import type * as cli_lib_runtimes_antigravity_effort from "../cli/lib/runtimes/antigravity/effort.js";
 import type * as cli_lib_runtimes_antigravity_models from "../cli/lib/runtimes/antigravity/models.js";
 import type * as cli_lib_runtimes_antigravity_normalizeChunk from "../cli/lib/runtimes/antigravity/normalizeChunk.js";
@@ -451,6 +452,7 @@ declare const fullApi: ApiFromModules<{
   "cli/lib/paths": typeof cli_lib_paths;
   "cli/lib/permissions": typeof cli_lib_permissions;
   "cli/lib/runtimes/acp/normalizeChunk": typeof cli_lib_runtimes_acp_normalizeChunk;
+  "cli/lib/runtimes/antigravity/costUsage": typeof cli_lib_runtimes_antigravity_costUsage;
   "cli/lib/runtimes/antigravity/effort": typeof cli_lib_runtimes_antigravity_effort;
   "cli/lib/runtimes/antigravity/models": typeof cli_lib_runtimes_antigravity_models;
   "cli/lib/runtimes/antigravity/normalizeChunk": typeof cli_lib_runtimes_antigravity_normalizeChunk;

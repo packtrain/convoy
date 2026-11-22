@@ -100,7 +100,7 @@ test.each([
   ["reported zero", 0, { hasReported: true }, "$0.00"],
   ["unpriced", 0, { hasUnpriced: true }, "Not priced"],
   ["estimate", 2, { hasEstimated: true }, "$2.00"],
-  ["mixed", 10, { hasReported: true, hasUnpriced: true }, "$10.00 known"],
+  ["mixed", 10, { hasReported: true, hasUnpriced: true }, "$10.00"],
   ["legacy", 0, { hasLegacy: true }, "$0.00"],
 ] as const)("renders %s usage in the header", (_name, amount, flags, label) => {
   mockSummaries(undefined, {
@@ -111,7 +111,7 @@ test.each([
   expect(screen.getByRole("button").textContent).toBe(label);
 });
 
-test("retains task and thread coverage when numeric totals match", () => {
+test("shows one amount when totals match, keeping coverage in the popover", () => {
   mockSummaries(
     {
       ...makeSummary(10),
@@ -120,7 +120,7 @@ test("retains task and thread coverage when numeric totals match", () => {
     makeSummary(10)
   );
   render(<CostIndicator taskId={TASK_ID} threadId={THREAD_ID} />);
-  expect(screen.getByRole("button").textContent).toBe("$10.00 known / $10.00");
+  expect(screen.getByRole("button").textContent).toBe("$10.00");
   fireEvent.click(screen.getByRole("button"));
   expect(screen.getByText("Task cost")).toBeTruthy();
   expect(screen.getByText("Thread cost")).toBeTruthy();
@@ -175,11 +175,11 @@ test("model rows omit the repeated estimate qualifier", () => {
   expect(screen.getByText(/500 tokens/).textContent).toBe("500 tokens · 100% · $2.00");
 });
 
-test("popover keeps estimate wording in the top total without the pricing paragraph", () => {
+test("popover shows an estimated total as a plain amount, without the pricing paragraph", () => {
   mockEstimatedSummary();
   render(<CostIndicator threadId={THREAD_ID} />);
   fireEvent.click(screen.getByRole("button"));
-  expect(screen.getByText("$2.00 estimated total")).toBeTruthy();
+  expect(screen.getByText("$2.00 total")).toBeTruthy();
   expect(screen.queryByText(/Estimates use standard short-context/)).toBeNull();
   expect(screen.queryByText(/Pricing snapshot/)).toBeNull();
 });

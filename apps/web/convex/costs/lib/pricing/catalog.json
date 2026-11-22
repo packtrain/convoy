@@ -1,9 +1,9 @@
 {
-  "snapshotVersion": "litellm-v2-52316808d9befffe79c099f834d97e09c8358a26",
-  "sourceUrl": "https://raw.githubusercontent.com/BerriAI/litellm/52316808d9befffe79c099f834d97e09c8358a26/model_prices_and_context_window.json",
-  "sourceRevision": "52316808d9befffe79c099f834d97e09c8358a26",
-  "sourceSha256": "8c1d8a40062346afb07cf84f62500b6958cd427dbdacc4cd6b0a79dc9978c99c",
-  "retrievedOn": "2026-11-17",
+  "snapshotVersion": "litellm-v3-1b101e8a61c2fb9e3477f15bf2cb5872d68dbd6d",
+  "sourceUrl": "https://raw.githubusercontent.com/BerriAI/litellm/1b101e8a61c2fb9e3477f15bf2cb5872d68dbd6d/model_prices_and_context_window.json",
+  "sourceRevision": "1b101e8a61c2fb9e3477f15bf2cb5872d68dbd6d",
+  "sourceSha256": "6d910af737f1c4853765535aaebc55965b1a817765f4d96a63466f167ca60422",
+  "retrievedOn": "2026-11-21",
   "units": "USD/token",
   "tariffBasis": "standard-short-context-api-equivalent",
   "models": {
@@ -551,6 +551,91 @@
       "cacheWrite": 0.00000275,
       "output": 0.000011
     },
+    "gemini/gemini-2.5-flash": {
+      "input": 3e-7,
+      "cacheRead": 3e-8,
+      "output": 0.0000025
+    },
+    "gemini/gemini-2.5-flash-lite": {
+      "input": 1e-7,
+      "cacheRead": 1e-8,
+      "output": 4e-7
+    },
+    "gemini/gemini-2.5-pro": {
+      "input": 0.00000125,
+      "cacheRead": 1.25e-7,
+      "output": 0.00001
+    },
+    "gemini/gemini-3-flash-preview": {
+      "input": 5e-7,
+      "cacheRead": 5e-8,
+      "output": 0.000003
+    },
+    "gemini/gemini-3.1-flash-lite": {
+      "input": 2.5e-7,
+      "cacheRead": 2.5e-8,
+      "output": 0.0000015
+    },
+    "gemini/gemini-3.1-flash-lite-preview": {
+      "input": 2.5e-7,
+      "cacheRead": 2.5e-8,
+      "output": 0.0000015
+    },
+    "gemini/gemini-3.1-pro-preview": {
+      "input": 0.000002,
+      "cacheRead": 2e-7,
+      "output": 0.000012
+    },
+    "gemini/gemini-3.1-pro-preview-customtools": {
+      "input": 0.000002,
+      "cacheRead": 2e-7,
+      "output": 0.000012
+    },
+    "gemini/gemini-3.5-flash": {
+      "input": 0.0000015,
+      "cacheRead": 1.5e-7,
+      "output": 0.000009
+    },
+    "gemini/gemini-3.5-flash-lite": {
+      "input": 3e-7,
+      "cacheRead": 3e-8,
+      "output": 0.0000025
+    },
+    "gemini/gemini-3.6-flash": {
+      "input": 7.5e-7,
+      "cacheRead": 7.5e-8,
+      "output": 0.00000375
+    },
+    "gemini/gemini-3.7-flash": {
+      "input": 7.5e-7,
+      "cacheRead": 7.5e-8,
+      "output": 0.00000375
+    },
+    "gemini/gemini-3.8-flash": {
+      "input": 7.5e-7,
+      "cacheRead": 7.5e-8,
+      "output": 0.00000375
+    },
+    "gemini/gemini-4-argon": {
+      "input": 0.000002,
+      "cacheRead": 1e-7,
+      "output": 0.00001
+    },
+    "gemini/gemini-4-carbon": {
+      "input": 0.000002,
+      "cacheRead": 1e-7,
+      "output": 0.00001
+    },
+    "gemini/gemini-4-hydrogen": {
+      "input": 0.0000015,
+      "cacheRead": 7.5e-8,
+      "output": 0.0000075
+    },
+    "gemini/gemini-4-neon": {
+      "input": 0.000003,
+      "cacheRead": 1.5e-7,
+      "output": 0.000015
+    },
     "global.anthropic.claude-fable-5": {
       "input": 0.00001,
       "cacheRead": 0.000001,
@@ -1071,10 +1156,10 @@
       "output": 5e-7
     },
     "gpt-6-rosalind": {
-      "input": 0.000015,
-      "cacheRead": 0.0000015,
-      "cacheWrite": 0.00001875,
-      "output": 0.000075
+      "input": 0.00001,
+      "cacheRead": 0.000001,
+      "cacheWrite": 0.0000125,
+      "output": 0.00005
     },
     "gpt-6-sol": {
       "input": 0.000002,

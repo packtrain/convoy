@@ -28,7 +28,7 @@ function CostBreakdown({
   const cost = describeCost({
     costUsd: summary.totalCostUsd,
     costMetadata: summary.costMetadata,
-  }, { showLegacyLabel: false });
+  });
   return (
     <div className="space-y-1.5 leading-tight">
       <div className="text-[11px] font-medium uppercase tracking-[0.08em] text-muted-foreground">
@@ -55,7 +55,7 @@ function CostBreakdown({
             <span className="min-w-0 truncate">{share.model}</span>
             <span className="tabular-nums">
               {formatContextWindowTokens(share.tokens)} tokens ·{" "}
-              {Math.round(share.shareOfTokens)}% · {describeCost(share, { showEstimateLabel: false, showLegacyLabel: false }).label}
+              {Math.round(share.shareOfTokens)}% · {describeCost(share).label}
             </span>
           </div>
         ))}
@@ -98,20 +98,18 @@ export function CostIndicator({
     ? describeCost({
         costUsd: task.totalCostUsd,
         costMetadata: task.costMetadata,
-      }, { showEstimateLabel: false, showLegacyLabel: false })
+      })
     : undefined;
   const threadCost = thread
     ? describeCost({
         costUsd: thread.totalCostUsd,
         costMetadata: thread.costMetadata,
-      }, { showEstimateLabel: false, showLegacyLabel: false })
+      })
     : undefined;
   const showBoth =
     taskCost &&
     threadCost &&
-    (task?.totalCostUsd !== thread?.totalCostUsd ||
-      taskCost.label !== threadCost.label ||
-      taskCost.description !== threadCost.description);
+    taskCost.label !== threadCost.label;
   const triggerLabel = showBoth
     ? `${taskCost.label} / ${threadCost.label}`
     : (taskCost ?? threadCost)!.label;

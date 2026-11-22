@@ -86,25 +86,13 @@ export function assignModelColors(
   );
 }
 
-/** Shared cost wording. Source, pricing coverage and model allocation are independent. */
-export function describeCost(
-  cost: CostTotal,
-  {
-    showEstimateLabel = true,
-    showLegacyLabel = true,
-  }: { showEstimateLabel?: boolean; showLegacyLabel?: boolean } = {}
-) {
+/** Shared cost wording: the label is the amount, the description names source and coverage. */
+export function describeCost(cost: CostTotal) {
   const metadata = metadataOrLegacy(cost.costMetadata);
   const known =
     metadata.hasReported || metadata.hasEstimated || metadata.hasLegacy;
   const notes: string[] = [];
-  const suffixes: string[] = [];
-  if (metadata.hasUnpriced || metadata.hasDataGap) {
-    if (known || cost.costUsd > 0) suffixes.push("known");
-  }
   if (metadata.hasEstimated) {
-    if (showEstimateLabel && !metadata.hasReported && !metadata.hasLegacy)
-      suffixes.push("estimated");
     notes.push(
       "Estimates use standard short-context API-equivalent token rates. They do not represent subscription charges or invoices and exclude provider adjustments and non-token fees."
     );
@@ -120,10 +108,8 @@ export function describeCost(
     notes.push(
       "Some usage is not priced. The amount includes only known costs."
     );
-  if (metadata.hasLegacy) {
-    if (showLegacyLabel) suffixes.push("source unknown");
+  if (metadata.hasLegacy)
     notes.push("Historical cost source and pricing coverage are unknown.");
-  }
   if (metadata.hasDataGap)
     notes.push(
       "Historical usage was excluded. Totals, tokens and run counts have a data gap."
@@ -137,7 +123,7 @@ export function describeCost(
     (metadata.hasUnpriced || metadata.hasDataGap) &&
     cost.costUsd === 0
       ? "Not priced"
-      : [formatUsd(cost.costUsd), ...suffixes].join(" ");
+      : formatUsd(cost.costUsd);
   return { label, description: notes.join(" ") };
 }
 

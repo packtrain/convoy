@@ -12,6 +12,7 @@ import type { ComponentProps, ReactNode } from "react";
 import { afterEach, describe, expect, test, vi } from "vitest";
 import type { Id } from "@/convex/_generated/dataModel";
 import { ProjectUsageDashboard } from "./project-usage-dashboard";
+import { PROJECT_USAGE_INFO_SLOT_ID } from "@/components/blocks/project/settings/project-settings-config";
 import { expectEmptyState, expectVerticallyCentered } from "@/test-utils/empty-state";
 
 const useQueryMock = vi.hoisted(() => vi.fn());
@@ -172,7 +173,7 @@ test.each([false, true])(
     expect(screen.getByText(`${byDay.length} active days`)).toBeTruthy();
     if (mixed)
       expect(
-        screen.getByLabelText("$4.00 known", { exact: false })
+        screen.getByLabelText("$4.00. ", { exact: false })
       ).toBeTruthy();
   }
 );
@@ -246,7 +247,7 @@ test("cache card shows the cached share and the uncached remainder", () => {
 test.each([
   [unpriced, 0, "Not priced"],
   [{ ...reported, hasEstimated: true }, 10, "$10.00"],
-  [{ ...reported, hasUnpriced: true }, 10, "$10.00 known"],
+  [{ ...reported, hasUnpriced: true }, 10, "Some usage is not priced"],
   [
     { ...emptyMetadata, hasLegacy: true },
     10,
@@ -315,6 +316,17 @@ test("omits the source unknown label from visible dashboard text", () => {
     container.querySelector('svg [role="graphics-symbol"]:last-child')!
   );
   expect(container.textContent).not.toContain("source unknown");
+});
+
+test("cost details open from the (i) beside the page description, not an accordion", () => {
+  const slot = document.createElement("span");
+  slot.id = PROJECT_USAGE_INFO_SLOT_ID;
+  document.body.append(slot);
+  renderDashboard(dashboardFixture({ ...reported, hasUnpriced: true }, 10));
+  expect(screen.queryByText("Cost details")).toBeNull();
+  fireEvent.click(within(slot).getByRole("button", { name: "Cost details" }));
+  expect(screen.getByRole("dialog").textContent).toContain("Some usage is not priced");
+  slot.remove();
 });
 
 test("daily chart tooltip leaves explanations to Cost details", () => {
@@ -392,13 +404,12 @@ test("daily chart exposes unpriced days by keyboard and retains the known subtot
     'svg [role="graphics-symbol"]:last-child'
   )!;
   fireEvent.focus(lastDay);
-  expect(lastDay.getAttribute("aria-label")).toContain("$10.00 known");
+  expect(lastDay.getAttribute("aria-label")).toContain("$10.00");
   expect(lastDay.getAttribute("aria-label")).toContain(
     "Some usage is not priced"
   );
-  expect(screen.getByText("Total").parentElement!.textContent).toContain(
-    "$10.00 known"
-  );
+  expect(screen.getByText("Total").parentElement!.textContent).toContain("$10.00");
+  expect(screen.getByText("Total").parentElement!.textContent).not.toContain("known");
   fireEvent.keyDown(lastDay, { key: "Escape" });
   expect(screen.queryByText("Total")).toBeNull();
 });
@@ -422,10 +433,11 @@ test("a known month stays reported when the previous month is unpriced", () => {
   ).toBeTruthy();
   expect(
     within(screen.getByText("Total spend · 90d").parentElement!).getByLabelText(
-      "$10.00 known",
+      "$10.00. ",
       { exact: false }
     )
   ).toBeTruthy();
+  expect(screen.getByText("Total spend · 90d").parentElement!.textContent).not.toMatch(/known|estimated/);
 });
 
 test("comparison discloses estimates even when only the prior period is estimated", () => {
