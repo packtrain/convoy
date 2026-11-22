@@ -126,6 +126,15 @@ without this check anyone could create a Convex Auth account on the hosted
 Clerk deployment by calling the API, once S1b adds a real sender. Token
 resolution still dispatches on the issuer and needs no flag.
 
+The check runs before anything the package writes sticks. The package's
+`signUpWithEmailPassword` calls `createUser` before it hashes the password or
+starts the email challenge, and nothing catches the error, so the whole mutation
+rolls back.
+
+`AUTH_MODE` is declared in `convex/convex.config.ts` as `clerk`, `local-demo` or
+`convex`, and read from `env`. Convex refuses any other value when it is set,
+so a typo fails at `convex env set` instead of quietly turning sign-up off.
+
 ### Users
 
 - `users.core.createAuthUser` is the method's `createUser`. It runs when sign-up

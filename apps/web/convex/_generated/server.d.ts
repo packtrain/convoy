@@ -31,6 +31,7 @@ type Env = {
   readonly CONVEX_CLOUD_URL: string;
   readonly CONVEX_SITE_URL: string;
   readonly AUTH_EMAIL_VERIFICATION: "required" | "off" | undefined;
+  readonly AUTH_MODE: "clerk" | "local-demo" | "convex" | undefined;
   readonly GITHUB_APP_CLIENT_ID: string | undefined;
   readonly GITHUB_APP_CLIENT_SECRET: string | undefined;
   readonly GITHUB_APP_ID: string | undefined;

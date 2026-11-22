@@ -1,4 +1,4 @@
-import type { MutationCtx, QueryCtx } from "../../_generated/server";
+import { env, type MutationCtx, type QueryCtx } from "../../_generated/server";
 import type { Doc } from "../../_generated/dataModel";
 import { getUserByTokenIdentifier } from "../../users/lib/usersRepo";
 
@@ -13,7 +13,7 @@ export const LOCAL_DEMO_USER_NAME = "Demo User";
 export const LOCAL_DEMO_USER_EMAIL = "demo@convoy.local";
 
 export function isLocalDemoDeployment(): boolean {
-  return process.env.AUTH_MODE === "local-demo";
+  return env.AUTH_MODE === "local-demo";
 }
 
 /**
