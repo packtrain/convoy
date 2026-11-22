@@ -30,6 +30,11 @@ export function isConvexAuthDeployment(): boolean {
   return env.AUTH_MODE === "convex";
 }
 
+/** Convex Auth sign-up without a mailbox check (docs/specs/auth-adapters.md#email-verification). */
+export function isEmailVerificationOff(): boolean {
+  return env.AUTH_EMAIL_VERIFICATION === "off";
+}
+
 /** Convex Auth tokens are issued by the `auth` component of this deployment. */
 export function isConvexAuthIdentity(identity: UserIdentity): boolean {
   return identity.issuer === `${env.CONVEX_CLOUD_URL}/components/auth`;

@@ -25,6 +25,7 @@ export function EmailPasswordForm({
   askEmail = true,
   passwordAutoComplete,
   passwordLabelAside,
+  otherMethods,
   error,
   pending,
   footer,
@@ -37,6 +38,8 @@ export function EmailPasswordForm({
   passwordAutoComplete: "current-password" | "new-password" | null;
   /** Shown to the right of the password label, e.g. a "Forgot password?" link. */
   passwordLabelAside?: ReactNode;
+  /** Other sign-in methods, between the heading and the fields. */
+  otherMethods?: ReactNode;
   error: string | null;
   pending: boolean;
   footer?: ReactNode;
@@ -60,6 +63,7 @@ export function EmailPasswordForm({
     <AuthCardPage>
       <form onSubmit={handleSubmit} className="flex flex-col gap-6">
         <AuthCardHeading title={title} description={description} />
+        {otherMethods}
         {/* The error sits close under the fields, not a full form gap away. */}
         <div className="flex flex-col gap-2">
           <div className="flex flex-col gap-6">

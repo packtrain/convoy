@@ -1,13 +1,13 @@
 # Auth adapters
 
-Status: S1 (OS-2492), S2 (OS-2493), S1b (OS-2495), S3 (OS-2496) and S4 (OS-2497) implemented. Parent plan: OS-2491.
+Status: S1 (OS-2492), S2 (OS-2493), S1b (OS-2495), S3 (OS-2496), S4 (OS-2497) and S6 (OS-2500) implemented. Parent plan: OS-2491.
 
 Convoy signs people in through one of three adapters, chosen at build time:
 
 | Mode | Sign-in | Accounts | Used by |
 | --- | --- | --- | --- |
 | `clerk` | Clerk's hosted components | Clerk users, matched by `tokenIdentifier` | The hosted app. Default when the mode is unset. |
-| `convex` | Our own email and password forms on Convex Auth 2 | Convex Auth users, matched by user id | Self-hosted multi-user installs |
+| `convex` | Our own email and password forms on Convex Auth 2, plus Google when configured | Convex Auth users, matched by user id | Self-hosted multi-user installs |
 | `local-demo` | None. Every request is the demo user. | One synthetic user | The no-auth demo. See [local-demo-auth.md](local-demo-auth.md). |
 
 `NEXT_PUBLIC_AUTH_MODE` sets the mode for the web bundle. `apps/web/lib/auth/auth-mode.ts`
@@ -81,6 +81,10 @@ exhaustive `Record`. A wrong password and an unknown address both show "Wrong
 email or password." When the backend refuses with a `ConvexError`, such as
 "Email sending is not configured on this deployment", the sign-up form shows
 that text.
+
+On a deployment with Google credentials both forms show "Continue with Google"
+and an "or" divider above the fields (`GoogleSignInButton`, see
+[Google](#google)). Without them the forms show only email and password.
 
 ### Verification screens
 
@@ -157,7 +161,8 @@ local-demo builds never create its Convex client.
 - `/auth/signin` forwards a call to the deployment only for the functions that
   mint a session, and answers 403 for anything else:
   `signInWithEmailPassword`, `completeSignUpWithEmailPassword`,
-  `completePasswordRecovery` and `signUpWithoutEmailVerification`. It moves the
+  `completePasswordRecovery`, `signUpWithoutEmailVerification` and
+  `completeSignInWithGoogle`. It moves the
   refresh token from the result into the cookie. A new session-minting
   function must join this list. Each must return the package's sign-in
   envelope, `{ status: "complete", tokens }` or `{ status: "error", userError }`;
@@ -205,13 +210,14 @@ for this, and the `withIdentity` test calls keep working.
 
 ### Components
 
-`convex/convex.config.ts` mounts `auth`, `authEmail` and `authPassword` on every
-deployment. Their tables stay empty outside Convex mode. `convex/auth.ts` loads
+`convex/convex.config.ts` mounts `auth`, `authEmail`, `authPassword` and
+`authGoogle` on every deployment. Their tables stay empty outside Convex mode. `convex/auth.ts` loads
 on every deployment too, so it must not require an env var. It exports
 `signOut`, `refreshSession`, `isAuthenticated`, `signUpWithEmailPassword`,
 `completeSignUpWithEmailPassword`, `signInWithEmailPassword`,
 `signUpWithoutEmailVerification`, `startPasswordRecovery`, `checkPasswordRecovery`,
-`completePasswordRecovery` and the `getSettings` query. Change-password and change-email
+`completePasswordRecovery`, `startSignInWithGoogle`, `completeSignInWithGoogle`
+and the `getSettings` query. Change-password and change-email
 are not exported.
 
 The email method needs three absolute landing URLs at setup. They are built from
@@ -241,14 +247,16 @@ so a typo fails at `convex env set` instead of quietly turning sign-up off.
 
 ### Users
 
-- `users.core.createAuthUser` is the method's `createUser`. It runs when sign-up
-  starts and inserts a row with an empty email and name, because the method
-  passes no address.
-- `users.core.onAuthSignIn` runs on every sign-in. It reads the primary verified
+- `users.core.createAuthUser` is the `createUser` of both methods. For email and
+  password it runs when sign-up starts and inserts a row with an empty email
+  and name, because the method passes no address. For Google see
+  [Google](#google).
+- `users.core.onAuthSignIn` runs on every email and password sign-in. It reads the primary verified
   address from `authEmail` and writes it to `users.email`, normalized by
   `normalizeEmail` in `convex/lib/shared/strings.ts` (trimmed, lowercase, NFC).
   Member lists, notifications and the `by_email` lookups read that column, and
-  invitations normalize the same way. An empty name becomes the address's local
+  invitations normalize the same way. A new address also sets or clears
+  `emailVerifiedAt` (see [Accounts](#accounts)). An empty name becomes the address's local
   part. People rename themselves in user settings.
 - `users.core.onboard` and `users.core.store` resolve a Convex Auth caller to the
   existing row. Clerk callers still upsert from their token claims. Without a
@@ -372,6 +380,85 @@ invitation opens the invitation link again.
 `completePasswordRecovery` mints a session, so it is on the `/auth/signin`
 allowlist (see Session).
 
+## Google
+
+A Convex mode deployment with a Google OAuth client shows "Continue with
+Google" on the sign-in and sign-up pages. The package's Google method does
+the OAuth flow; we supply the user callback and the button.
+
+### Configuration
+
+`convex.config.ts` mounts the package's `authGoogle` component under
+`httpPrefix: "/auth/google"` and binds its `CLIENT_ID` and `CLIENT_SECRET` to
+the app's `AUTH_GOOGLE_CLIENT_ID` and `AUTH_GOOGLE_CLIENT_SECRET`. The prefix
+is not the package's `/oauth/google`, because `http.ts` already serves
+`/oauth/register` and `/oauth/token` for MCP.
+
+The component declares both credentials as required strings, and Convex
+checks that at push time. Bound to optional app variables, the push fails
+("env var CLIENT_ID is required, but parent env var AUTH_GOOGLE_CLIENT_ID is
+optional"). Declared required, it fails while they are unset. So the app
+declares them required, and every deployment sets both, Clerk and
+local-demo included. A deployment without Google sets them to `none`.
+`auth.getSettings` reports `googleEnabled` when both are set and neither is
+`none`, and the button shows only then.
+
+The OAuth client is a "Web application" client whose redirect URI is
+`<CONVEX_SITE_URL>/auth/google/callback`. The redirect URI is per deployment,
+so each worktree preview, with its own site URL, needs its own registered by
+hand to test Google. `startSignInWithGoogle` accepts a return URL only on the
+origin of `getAppUrlBase()`. Setup steps, preview testing and troubleshooting:
+[docs/agents/google-sign-in.md](../agents/google-sign-in.md).
+
+### Flow
+
+`GoogleSignInButton` (`components/blocks/auth/google-sign-in-button.tsx`)
+calls the package's `useSignInWithGoogle(api.auth).signIn()`, which runs
+`startSignInWithGoogle` and leaves for Google. Google returns to the
+component's callback, which redirects back to the page the flow started on,
+`redirect_url` included. The package's client provider registers its OAuth
+client by default; on that page load it redeems the code through
+`/auth/signin` with `completeSignInWithGoogle`, which sets the session cookie.
+`AuthPageWrapper` then forwards to `/auth/callback` as after a password
+sign-in, so a new Google account gets its workspace there.
+
+When the flow fails after the redirect, the button reads the package's
+`useOauth().flowError` and shows one message per code through an exhaustive
+`Record`. Cancelling on Google's consent screen shows "Sign-in was
+cancelled." A backend refusal, such as sign-up with `AUTH_MODE` unset, shows
+the `ConvexError` text.
+
+### Accounts
+
+`users.core.createAuthUser` gets the Google profile: `id` (Google's `sub`),
+`email`, `emailVerified`, `name` and `picture`. The package looks the Google
+account up by `sub` first and calls `createUser` only for a new one.
+
+- It refuses without `AUTH_MODE=convex`, as for email sign-up.
+- When Google marks the address verified and a Convex Auth user (one without
+  `tokenIdentifier`) has that normalized address in `users.email` and a
+  `users.emailVerifiedAt`, it returns that user. Signing up by email with
+  verification required and later continuing with Google on the same address
+  is one account. Clerk users are never matched, as under
+  [Switching auth mode](#switching-auth-mode).
+- Otherwise it inserts a user with Google's name and photo. The email is
+  stored only when Google verified it, with `emailVerifiedAt` set, and an
+  account without a name is named after the address's local part.
+
+`users.emailVerifiedAt` records that a mailbox check proved the address.
+`onAuthSignIn` sets it when it writes a new address with verification
+required, and clears it when it writes one with verification off. It never
+changes for an address already stored. The current setting is not enough: an
+address registered while verification was off stays unproven after it is
+turned on. Linking it would hand the Google account's owner an account whose
+password someone else chose. The package's own verified-email record doesn't
+help either, because the verification-off sign-up completes it without a
+mailbox. Rows from before S6 have no `emailVerifiedAt` and are never linked.
+
+The reverse is not linked: signing up by email on an address a Google account
+already uses makes a second user. The email method calls `createUser` before
+it knows the address.
+
 ## Switching auth mode
 
 Choose the mode before the first user signs up. Switching later does not move
@@ -401,6 +488,10 @@ A Convex mode deployment sets:
   bottom of every email ([email-templates.md](email-templates.md#support-address)).
 - A placeholder `CLERK_JWT_ISSUER_DOMAIN`, as local-demo does, because
   `auth.config.ts` always lists the Clerk provider.
+- `AUTH_GOOGLE_CLIENT_ID` and `AUTH_GOOGLE_CLIENT_SECRET` on the Convex
+  deployment, from a Google OAuth client, or `none` for both to turn Google
+  off. Every deployment needs them, whatever its mode: Convex refuses to
+  deploy without them (see [Google](#google)).
 - `NEXT_PUBLIC_APP_URL` on the Convex deployment, with a scheme, so the landing
   URLs point at the right host. Set it for the web build too: it decides
   whether the session cookie is `Secure`, and behind a proxy that rewrites
@@ -412,7 +503,8 @@ The deployment signs its own tokens, so there are no auth secrets.
 
 The self-hosted script (S7a, which also asks for the Resend key), password reset
 with verification off, change password and change email while signed in,
-resending a verification link, and Google (S6).
+resending a verification link, GitHub and Apple sign-in, and linking an email
+sign-up to an existing Google account.
 
 ## Testing
 
@@ -422,12 +514,19 @@ normalized address in `users.email`, the workspace name, sign-in with right and
 wrong passwords, a taken address, a weak password, sign-out, `store` on a Convex
 Auth session, a token with a session's subject and another issuer, the stand-in
 dropping recovery and change-email links, and sign-up failing without
-`AUTH_MODE=convex`. With verification required it covers the one-transaction
+`AUTH_MODE=convex`. It covers Google's `createAuthUser` too: a new user
+with the Google name and photo, linking by verified address, no link for an
+unverified address, to a user without `emailVerifiedAt`, to an account
+registered with verification off and then turned on (whose password keeps
+opening only that account), or to a Clerk user, linking to an account made
+through the emailed link, and refusal
+without `AUTH_MODE=convex`. The OAuth round trip itself is the package's and
+is not run here. With verification required it covers the one-transaction
 mutation answering `emailVerificationRequired`, the emailed link completing
 the sign-up and sign-in, sign-in refused before the link is opened, an account
 made with verification off still signing in, sign-up refused without
 `RESEND_API_KEY`, and a recovery link that sets the new password, ends the old
-session and refuses the old password. It also covers `getSettings`. It records email through the package's Resend stub
+session and refuses the old password. It also covers `getSettings`, including `googleEnabled` with `none`. It records email through the package's Resend stub
 (`registerResendStub`, `sentEmails`). `convex/organizations/invitations.test.ts`
 covers accepting an invitation as a Convex Auth session, the wrong-account
 reply, and inviting an address two users share. `convex/users/localDemo.test.ts`
@@ -438,6 +537,8 @@ Convex URLs,
 `components/blocks/auth/email-password-sign-in-form.test.tsx` the
 "Forgot password?" link, `forgot-password-form.test.tsx` and
 `reset-password-form.test.tsx` the two recovery pages,
+`google-sign-in-button.test.tsx` the Google button shown only when configured
+and its error messages,
 `components/blocks/auth/email-password-sign-up-form.test.tsx` covers the
 form's messages and the "Check your email" card, and
 `components/blocks/auth/verify-email-screen.test.tsx` covers the landing page.

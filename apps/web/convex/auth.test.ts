@@ -215,6 +215,23 @@ describe("Convex Auth email and password, verification required", () => {
     expect(signedIn.status === "complete" && signedIn.tokens.userId).toBe(completed.tokens.userId);
   });
 
+  test("the emailed link proves the address, so a verified Google sign-in on it reuses the account", async () => {
+    const t = client();
+    const started = await t.mutation(api.auth.signUpWithEmailPassword, { email: "Robin@Gmail.com", password: PASSWORD });
+    if (!started.success) throw new Error(started.userError.error);
+    const completed = await t.mutation(api.auth.completeSignUpWithEmailPassword, {
+      emailCode: await emailedCode(t),
+      browserSecret: started.browserSecret,
+    });
+    if (completed.status !== "complete") throw new Error(completed.userError.error);
+
+    const googleUser = await t.mutation(internal.users.core.createAuthUser, {
+      method: { name: "google", profile: { id: "google-sub-1", email: "robin@gmail.com", emailVerified: true } },
+    });
+
+    expect(googleUser).toBe(completed.tokens.userId);
+  });
+
   test("an account made with verification off still signs in after it is turned on", async () => {
     vi.stubEnv("AUTH_EMAIL_VERIFICATION", "off");
     const t = client();
@@ -272,10 +289,120 @@ describe("Convex Auth email and password, verification required", () => {
 
 test("getSettings reports email as on unless verification is off", async () => {
   const { t } = createTestContext();
-  expect(await t.query(api.auth.getSettings, {})).toEqual({ emailEnabled: true });
+  expect(await t.query(api.auth.getSettings, {})).toMatchObject({ emailEnabled: true });
   vi.stubEnv("AUTH_EMAIL_VERIFICATION", "off");
-  expect(await t.query(api.auth.getSettings, {})).toEqual({ emailEnabled: false });
+  expect(await t.query(api.auth.getSettings, {})).toMatchObject({ emailEnabled: false });
   vi.unstubAllEnvs();
+});
+
+test("getSettings reports Google as on only when neither credential is the placeholder", async () => {
+  const { t } = createTestContext();
+  vi.stubEnv("AUTH_GOOGLE_CLIENT_ID", "none");
+  vi.stubEnv("AUTH_GOOGLE_CLIENT_SECRET", "none");
+  expect(await t.query(api.auth.getSettings, {})).toMatchObject({ googleEnabled: false });
+  vi.stubEnv("AUTH_GOOGLE_CLIENT_ID", "1234.apps.googleusercontent.com");
+  expect(await t.query(api.auth.getSettings, {})).toMatchObject({ googleEnabled: false });
+  vi.stubEnv("AUTH_GOOGLE_CLIENT_SECRET", "client-secret");
+  expect(await t.query(api.auth.getSettings, {})).toMatchObject({ googleEnabled: true });
+  vi.unstubAllEnvs();
+});
+
+describe("Convex Auth Google user callback", () => {
+  beforeEach(() => {
+    vi.stubEnv("AUTH_MODE", "convex");
+    vi.stubEnv("AUTH_EMAIL_VERIFICATION", "required");
+  });
+  afterEach(() => {
+    vi.unstubAllEnvs();
+  });
+
+  const profile = {
+    id: "google-sub-1",
+    email: "Robin@Gmail.com",
+    emailVerified: true,
+    name: "Robin Hale",
+    picture: "https://lh3.googleusercontent.com/robin",
+  };
+
+  function createGoogleUser(t: TestConvex, overrides: Partial<typeof profile> = {}) {
+    return t.mutation(internal.users.core.createAuthUser, { method: { name: "google", profile: { ...profile, ...overrides } } });
+  }
+
+  function insertConvexAuthUser(t: TestConvex, fields: { email: string; tokenIdentifier?: string; emailVerifiedAt?: number }) {
+    const now = Date.now();
+    return t.run((ctx) => ctx.db.insert("users", { ...fields, name: "robin", createdAt: now, updatedAt: now }));
+  }
+
+  test("a new Google account gets a user with its normalized address, name and photo", async () => {
+    const { t } = createTestContext();
+
+    const userId = await createGoogleUser(t);
+
+    const user = await t.run((ctx) => ctx.db.get("users", userId));
+    expect(user).toMatchObject({ email: "robin@gmail.com", name: "Robin Hale", avatarUrl: profile.picture });
+    expect(user?.tokenIdentifier).toBeUndefined();
+  });
+
+  test("without a name, the address's local part names the user", async () => {
+    const { t } = createTestContext();
+
+    const userId = await createGoogleUser(t, { name: undefined });
+
+    expect(await t.run((ctx) => ctx.db.get("users", userId))).toMatchObject({ name: "robin" });
+  });
+
+  test("a verified Google address reuses the Convex Auth user whose address was proven", async () => {
+    const { t } = createTestContext();
+    const existing = await insertConvexAuthUser(t, { email: "robin@gmail.com", emailVerifiedAt: 1 });
+
+    expect(await createGoogleUser(t)).toBe(existing);
+    expect(await t.run((ctx) => ctx.db.query("users").collect())).toHaveLength(1);
+  });
+
+  test("a user with the address but no proof of it is not linked", async () => {
+    const { t } = createTestContext();
+    const unproven = await insertConvexAuthUser(t, { email: "robin@gmail.com" });
+
+    expect(await createGoogleUser(t)).not.toBe(unproven);
+  });
+
+  test("an account registered while verification was off stays unlinked after it is turned on", async () => {
+    vi.stubEnv("AUTH_EMAIL_VERIFICATION", "off");
+    const t = createTestContext().t.withRequestMetadata({ ip: "203.0.113.7" }) as TestConvex;
+    const squatter = await signUp(t, "Robin@Gmail.com");
+    vi.stubEnv("AUTH_EMAIL_VERIFICATION", "required");
+
+    const googleUser = await createGoogleUser(t);
+
+    expect(googleUser).not.toBe(squatter.userId);
+    // The squatter's password keeps opening only the squatter's account.
+    const withPassword = await t.mutation(api.auth.signInWithEmailPassword, { email: "robin@gmail.com", password: PASSWORD });
+    expect(withPassword.status === "complete" && withPassword.tokens.userId).toBe(squatter.userId);
+  });
+
+  test("an unverified Google address links nothing and is not stored", async () => {
+    const { t } = createTestContext();
+    const existing = await insertConvexAuthUser(t, { email: "robin@gmail.com" });
+
+    const userId = await createGoogleUser(t, { emailVerified: false });
+
+    expect(userId).not.toBe(existing);
+    expect(await t.run((ctx) => ctx.db.get("users", userId))).toMatchObject({ email: "", name: "Robin Hale" });
+  });
+
+  test("a Clerk user with the address is never linked", async () => {
+    const { t } = createTestContext();
+    const clerkUser = await insertConvexAuthUser(t, { email: "robin@gmail.com", tokenIdentifier: "https://clerk|user_1" });
+
+    expect(await createGoogleUser(t)).not.toBe(clerkUser);
+  });
+
+  test("without AUTH_MODE=convex, no Google account can be created", async () => {
+    vi.stubEnv("AUTH_MODE", "");
+    const { t } = createTestContext();
+
+    await expect(createGoogleUser(t)).rejects.toThrow("Convex Auth sign-up is not enabled");
+  });
 });
 
 describe("unified auth", () => {

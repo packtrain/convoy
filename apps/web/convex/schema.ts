@@ -96,6 +96,8 @@ export default defineSchema({
     email: v.string(),
     name: v.string(),
     avatarUrl: v.optional(v.string()),
+    // When a mailbox check proved `email`: a verified sign-up or Google. Only these rows link to Google.
+    emailVerifiedAt: v.optional(v.number()),
     createdAt: v.number(),
     updatedAt: v.number(),
   })

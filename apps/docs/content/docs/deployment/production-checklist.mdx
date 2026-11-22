@@ -10,6 +10,7 @@ Use this checklist before opening the system to real users.
 - [ ] Production deployment created in [Convex dashboard](https://dashboard.convex.dev)
 - [ ] Environment variables set in Convex dashboard (Settings → Environment Variables):
   - `CLERK_JWT_ISSUER_DOMAIN` (required)
+  - `AUTH_GOOGLE_CLIENT_ID` and `AUTH_GOOGLE_CLIENT_SECRET` (required; `none` for both when not using Google sign-in)
   - `RESEND_API_KEY` (if using email)
   - `EMAIL_FROM` (if using email)
   - `SUPPORT_EMAIL` (if using email; without it emails name no help address)

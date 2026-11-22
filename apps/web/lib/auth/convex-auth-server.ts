@@ -29,6 +29,7 @@ function setup() {
       api.auth.completeSignUpWithEmailPassword,
       api.auth.completePasswordRecovery,
       api.auth.signUpWithoutEmailVerification,
+      api.auth.completeSignInWithGoogle,
     ],
     cookieOptions,
     allowedOrigins: [

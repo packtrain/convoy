@@ -2,6 +2,7 @@ import { defineApp } from "convex/server";
 import { v } from "convex/values";
 import auth from "@convex-dev/auth/convex.config.js";
 import authEmail from "@convex-dev/auth/components/email/convex.config.js";
+import authGoogle from "@convex-dev/auth/components/google/convex.config.js";
 import authPassword from "@convex-dev/auth/components/password/convex.config.js";
 import migrations from "@convex-dev/migrations/convex.config.js";
 import resend from "@convex-dev/resend/convex.config.js";
@@ -25,12 +26,20 @@ const app = defineApp({
     EMAIL_FROM: v.optional(v.string()),
     // The help line at the bottom of every email. Unset leaves the line out.
     SUPPORT_EMAIL: v.optional(v.string()),
+    // Google sign-in (docs/specs/auth-adapters.md#configuration). Required by the component; `none` turns it off.
+    AUTH_GOOGLE_CLIENT_ID: v.string(),
+    AUTH_GOOGLE_CLIENT_SECRET: v.string(),
   },
 });
 // Convex Auth (docs/specs/auth-adapters.md). Mounted in every auth mode; empty outside `convex`.
 app.use(auth);
 app.use(authEmail);
 app.use(authPassword);
+// Not /oauth/google: http.ts already serves /oauth/register and /oauth/token for MCP.
+app.use(authGoogle, {
+  httpPrefix: "/auth/google",
+  env: { CLIENT_ID: app.env.AUTH_GOOGLE_CLIENT_ID, CLIENT_SECRET: app.env.AUTH_GOOGLE_CLIENT_SECRET },
+});
 app.use(migrations);
 app.use(resend);
 export default app;

@@ -102,9 +102,13 @@ if [ "$AUTH_MODE" = "local-demo" ]; then
 else
   DEPLOY_ENV_CMD="npx convex env set CLERK_JWT_ISSUER_DOMAIN '$ISSUER'"
 fi
+# Convex refuses to deploy with these unset; `none` hides Google sign-in.
+DEPLOY_ENV_CMD="$DEPLOY_ENV_CMD"' && npx convex env set AUTH_GOOGLE_CLIENT_ID "$AUTH_GOOGLE_CLIENT_ID" && npx convex env set AUTH_GOOGLE_CLIENT_SECRET "$AUTH_GOOGLE_CLIENT_SECRET"'
 docker compose run --rm --no-deps \
   -e CONVEX_SELF_HOSTED_URL=http://backend:3210 \
   -e CONVEX_SELF_HOSTED_ADMIN_KEY="$ADMIN_KEY" \
+  -e AUTH_GOOGLE_CLIENT_ID="$(env_get AUTH_GOOGLE_CLIENT_ID | grep . || echo none)" \
+  -e AUTH_GOOGLE_CLIENT_SECRET="$(env_get AUTH_GOOGLE_CLIENT_SECRET | grep . || echo none)" \
   web sh -c "cd apps/web && $DEPLOY_ENV_CMD && npx convex deploy -y"
 
 say "Starting the web app..."
@@ -114,6 +118,9 @@ APP_URL="$(env_get APP_URL)"
 say "Convoy is running."
 echo "  App:              ${APP_URL:-http://127.0.0.1:3000}"
 echo "  Convex dashboard: http://127.0.0.1:6791 (log in with CONVEX_SELF_HOSTED_ADMIN_KEY from self-hosted/.env)"
+if [ "$(env_get AUTH_GOOGLE_CLIENT_ID | grep . || echo none)" != "none" ]; then
+  echo "  Google redirect:  $(env_get CONVEX_SITE_ORIGIN)/auth/google/callback (register it on the OAuth client)"
+fi
 if [ "$AUTH_MODE" = "local-demo" ]; then
   echo
   echo "  NOTE: local demo mode has NO authentication — anyone who can reach"

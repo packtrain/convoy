@@ -10,6 +10,7 @@ import { api } from "@/convex/_generated/api";
 import { AppLink, appRoute, useNavigation } from "@/lib/navigation";
 import { AUTH_REDIRECT_PARAM, rememberSignUpRedirect } from "@/lib/routing/auth-redirects";
 import { getMutationErrorMessage } from "@/lib/errors";
+import { GoogleSignInButton } from "./google-sign-in-button";
 import { AuthCardHeading, AuthCardPage, EmailPasswordForm, type EmailPasswordCredentials } from "./email-password-form";
 
 type SignUpResult = FunctionReturnType<typeof api.auth.signUpWithoutEmailVerification>;
@@ -108,6 +109,7 @@ export function EmailPasswordSignUpForm() {
       description="Fill in the form below to create your account"
       submitLabel="Create account"
       passwordAutoComplete="new-password"
+      otherMethods={<GoogleSignInButton />}
       error={error}
       pending={pending}
       onSubmit={(credentials) => void handleSubmit(credentials)}

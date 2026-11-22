@@ -9,10 +9,11 @@ import {
   getOptionalAuthenticatedUser,
   isConvexAuthDeployment,
   isConvexAuthIdentity,
+  isEmailVerificationOff,
   resolveIdentityUser,
 } from "../lib/access/auth";
 import { normalizeEmail } from "../lib/shared/strings";
-import { emailPasswordMethodValidator } from "./lib/validators";
+import { authMethodValidator, emailPasswordMethodValidator } from "./lib/validators";
 import { getLocalDemoUser, isLocalDemoDeployment, LOCAL_DEMO_TOKEN_IDENTIFIER, LOCAL_DEMO_USER_EMAIL, LOCAL_DEMO_USER_NAME } from "../lib/access/localDemo";
 import { OrgRole, ProjectRole } from "../../lib/authz/roles";
 import { getOrganizationById, getOrganizationBySlug, insertOrganization } from "../organizations/lib/organizationsRepo";
@@ -23,7 +24,14 @@ import {
 import { insertProject, initializeProjectLists } from "../projects/lib/projectsRepo";
 import { insertMembership as insertProjectMembership } from "../projects/lib/membersRepo";
 import { createInboxList } from "../tasks/lib/taskListsRepo";
-import { getUserById, getUserByTokenIdentifier, insertUser, updateUserProfile, upsertUserFromIdentity } from "./lib/usersRepo";
+import {
+  getUserById,
+  getUserByTokenIdentifier,
+  insertUser,
+  listUsersByEmail,
+  updateUserProfile,
+  upsertUserFromIdentity,
+} from "./lib/usersRepo";
 import { notAuthenticatedError } from "./errors";
 
 function generateSlug(name: string): string {
@@ -153,18 +161,30 @@ export const onboard = mutation({
 });
 
 /**
- * Convex Auth `createUser`: runs when sign-up starts, before the address is known
- * here. `onAuthSignIn` fills in the email and name.
+ * Convex Auth `createUser`. Email sign-up runs before the address is known, so `onAuthSignIn`
+ * fills it in. Google reuses a user by verified address (docs/specs/auth-adapters.md#google).
  */
 export const createAuthUser = internalMutation({
-  args: { method: emailPasswordMethodValidator },
+  args: { method: authMethodValidator },
   returns: v.id("users"),
-  handler: async (ctx) => {
+  handler: async (ctx, { method }) => {
     if (!isConvexAuthDeployment()) {
       throw new ConvexError("Convex Auth sign-up is not enabled on this deployment");
     }
-    const user = await insertUser(ctx, { email: "", name: "" });
-    return user._id;
+    if (method.name === "emailPassword") {
+      return (await insertUser(ctx, { email: "", name: "" }))._id;
+    }
+    const { profile } = method;
+    const email = profile.emailVerified && profile.email ? normalizeEmail(profile.email) : "";
+    if (email) {
+      // Only a proven address: one registered with verification off may belong to someone else.
+      const users = await listUsersByEmail(ctx, email);
+      const existing = users.find((user) => user.tokenIdentifier === undefined && user.emailVerifiedAt !== undefined);
+      if (existing) return existing._id;
+    }
+    const name = profile.name || email.split("@")[0] || "User";
+    const emailVerifiedAt = email ? Date.now() : undefined;
+    return (await insertUser(ctx, { email, name, avatarUrl: profile.picture, emailVerifiedAt }))._id;
   },
 });
 
@@ -182,7 +202,14 @@ export const onAuthSignIn = internalMutation({
     if (!user || email === null || (email === user.email && user.name)) {
       return null;
     }
-    await updateUserProfile(ctx, userId, { email, name: user.name || email.split("@")[0] });
+    const name = user.name || email.split("@")[0];
+    if (email === user.email) {
+      await updateUserProfile(ctx, userId, { name });
+      return null;
+    }
+    // Proven only when written with verification on; turning it on later doesn't vouch for an older address.
+    const emailVerifiedAt = isEmailVerificationOff() ? undefined : Date.now();
+    await updateUserProfile(ctx, userId, { email, name, emailVerifiedAt });
     return null;
   },
 });
@@ -225,6 +252,7 @@ export const current = query({
       email: v.string(),
       name: v.string(),
       avatarUrl: v.optional(v.string()),
+      emailVerifiedAt: v.optional(v.number()),
       createdAt: v.number(),
       updatedAt: v.number(),
     }),

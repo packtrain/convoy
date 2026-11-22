@@ -43,7 +43,7 @@ export async function getUserByTokenIdentifier(
 export async function updateUserProfile(
   ctx: MutationCtx,
   userId: Id<"users">,
-  patch: { name?: string; email?: string; avatarUrl?: string }
+  patch: { name?: string; email?: string; avatarUrl?: string; emailVerifiedAt?: number }
 ): Promise<void> {
   await ctx.db.patch("users", userId, {
     ...patch,
@@ -54,7 +54,7 @@ export async function updateUserProfile(
 /** Insert a user row not created from a JWT identity (local-demo, Convex Auth). */
 export async function insertUser(
   ctx: MutationCtx,
-  fields: { tokenIdentifier?: string; email: string; name: string }
+  fields: { tokenIdentifier?: string; email: string; name: string; avatarUrl?: string; emailVerifiedAt?: number }
 ): Promise<Doc<"users">> {
   const now = Date.now();
   const userId = await ctx.db.insert("users", {

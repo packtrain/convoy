@@ -4,6 +4,7 @@ import {
   type CompleteSignUpResult,
   type SignUpResult,
 } from "@convex-dev/auth/methods/email-password/server";
+import { setupGoogle } from "@convex-dev/auth/methods/google/server";
 import type { FunctionReference } from "convex/server";
 import { ConvexError, v, type Infer } from "convex/values";
 import { api, components, internal } from "./_generated/api";
@@ -18,6 +19,7 @@ import {
 } from "../lib/emails/catalog";
 import { appRoute } from "../lib/navigation/routes";
 import { href } from "../lib/navigation/target";
+import { isEmailVerificationOff } from "./lib/access/auth";
 import { getAppUrlBase } from "./lib/shared/appUrl";
 import { normalizeEmail } from "./lib/shared/strings";
 import { takePendingSignUpCode, upsertPendingSignUpCode } from "./users/lib/pendingSignUpCodesRepo";
@@ -39,8 +41,13 @@ const FORGOT_PASSWORD_URL = `${appUrl}${href(appRoute.authForgotPassword())}`;
 
 const EMAIL_NOT_CONFIGURED = "Email sending is not configured on this deployment";
 
-function isEmailVerificationOff(): boolean {
-  return env.AUTH_EMAIL_VERIFICATION === "off";
+// Convex refuses to deploy without the Google credentials, so an install without Google sets this.
+const GOOGLE_CREDENTIAL_PLACEHOLDER = "none";
+
+function isGoogleConfigured(): boolean {
+  return [env.AUTH_GOOGLE_CLIENT_ID, env.AUTH_GOOGLE_CLIENT_SECRET].every(
+    (value) => value && value !== GOOGLE_CREDENTIAL_PLACEHOLDER
+  );
 }
 
 // Annotated so the exports below don't infer their types through `internal`, which includes this module.
@@ -75,11 +82,16 @@ export const {
     onSignIn: onAuthSignIn,
   });
 
+export const { startSignInWithGoogle, completeSignInWithGoogle } = setupGoogle(auth, {
+  component: components.authGoogle,
+  allowedRedirectOrigins: [new URL(appUrl).origin],
+}).attachUserCallbacks({ createUser: createAuthUser });
+
 /** The deployment's auth configuration, for the sign-in screens. Email is on unless verification is off. */
 export const getSettings = query({
   args: {},
-  returns: v.object({ emailEnabled: v.boolean() }),
-  handler: async () => ({ emailEnabled: !isEmailVerificationOff() }),
+  returns: v.object({ emailEnabled: v.boolean(), googleEnabled: v.boolean() }),
+  handler: async () => ({ emailEnabled: !isEmailVerificationOff(), googleEnabled: isGoogleConfigured() }),
 });
 
 /**

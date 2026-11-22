@@ -6,6 +6,7 @@ import { useSignInWithEmailPassword, type SignInResult } from "@convex-dev/auth/
 import { api } from "@/convex/_generated/api";
 import { AppLink, appRoute, useNavigation } from "@/lib/navigation";
 import { AUTH_REDIRECT_PARAM } from "@/lib/routing/auth-redirects";
+import { GoogleSignInButton } from "./google-sign-in-button";
 import { EmailPasswordForm, type EmailPasswordCredentials } from "./email-password-form";
 
 type SignInErrorCode = Extract<SignInResult, { status: "error" }>["userError"]["error"];
@@ -38,7 +39,7 @@ export function EmailPasswordSignInForm() {
   return (
     <EmailPasswordForm
       title="Sign in to Convoy"
-      description="Welcome back. Sign in with your email and password."
+      description="Welcome back. Sign in to your account."
       submitLabel="Sign in"
       passwordAutoComplete="current-password"
       passwordLabelAside={
@@ -49,6 +50,7 @@ export function EmailPasswordSignInForm() {
           </AppLink>
         )
       }
+      otherMethods={<GoogleSignInButton />}
       error={error}
       pending={pending}
       onSubmit={handleSubmit}

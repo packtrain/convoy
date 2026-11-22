@@ -182,6 +182,7 @@ Read the file for the area you are touching.
 | Commits, conventional commit format, task links | [docs/agents/git-and-commits.md](docs/agents/git-and-commits.md) |
 | Git worktrees & preview deployments | [docs/agents/worktrees.md](docs/agents/worktrees.md) |
 | Publishing the CLI to npm | [docs/agents/publishing-the-cli.md](docs/agents/publishing-the-cli.md) |
+| Google sign-in setup (OAuth client, env vars, preview testing) | [docs/agents/google-sign-in.md](docs/agents/google-sign-in.md) |
 | Verifying UI visually (agent browser login) | [docs/agents/ui-verification.md](docs/agents/ui-verification.md) |
 | Which Convoy MCP server; updating MCP tools | [docs/agents/mcp-servers.md](docs/agents/mcp-servers.md) |
 | Issue tracker, tags vs. labels | [docs/agents/issue-tracker.md](docs/agents/issue-tracker.md) |

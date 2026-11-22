@@ -64,6 +64,9 @@ npx convex env set AUTH_MODE local-demo
 npx convex env set CLERK_JWT_ISSUER_DOMAIN https://local-demo.invalid
 # clerk mode instead:
 # npx convex env set CLERK_JWT_ISSUER_DOMAIN "https://<your-clerk-domain>"
+# Required on every install; `none` turns Google sign-in off (see below):
+npx convex env set AUTH_GOOGLE_CLIENT_ID none
+npx convex env set AUTH_GOOGLE_CLIENT_SECRET none
 npx convex deploy
 
 # 4. Build and start the web app
@@ -79,6 +82,17 @@ step 3 above. GitHub must reach the backend's HTTP actions URL for webhooks,
 so this needs a Clerk-authenticated install on a reachable host; local-demo
 mode shows GitHub as unavailable. Steps:
 [GitHub integration](https://docs.convoy.build/docs/deployment/github-integration).
+
+## Google sign-in
+
+Convex Auth mode can show "Continue with Google" on the sign-in and sign-up
+pages. Create a "Web application" OAuth client in the
+[Google Cloud console](https://console.cloud.google.com/apis/credentials),
+register `<CONVEX_SITE_ORIGIN>/auth/google/callback` as its redirect URI, and
+put the client ID and secret in `.env` as `AUTH_GOOGLE_CLIENT_ID` and
+`AUTH_GOOGLE_CLIENT_SECRET`. Re-run `./start.sh`. Convex refuses to deploy
+without the two variables, so an install without Google keeps both at `none`,
+which hides the button.
 
 ## Cost estimation
 

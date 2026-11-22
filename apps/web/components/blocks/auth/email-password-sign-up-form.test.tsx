@@ -25,6 +25,7 @@ vi.mock("@convex-dev/auth/react", () => ({ useAuthActions: () => ({ setSession }
 vi.mock("@convex-dev/auth/methods/email-password/react", () => ({
   useSignUpWithEmailPassword: () => ({ signUp: startEmailedSignUp, pending: false }),
 }));
+vi.mock("./google-sign-in-button", () => ({ GoogleSignInButton: () => null }));
 vi.mock("@/convex/_generated/api", () => ({ api: { auth: { signUpWithoutEmailVerification: "signUp" } } }));
 vi.mock("@/lib/navigation", () => ({
   AppLink: ({ children }: { children: React.ReactNode }) => <a>{children}</a>,
