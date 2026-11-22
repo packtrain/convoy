@@ -1,4 +1,4 @@
-import { afterEach, describe, expect, test, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, test, vi } from "vitest";
 
 const { sendTransactionalEmailMock } = vi.hoisted(() => ({
   sendTransactionalEmailMock: vi.fn(async () => null),
@@ -15,8 +15,21 @@ vi.mock("../lib/notifications/email", async (importOriginal) => {
 });
 
 import { api } from "../_generated/api";
+import type { Id } from "../_generated/dataModel";
 import { createTestContext } from "../../convex-testing";
 import { OrgRole, InvitationStatus } from "../../lib/authz/roles";
+
+type TestConvex = ReturnType<typeof createTestContext>["t"];
+
+/** Signs up through Convex Auth with verification off and calls as that session. */
+async function signUpConvexAuth(t: TestConvex, email: string) {
+  const result = await t
+    .withRequestMetadata({ ip: "203.0.113.7" })
+    .mutation(api.auth.signUpWithoutEmailVerification, { email, password: "correct horse battery staple" });
+  if (result.status !== "complete") throw new Error(`sign-up failed: ${result.userError.error}`);
+  const { sub, iss } = JSON.parse(atob(result.tokens.accessToken.split(".")[1].replace(/-/g, "+").replace(/_/g, "/"))) as { sub: string; iss: string };
+  return { userId: result.tokens.userId as Id<"users">, asSession: t.withIdentity({ subject: sub, issuer: iss }) };
+}
 
 describe("organizations.invitations", () => {
   afterEach(() => {
@@ -56,6 +69,105 @@ describe("organizations.invitations", () => {
           role: "member",
         })
       ).rejects.toThrow("already a member");
+    });
+
+    test("should create when two users share the invited address", async () => {
+      const ctx = createTestContext();
+      const { org, asUser } = await ctx.setupOrg();
+      await ctx.user({ email: "shared@test.com" });
+      await ctx.user({ email: "shared@test.com" });
+
+      await expect(
+        asUser.mutation(api.organizations.invitations.create, {
+          organizationId: org._id,
+          email: "shared@test.com",
+          role: "member",
+        })
+      ).resolves.toBeDefined();
+    });
+
+    test("should find a member however many users share the invited address", async () => {
+      const ctx = createTestContext();
+      const { org, asUser } = await ctx.setupOrg();
+      for (let i = 0; i < 25; i++) await ctx.user({ email: "shared@test.com" });
+      const member = await ctx.user({ email: "shared@test.com" });
+      await ctx.orgMember(org._id, member._id, OrgRole.MEMBER);
+
+      await expect(
+        asUser.mutation(api.organizations.invitations.create, {
+          organizationId: org._id,
+          email: "shared@test.com",
+          role: "member",
+        })
+      ).rejects.toThrow("already a member");
+    });
+
+    test("should fail if any user with the invited address is already a member", async () => {
+      const ctx = createTestContext();
+      const { org, asUser } = await ctx.setupOrg();
+      await ctx.user({ email: "shared@test.com" });
+      const member = await ctx.user({ email: "shared@test.com" });
+      await ctx.orgMember(org._id, member._id, OrgRole.MEMBER);
+
+      await expect(
+        asUser.mutation(api.organizations.invitations.create, {
+          organizationId: org._id,
+          email: "shared@test.com",
+          role: "member",
+        })
+      ).rejects.toThrow("already a member");
+    });
+  });
+
+  describe("Convex Auth session", () => {
+    beforeEach(() => {
+      vi.stubEnv("AUTH_MODE", "convex");
+      vi.stubEnv("AUTH_EMAIL_VERIFICATION", "off");
+    });
+    afterEach(() => {
+      vi.unstubAllEnvs();
+    });
+
+    test("getByToken authorizes the invited address from the user row", async () => {
+      const ctx = createTestContext();
+      const { org, user, t } = await ctx.setupOrg();
+      const invitation = await ctx.organizationInvitation(org._id, user._id, { email: "robin@example.com" });
+      const { asSession } = await signUpConvexAuth(t, "Robin@Example.com");
+
+      const result = await asSession.query(api.organizations.invitations.getByToken, { token: invitation.token });
+
+      expect(result?.access).toBe("authorized");
+    });
+
+    test("accept adds the signed-up user to the organization", async () => {
+      const ctx = createTestContext();
+      const { org, user, t } = await ctx.setupOrg();
+      const invitation = await ctx.organizationInvitation(org._id, user._id, { email: "robin@example.com" });
+      const { userId, asSession } = await signUpConvexAuth(t, "robin@example.com");
+
+      await asSession.mutation(api.organizations.invitations.accept, { token: invitation.token });
+
+      const membership = await t.run((runCtx) =>
+        runCtx.db
+          .query("organizationMembers")
+          .withIndex("by_organization_and_user", (q) => q.eq("organizationId", org._id).eq("userId", userId))
+          .unique()
+      );
+      expect(membership?.role).toBe("member");
+    });
+
+    test("another address is the wrong account", async () => {
+      const ctx = createTestContext();
+      const { org, user, t } = await ctx.setupOrg();
+      const invitation = await ctx.organizationInvitation(org._id, user._id, { email: "robin@example.com" });
+      const { asSession } = await signUpConvexAuth(t, "sam@example.com");
+
+      expect(await asSession.query(api.organizations.invitations.getByToken, { token: invitation.token })).toEqual({
+        access: "unauthorized",
+      });
+      await expect(
+        asSession.mutation(api.organizations.invitations.accept, { token: invitation.token })
+      ).rejects.toThrow("not available for this account");
     });
   });
 

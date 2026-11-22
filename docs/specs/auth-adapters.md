@@ -1,6 +1,6 @@
 # Auth adapters
 
-Status: S1 implemented (OS-2492). Parent plan: OS-2491.
+Status: S1 (OS-2492) and S2 (OS-2493) implemented. Parent plan: OS-2491.
 
 Convoy signs people in through one of three adapters, chosen at build time:
 
@@ -162,6 +162,17 @@ so a typo fails at `convex env set` instead of quietly turning sign-up off.
   JWT, `onboard` resolves the local-demo user, because `/auth/callback` runs in
   every mode.
 
+### Invitations
+
+A Convex Auth token carries no `email` claim. `getIdentityEmail` in
+`convex/lib/access/auth.ts` gives `organizations.invitations.accept` and
+`getByToken` the caller's address: `users.email` for a Convex Auth session, the
+token's `email` claim for any other issuer. Clerk behavior is unchanged.
+
+With `AUTH_EMAIL_VERIFICATION=off` that address is unverified. Anyone can sign
+up with any address, so accepting rests on holding the invitation link alone.
+This is the cost of turning verification off.
+
 ## Email verification
 
 `AUTH_EMAIL_VERIFICATION` on the Convex deployment is `required` or `off`. Unset
@@ -204,8 +215,8 @@ accounts:
   stay in the database. Switching back restores access.
 - API keys and CLI logins keep working as the old user, because they point at
   the `users` row.
-- Two `users` rows can then share an address, and inviting it throws until S2
-  (OS-2493).
+- Two `users` rows can then share an address. `organizations.invitations.create`
+  checks membership for each of them through `listUsersByEmail`.
 
 ## Deployment
 
@@ -223,7 +234,7 @@ The deployment signs its own tokens, so there are no auth secrets.
 
 ## Not covered yet
 
-Invitations (S2), the self-hosted script (S7a), verification on (S1b), forgotten
+The self-hosted script (S7a), verification on (S1b), forgotten
 passwords (S3), the cookie session and server-side redirect (S4), agent browser
 login (S5, `app/api/agent/browser-login` still calls Clerk), and Google (S6).
 
@@ -235,7 +246,9 @@ normalized address in `users.email`, the workspace name, sign-in with right and
 wrong passwords, a taken address, a weak password, sign-out, `store` on a Convex
 Auth session, a token with a session's subject and another issuer, the stand-in
 dropping recovery and change-email links, and sign-up failing with verification
-`required` or without `AUTH_MODE=convex`. `convex/users/localDemo.test.ts`
+`required` or without `AUTH_MODE=convex`. `convex/organizations/invitations.test.ts`
+covers accepting an invitation as a Convex Auth session, the wrong-account
+reply, and inviting an address two users share. `convex/users/localDemo.test.ts`
 covers anonymous `onboard` in local-demo. `lib/auth/adapters/convex.test.tsx`
 covers the route gate and sign-out, and
 `components/blocks/auth/email-password-sign-up-form.test.tsx` covers the

@@ -89,7 +89,7 @@ Users cannot be invited directly as owners. Ownership must be granted by an exis
 | --------------------------- | ---------------------------------------------------------- |
 | **Permission required**     | `MEMBERS_INVITE` (Owner or Admin)                          |
 | **Email normalization**     | Emails are lowercased and trimmed                          |
-| **Existing member check**   | Cannot invite someone who is already a member              |
+| **Existing member check**   | Cannot invite someone who is already a member. Every user with the address is checked, since two can share one after an auth-mode switch ([auth-adapters.md](auth-adapters.md#switching-auth-mode)) |
 | **Duplicate pending check** | Cannot create duplicate pending invitations for same email |
 | **Token generation**        | Unique UUID token generated for each invitation            |
 | **Expiration**              | Invitations expire after 7 days                            |
@@ -99,7 +99,7 @@ Users cannot be invited directly as owners. Ownership must be granted by an exis
 | Rule                        | Behavior                                                                |
 | --------------------------- | ----------------------------------------------------------------------- |
 | **Authentication required** | User must be logged in to accept                                        |
-| **Email verification**      | Logged-in user's email must match invitation email                      |
+| **Email verification**      | Logged-in user's email must match invitation email. A Clerk caller's email is the token's `email` claim. A Convex Auth token has no email, so its caller's is `users.email` |
 | **Invitation detail privacy** | Invitation details are only returned to an authenticated identity whose email matches the invitation email |
 | **Token validation**        | Invalid tokens are rejected                                             |
 | **Status validation**       | Only `pending` invitations can be accepted                              |
@@ -441,6 +441,8 @@ organizationMembers: {
 - [ ] Admin can invite new member
 - [ ] Member cannot invite
 - [ ] Cannot invite existing member
+- [ ] Inviting an address two users share works, and fails if either is a member
+- [ ] A Convex Auth user accepts with the address from `users.email`
 - [ ] Cannot create duplicate pending invitation
 - [ ] User can accept valid invitation
 - [ ] Acceptance fails with wrong email

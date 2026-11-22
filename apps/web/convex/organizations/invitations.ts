@@ -1,7 +1,7 @@
 import { v } from "convex/values";
 import { mutation, query } from "../_generated/server";
 import { sendTransactionalEmail } from "../lib/notifications/email";
-import { getAuthenticatedUser, getOptionalAuthenticatedUser } from "../lib/access/auth";
+import { getAuthenticatedUser, getIdentityEmail, getOptionalAuthenticatedUser } from "../lib/access/auth";
 import { hasOrgPermission, requireOrgPermission } from "../lib/access/permissions";
 import { OrgPermission } from "../../lib/authz/permissions";
 import { InvitationStatus } from "../../lib/authz/roles";
@@ -11,7 +11,7 @@ import { invitationRoleValidator, invitationStatusValidator } from "../lib/contr
 import { invitationSummaryValidator } from "./lib/validators";
 import { getActiveOrganizationById, getOrganizationById, requireActiveOrganization } from "./lib/organizationsRepo";
 import { getMembership, insertMembership } from "./lib/membersRepo";
-import { getUserByEmail, getUserById, getUsersByIds } from "../users/lib/usersRepo";
+import { getUserById, getUsersByIds, listUsersByEmail } from "../users/lib/usersRepo";
 import {
   extendInvitationExpiration,
   findPendingInvitation,
@@ -87,10 +87,8 @@ export const create = mutation({
     // Normalize email
     const email = normalizeEmail(args.email);
 
-    // Check if email belongs to existing user who is already a member
-    const existingUser = await getUserByEmail(ctx, email);
-
-    if (existingUser) {
+    // Two users can share an address after an auth-mode switch; none may already be a member.
+    for (const existingUser of await listUsersByEmail(ctx, email)) {
       await ensure(getMembership(ctx, args.organizationId, existingUser._id)).isNull(errors.USER_ALREADY_MEMBER);
     }
 
@@ -196,8 +194,7 @@ export const accept = mutation({
   }),
   handler: async (ctx, args) => {
     const user = await getAuthenticatedUser(ctx);
-    const identity = await ctx.auth.getUserIdentity();
-    const identityEmail = identity?.email ? normalizeEmail(identity.email) : null;
+    const identityEmail = await getIdentityEmail(ctx);
 
     ensure(identityEmail).notNull(errors.INVITATION_ACCOUNT_EMAIL_REQUIRED);
 
@@ -307,12 +304,12 @@ export const getByToken = query({
       return null;
     }
 
-    const identity = await ctx.auth.getUserIdentity();
-    if (!identity?.email) {
+    const identityEmail = await getIdentityEmail(ctx);
+    if (!identityEmail) {
       return { access: "requires-authentication" as const };
     }
 
-    const isEmailMatch = normalizeEmail(identity.email) === normalizeEmail(invitation.email);
+    const isEmailMatch = identityEmail === normalizeEmail(invitation.email);
     if (!isEmailMatch) {
       return { access: "unauthorized" as const };
     }

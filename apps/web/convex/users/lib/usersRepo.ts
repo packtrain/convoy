@@ -18,14 +18,15 @@ export async function getUsersByIds(
   return Promise.all(userIds.map((userId) => getUserById(ctx, userId)));
 }
 
-export async function getUserByEmail(
+/** Every user with this address: two can share one after an auth-mode switch (auth-adapters.md). Unbounded so a membership check misses none. */
+export async function listUsersByEmail(
   ctx: Ctx,
   email: string
-): Promise<Doc<"users"> | null> {
+): Promise<Doc<"users">[]> {
   return ctx.db
     .query("users")
     .withIndex("by_email", (q) => q.eq("email", email))
-    .unique();
+    .collect();
 }
 
 export async function getUserByTokenIdentifier(

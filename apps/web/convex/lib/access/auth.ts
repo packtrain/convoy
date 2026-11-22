@@ -8,6 +8,7 @@ import type { Doc } from "../../_generated/dataModel";
 import { hashApiKey, isApiKeyExpired } from "./apiKeys";
 import { getLocalDemoUser } from "./localDemo";
 import { getUserByTokenIdentifier } from "../../users/lib/usersRepo";
+import { normalizeEmail } from "../shared/strings";
 import type { ApiKeyScope, AuthenticatedAccess } from "./permissions";
 
 export function normalizeApiKeyScope(
@@ -47,6 +48,14 @@ export async function resolveIdentityUser(
     return userId ? await ctx.db.get("users", userId) : null;
   }
   return getUserByTokenIdentifier(ctx, identity.tokenIdentifier);
+}
+
+/** The JWT caller's normalized address. A Convex Auth token carries none, so it comes from `users.email`. */
+export async function getIdentityEmail(ctx: QueryCtx | MutationCtx): Promise<string | null> {
+  const identity = await ctx.auth.getUserIdentity();
+  if (!identity) return null;
+  const email = isConvexAuthIdentity(identity) ? (await resolveIdentityUser(ctx, identity))?.email : identity.email;
+  return email ? normalizeEmail(email) : null;
 }
 
 export async function getAuthenticatedAccess(
