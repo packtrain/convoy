@@ -58,14 +58,21 @@ export function buildAuthPathWithRedirect(
   return toLocalPath(authUrl);
 }
 
+const AUTH_CALLBACK_PATH = "/auth/callback";
+
 /**
- * Path that routes a Clerk post-auth redirect through /auth/callback so
- * onboarding always runs. The redirect_url is passed through raw; the
- * callback page sanitizes it before navigating.
+ * Path that routes a post-auth redirect through /auth/callback so onboarding
+ * always runs. The redirect_url is passed through raw; the callback page
+ * sanitizes it before navigating.
  */
 export function buildAuthCallbackPath(
   redirectUrl: string | null | undefined
 ): string {
-  if (!redirectUrl) return "/auth/callback";
-  return `/auth/callback?${AUTH_REDIRECT_PARAM}=${encodeURIComponent(redirectUrl)}`;
+  if (!redirectUrl) return AUTH_CALLBACK_PATH;
+  // Already the callback: nesting it would stall, since the page onboards once per mount.
+  if (URL.canParse(redirectUrl, "http://local.invalid")) {
+    const target = new URL(redirectUrl, "http://local.invalid");
+    if (target.pathname === AUTH_CALLBACK_PATH) return toLocalPath(target);
+  }
+  return `${AUTH_CALLBACK_PATH}?${AUTH_REDIRECT_PARAM}=${encodeURIComponent(redirectUrl)}`;
 }

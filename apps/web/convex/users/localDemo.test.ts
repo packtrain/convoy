@@ -19,6 +19,16 @@ afterEach(() => {
 });
 
 describe("local demo mode (OS-1230)", () => {
+  // /auth/callback runs onboard in every mode; local-demo has no JWT.
+  test("onboard resolves the demo user anonymously and returns its workspace", async () => {
+    enableLocalDemo();
+    const ctx = createTestContext();
+    const bootstrap = await ctx.t.mutation(api.users.core.onboardLocalDemo, {});
+
+    const result = await ctx.t.mutation(api.users.core.onboard, {});
+    expect(result.organizationSlug).toBe(bootstrap.organizationSlug);
+  });
+
   describe("onboardLocalDemo", () => {
     test("throws when local demo mode is not enabled", async () => {
       const ctx = createTestContext();

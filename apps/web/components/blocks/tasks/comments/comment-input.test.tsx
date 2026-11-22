@@ -6,13 +6,10 @@ import { cleanup, createEvent, fireEvent, render, screen } from "@testing-librar
 import type { ReactNode } from "react";
 import { CommentInput } from "./comment-input";
 
-vi.mock("@clerk/nextjs", () => ({
-  useUser: () => ({
-    user: {
-      firstName: "Test",
-      lastName: "User",
-      imageUrl: "",
-    },
+vi.mock("@/lib/auth/hooks", () => ({
+  useAppUser: () => ({
+    isLoaded: true,
+    user: { firstName: "Test", lastName: "User", fullName: "Test User", email: "", imageUrl: "" },
   }),
 }));
 

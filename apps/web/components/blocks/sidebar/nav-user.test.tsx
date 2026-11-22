@@ -35,18 +35,17 @@ const organizations = [
   },
 ];
 
-vi.mock("@clerk/nextjs", () => ({
-  useClerk: () => ({
-    signOut: signOutMock,
-  }),
-  useUser: () => ({
+vi.mock("@/lib/auth/hooks", () => ({
+  supportsSignOut: true,
+  useAppSignOut: () => signOutMock,
+  useAppUser: () => ({
+    isLoaded: true,
     user: {
       firstName: "Robin",
+      lastName: "Hale",
       fullName: "Robin Hale",
+      email: "robin@example.com",
       imageUrl: "https://example.com/avatar.png",
-      primaryEmailAddress: {
-        emailAddress: "robin@example.com",
-      },
     },
   }),
 }));

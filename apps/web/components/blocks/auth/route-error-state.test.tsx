@@ -9,10 +9,9 @@ import { isAuthenticationRouteError, RouteErrorState } from "./route-error-state
 const signOutMock = vi.fn();
 const reloadMock = vi.fn();
 
-vi.mock("@clerk/nextjs", () => ({
-  useClerk: () => ({
-    signOut: signOutMock,
-  }),
+vi.mock("@/lib/auth/hooks", () => ({
+  supportsSignOut: true,
+  useAppSignOut: () => signOutMock,
 }));
 
 let readiness: AppAuthReadiness = { status: "authenticated", reason: null, userId: "user_1" };

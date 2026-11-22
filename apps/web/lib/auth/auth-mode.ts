@@ -1,7 +1,12 @@
+import { z } from "zod";
+
 /**
- * App auth mode (OS-1230). Baked in at build time: `clerk` (default) or
- * `local-demo` (self-hosted no-auth demo — one synthetic user, no sign-in).
- * See docs/specs/local-demo-auth.md.
+ * App auth mode, baked in at build time from NEXT_PUBLIC_AUTH_MODE. Unset means
+ * `clerk`. See docs/specs/auth-adapters.md.
  */
-export const isLocalDemoAuthMode =
-  process.env.NEXT_PUBLIC_AUTH_MODE === "local-demo";
+export const authModeSchema = z.enum(["clerk", "local-demo", "convex"]);
+export type AuthMode = z.infer<typeof authModeSchema>;
+
+export const authMode: AuthMode = authModeSchema.parse(process.env.NEXT_PUBLIC_AUTH_MODE || "clerk");
+
+export const isLocalDemoAuthMode = authMode === "local-demo";

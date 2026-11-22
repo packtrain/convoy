@@ -1327,10 +1327,11 @@ describe("Watch Tower container lifecycle and access", () => {
     expect((await list("done")).page.map((item) => item._id)).toEqual([groupId]);
     await t.run((runCtx) => setContainerAggregateStatus(runCtx, groupId, "failed", Date.now()));
     expect((await list("done")).page.map((item) => item._id)).toEqual([groupId]);
+    const activityAt = Date.now() + 1000;
     await t.run((runCtx) => markThreadStreamEnded(runCtx, child._id, {
-      status: "streaming", processingState: "streaming", hasPendingUserMessages: false, lastActivityAt: Date.now() + 1000,
+      status: "streaming", processingState: "streaming", hasPendingUserMessages: false, lastActivityAt: activityAt,
     }));
-    expect((await list("running")).page).toMatchObject([{ _id: groupId, hasUnread: true, lastActivityAt: Date.now() + 1000 }]);
+    expect((await list("running")).page).toMatchObject([{ _id: groupId, hasUnread: true, lastActivityAt: activityAt }]);
     await t.run((runCtx) => setThreadHasPendingInteraction(runCtx, child._id, true));
     expect((await list("waiting_input")).page.map((item) => item._id)).toEqual([groupId]);
     await t.run((runCtx) => setThreadHasPendingInteraction(runCtx, child._id, false));

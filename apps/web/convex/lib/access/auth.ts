@@ -1,10 +1,13 @@
 import { ConvexError } from "convex/values";
+import type { UserIdentity } from "convex/server";
+import { getAuthUserId } from "@convex-dev/auth/server";
 import { getApiKeyById, findApiKeyByHash } from "../../apiKeys/lib/apiKeysRepo";
 import type { WorkerKeyStatus } from "../../apiKeys/lib/validators";
-import type { MutationCtx, QueryCtx } from "../../_generated/server";
+import { env, type MutationCtx, type QueryCtx } from "../../_generated/server";
 import type { Doc } from "../../_generated/dataModel";
 import { hashApiKey, isApiKeyExpired } from "./apiKeys";
 import { getLocalDemoUser } from "./localDemo";
+import { getUserByTokenIdentifier } from "../../users/lib/usersRepo";
 import type { ApiKeyScope, AuthenticatedAccess } from "./permissions";
 
 export function normalizeApiKeyScope(
@@ -19,6 +22,31 @@ export function normalizeApiKeyScope(
     organizationId: apiKey.scope.organizationId,
     projectIds: [...new Set(apiKey.scope.projectIds)],
   };
+}
+
+/** New Convex Auth accounts need AUTH_MODE=convex on the deployment; tokens dispatch on issuer alone. */
+export function isConvexAuthDeployment(): boolean {
+  return process.env.AUTH_MODE === "convex";
+}
+
+/** Convex Auth tokens are issued by the `auth` component of this deployment. */
+export function isConvexAuthIdentity(identity: UserIdentity): boolean {
+  return identity.issuer === `${env.CONVEX_CLOUD_URL}/components/auth`;
+}
+
+/**
+ * The user behind a verified JWT. Dispatches on the issuer: a Convex Auth token
+ * names a session, any other issuer's token is matched by `tokenIdentifier`.
+ */
+export async function resolveIdentityUser(
+  ctx: QueryCtx | MutationCtx,
+  identity: UserIdentity
+): Promise<Doc<"users"> | null> {
+  if (isConvexAuthIdentity(identity)) {
+    const userId = await getAuthUserId(ctx);
+    return userId ? await ctx.db.get("users", userId) : null;
+  }
+  return getUserByTokenIdentifier(ctx, identity.tokenIdentifier);
 }
 
 export async function getAuthenticatedAccess(
@@ -40,10 +68,7 @@ export async function getOptionalAuthenticatedAccess(
 ): Promise<{ user: Doc<"users">; principal: AuthenticatedAccess } | null> {
   const identity = await ctx.auth.getUserIdentity();
   if (identity) {
-    const user = await ctx.db
-      .query("users")
-      .withIndex("by_token", (q) => q.eq("tokenIdentifier", identity.tokenIdentifier))
-      .unique();
+    const user = await resolveIdentityUser(ctx, identity);
     if (!user) {
       return null;
     }
@@ -94,7 +119,7 @@ export async function getOptionalAuthenticatedAccess(
 
 /**
  * Get the authenticated user from the context.
- * Supports both Clerk JWT tokens and API keys.
+ * Supports JWTs (Clerk or Convex Auth) and API keys.
  *
  * @param ctx - The Convex context
  * @param apiKey - Optional API key (for HTTP/MCP access)
@@ -111,10 +136,10 @@ export async function getAuthenticatedUser(
 
 /**
  * Get the authenticated user from the context, or null if not authenticated.
- * Supports both Clerk JWT tokens and API keys.
+ * Supports JWTs (Clerk or Convex Auth) and API keys.
  *
  * Priority:
- * 1. Clerk JWT (ctx.auth.getUserIdentity())
+ * 1. JWT (ctx.auth.getUserIdentity())
  * 2. API key (if provided and valid)
  *
  * @param ctx - The Convex context

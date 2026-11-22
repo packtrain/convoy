@@ -50,10 +50,10 @@ export async function updateUserProfile(
   });
 }
 
-/** Insert a user row not backed by an auth identity (local-demo mode). */
+/** Insert a user row not created from a JWT identity (local-demo, Convex Auth). */
 export async function insertUser(
   ctx: MutationCtx,
-  fields: { tokenIdentifier: string; email: string; name: string }
+  fields: { tokenIdentifier?: string; email: string; name: string }
 ): Promise<Doc<"users">> {
   const now = Date.now();
   const userId = await ctx.db.insert("users", {

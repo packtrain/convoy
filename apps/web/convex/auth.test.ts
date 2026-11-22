@@ -1,6 +1,167 @@
-import { expect, test, describe } from "vitest";
-import { api } from "./_generated/api";
+import { afterEach, beforeEach, expect, test, describe, vi } from "vitest";
+import { api, internal } from "./_generated/api";
 import { createTestContext } from "../convex-testing";
+import { getAppUrlBase } from "./lib/shared/appUrl";
+
+const PASSWORD = "correct horse battery staple";
+
+type TestConvex = ReturnType<typeof createTestContext>["t"];
+
+/** Calls as the session an access token names, with the token's real issuer. */
+function asSession(t: TestConvex, accessToken: string) {
+  const claims = JSON.parse(atob(accessToken.split(".")[1].replace(/-/g, "+").replace(/_/g, "/"))) as { sub: string; iss: string };
+  return t.withIdentity({ subject: claims.sub, issuer: claims.iss });
+}
+
+/** Sign-up as the browser runs it with verification off: one mutation. */
+async function signUp(t: TestConvex, email: string) {
+  const result = await t.mutation(api.auth.signUpWithoutEmailVerification, { email, password: PASSWORD });
+  if (result.status !== "complete") throw new Error(`sign-up failed: ${result.userError.error}`);
+  return result.tokens;
+}
+
+describe("Convex Auth email and password, verification off", () => {
+  beforeEach(() => {
+    vi.stubEnv("AUTH_MODE", "convex");
+    vi.stubEnv("AUTH_EMAIL_VERIFICATION", "off");
+  });
+  afterEach(() => {
+    vi.unstubAllEnvs();
+  });
+
+  function client() {
+    // The email component rate-limits by client IP.
+    return createTestContext().t.withRequestMetadata({ ip: "203.0.113.7" }) as TestConvex;
+  }
+
+  test("sign-up signs in at once and leaves one user and no pending code", async () => {
+    const t = client();
+    const tokens = await signUp(t, "robin@example.com");
+
+    const user = await asSession(t, tokens.accessToken).query(api.users.core.current, {});
+    expect(user).toMatchObject({ _id: tokens.userId, email: "robin@example.com", name: "robin" });
+    expect(user?.tokenIdentifier).toBeUndefined();
+    expect(await t.run((ctx) => ctx.db.query("users").collect())).toHaveLength(1);
+    expect(await t.run((ctx) => ctx.db.query("pendingSignUpCodes").collect())).toEqual([]);
+  });
+
+  test("users.email holds the normalized address, so by_email lookups find it", async () => {
+    const t = client();
+    const { userId } = await signUp(t, "Robin.Hale@Example.com");
+
+    const found = await t.run((ctx) =>
+      ctx.db.query("users").withIndex("by_email", (q) => q.eq("email", "robin.hale@example.com")).unique()
+    );
+    expect(found?._id).toBe(userId);
+    expect(found?.name).toBe("robin.hale");
+  });
+
+  test("onboarding names the first workspace from the user's name", async () => {
+    const t = client();
+    const tokens = await signUp(t, "robin@example.com");
+
+    const result = await asSession(t, tokens.accessToken).mutation(api.users.core.onboard, {});
+    const org = await t.run((ctx) => ctx.db.get("organizations", result.organizationId));
+    expect(org?.name).toBe("robin's Workspace");
+  });
+
+  test("sign-in with the right password returns the same user, a wrong one does not", async () => {
+    const t = client();
+    const { userId } = await signUp(t, "robin@example.com");
+
+    const ok = await t.mutation(api.auth.signInWithEmailPassword, { email: "robin@example.com", password: PASSWORD });
+    expect(ok.status === "complete" && ok.tokens.userId).toBe(userId);
+    const wrong = await t.mutation(api.auth.signInWithEmailPassword, { email: "robin@example.com", password: "wrong password!" });
+    expect(wrong).toEqual({ status: "error", userError: { error: "INVALID_CREDENTIALS" } });
+  });
+
+  test("a second sign-up with the same address reports it taken and adds no user", async () => {
+    const t = client();
+    await signUp(t, "robin@example.com");
+
+    const again = await t.mutation(api.auth.signUpWithoutEmailVerification, { email: "ROBIN@example.com", password: PASSWORD });
+    expect(again).toEqual({ status: "error", userError: { error: "EMAIL_TAKEN" } });
+    expect(await t.run((ctx) => ctx.db.query("users").collect())).toHaveLength(1);
+  });
+
+  test("a weak password is reported and adds no user", async () => {
+    const t = client();
+
+    const result = await t.mutation(api.auth.signUpWithoutEmailVerification, { email: "robin@example.com", password: "short" });
+    expect(result).toEqual({ status: "error", userError: { error: "PASSWORD_TOO_SHORT" } });
+    expect(await t.run((ctx) => ctx.db.query("users").collect())).toEqual([]);
+  });
+
+  test("store resolves the signed-up user instead of creating one from the session token", async () => {
+    const t = client();
+    const tokens = await signUp(t, "robin@example.com");
+
+    expect(await asSession(t, tokens.accessToken).mutation(api.users.core.store, {})).toBe(tokens.userId);
+    expect(await t.run((ctx) => ctx.db.query("users").collect())).toHaveLength(1);
+  });
+
+  test("a token with a session's subject but another issuer resolves to no user", async () => {
+    const t = client();
+    const tokens = await signUp(t, "robin@example.com");
+    const { sub } = JSON.parse(atob(tokens.accessToken.split(".")[1].replace(/-/g, "+").replace(/_/g, "/"))) as { sub: string };
+
+    const forged = t.withIdentity({ subject: sub, issuer: "https://other-issuer.example" });
+    expect(await forged.query(api.users.core.current, {})).toBeNull();
+  });
+
+  test("sign-out ends the session", async () => {
+    const t = client();
+    const tokens = await signUp(t, "robin@example.com");
+    const session = asSession(t, tokens.accessToken);
+
+    await t.mutation(api.auth.signOut, { refreshToken: tokens.refreshToken });
+    expect(await session.query(api.users.core.current, {})).toBeNull();
+  });
+
+  test("the stand-in sender keeps only sign-up links", async () => {
+    const t = client();
+    const send = (path: string) =>
+      t.mutation(internal.auth.deliverAuthEmail, {
+        options: { apiKey: "", testMode: false, initialBackoffMs: 0, retryAttempts: 0 },
+        from: "Convoy <auth@convoy.invalid>",
+        to: ["robin@example.com"],
+        text: `Open this link:\n\n${getAppUrlBase()}${path}?code=secret-code\n`,
+      });
+    const pending = () => t.run((ctx) => ctx.db.query("pendingSignUpCodes").collect());
+
+    expect(await send("/auth/reset-password")).toBe("dropped");
+    expect(await send("/auth/change-email")).toBe("dropped");
+    expect(await pending()).toEqual([]);
+    expect(await send("/auth/verify-email")).toBe("stored");
+    expect(await pending()).toMatchObject([{ email: "robin@example.com", code: "secret-code" }]);
+  });
+
+  test("with verification required, sign-up fails plainly and creates nothing", async () => {
+    vi.stubEnv("AUTH_EMAIL_VERIFICATION", "required");
+    const t = client();
+
+    await expect(
+      t.mutation(api.auth.signUpWithoutEmailVerification, { email: "robin@example.com", password: PASSWORD })
+    ).rejects.toThrow("Email sending is not configured");
+    await expect(
+      t.mutation(api.auth.signUpWithEmailPassword, { email: "robin@example.com", password: PASSWORD })
+    ).rejects.toThrow("Email sending is not configured");
+    expect(await t.run((ctx) => ctx.db.query("users").collect())).toEqual([]);
+  });
+
+  test("without AUTH_MODE=convex, no Convex Auth account can be created", async () => {
+    vi.stubEnv("AUTH_MODE", "");
+    const t = client();
+
+    await expect(
+      t.mutation(api.auth.signUpWithoutEmailVerification, { email: "robin@example.com", password: PASSWORD })
+    ).rejects.toThrow("Convex Auth sign-up is not enabled on this deployment");
+    await expect(
+      t.mutation(api.auth.signUpWithEmailPassword, { email: "robin@example.com", password: PASSWORD })
+    ).rejects.toThrow("Convex Auth sign-up is not enabled on this deployment");
+    expect(await t.run((ctx) => ctx.db.query("users").collect())).toEqual([]);
+  });
+});
 
 describe("unified auth", () => {
   describe("getOptionalAuthenticatedUser with API key", () => {

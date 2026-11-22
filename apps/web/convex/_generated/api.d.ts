@@ -21,6 +21,7 @@ import type * as apiKeys_lib_apiKeysRepo from "../apiKeys/lib/apiKeysRepo.js";
 import type * as apiKeys_lib_scope from "../apiKeys/lib/scope.js";
 import type * as apiKeys_lib_validators from "../apiKeys/lib/validators.js";
 import type * as appVersion_core from "../appVersion/core.js";
+import type * as auth from "../auth.js";
 import type * as checks_checklists from "../checks/checklists.js";
 import type * as checks_definitions from "../checks/definitions.js";
 import type * as checks_errors from "../checks/errors.js";
@@ -364,9 +365,11 @@ import type * as tasks_sections from "../tasks/sections.js";
 import type * as tasks_timeline from "../tasks/timeline.js";
 import type * as users_core from "../users/core.js";
 import type * as users_errors from "../users/errors.js";
+import type * as users_lib_pendingSignUpCodesRepo from "../users/lib/pendingSignUpCodesRepo.js";
 import type * as users_lib_userPreferencesRepo from "../users/lib/userPreferencesRepo.js";
 import type * as users_lib_userProjectPreferencesRepo from "../users/lib/userProjectPreferencesRepo.js";
 import type * as users_lib_usersRepo from "../users/lib/usersRepo.js";
+import type * as users_lib_validators from "../users/lib/validators.js";
 import type * as users_preferences from "../users/preferences.js";
 import type * as users_projectPreferences from "../users/projectPreferences.js";
 import type * as workflows_core from "../workflows/core.js";
@@ -405,6 +408,7 @@ declare const fullApi: ApiFromModules<{
   "apiKeys/lib/scope": typeof apiKeys_lib_scope;
   "apiKeys/lib/validators": typeof apiKeys_lib_validators;
   "appVersion/core": typeof appVersion_core;
+  auth: typeof auth;
   "checks/checklists": typeof checks_checklists;
   "checks/definitions": typeof checks_definitions;
   "checks/errors": typeof checks_errors;
@@ -748,9 +752,11 @@ declare const fullApi: ApiFromModules<{
   "tasks/timeline": typeof tasks_timeline;
   "users/core": typeof users_core;
   "users/errors": typeof users_errors;
+  "users/lib/pendingSignUpCodesRepo": typeof users_lib_pendingSignUpCodesRepo;
   "users/lib/userPreferencesRepo": typeof users_lib_userPreferencesRepo;
   "users/lib/userProjectPreferencesRepo": typeof users_lib_userProjectPreferencesRepo;
   "users/lib/usersRepo": typeof users_lib_usersRepo;
+  "users/lib/validators": typeof users_lib_validators;
   "users/preferences": typeof users_preferences;
   "users/projectPreferences": typeof users_projectPreferences;
   "workflows/core": typeof workflows_core;
@@ -797,6 +803,9 @@ export declare const internal: FilterApi<
 >;
 
 export declare const components: {
+  auth: import("@convex-dev/auth/_generated/component.js").ComponentApi<"auth">;
+  authEmail: import("@convex-dev/auth/components/email/_generated/component.js").ComponentApi<"authEmail">;
+  authPassword: import("@convex-dev/auth/components/password/_generated/component.js").ComponentApi<"authPassword">;
   migrations: import("@convex-dev/migrations/_generated/component.js").ComponentApi<"migrations">;
   resend: import("@convex-dev/resend/_generated/component.js").ComponentApi<"resend">;
 };
