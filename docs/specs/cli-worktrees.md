@@ -348,9 +348,12 @@ composer layout, see `docs/specs/cli-thread-context-selectors.md`): the split
 **environment + branch** selectors (`WorkspaceSelectors`, OS-1218) in the
 context bar **above** the input, right after the working-directory selector.
   - **Environment selector** ("Start in"): trigger shows `Work locally`
-    (laptop icon) / `Worktree` (branch icon) / `New worktree` (plus icon).
+    (laptop icon) / `Worktree` (folder-git icon) / `New worktree` (plus icon).
+    The branch icon belongs to the branch chip alone: a narrow composer bar
+    hides the environment label, and two branch icons side by side read as
+    one control.
     Dropdown (no search input): "Work locally" (badge shows the current
-    branch when known), the parent's worktrees (each with the inline
+    branch when known), the parent's worktrees (folder-git icon, each with the inline
     two-step-confirm remove action), "New worktree" (selecting it commits a
     bare `{ type: "branch" }` selection — new worktree from the repo's
     default branch with an auto-derived name), then below a separator a
@@ -380,7 +383,7 @@ incidental pointer movement.
 
 Started-thread composers show read-only environment and branch chips
 (OS-1988). Local checkouts show a laptop icon with `Work locally`; worktrees
-show a branch icon with `Worktree`. A separate branch chip uses the detail
+show a folder-git icon with `Worktree`. A separate branch chip uses the detail
 query's canonical `branch`, with the precedence defined below in Thread List
 Branch Display, and updates when the CLI reports a changed branch. The
 thread's stored worktree metadata preserves its environment when its profile

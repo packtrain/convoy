@@ -49,6 +49,14 @@ describe("WorkspaceSelectors", () => {
     expect(screen.getByTitle("Worktree branch: feat/x")).toBeDefined();
   });
 
+  test("worktree environment uses a folder icon so the branch icon stays unique when labels hide", () => {
+    render(<WorkspaceSelectors {...BASE_PROPS} value={{ type: "worktree", pathId: "wt_1" }} />);
+
+    expect(screen.getByTitle("Environment: Worktree").querySelector(".lucide-folder-git-2")).not.toBeNull();
+    expect(screen.getByTitle("Environment: Worktree").querySelector(".lucide-git-branch")).toBeNull();
+    expect(screen.getByTitle("Worktree branch: feat/x").querySelector(".lucide-git-branch")).not.toBeNull();
+  });
+
   test("new-worktree selection exposes an editable base-branch trigger", () => {
     render(<WorkspaceSelectors {...BASE_PROPS} value={{ type: "branch", baseRef: undefined, startFromOrigin: false }} />);
 

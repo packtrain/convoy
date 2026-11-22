@@ -792,7 +792,8 @@ describe("ThreadComposer", () => {
         readOnlyWorkspace={{ kind: "worktree", branch: "feat/removed-path" }}
       />);
       expect(screen.getByText("feat/removed-path")).toBeDefined();
-      expect(screen.getByText("Worktree").parentElement?.querySelector(".lucide-git-branch")).not.toBeNull();
+      expect(screen.getByText("Worktree").parentElement?.querySelector(".lucide-folder-git-2")).not.toBeNull();
+      expect(screen.getByText("Worktree").parentElement?.querySelector(".lucide-git-branch")).toBeNull();
       expect(screen.queryByText("Work locally")).toBeNull();
     });
   });

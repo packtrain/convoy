@@ -121,7 +121,7 @@ new-thread composer, no agent selector on follow-ups).
   text size as `size="sm"` button triggers (`text-[0.8rem] leading-4`).
 - Started threads keep separate read-only environment and branch chips
   (OS-1988). Local checkouts retain the laptop icon and `Work locally` label;
-  worktrees show the branch icon and `Worktree` label. The branch chip uses
+  worktrees show the folder-git icon and `Worktree` label. The branch chip uses
   the detail query's canonical execution branch and updates when it changes.
   Clicking the branch chip copies the branch name to the clipboard.
   Creation seeds the local thread's branch from the draft scan, so sending

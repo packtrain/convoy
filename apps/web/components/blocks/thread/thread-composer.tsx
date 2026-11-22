@@ -7,7 +7,7 @@ import { useCallback, useEffect, useMemo, useRef, useState, type ComponentProps,
 import { useHotkey } from "@tanstack/react-hotkeys";
 import type { FileUIPart } from "ai";
 import type { JSONContent } from "@tiptap/react";
-import { ChevronDown, GitBranch, Laptop, Paperclip, TriangleAlert, X } from "lucide-react";
+import { ChevronDown, FolderGit2, GitBranch, Laptop, Paperclip, TriangleAlert, X } from "lucide-react";
 import { toast } from "sonner";
 import { BackgroundTasksPill } from "@/components/blocks/background-tasks";
 import type { CliThreadBackgroundTasks, CliStopConfirmation, CliThreadGoal } from "@/convex/lib/contracts/validators";
@@ -647,7 +647,7 @@ function ThreadComposerWorkspaceSummary({
   tooltip,
 }: NonNullable<ThreadComposerProps["readOnlyWorkspace"]> & { tooltip?: string }) {
   const label = kind === "worktree" ? "Worktree" : "Work locally";
-  const EnvironmentIcon = kind === "worktree" ? GitBranch : Laptop;
+  const EnvironmentIcon = kind === "worktree" ? FolderGit2 : Laptop;
   const chipClassName =
     "flex h-7 min-w-0 max-w-44 shrink items-center gap-1.5 rounded-[min(var(--radius-md),12px)] px-2 text-[0.8rem] leading-4 text-muted-foreground";
   const summary = (

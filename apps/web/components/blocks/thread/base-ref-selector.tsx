@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useMutation, useQuery } from "convex/react";
-import { Check, ChevronDown, ChevronLeft, Cloud, GitBranch, Home, Laptop, Plus, Trash2 } from "lucide-react";
+import { Check, ChevronDown, ChevronLeft, Cloud, FolderGit2, GitBranch, Home, Laptop, Plus, Trash2 } from "lucide-react";
 import { toast } from "sonner";
 import { api } from "@/convex/_generated/api";
 import type { Id } from "@/convex/_generated/dataModel";
@@ -552,7 +552,7 @@ export function WorkspaceSelectors({
   const selectedWorktree = value?.type === "worktree" ? worktrees.find((wt) => wt.id === value.pathId) : undefined;
   const environment: "local" | "worktree" | "new-worktree" = branchSelection ? "new-worktree" : selectedWorktree ? "worktree" : "local";
   const environmentLabel = environment === "local" ? "Work locally" : environment === "worktree" ? "Worktree" : "New worktree";
-  const EnvironmentIcon = environment === "local" ? Laptop : environment === "worktree" ? GitBranch : Plus;
+  const EnvironmentIcon = environment === "local" ? Laptop : environment === "worktree" ? FolderGit2 : Plus;
 
   // The read-only branch label for non-editable environments; the editable
   // new-worktree label falls back to the repo's default branch.
@@ -622,7 +622,7 @@ export function WorkspaceSelectors({
                   }}
                   data-checked={selectedWorktree?.id === worktree.id ? true : undefined}
                 >
-                  <GitBranch className="size-3.5 shrink-0 opacity-70" />
+                  <FolderGit2 className="size-3.5 shrink-0 opacity-70" />
                   <ModelSelectorDropdownName>{worktree.branch ?? worktree.label}</ModelSelectorDropdownName>
                   <RowEnd checked={selectedWorktree?.id === worktree.id}>
                     <WorktreeRemoveButton
