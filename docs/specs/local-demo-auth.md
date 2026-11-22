@@ -9,13 +9,14 @@ everywhere) is unchanged.
 
 ## Mode wiring
 
-One logical flag in three places kept in sync by `self-hosted/start.sh`. The
-web bundle also accepts `convex`; see [auth-adapters.md](auth-adapters.md).
+One logical flag in three places kept in sync by `self-hosted/start.sh`, which
+offers `local-demo`, `convex` and `clerk`. For `convex` see
+[auth-adapters.md](auth-adapters.md#deployment).
 
 | Surface | Mechanism | Consumed by |
 | --- | --- | --- |
 | Web bundle | `NEXT_PUBLIC_AUTH_MODE` build ARG (`self-hosted/web.Dockerfile`), default `clerk` | `apps/web/lib/auth/auth-mode.ts` (`authMode`, `isLocalDemoAuthMode`) |
-| Convex deployment | `AUTH_MODE` deployment env var (`npx convex env set AUTH_MODE local-demo`) | `apps/web/convex/lib/access/localDemo.ts` (`isLocalDemoDeployment`) |
+| Convex deployment | `AUTH_MODE` deployment env var, set by `start.sh` in every mode (`npx convex env set AUTH_MODE local-demo`) | `apps/web/convex/lib/access/localDemo.ts` (`isLocalDemoDeployment`) |
 | Compose/.env | `AUTH_MODE` in `self-hosted/.env` | `start.sh`, compose build arg |
 
 Rules:

@@ -1,6 +1,6 @@
 import { v } from "convex/values";
 import { mutation, query } from "../_generated/server";
-import { sendTransactionalEmail } from "../lib/notifications/email";
+import { isEmailSendingConfigured, sendTransactionalEmail } from "../lib/notifications/email";
 import { getAuthenticatedUser, getIdentityEmail, getOptionalAuthenticatedUser } from "../lib/access/auth";
 import { hasOrgPermission, requireOrgPermission } from "../lib/access/permissions";
 import { OrgPermission } from "../../lib/authz/permissions";
@@ -270,7 +270,7 @@ export const listPending = query({
 
     const invitations = await listPendingInvitations(ctx, args.organizationId);
 
-    // Enrich with inviter info
+    const shareLinks = !isEmailSendingConfigured();
     return join(invitations)
       .on((inv) => inv.invitedBy)
       .with((ids) => getUsersByIds(ctx, ids))
@@ -286,6 +286,7 @@ export const listPending = query({
           name: inviter?.name || null,
           email: inviter?.email || null,
         },
+        inviteUrl: shareLinks ? buildInvitationUrl(inv.token) : null,
       }));
   },
 });

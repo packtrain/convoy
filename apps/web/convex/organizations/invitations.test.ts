@@ -599,6 +599,20 @@ describe("organizations.invitations", () => {
       ]);
     });
 
+    test("gives the invite link only while the deployment sends no email", async () => {
+      const ctx = createTestContext();
+      const { org, user, asUser } = await ctx.setupOrg();
+      const invitation = await ctx.organizationInvitation(org._id, user._id, { email: "robin@example.com" });
+      const list = () => asUser.query(api.organizations.invitations.listPending, { organizationId: org._id });
+
+      vi.stubEnv("RESEND_API_KEY", "");
+      expect((await list())[0].inviteUrl).toMatch(new RegExp(`/auth/invite/${invitation.token}$`));
+
+      vi.stubEnv("RESEND_API_KEY", "re_test_key");
+      expect((await list())[0].inviteUrl).toBeNull();
+      vi.unstubAllEnvs();
+    });
+
     test("should not include revoked invitations", async () => {
       const ctx = createTestContext();
       const { org, user, asUser } = await ctx.setupOrg();

@@ -56,4 +56,6 @@ export const invitationSummaryValidator = v.object({
     name: v.union(v.string(), v.null()),
     email: v.union(v.string(), v.null()),
   }),
+  // The accept link, for the inviter to share, only while the deployment sends no email.
+  inviteUrl: v.union(v.string(), v.null()),
 });

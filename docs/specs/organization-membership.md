@@ -117,6 +117,17 @@ Users cannot be invited directly as owners. Ownership must be granted by an exis
 | **Same token**          | Reuses existing token (previous link still works)                                    |
 | **Template reuse**      | Uses the shared `org-invitation` template defined in `docs/specs/email-templates.md` |
 
+### Deployments without email
+
+A deployment with no `RESEND_API_KEY` sends no email. `sendTransactionalEmail`
+returns without sending, so creating, resending and accepting an invitation and
+adding a project member still succeed. `listPending` then returns each row's
+accept link as `inviteUrl` (null while email is configured), and the Members
+screen shows **Copy link** in place of **Resend**. The inviter passes the link
+on. Copy link also calls `resend`, so it renews an expired invitation. Where the
+Clipboard API is missing, as over plain http on a LAN address, a prompt shows
+the link for copying by hand. The invite dialog still says an email will be sent.
+
 ### Business Rules: Revoking Invitations
 
 | Rule                    | Behavior                                      |
@@ -453,6 +464,9 @@ organizationMembers: {
 - [ ] Revoking invalidates invitation
 - [ ] Cannot revoke non-pending invitation
 - [ ] Invitation email preview is available in `/playground/emails`
+- [ ] Without `RESEND_API_KEY` no email is sent and the calling mutation commits
+- [ ] `listPending` gives `inviteUrl` only without `RESEND_API_KEY`; the row shows Copy link instead of Resend
+- [ ] Copy link renews the invitation, and falls back to a prompt without clipboard access
 
 ### Role Management Tests
 

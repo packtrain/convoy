@@ -12,7 +12,7 @@ RUN pnpm install --frozen-lockfile --filter @convoy/web...
 ARG NEXT_PUBLIC_CONVEX_URL
 ARG NEXT_PUBLIC_APP_URL
 ARG NEXT_PUBLIC_APP_ENV=production
-# clerk | local-demo — the auth mode is baked into the bundle; switching
+# clerk | convex | local-demo — the auth mode is baked into the bundle; switching
 # modes requires rebuilding this image.
 ARG NEXT_PUBLIC_AUTH_MODE=clerk
 ARG NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY

@@ -2,7 +2,8 @@ import { describe, expect, test, vi, afterEach } from "vitest";
 import { buildOrganizationInvitationEmail } from "../../../lib/emails/catalog";
 import { buildProjectUrl } from "../../../lib/emails/links";
 import { EMAIL_LOGO_URL } from "../../../lib/emails/render-html";
-import { buildResendEmail, getEmailFrom } from "./email";
+import { createTestContext } from "../../../convex-testing";
+import { buildResendEmail, getEmailFrom, sendTransactionalEmail } from "./email";
 
 describe("notification email helper", () => {
   afterEach(() => {
@@ -43,6 +44,20 @@ describe("notification email helper", () => {
 
     vi.stubEnv("SUPPORT_EMAIL", "help@example.com");
     expect(buildResendEmail(template).html).toContain("mailto:help@example.com");
+  });
+
+  test("sends nothing without RESEND_API_KEY, so the calling mutation still commits", async () => {
+    const { t } = createTestContext();
+    const template = buildOrganizationInvitationEmail({
+      organizationName: "Acme Workspace",
+      inviterName: "Jordan Lee",
+      inviteUrl: "https://example.com/invite",
+      role: "member",
+    });
+
+    await expect(
+      t.run((ctx) => sendTransactionalEmail(ctx, { to: "robin@example.com", template }))
+    ).resolves.toBeNull();
   });
 
   test("builds absolute project URLs from the configured app base", () => {

@@ -1,6 +1,6 @@
 # Auth adapters
 
-Status: S1 (OS-2492), S2 (OS-2493), S1b (OS-2495), S3 (OS-2496), S4 (OS-2497) and S6 (OS-2500) implemented. Parent plan: OS-2491.
+Status: S1 (OS-2492), S2 (OS-2493), S1b (OS-2495), S3 (OS-2496), S4 (OS-2497), S6 (OS-2500) and S7a (OS-2494) implemented. Parent plan: OS-2491.
 
 Convoy signs people in through one of three adapters, chosen at build time:
 
@@ -272,7 +272,9 @@ token's `email` claim for any other issuer. Clerk behavior is unchanged.
 
 With `AUTH_EMAIL_VERIFICATION=off` that address is unverified. Anyone can sign
 up with any address, so accepting rests on holding the invitation link alone.
-This is the cost of turning verification off.
+This is the cost of turning verification off. Without `RESEND_API_KEY` the
+inviter copies that link from the Members screen
+([organization-membership.md](organization-membership.md#deployments-without-email)).
 
 ## Email verification
 
@@ -499,10 +501,18 @@ A Convex mode deployment sets:
 
 The deployment signs its own tokens, so there are no auth secrets.
 
+`self-hosted/start.sh` sets all of these when the operator picks `convex`. It
+asks for a Resend key and `EMAIL_FROM`; with a key it sets
+`AUTH_EMAIL_VERIFICATION=required`, without one `off`. It sets `AUTH_MODE`,
+`NEXT_PUBLIC_APP_URL` (from the image, built from `APP_URL`) and
+`CLERK_JWT_ISSUER_DOMAIN` (`https://convex.invalid` here,
+`https://local-demo.invalid` in local-demo) in every mode, so a mode switch
+never leaves the backend on the old one. The README tells the operator to pick
+the mode before the first sign-up.
+
 ## Not covered yet
 
-The self-hosted script (S7a, which also asks for the Resend key), password reset
-with verification off, change password and change email while signed in,
+Password reset with verification off, change password and change email while signed in,
 resending a verification link, GitHub and Apple sign-in, and linking an email
 sign-up to an existing Google account.
 

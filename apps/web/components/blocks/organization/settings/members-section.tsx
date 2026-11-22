@@ -10,7 +10,7 @@ import { Empty } from "@/components/custom/empty-state";
 import { SearchInput } from "@/components/custom/search-input";
 import { Separator } from "@/components/ui/separator";
 import { Skeleton } from "@/components/ui/skeleton";
-import { UserPlus, RotateCw, X, Clock } from "lucide-react";
+import { UserPlus, RotateCw, X, Clock, Link } from "lucide-react";
 import { MemberRow } from "../member-row";
 import { InviteMemberDialog } from "../invite-member-dialog";
 import { RoleBadge } from "@/components/ui/role-badge";
@@ -85,6 +85,25 @@ export function MembersSection({
       toast.error(
         getErrorMessage(error, "Failed to resend invitation")
       );
+    }
+  };
+
+  // Without email the link is the invitation, so copying also renews its expiry.
+  const handleCopyLink = async (
+    organizationInvitationId: Id<"organizationInvitations">,
+    inviteUrl: string
+  ) => {
+    try {
+      await navigator.clipboard.writeText(inviteUrl);
+      toast.success("Invitation link copied");
+    } catch {
+      // No Clipboard API over plain http on a LAN address: show it for copying by hand.
+      window.prompt("Copy the invitation link", inviteUrl);
+    }
+    try {
+      await resendInvitation({ organizationInvitationId });
+    } catch (error) {
+      toast.error(getErrorMessage(error, "Failed to renew invitation"));
     }
   };
 
@@ -175,14 +194,26 @@ export function MembersSection({
                       </div>
                       <div className="flex items-center gap-1">
                         <RoleBadge label={invitation.role.charAt(0).toUpperCase() + invitation.role.slice(1)} className="mr-2" />
-                        <Button
-                          variant="ghost"
-                          size="sm"
-                          onClick={() => handleResend(invitation._id)}
-                        >
-                          <RotateCw className="size-3" />
-                          Resend
-                        </Button>
+                        {/* No email on this deployment: the inviter shares the link. */}
+                        {invitation.inviteUrl ? (
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            onClick={() => handleCopyLink(invitation._id, invitation.inviteUrl!)}
+                          >
+                            <Link className="size-3" />
+                            Copy link
+                          </Button>
+                        ) : (
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            onClick={() => handleResend(invitation._id)}
+                          >
+                            <RotateCw className="size-3" />
+                            Resend
+                          </Button>
+                        )}
                         <Button
                           variant="ghost"
                           size="sm"

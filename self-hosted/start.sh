@@ -1,8 +1,7 @@
 #!/usr/bin/env bash
 # One-command self-hosted Convoy: Convex backend + dashboard + web app.
-# Only prerequisite: Docker (with Compose). The default local-demo mode
-# needs no other accounts; opt into Clerk mode for real multi-user auth
-# (free Clerk application with a JWT template named "convex").
+# Only prerequisite: Docker (with Compose). local-demo and convex modes need
+# no other accounts; clerk mode needs a free Clerk application.
 # Safe to re-run — every step is idempotent.
 set -euo pipefail
 cd "$(dirname "$0")"
@@ -34,14 +33,39 @@ AUTH_MODE="$(env_get AUTH_MODE)"
 if [ -z "$AUTH_MODE" ]; then
   say "Choose an authentication mode:"
   echo "  local-demo — no accounts or sign-in; one demo user. Great for trying Convoy."
-  echo "  clerk      — real multi-user authentication via https://clerk.com (free tier is fine)."
+  echo "  convex     — real accounts with email and password, no outside service."
+  echo "  clerk      — real accounts through https://clerk.com (free tier is fine)."
   echo
-  read -r -p "Run in local demo mode without accounts? [Y/n]: " DEMO_ANSWER
-  case "${DEMO_ANSWER:-Y}" in
-    [Nn]*) AUTH_MODE=clerk ;;
-    *) AUTH_MODE=local-demo ;;
-  esac
+  echo "Choose before the first user signs up: accounts do not move to another mode."
+  while :; do
+    read -r -p "Auth mode [local-demo/convex/clerk] (local-demo): " AUTH_MODE
+    case "${AUTH_MODE:=local-demo}" in
+      local-demo | convex | clerk) break ;;
+      *) echo "Type local-demo, convex or clerk." ;;
+    esac
+  done
   env_set AUTH_MODE "$AUTH_MODE"
+fi
+case "$AUTH_MODE" in
+  local-demo | convex | clerk) ;;
+  *) echo "AUTH_MODE in .env must be local-demo, convex or clerk, not \"$AUTH_MODE\"."; exit 1 ;;
+esac
+
+if [ "$AUTH_MODE" = "convex" ] && [ -z "$(env_get AUTH_EMAIL_VERIFICATION)" ]; then
+  say "Convex Auth can email a link that confirms each new address (needs https://resend.com)."
+  echo "Leave the key empty to skip email: sign-up then checks no mailbox, so keep"
+  echo "the instance off the public internet."
+  echo
+  read -r -p "RESEND_API_KEY (re_..., empty for none): " RESEND_KEY
+  if [ -n "$RESEND_KEY" ]; then
+    read -r -p "EMAIL_FROM, on a domain verified in Resend (Convoy <noreply@example.com>): " FROM
+    [ -n "$FROM" ] || { echo "EMAIL_FROM is required with a Resend key."; exit 1; }
+    env_set RESEND_API_KEY "$RESEND_KEY"
+    env_set EMAIL_FROM "$FROM"
+    env_set AUTH_EMAIL_VERIFICATION required
+  else
+    env_set AUTH_EMAIL_VERIFICATION off
+  fi
 fi
 
 ISSUER=""
@@ -95,21 +119,26 @@ say "Building the web app image (first run takes a few minutes)..."
 docker compose build web
 
 say "Deploying Convoy functions and schema to your backend..."
-if [ "$AUTH_MODE" = "local-demo" ]; then
-  # The placeholder issuer keeps auth.config.ts satisfied; it is never used
-  # because local-demo issues no JWTs.
-  DEPLOY_ENV_CMD="npx convex env set AUTH_MODE local-demo && npx convex env set CLERK_JWT_ISSUER_DOMAIN https://local-demo.invalid"
-else
-  DEPLOY_ENV_CMD="npx convex env set CLERK_JWT_ISSUER_DOMAIN '$ISSUER'"
-fi
-# Convex refuses to deploy with these unset; `none` hides Google sign-in.
-DEPLOY_ENV_CMD="$DEPLOY_ENV_CMD"' && npx convex env set AUTH_GOOGLE_CLIENT_ID "$AUTH_GOOGLE_CLIENT_ID" && npx convex env set AUTH_GOOGLE_CLIENT_SECRET "$AUTH_GOOGLE_CLIENT_SECRET"'
+# Non-clerk modes set a placeholder issuer: auth.config.ts always lists Clerk,
+# and no Clerk JWT ever arrives. NEXT_PUBLIC_APP_URL comes from the image.
+# Values travel as env vars to avoid quoting. Convex rejects empty values, so a
+# cleared optional one is removed from the deployment instead.
+[ "$AUTH_MODE" = "clerk" ] || ISSUER="https://$AUTH_MODE.invalid"
 docker compose run --rm --no-deps \
   -e CONVEX_SELF_HOSTED_URL=http://backend:3210 \
   -e CONVEX_SELF_HOSTED_ADMIN_KEY="$ADMIN_KEY" \
+  -e AUTH_MODE="$AUTH_MODE" \
+  -e CLERK_JWT_ISSUER_DOMAIN="$ISSUER" \
   -e AUTH_GOOGLE_CLIENT_ID="$(env_get AUTH_GOOGLE_CLIENT_ID | grep . || echo none)" \
   -e AUTH_GOOGLE_CLIENT_SECRET="$(env_get AUTH_GOOGLE_CLIENT_SECRET | grep . || echo none)" \
-  web sh -c "cd apps/web && $DEPLOY_ENV_CMD && npx convex deploy -y"
+  -e AUTH_EMAIL_VERIFICATION="$(env_get AUTH_EMAIL_VERIFICATION)" \
+  -e RESEND_API_KEY="$(env_get RESEND_API_KEY)" \
+  -e EMAIL_FROM="$(env_get EMAIL_FROM)" \
+  web sh -c 'cd apps/web && for k in AUTH_MODE CLERK_JWT_ISSUER_DOMAIN NEXT_PUBLIC_APP_URL \
+      AUTH_GOOGLE_CLIENT_ID AUTH_GOOGLE_CLIENT_SECRET AUTH_EMAIL_VERIFICATION RESEND_API_KEY EMAIL_FROM; do
+    v="$(printenv "$k")"
+    if [ -n "$v" ]; then npx convex env set "$k" "$v"; else npx convex env remove "$k"; fi || exit 1
+  done && npx convex deploy -y'
 
 say "Starting the web app..."
 docker compose up -d web
@@ -126,6 +155,11 @@ if [ "$AUTH_MODE" = "local-demo" ]; then
   echo "  NOTE: local demo mode has NO authentication — anyone who can reach"
   echo "  these ports has full access. Ports are bound to 127.0.0.1 by default;"
   echo "  do not expose them to a network or use this mode for sensitive data."
+fi
+if [ "$AUTH_MODE" = "convex" ] && [ "$(env_get AUTH_EMAIL_VERIFICATION)" = "off" ]; then
+  echo
+  echo "  NOTE: email verification is off. Anyone who can reach the app can sign"
+  echo "  up under any address, so keep it off the public internet."
 fi
 echo
 echo "To stop: docker compose down (add -v to also delete all data)"
