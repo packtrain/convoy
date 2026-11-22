@@ -1216,6 +1216,7 @@ describe("worker credentials", () => {
   test("caps a worker from a non-expiring source at one year", async () => {
     const { project, asUser, t } = await createTestContext().setupProject();
     const source = await asUser.mutation(api.apiKeys.core.create, { name: "setup" });
+    await tickPastLastCommit();
     const before = Date.now();
     const issued = await t.mutation(api.apiKeys.core.createProjectKey, { apiKey: source.key, projectId: project._id });
     const expiresAt = await t.run(async (c) => (await c.db.get("apiKeys", issued.id))?.expiresAt);
