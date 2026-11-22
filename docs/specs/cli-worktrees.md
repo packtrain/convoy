@@ -154,7 +154,11 @@ entries would churn it).
 ### Remove
 
 The CLI refuses to remove a dirty worktree (surfaced as op failure; no force
-in v1). On success it runs `git worktree remove`, re-syncs the parent (entry
+in v1). On success it runs `git worktree remove` with a 10-minute timeout
+instead of the 30-second git default: git deletes ignored files such as an
+installed `node_modules` before it unregisters the worktree, and a kill
+partway through leaves a registered worktree with most tracked files deleted.
+It then re-syncs the parent (entry
 disappears from the profile), and completes the op. The local branch is not
 deleted. Threads keep their path snapshot until the next run validates and,
 when necessary, repairs their execution target.

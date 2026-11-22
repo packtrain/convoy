@@ -1,10 +1,15 @@
-import { afterEach, beforeEach, describe, expect, it } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { mkdtemp, rm, writeFile, readFile, realpath, mkdir, cp, rename } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { runGit } from "./exec.js";
-import { buildDefaultWorktreePath, listWorktrees, parseWorktreeList, resolveExecutionWorkspace } from "./worktrees.js";
+import { buildDefaultWorktreePath, listWorktrees, parseWorktreeList, removeWorktree, resolveExecutionWorkspace } from "./worktrees.js";
 import { dedupeBranchRefs } from "../../agent/app/worktree-op-processor.js";
+
+vi.mock("./exec.js", async (importOriginal) => {
+  const actual = await importOriginal<typeof import("./exec.js")>();
+  return { ...actual, runGit: vi.fn(actual.runGit) };
+});
 
 describe("execution workspace recovery (real git)", () => {
   let parent: string;
@@ -23,6 +28,13 @@ describe("execution workspace recovery (real git)", () => {
     const identity = await resolveExecutionWorkspace(checkout, spec);
     return { ...spec, repositoryId: identity.repositoryId, worktreeId: identity.worktreeId };
   }
+
+  it("gives worktree removal minutes, not the default 30s, to delete node_modules", async () => {
+    await removeWorktree({ parentPath: parent, worktreePath: checkout });
+    const call = vi.mocked(runGit).mock.calls.find(([, args]) => args[1] === "remove");
+    expect(call?.[2]?.timeoutMs).toBeGreaterThanOrEqual(10 * 60_000);
+    expect((await listWorktrees(parent)).map((wt) => wt.path)).not.toContain(checkout);
+  });
 
   it("accepts a configured repository subdirectory and falls back to it", async () => {
     const subdir = join(parent, "app");

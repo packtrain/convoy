@@ -195,5 +195,6 @@ export async function removeWorktree(input: { parentPath: string; worktreePath: 
     throw new GitCommandError("Worktree has uncommitted changes", ["worktree", "remove"], null, "");
   }
 
-  await runGit(input.parentPath, ["worktree", "remove", input.worktreePath]);
+  // Deleting an installed node_modules can take minutes; a kill mid-delete leaves a half-removed tree.
+  await runGit(input.parentPath, ["worktree", "remove", input.worktreePath], { timeoutMs: 10 * 60_000 });
 }
