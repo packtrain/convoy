@@ -1,5 +1,12 @@
 import type { EmailTemplateDocument } from "./catalog";
 
+// Production asset, so the logo also loads in emails sent from dev and preview deployments.
+export const EMAIL_LOGO_URL = "https://app.convoy.build/web-app-manifest-192x192.png";
+
+const SANS = `-apple-system,BlinkMacSystemFont,'Segoe UI',Helvetica,Arial,sans-serif`;
+const TEXT = `margin:0 0 16px;font-family:${SANS};color:#4a4a4a;font-size:14px;line-height:1.5;`;
+const LINK = "color:#1a1a1a;text-decoration:underline;";
+
 function escapeHtml(value: string): string {
   return value
     .replaceAll("&", "&amp;")
@@ -9,61 +16,42 @@ function escapeHtml(value: string): string {
     .replaceAll("'", "&#39;");
 }
 
-function renderParagraphs(paragraphs: string[]): string {
-  return paragraphs
+const paragraph = (text: string) => `<p style="${TEXT}">${escapeHtml(text)}</p>`;
+
+function renderDetails(template: EmailTemplateDocument): string {
+  if (template.details.length === 0) return "";
+  const rows = template.details
     .map(
-      (paragraph) =>
-        `<p style="margin:0 0 14px;color:#111827;font-size:15px;line-height:1.6;">${escapeHtml(paragraph)}</p>`
+      (detail) => `<tr>
+        <td style="padding:3px 16px 3px 0;font-family:${SANS};color:#6b6b6b;font-size:13px;white-space:nowrap;vertical-align:top;">${escapeHtml(detail.label)}:</td>
+        <td style="padding:3px 0;font-family:${SANS};color:#1a1a1a;font-size:13px;font-weight:600;">${escapeHtml(detail.value)}</td>
+      </tr>`,
     )
     .join("");
+  return `<table role="presentation" cellspacing="0" cellpadding="0" border="0" width="100%" style="width:100%;margin:0 0 28px;border:1px solid #e6e6e6;border-radius:6px;background:#f9f9f9;border-collapse:separate;">
+    <tr><td style="padding:12px 16px;">
+      <table role="presentation" cellspacing="0" cellpadding="0" border="0" style="border-collapse:collapse;">${rows}</table>
+    </td></tr>
+  </table>`;
 }
 
-function renderBullets(bullets: string[] | undefined): string {
-  if (!bullets || bullets.length === 0) {
-    return "";
-  }
-
-  return `<ul style="margin:0;padding:0 0 0 18px;color:#111827;">${bullets
-    .map(
-      (bullet) =>
-        `<li style="margin:0 0 8px;font-size:14px;line-height:1.6;">${escapeHtml(bullet)}</li>`
-    )
-    .join("")}</ul>`;
+function renderAction(template: EmailTemplateDocument): string {
+  if (!template.action) return "";
+  const url = escapeHtml(template.action.url);
+  return `<p style="margin:4px 0 24px;">
+      <a href="${url}" style="display:inline-block;padding:7px 10px;border-radius:4px;background:#1a1a1a;color:#ffffff;font-family:${SANS};font-size:13px;font-weight:500;text-decoration:none;">${escapeHtml(template.action.label)}</a>
+    </p>
+    <p style="${TEXT}">If you're having trouble with the above button, <a href="${url}" style="${LINK}">click here</a>.</p>`;
 }
 
-export function renderEmailHtml(template: EmailTemplateDocument): string {
-  const detailsMarkup = template.details
-    .map(
-      (detail) => `
-        <tr>
-          <td style="padding:10px 0;border-top:1px solid #111827;color:#6b7280;font-size:12px;font-weight:700;letter-spacing:0.08em;text-transform:uppercase;">
-            ${escapeHtml(detail.label)}
-          </td>
-          <td style="padding:10px 0;border-top:1px solid #111827;color:#111827;font-size:14px;font-weight:600;text-align:right;">
-            ${escapeHtml(detail.value)}
-          </td>
-        </tr>`
-    )
-    .join("");
-  const bulletsMarkup = renderBullets(template.bullets);
-  const hasDetails = template.details.length > 0;
-  const hasBullets = bulletsMarkup !== "";
+function renderSupport(supportEmail: string | undefined): string {
+  if (!supportEmail) return "";
+  const address = escapeHtml(supportEmail);
+  return `<p style="${TEXT}">If you have any questions or need any help, reach out to <a href="mailto:${address}" style="${LINK}">${address}</a>.</p>`;
+}
 
-  const actionMarkup = template.action
-    ? `
-      <div style="margin:24px 0 0;">
-        <a href="${escapeHtml(template.action.url)}" style="display:inline-block;padding:14px 18px;border:1px solid #111827;background:#111827;color:#ffffff;font-size:14px;font-weight:700;letter-spacing:0.02em;text-decoration:none;text-transform:uppercase;">
-          ${escapeHtml(template.action.label)}
-        </a>
-      </div>`
-    : "";
-  const footerMarkup = template.footer
-    .map(
-      (line) =>
-        `<p style="margin:0 0 8px;color:#4b5563;font-size:12px;line-height:1.6;">${escapeHtml(line)}</p>`
-    )
-    .join("");
-
+/** The live email layout: logo, title, details box, button, footer. See docs/specs/email-templates.md. */
+export function renderEmailHtml(template: EmailTemplateDocument, supportEmail?: string): string {
   return `<!doctype html>
 <html lang="en">
   <head>
@@ -71,48 +59,31 @@ export function renderEmailHtml(template: EmailTemplateDocument): string {
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>${escapeHtml(template.subject)}</title>
   </head>
-  <body style="margin:0;padding:24px;background:#f5f5f4;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;">
+  <body style="margin:0;padding:0;background:#ffffff;">
     <div style="display:none;max-height:0;overflow:hidden;opacity:0;">${escapeHtml(template.preheader)}</div>
     <table role="presentation" cellspacing="0" cellpadding="0" border="0" width="100%" style="width:100%;border-collapse:collapse;">
       <tr>
-        <td align="center">
-          <table role="presentation" cellspacing="0" cellpadding="0" border="0" width="100%" style="max-width:640px;width:100%;border-collapse:separate;">
+        <td align="center" style="padding:48px 20px;">
+          <table role="presentation" cellspacing="0" cellpadding="0" border="0" width="100%" style="max-width:500px;width:100%;border-collapse:collapse;">
             <tr>
-              <td style="padding:0;">
-                <div style="border:1px solid #111827;background:#ffffff;">
-                  <div style="height:8px;background:#111827;"></div>
-                  <div style="padding:18px 20px;border-bottom:1px solid #111827;">
-                    <div style="display:flex;justify-content:space-between;gap:12px;align-items:flex-start;">
-                      <div style="color:#111827;font-size:16px;font-weight:700;letter-spacing:0.01em;">Convoy</div>
-                      <div style="color:#6b7280;font-size:11px;font-weight:700;letter-spacing:0.12em;text-transform:uppercase;">${escapeHtml(template.headerTag)}</div>
-                    </div>
-                  </div>
-                  <div style="padding:24px 20px;border-bottom:1px solid #111827;">
-                    <h1 style="margin:0 0 12px;color:#111827;font-size:32px;line-height:1.1;font-weight:700;">
-                      ${escapeHtml(template.title)}
-                    </h1>
-                    <p style="margin:0;color:#111827;font-size:15px;line-height:1.6;">
-                      ${escapeHtml(template.intro)}
-                    </p>
-                  </div>
-                  ${
-                    hasDetails
-                      ? `<div style="padding:20px;border-bottom:1px solid #111827;">
-                    <table role="presentation" cellspacing="0" cellpadding="0" border="0" width="100%" style="width:100%;border-collapse:collapse;">
-                      ${detailsMarkup}
-                    </table>
-                  </div>`
-                      : ""
-                  }
-                  <div style="padding:20px;border-bottom:1px solid #111827;">
-                    ${renderParagraphs(template.body)}
-                    ${hasBullets ? bulletsMarkup : ""}
-                    ${actionMarkup}
-                  </div>
-                  <div style="padding:16px 20px;background:#fafaf9;">
-                    ${footerMarkup}
-                  </div>
-                </div>
+              <td style="padding:0 0 32px;">
+                <img src="${EMAIL_LOGO_URL}" width="112" height="112" alt="Convoy" style="display:block;width:112px;height:112px;border:0;border-radius:12px;" />
+              </td>
+            </tr>
+            <tr>
+              <td>
+                <h1 style="margin:0 0 20px;font-family:${SANS};color:#1a1a1a;font-size:24px;line-height:1.25;font-weight:700;">${escapeHtml(template.title)}</h1>
+                ${paragraph(template.intro)}
+                ${renderDetails(template)}
+                ${template.body.map(paragraph).join("")}
+                ${renderAction(template)}
+                ${template.footer.map(paragraph).join("")}
+                ${renderSupport(supportEmail)}
+              </td>
+            </tr>
+            <tr>
+              <td style="padding:40px 0 0;">
+                <div style="border-top:1px dashed #cccccc;padding:16px 0 0;font-family:${SANS};color:#4a4a4a;font-size:12px;">&copy; ${new Date().getFullYear()} Convoy</div>
               </td>
             </tr>
           </table>

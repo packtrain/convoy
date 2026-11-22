@@ -256,6 +256,7 @@ export const appRoute = {
     withQuery("/auth/sign-in", { redirect_url: redirectUrl }),
   authSignUp: (redirectUrl?: string | null) =>
     withQuery("/auth/sign-up", { redirect_url: redirectUrl }),
+  authVerifyEmail: () => routeTarget("/auth/verify-email"),
   authInvite: (token: string) => routeTarget(`/auth/invite/${token}`),
   playground: () => routeTarget("/playground"),
 } as const;

@@ -23,6 +23,7 @@ vi.mock("@/lib/navigation", () => ({ useNavigationLocation: () => ({ pathname: s
 vi.mock("@/convex/_generated/api", () => ({ api: { auth: {} } }));
 vi.mock("@/components/blocks/auth/email-password-sign-in-form", () => ({ EmailPasswordSignInForm: () => null }));
 vi.mock("@/components/blocks/auth/email-password-sign-up-form", () => ({ EmailPasswordSignUpForm: () => null }));
+vi.mock("@/components/blocks/auth/verify-email-screen", () => ({ VerifyEmailScreen: () => null }));
 
 import { convexAdapter } from "./convex";
 
@@ -55,8 +56,8 @@ describe("Convex adapter route gate", () => {
     expect(location.replace).toHaveBeenCalledWith("/auth/sign-in?redirect_url=%2Fo%2Facme%2FWEB%3Ftask%3DWEB-7");
   });
 
-  test("leaves the sign-in and sign-up pages alone", () => {
-    for (const pathname of ["/auth/sign-in", "/auth/sign-up"]) {
+  test("leaves the sign-in, sign-up and verify-email pages alone", () => {
+    for (const pathname of ["/auth/sign-in", "/auth/sign-up", "/auth/verify-email"]) {
       state.pathname = pathname;
       renderProvider().unmount();
     }

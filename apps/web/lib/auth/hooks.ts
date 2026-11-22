@@ -45,6 +45,8 @@ export type AuthAdapter = {
   Provider: ComponentType<{ client: ConvexReactClient; children: ReactNode }>;
   SignInScreen: ComponentType;
   SignUpScreen: ComponentType;
+  /** Landing page of the emailed sign-up link. */
+  VerifyEmailScreen: ComponentType;
   useAuth: () => AppAuthState;
   useUser: () => AppUserState;
   useSignOut: () => AppSignOut;
@@ -67,6 +69,7 @@ const adapter = AUTH_ADAPTERS[authMode];
 export const AuthProvider = adapter.Provider;
 export const SignInScreen = adapter.SignInScreen;
 export const SignUpScreen = adapter.SignUpScreen;
+export const VerifyEmailScreen = adapter.VerifyEmailScreen;
 export const supportsSignOut = adapter.supportsSignOut;
 export const emailChangeHint = adapter.emailChangeHint;
 export const useAppAuth = adapter.useAuth;

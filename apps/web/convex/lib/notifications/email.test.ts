@@ -1,6 +1,7 @@
 import { describe, expect, test, vi, afterEach } from "vitest";
 import { buildOrganizationInvitationEmail } from "../../../lib/emails/catalog";
 import { buildProjectUrl } from "../../../lib/emails/links";
+import { EMAIL_LOGO_URL } from "../../../lib/emails/render-html";
 import { buildResendEmail, getEmailFrom } from "./email";
 
 describe("notification email helper", () => {
@@ -28,7 +29,20 @@ describe("notification email helper", () => {
     expect(email.subject).toBe("You're invited to join Acme Workspace");
     expect(email.html).toContain("Accept invitation");
     expect(email.html).toContain("Jordan Lee");
-    expect(email.html).toContain("CONVOY</span><span style=\"color:#999999;\"> / ORG INVITE");
+    expect(email.html).toContain(`src="${EMAIL_LOGO_URL}"`);
+  });
+
+  test("the help line names SUPPORT_EMAIL, and is left out without it", () => {
+    const template = buildOrganizationInvitationEmail({
+      organizationName: "Acme Workspace",
+      inviterName: "Jordan Lee",
+      inviteUrl: "https://example.com/invite",
+      role: "member",
+    });
+    expect(buildResendEmail(template).html).not.toContain("need any help");
+
+    vi.stubEnv("SUPPORT_EMAIL", "help@example.com");
+    expect(buildResendEmail(template).html).toContain("mailto:help@example.com");
   });
 
   test("builds absolute project URLs from the configured app base", () => {

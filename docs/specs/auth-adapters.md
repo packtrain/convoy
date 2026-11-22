@@ -1,6 +1,6 @@
 # Auth adapters
 
-Status: S1 (OS-2492) and S2 (OS-2493) implemented. Parent plan: OS-2491.
+Status: S1 (OS-2492), S2 (OS-2493) and S1b (OS-2495) implemented. Parent plan: OS-2491.
 
 Convoy signs people in through one of three adapters, chosen at build time:
 
@@ -20,7 +20,7 @@ and the CLI keeps authenticating with API keys.
 
 `apps/web/lib/auth/hooks.ts` holds an exhaustive `Record<AuthMode, AuthAdapter>`
 and exports the selected adapter's parts under fixed names. Product code imports
-only these: `AuthProvider`, `SignInScreen`, `SignUpScreen`, `useAppAuth`,
+only these: `AuthProvider`, `SignInScreen`, `SignUpScreen`, `VerifyEmailScreen`, `useAppAuth`,
 `useAppUser`, `useAppSignOut`, `useAppUpdateProfileName`, `useAppConvexAuth`,
 `supportsSignOut` and `emailChangeHint`.
 
@@ -36,6 +36,8 @@ Each adapter lives in `apps/web/lib/auth/adapters/`:
 - `local-demo.tsx` renders a plain `ConvexProvider` behind the demo bootstrap
   gate. Its sign-in screens render nothing, because the auth pages redirect a
   signed-in user away.
+- `VerifyEmailScreen` renders nothing in Clerk and local-demo mode. Clerk
+  verifies the address inside its own sign-up screen.
 - `convex.tsx` renders `ConvexAuthProvider`. Sign-out calls
   `useAuthActions().signOut` and then loads `redirectUrl`, or the sign-in page.
 - `convex-user.ts` holds the profile hooks backed by our `users` row
@@ -77,11 +79,36 @@ email or password." When the backend refuses with a `ConvexError`, such as
 "Email sending is not configured on this deployment", the sign-up form shows
 that text.
 
+### Verification screens
+
+With verification required, `auth.signUpWithoutEmailVerification` answers
+`emailVerificationRequired` and changes nothing. The form then calls the
+package's `useSignUpWithEmailPassword`, which runs `signUpWithEmailPassword` and
+keeps the returned browser secret in the auth client's storage. The form swaps
+to a "Check your email" card that names the address and says to open the link
+in this browser. "Sign up again" goes back to the form. That is also how a
+person gets a new link: S1b has no resend button.
+
+The emailed link can't carry `redirect_url`, because the package builds it from
+a fixed landing URL. The form keeps `redirect_url` in `localStorage` under
+`convoy.signUpRedirect` (`rememberSignUpRedirect` in
+`lib/routing/auth-redirects.ts`). Without it, someone who signed up from an
+invitation would land in a new workspace instead of on the invitation.
+
+`/auth/verify-email` renders `VerifyEmailScreen`. It runs the package's
+`useCompleteSignUpWithEmailPassword` with the link's `code`, shows a spinner,
+and on success replaces the page with `/auth/callback`, carrying the kept
+redirect and removing it from storage. Errors map through an exhaustive
+`Record`. A link opened in another browser (`MISSING_SECRET`) says to open it
+where you signed up. An expired or used link says to sign up again. Its "Back
+to sign up" link carries the kept redirect without removing it, so a retry
+started from an invitation still ends on the invitation.
+
 ### Route gate
 
 Until S4 there is no server-side gate in Convex mode. `SignedOutRedirect`, inside
 the Convex adapter's provider, sends a signed-out visitor of any page other than
-`/auth/sign-in` and `/auth/sign-up` to the sign-in page with `redirect_url` set
+`/auth/sign-in`, `/auth/sign-up` and `/auth/verify-email` to the sign-in page with `redirect_url` set
 to the page they asked for. It reloads the page instead of using client
 navigation, because the provider sits outside `NavigationProvider`. Sign-out
 navigates itself, so the gate stands down while it runs. Otherwise the gate
@@ -123,7 +150,7 @@ later slices.
 
 The email method needs three absolute landing URLs at setup. They are built from
 `getAppUrlBase()`: `/auth/verify-email`, `/auth/change-email` and
-`/auth/reset-password`. None of these pages exists yet. The package checks them
+`/auth/reset-password`. Only `/auth/verify-email` exists so far. The package checks them
 when the module loads, so a `NEXT_PUBLIC_APP_URL` without a scheme, such as
 `localhost:3000`, fails `convex deploy` in every mode.
 
@@ -176,14 +203,26 @@ This is the cost of turning verification off.
 ## Email verification
 
 `AUTH_EMAIL_VERIFICATION` on the Convex deployment is `required` or `off`. Unset
-means `required`, so the safe setting is the default from day one. S1 implements
-`off` only. With `required`, sign-up fails with "Email sending is not configured
-on this deployment" until S1b adds Resend.
+means `required`, so the safe setting is the default from day one.
 
 The package's email method has no option to skip verification. It always hands
 a link to a function it expects to be Resend's `lib.sendEmail`. We pass our own
-internal mutation, `auth.deliverAuthEmail`, with the same arguments. With
-verification off it sends nothing:
+internal mutation, `auth.deliverAuthEmail`, with the same arguments.
+
+With verification required it forwards the call to the mounted Resend
+component's `lib.sendEmail`. It fills in `RESEND_API_KEY` and the sender from
+`getEmailFrom()` (`EMAIL_FROM`, the same sender as invitation email) when it
+sends, so the package setup holds neither. Without `RESEND_API_KEY` it throws
+"Email sending is not configured on this deployment". The throw rolls back the
+whole sign-up, user row included, and the form shows the text. The package
+sets the link lifetime and writes a plain-text email; we can't change either.
+For a sign-up link `deliverAuthEmail` adds our own subject and HTML, the
+`verify-email` template in [email-templates.md](email-templates.md), and
+keeps the package text as the plain-text part. It reads the link and the
+lifetime out of that text. If the text stops matching (a package update), the
+email goes out as the package's plain text alone.
+
+With verification off it sends nothing:
 
 - A sign-up link: it stores the link's `code` in `pendingSignUpCodes`, one row
   per normalized address.
@@ -200,8 +239,16 @@ a failure rolls back the user row with everything else. Expected errors
 user row is created only after the package's own checks pass.
 
 The package's `signUpWithEmailPassword` stays public, as the package exports it.
-Calling it directly still leaves a user row with an empty email and no way to
-complete it, limited by the package to 20 sign-up starts per hour per IP.
+With verification off, calling it directly still leaves a user row with an
+empty email and no way to complete it, limited by the package to 20 sign-up
+starts per hour per IP. With verification required that is the normal path,
+and a sign-up nobody verifies leaves the same row. It has no memberships, so
+nothing lists it, and there is no cleanup job.
+
+There is one account type in both settings. An account made with verification
+off has a verified address in `authEmail`, so it keeps signing in after an
+instance turns verification on. Sign-in only finds verified addresses, so an
+account whose link was never opened gets "Wrong email or password."
 
 ## Switching auth mode
 
@@ -224,7 +271,12 @@ A Convex mode deployment sets:
 
 - `NEXT_PUBLIC_AUTH_MODE=convex` for the web build.
 - `AUTH_MODE=convex` on the Convex deployment, to allow new accounts.
-- `AUTH_EMAIL_VERIFICATION=off` on the Convex deployment, until S1b.
+- `RESEND_API_KEY` on the Convex deployment, and `EMAIL_FROM` with an address
+  on a domain verified in Resend. Without a verified domain Resend delivers
+  only to the Resend account owner's address. Or `AUTH_EMAIL_VERIFICATION=off`
+  to skip email, at the cost described under Invitations.
+- Optionally `SUPPORT_EMAIL` on the Convex deployment, the help address at the
+  bottom of every email ([email-templates.md](email-templates.md#support-address)).
 - A placeholder `CLERK_JWT_ISSUER_DOMAIN`, as local-demo does, because
   `auth.config.ts` always lists the Clerk provider.
 - `NEXT_PUBLIC_APP_URL` on the Convex deployment, with a scheme, so the landing
@@ -234,8 +286,8 @@ The deployment signs its own tokens, so there are no auth secrets.
 
 ## Not covered yet
 
-The self-hosted script (S7a), verification on (S1b), forgotten
-passwords (S3), the cookie session and server-side redirect (S4), agent browser
+The self-hosted script (S7a, which also asks for the Resend key), forgotten
+passwords (S3), resending a verification link, the cookie session and server-side redirect (S4), agent browser
 login (S5, `app/api/agent/browser-login` still calls Clerk), and Google (S6).
 
 ## Testing
@@ -245,14 +297,20 @@ sign-up with verification off leaving one user and no pending code, the
 normalized address in `users.email`, the workspace name, sign-in with right and
 wrong passwords, a taken address, a weak password, sign-out, `store` on a Convex
 Auth session, a token with a session's subject and another issuer, the stand-in
-dropping recovery and change-email links, and sign-up failing with verification
-`required` or without `AUTH_MODE=convex`. `convex/organizations/invitations.test.ts`
+dropping recovery and change-email links, and sign-up failing without
+`AUTH_MODE=convex`. With verification required it covers the one-transaction
+mutation answering `emailVerificationRequired`, the emailed link completing
+the sign-up and sign-in, sign-in refused before the link is opened, an account
+made with verification off still signing in, and sign-up refused without
+`RESEND_API_KEY`. It records email through the package's Resend stub
+(`registerResendStub`, `sentEmails`). `convex/organizations/invitations.test.ts`
 covers accepting an invitation as a Convex Auth session, the wrong-account
 reply, and inviting an address two users share. `convex/users/localDemo.test.ts`
 covers anonymous `onboard` in local-demo. `lib/auth/adapters/convex.test.tsx`
-covers the route gate and sign-out, and
+covers the route gate and sign-out,
 `components/blocks/auth/email-password-sign-up-form.test.tsx` covers the
-form's messages.
+form's messages and the "Check your email" card, and
+`components/blocks/auth/verify-email-screen.test.tsx` covers the landing page.
 
 `convex-testing/context.ts` registers the three components. `vitest.config.ts`
 loads `.wasm` imports as `WebAssembly.Module`, as Convex's bundler does, for the

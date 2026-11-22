@@ -29,6 +29,7 @@ In the Convex dashboard, select your deployment and go to **Settings → Environ
 | `CLERK_JWT_ISSUER_DOMAIN` | Yes | Clerk JWT issuer domain for token verification |
 | `EMAIL_FROM` | No | Verified sender address (e.g. `Convoy <noreply@convoy.build>`) |
 | `RESEND_API_KEY` | No | Resend API key for transactional email |
+| `SUPPORT_EMAIL` | No | Help address named at the bottom of every email. Unset leaves that line out |
 | `NEXT_PUBLIC_APP_URL` | No | Base URL for email links. Defaults to `https://app.convoy.build` |
 
 These run inside Convex functions at runtime. They are **not** the same as the Next.js environment variables you configure in your web hosting provider — see [Environment Variables](/docs/reference/environment-variables) for the full breakdown.

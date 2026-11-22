@@ -26,7 +26,7 @@ async function signUpConvexAuth(t: TestConvex, email: string) {
   const result = await t
     .withRequestMetadata({ ip: "203.0.113.7" })
     .mutation(api.auth.signUpWithoutEmailVerification, { email, password: "correct horse battery staple" });
-  if (result.status !== "complete") throw new Error(`sign-up failed: ${result.userError.error}`);
+  if (result.status !== "complete") throw new Error(`sign-up failed: ${JSON.stringify(result)}`);
   const { sub, iss } = JSON.parse(atob(result.tokens.accessToken.split(".")[1].replace(/-/g, "+").replace(/_/g, "/"))) as { sub: string; iss: string };
   return { userId: result.tokens.userId as Id<"users">, asSession: t.withIdentity({ subject: sub, issuer: iss }) };
 }

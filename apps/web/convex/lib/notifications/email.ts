@@ -1,8 +1,8 @@
 import { components } from "../../_generated/api";
-import type { MutationCtx } from "../../_generated/server";
+import { env, type MutationCtx } from "../../_generated/server";
 import { Resend } from "@convex-dev/resend";
 import type { EmailTemplateDocument } from "../../../lib/emails/catalog";
-import { renderLiveEmailHtml } from "../../../lib/emails/render-live-html";
+import { renderEmailHtml } from "../../../lib/emails/render-html";
 
 // Initialize Resend client
 // Requires RESEND_API_KEY environment variable in Convex
@@ -18,7 +18,7 @@ export function buildResendEmail(template: EmailTemplateDocument) {
   return {
     from: getEmailFrom(),
     subject: template.subject,
-    html: renderLiveEmailHtml(template),
+    html: renderEmailHtml(template, env.SUPPORT_EMAIL),
   };
 }
 

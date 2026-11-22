@@ -1,5 +1,5 @@
 import { getEmailPreviewEntries } from "@/lib/emails/catalog";
-import { renderLiveEmailHtml } from "@/lib/emails/render-live-html";
+import { renderEmailHtml } from "@/lib/emails/render-html";
 
 const VIEWPORTS = [
   { key: "desktop", label: "Desktop", width: 640, height: 760 },
@@ -27,16 +27,16 @@ export default function EmailsPlaygroundPage() {
               Review the exact email HTML before it reaches Resend
             </h1>
             <p className="text-base leading-7 text-muted-foreground">
-              Review the live transactional email HTML for organization invites, onboarding, and
-              project invitations. Each card below renders the same HTML used for outbound email
-              payloads.
+              Review the live email HTML for organization invites, onboarding, project
+              invitations, and the sign-up link. Each card below renders the same HTML used for
+              outbound email payloads.
             </p>
           </div>
         </header>
 
         <section className="grid gap-6">
           {entries.map((entry) => {
-            const html = renderLiveEmailHtml(entry.template);
+            const html = renderEmailHtml(entry.template, "team@convoy.build");
 
             return (
               <article

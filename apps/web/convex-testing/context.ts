@@ -1,7 +1,7 @@
 import { convexTest } from "convex-test";
 import migrations from "@convex-dev/migrations/test";
 import authCore from "@convex-dev/auth/test";
-import authEmail from "@convex-dev/auth/components/email/test";
+import authEmail, { registerResendStub } from "@convex-dev/auth/components/email/test";
 import authPassword from "@convex-dev/auth/components/password/test";
 import schema from "../convex/schema";
 import { Id } from "../convex/_generated/dataModel";
@@ -50,6 +50,8 @@ export function createTestContext(options: { transactionLimits?: Partial<Transac
   authCore.registerCore(t);
   authEmail.registerEmail(t);
   authPassword.registerPassword(t);
+  // Records auth emails instead of sending them; read them with `sentEmails`.
+  registerResendStub(t);
 
   const ctx = {
     t,

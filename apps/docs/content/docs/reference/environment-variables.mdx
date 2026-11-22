@@ -12,6 +12,7 @@ Convoy uses environment variables across three different contexts. Each variable
 | `CLERK_JWT_ISSUER_DOMAIN` | Yes | — | — |
 | `RESEND_API_KEY` | Yes | — | — |
 | `EMAIL_FROM` | Yes | — | — |
+| `SUPPORT_EMAIL` | Yes | — | — |
 | `NEXT_PUBLIC_APP_URL` | Yes | — | — |
 | `CONVOY_BACKEND_BUILD_ID` | Yes | — | — |
 | `CONVOY_BACKEND_BUILD_TIME` | Yes | — | — |
@@ -49,6 +50,7 @@ Set these in the Convex dashboard under **Settings → Environment Variables** f
 | `CLERK_JWT_ISSUER_DOMAIN` | Yes | Clerk JWT issuer domain for token verification |
 | `RESEND_API_KEY` | No | Resend API key for transactional email |
 | `EMAIL_FROM` | No | Verified sender identity (e.g. `Convoy <noreply@example.com>`) |
+| `SUPPORT_EMAIL` | No | Help address named at the bottom of every email. Unset leaves that line out |
 | `NEXT_PUBLIC_APP_URL` | No | Base URL for email links. Defaults to `https://app.convoy.build` when unset |
 | `CONVOY_BACKEND_BUILD_ID` | No | Backend build or commit id shown in Settings → Developer. Vercel integrated builds should set this from `VERCEL_GIT_COMMIT_SHA` before `convex deploy` |
 | `CONVOY_BACKEND_BUILD_TIME` | No | Backend deploy timestamp shown in Settings → Developer |
@@ -119,7 +121,7 @@ NEXT_PUBLIC_CLERK_SIGN_UP_FALLBACK_REDIRECT_URL=/auth/callback
 
 The `dev:` prefix indicates a development deployment. Production deployments use `prod:` instead.
 
-Convex server-side variables (`CLERK_JWT_ISSUER_DOMAIN`, `RESEND_API_KEY`, `EMAIL_FROM`, `NEXT_PUBLIC_APP_URL`) go in the Convex dashboard for your dev deployment — they are not needed in `.env.local`.
+Convex server-side variables (`CLERK_JWT_ISSUER_DOMAIN`, `RESEND_API_KEY`, `EMAIL_FROM`, `SUPPORT_EMAIL`, `NEXT_PUBLIC_APP_URL`) go in the Convex dashboard for your dev deployment — they are not needed in `.env.local`.
 
 ## Guidance
 

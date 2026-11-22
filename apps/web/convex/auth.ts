@@ -9,6 +9,8 @@ import { ConvexError, v, type Infer } from "convex/values";
 import { api, components, internal } from "./_generated/api";
 import type { Id } from "./_generated/dataModel";
 import { env, internalMutation, mutation } from "./_generated/server";
+import { buildResendEmail, getEmailFrom } from "./lib/notifications/email";
+import { buildVerifyEmailEmail } from "../lib/emails/catalog";
 import { getAppUrlBase } from "./lib/shared/appUrl";
 import { normalizeEmail } from "./lib/shared/strings";
 import { takePendingSignUpCode, upsertPendingSignUpCode } from "./users/lib/pendingSignUpCodesRepo";
@@ -39,7 +41,7 @@ const createAuthUser: FunctionReference<"mutation", "internal", CreateAuthUserAr
 const onAuthSignIn: FunctionReference<"mutation", "internal", OnAuthSignInArgs, null> =
   internal.users.core.onAuthSignIn;
 type SendEmailRef = typeof components.resend.lib.sendEmail;
-// Stand-in for Resend's `lib.sendEmail`, same args. S1b sends real mail.
+// Stand-in for Resend's `lib.sendEmail`, same args: it forwards or keeps the code by setting.
 const deliverAuthEmailRef = internal.auth.deliverAuthEmail as unknown as SendEmailRef;
 
 export const { signUpWithEmailPassword, completeSignUpWithEmailPassword, signInWithEmailPassword } =
@@ -49,8 +51,9 @@ export const { signUpWithEmailPassword, completeSignUpWithEmailPassword, signInW
     emailSender: {
       kind: "resend",
       sendEmail: deliverAuthEmailRef,
+      // Both are read when sending, in `deliverAuthEmail`.
       apiKey: "",
-      from: "Convoy <auth@convoy.invalid>",
+      from: "",
     },
     urls: LANDING_URLS,
   }).attachUserCallbacks({
@@ -59,8 +62,8 @@ export const { signUpWithEmailPassword, completeSignUpWithEmailPassword, signInW
   });
 
 /**
- * Stand-in email sender. With verification off it keeps the code of a sign-up link
- * and sends nothing; every other link (recovery, change-email) is dropped.
+ * Stand-in email sender. With verification required it forwards to Resend. With it off
+ * it keeps the code of a sign-up link and sends nothing; other links are dropped.
  */
 export const deliverAuthEmail = internalMutation({
   args: {
@@ -78,9 +81,17 @@ export const deliverAuthEmail = internalMutation({
   returns: v.string(),
   handler: async (ctx, args) => {
     if (!isEmailVerificationOff()) {
-      throw new ConvexError(EMAIL_NOT_CONFIGURED);
+      const apiKey = env.RESEND_API_KEY;
+      if (!apiKey) throw new ConvexError(EMAIL_NOT_CONFIGURED);
+      return await ctx.runMutation(components.resend.lib.sendEmail, {
+        ...args,
+        options: { ...args.options, apiKey },
+        from: getEmailFrom(),
+        ...signUpEmailFromText(args.text),
+      });
     }
-    const code = signUpCodeFromText(args.text);
+    const link = signUpLinkFromText(args.text);
+    const code = link && new URL(link).searchParams.get("code");
     const to = args.to[0];
     if (code === null || to === undefined) {
       return "dropped";
@@ -91,14 +102,23 @@ export const deliverAuthEmail = internalMutation({
   },
 });
 
-/** The `code` of the link in the email text, only if the link is our sign-up landing URL. */
-function signUpCodeFromText(text: string | undefined): string | null {
+/** The link in the email text, only if it is our sign-up landing URL with a `code`. */
+function signUpLinkFromText(text: string | undefined): string | null {
   const link = text?.match(/https?:\/\/\S+/)?.[0];
   if (!link) return null;
   const url = new URL(link);
   const code = url.searchParams.get("code");
   url.searchParams.delete("code");
-  return code && url.toString() === new URL(LANDING_URLS.signUp).toString() ? code : null;
+  return code && url.toString() === new URL(LANDING_URLS.signUp).toString() ? link : null;
+}
+
+/** Our subject and HTML for the package's sign-up email; its text stays the plain-text part. */
+function signUpEmailFromText(text: string | undefined): { subject: string; html: string } | null {
+  const verifyUrl = signUpLinkFromText(text);
+  const expiresIn = text?.match(/stops working after ([^,]+),/)?.[1];
+  if (!verifyUrl || !expiresIn) return null;
+  const { subject, html } = buildResendEmail(buildVerifyEmailEmail({ verifyUrl, expiresIn }));
+  return { subject, html };
 }
 
 type SignUpErrorCode = Extract<SignUpResult, { success: false }>["userError"]["error"];
@@ -115,6 +135,8 @@ const SIGN_UP_ERROR_CODES: Record<SignUpErrorCode, null> = {
 };
 
 const vSignUpWithoutVerificationResult = v.union(
+  // Verification is on: the browser starts the sign-up with `signUpWithEmailPassword` instead.
+  v.object({ status: v.literal("emailVerificationRequired") }),
   v.object({
     status: v.literal("complete"),
     tokens: v.object({
@@ -151,7 +173,7 @@ export const signUpWithoutEmailVerification = mutation({
   returns: vSignUpWithoutVerificationResult,
   handler: async (ctx, args): Promise<SignUpWithoutVerificationResult> => {
     if (!isEmailVerificationOff()) {
-      throw new ConvexError(EMAIL_NOT_CONFIGURED);
+      return { status: "emailVerificationRequired" };
     }
     const started = await ctx.runMutation(signUpRef, args);
     if (!started.success) {

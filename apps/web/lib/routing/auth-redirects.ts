@@ -1,4 +1,26 @@
+import { readLocalString, removeLocalValue, writeLocalString } from "@/lib/browser/local-storage";
+
 export const AUTH_REDIRECT_PARAM = "redirect_url";
+
+// The emailed sign-up link can't carry redirect_url, so the starting browser keeps it.
+const SIGN_UP_REDIRECT_KEY = "convoy.signUpRedirect";
+
+export function rememberSignUpRedirect(redirectUrl: string | null): void {
+  if (redirectUrl) writeLocalString(SIGN_UP_REDIRECT_KEY, redirectUrl);
+  else removeLocalValue(SIGN_UP_REDIRECT_KEY);
+}
+
+/** The redirect_url kept at sign-up. */
+export function readSignUpRedirect(): string | null {
+  return readLocalString(SIGN_UP_REDIRECT_KEY);
+}
+
+/** The redirect_url kept at sign-up, removed from storage. */
+export function takeSignUpRedirect(): string | null {
+  const redirectUrl = readSignUpRedirect();
+  removeLocalValue(SIGN_UP_REDIRECT_KEY);
+  return redirectUrl;
+}
 
 const ABSOLUTE_HTTP_URL_PATTERN = /^https?:\/\//i;
 

@@ -1,5 +1,6 @@
 import { afterEach, beforeEach, expect, test, describe, vi } from "vitest";
 import { api, internal } from "./_generated/api";
+import { sentEmails } from "@convex-dev/auth/components/email/test";
 import { createTestContext } from "../convex-testing";
 import { getAppUrlBase } from "./lib/shared/appUrl";
 
@@ -16,7 +17,7 @@ function asSession(t: TestConvex, accessToken: string) {
 /** Sign-up as the browser runs it with verification off: one mutation. */
 async function signUp(t: TestConvex, email: string) {
   const result = await t.mutation(api.auth.signUpWithoutEmailVerification, { email, password: PASSWORD });
-  if (result.status !== "complete") throw new Error(`sign-up failed: ${result.userError.error}`);
+  if (result.status !== "complete") throw new Error(`sign-up failed: ${JSON.stringify(result)}`);
   return result.tokens;
 }
 
@@ -136,19 +137,6 @@ describe("Convex Auth email and password, verification off", () => {
     expect(await pending()).toMatchObject([{ email: "robin@example.com", code: "secret-code" }]);
   });
 
-  test("with verification required, sign-up fails plainly and creates nothing", async () => {
-    vi.stubEnv("AUTH_EMAIL_VERIFICATION", "required");
-    const t = client();
-
-    await expect(
-      t.mutation(api.auth.signUpWithoutEmailVerification, { email: "robin@example.com", password: PASSWORD })
-    ).rejects.toThrow("Email sending is not configured");
-    await expect(
-      t.mutation(api.auth.signUpWithEmailPassword, { email: "robin@example.com", password: PASSWORD })
-    ).rejects.toThrow("Email sending is not configured");
-    expect(await t.run((ctx) => ctx.db.query("users").collect())).toEqual([]);
-  });
-
   test("without AUTH_MODE=convex, no Convex Auth account can be created", async () => {
     vi.stubEnv("AUTH_MODE", "");
     const t = client();
@@ -160,6 +148,91 @@ describe("Convex Auth email and password, verification off", () => {
       t.mutation(api.auth.signUpWithEmailPassword, { email: "robin@example.com", password: PASSWORD })
     ).rejects.toThrow("Convex Auth sign-up is not enabled on this deployment");
     expect(await t.run((ctx) => ctx.db.query("users").collect())).toEqual([]);
+  });
+});
+
+describe("Convex Auth email and password, verification required", () => {
+  beforeEach(() => {
+    vi.stubEnv("AUTH_MODE", "convex");
+    vi.stubEnv("AUTH_EMAIL_VERIFICATION", "required");
+    vi.stubEnv("RESEND_API_KEY", "re_test_key");
+    vi.stubEnv("EMAIL_FROM", "Convoy <auth@example.com>");
+  });
+  afterEach(() => {
+    vi.unstubAllEnvs();
+  });
+
+  function client() {
+    return createTestContext().t.withRequestMetadata({ ip: "203.0.113.7" }) as TestConvex;
+  }
+
+  /** The `code` of the verify-email link in the only email sent. */
+  async function emailedCode(t: TestConvex) {
+    const [email] = await sentEmails(t);
+    const link = email.text?.match(/https?:\/\/\S+/)?.[0] ?? "";
+    expect(link.startsWith(`${getAppUrlBase()}/auth/verify-email?`)).toBe(true);
+    return new URL(link).searchParams.get("code") ?? "";
+  }
+
+  test("the one-transaction sign-up reports that verification is required and creates nothing", async () => {
+    const t = client();
+
+    const result = await t.mutation(api.auth.signUpWithoutEmailVerification, { email: "robin@example.com", password: PASSWORD });
+    expect(result).toEqual({ status: "emailVerificationRequired" });
+    expect(await t.run((ctx) => ctx.db.query("users").collect())).toEqual([]);
+    expect(await sentEmails(t)).toEqual([]);
+  });
+
+  test("sign-up emails a link through Resend; the link completes it and signs in", async () => {
+    const t = client();
+
+    const started = await t.mutation(api.auth.signUpWithEmailPassword, { email: "Robin@Example.com", password: PASSWORD });
+    if (!started.success) throw new Error(started.userError.error);
+    const [email] = await sentEmails(t);
+    expect(email).toMatchObject({
+      from: "Convoy <auth@example.com>",
+      to: ["Robin@Example.com"],
+      subject: "Verify your email address",
+    });
+    // Our HTML template wraps the same link; the package's text stays as the plain-text part.
+    expect(email.html).toContain(`href="${email.text?.match(/https?:\/\/\S+/)?.[0]}"`);
+    expect(email.html).toContain("1 hour");
+    expect(await t.run((ctx) => ctx.db.query("pendingSignUpCodes").collect())).toEqual([]);
+
+    const unverified = await t.mutation(api.auth.signInWithEmailPassword, { email: "robin@example.com", password: PASSWORD });
+    expect(unverified).toEqual({ status: "error", userError: { error: "USER_NOT_FOUND" } });
+
+    const completed = await t.mutation(api.auth.completeSignUpWithEmailPassword, {
+      emailCode: await emailedCode(t),
+      browserSecret: started.browserSecret,
+    });
+    if (completed.status !== "complete") throw new Error(completed.userError.error);
+    const user = await asSession(t, completed.tokens.accessToken).query(api.users.core.current, {});
+    expect(user).toMatchObject({ email: "robin@example.com", name: "robin" });
+
+    const signedIn = await t.mutation(api.auth.signInWithEmailPassword, { email: "robin@example.com", password: PASSWORD });
+    expect(signedIn.status === "complete" && signedIn.tokens.userId).toBe(completed.tokens.userId);
+  });
+
+  test("an account made with verification off still signs in after it is turned on", async () => {
+    vi.stubEnv("AUTH_EMAIL_VERIFICATION", "off");
+    const t = client();
+    const { userId } = await signUp(t, "robin@example.com");
+    vi.stubEnv("AUTH_EMAIL_VERIFICATION", "required");
+
+    const result = await t.mutation(api.auth.signInWithEmailPassword, { email: "robin@example.com", password: PASSWORD });
+    expect(result.status === "complete" && result.tokens.userId).toBe(userId);
+  });
+
+  test("without a Resend key, sign-up fails plainly and creates nothing", async () => {
+    vi.stubEnv("RESEND_API_KEY", "");
+    const t = client();
+
+    await expect(
+      t.mutation(api.auth.signUpWithEmailPassword, { email: "robin@example.com", password: PASSWORD })
+    ).rejects.toThrow("Email sending is not configured");
+    expect(await t.run((ctx) => ctx.db.query("users").collect())).toEqual([]);
+    expect(await sentEmails(t)).toEqual([]);
   });
 });
 

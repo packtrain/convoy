@@ -7,15 +7,20 @@ import { beforeEach, describe, expect, test, vi } from "vitest";
 import { EmailPasswordSignUpForm } from "./email-password-sign-up-form";
 
 const signUp = vi.fn();
+const startEmailedSignUp = vi.fn();
 const setSession = vi.fn(async () => {});
+let search = "";
 
 vi.mock("convex/react", () => ({ useMutation: () => signUp }));
 vi.mock("@convex-dev/auth/react", () => ({ useAuthActions: () => ({ setSession }) }));
+vi.mock("@convex-dev/auth/methods/email-password/react", () => ({
+  useSignUpWithEmailPassword: () => ({ signUp: startEmailedSignUp, pending: false }),
+}));
 vi.mock("@/convex/_generated/api", () => ({ api: { auth: { signUpWithoutEmailVerification: "signUp" } } }));
 vi.mock("@/lib/navigation", () => ({
   AppLink: ({ children }: { children: React.ReactNode }) => <a>{children}</a>,
   appRoute: { authSignIn: () => ({ pathname: "/auth/sign-in" }) },
-  useNavigation: () => ({ location: { search: "" } }),
+  useNavigation: () => ({ location: { search } }),
 }));
 
 function submit(email = "robin@example.com", password = "correct horse battery", confirmation = password) {
@@ -29,7 +34,10 @@ function submit(email = "robin@example.com", password = "correct horse battery",
 describe("EmailPasswordSignUpForm", () => {
   beforeEach(() => {
     signUp.mockReset();
+    startEmailedSignUp.mockReset();
     setSession.mockClear();
+    search = "";
+    window.localStorage.clear();
   });
 
   test("adopts the session the one-transaction sign-up returns", async () => {
@@ -70,5 +78,57 @@ describe("EmailPasswordSignUpForm", () => {
       "textContent",
       "Email sending is not configured on this deployment"
     );
+  });
+
+  describe("with verification required", () => {
+    beforeEach(() => {
+      signUp.mockResolvedValue({ status: "emailVerificationRequired" });
+    });
+
+    test("starts the emailed sign-up and asks to open the link in this browser", async () => {
+      startEmailedSignUp.mockResolvedValue({ success: true });
+
+      submit();
+
+      expect(await screen.findByRole("heading", { name: "Check your email" })).toBeTruthy();
+      expect(screen.getByText(/robin@example.com/).textContent).toContain("in this browser");
+      expect(startEmailedSignUp).toHaveBeenCalledWith({ email: "robin@example.com", password: "correct horse battery" });
+      expect(setSession).not.toHaveBeenCalled();
+    });
+
+    test("keeps redirect_url for the landing page of the link", async () => {
+      search = "?redirect_url=%2Fauth%2Finvite%2Ftok";
+      startEmailedSignUp.mockResolvedValue({ success: true });
+
+      submit();
+
+      await screen.findByRole("heading", { name: "Check your email" });
+      expect(window.localStorage.getItem("convoy.signUpRedirect")).toBe("/auth/invite/tok");
+    });
+
+    test("shows a plain message for an error code", async () => {
+      startEmailedSignUp.mockResolvedValue({ success: false, userError: { error: "EMAIL_TAKEN" } });
+
+      submit();
+
+      expect(await screen.findByRole("alert")).toHaveProperty(
+        "textContent",
+        "An account with this email already exists. Sign in instead."
+      );
+    });
+
+    test("shows the deployment's reason when sending is not configured", async () => {
+      startEmailedSignUp.mockResolvedValue({
+        success: false,
+        userError: { error: "OTHER_ERROR", cause: new ConvexError("Email sending is not configured on this deployment") },
+      });
+
+      submit();
+
+      expect(await screen.findByRole("alert")).toHaveProperty(
+        "textContent",
+        "Email sending is not configured on this deployment"
+      );
+    });
   });
 });

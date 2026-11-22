@@ -2,6 +2,7 @@ export const EMAIL_TEMPLATE_IDS = [
   "org-invitation",
   "welcome-onboarding",
   "project-invitation",
+  "verify-email",
 ] as const;
 
 export type EmailTemplateId = (typeof EMAIL_TEMPLATE_IDS)[number];
@@ -56,6 +57,12 @@ export interface ProjectInvitationEmailData {
   role: "project-admin" | "member" | "viewer";
 }
 
+export interface VerifyEmailEmailData {
+  verifyUrl: string;
+  // How long the link works, e.g. "1 hour".
+  expiresIn: string;
+}
+
 export interface EmailPreviewEntry {
   key: string;
   fixtureLabel: string;
@@ -90,10 +97,14 @@ export function buildOrganizationInvitationEmail(
     subject: `You're invited to join ${data.organizationName}`,
     preheader: `${data.inviterName} invited you to join ${data.organizationName} in Convoy.`,
     title: `Join ${data.organizationName}`,
-    intro: `${data.inviterName} invited you as ${roleLabel.toLowerCase()}.`,
-    details: [],
+    intro: `${data.inviterName} invited you to join ${data.organizationName} in Convoy.`,
+    details: [
+      { label: "Organization", value: data.organizationName },
+      { label: "Invited by", value: data.inviterName },
+      { label: "Role", value: roleLabel },
+    ],
     body: [
-      `Accept the invite to access ${data.organizationName}. Sign in with the same email address that received this message.`,
+      "Accept the invitation with the same email address that received this message.",
     ],
     action: {
       label: "Accept invitation",
@@ -142,8 +153,13 @@ export function buildProjectInvitationEmail(
     subject: `You've been added to ${data.projectName}`,
     preheader: `${data.addedByName} added you to ${data.projectName} in ${data.organizationName}.`,
     title: `Open ${data.projectName}`,
-    intro: `${data.addedByName} added you to this project in ${data.organizationName}.`,
-    details: [],
+    intro: `${data.addedByName} added you to ${data.projectName} in ${data.organizationName}.`,
+    details: [
+      { label: "Project", value: data.projectName },
+      { label: "Organization", value: data.organizationName },
+      { label: "Added by", value: data.addedByName },
+      { label: "Role", value: humanizeRole(data.role) },
+    ],
     body: [
       "Open the project to review the board, task list, and recent team activity.",
     ],
@@ -153,6 +169,32 @@ export function buildProjectInvitationEmail(
     },
     footer: [
       "If this access looks unexpected, check with your project admin.",
+    ],
+  };
+}
+
+/** The Convex Auth sign-up link, sent from `deliverAuthEmail` in convex/auth.ts. */
+export function buildVerifyEmailEmail(
+  data: VerifyEmailEmailData
+): EmailTemplateDocument {
+  return {
+    id: "verify-email",
+    label: "Verify email",
+    headerTag: "Verify email",
+    subject: "Verify your email address",
+    preheader: "Finish creating your Convoy account.",
+    title: "Verify your email",
+    intro: "Open the link below to finish creating your Convoy account.",
+    details: [],
+    body: [
+      `The link works for ${data.expiresIn}, and only in the browser where you signed up.`,
+    ],
+    action: {
+      label: "Verify email",
+      url: data.verifyUrl,
+    },
+    footer: [
+      "If you didn't sign up for Convoy, you can ignore this email.",
     ],
   };
 }
@@ -194,6 +236,15 @@ export function getEmailPreviewEntries(): EmailPreviewEntry[] {
         projectUrl: "https://app.convoy.build/o/starlight/NSL",
         addedByName: "Mika Hale",
         role: "member",
+      }),
+    },
+    {
+      key: "verify-email",
+      fixtureLabel: "Verify email",
+      description: "The Convex Auth sign-up link. Clerk sends its own.",
+      template: buildVerifyEmailEmail({
+        verifyUrl: "https://app.convoy.build/auth/verify-email?code=fixture_code",
+        expiresIn: "1 hour",
       }),
     },
   ];

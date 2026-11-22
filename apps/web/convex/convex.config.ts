@@ -20,6 +20,11 @@ const app = defineApp({
     AUTH_MODE: v.optional(v.union(v.literal("clerk"), v.literal("local-demo"), v.literal("convex"))),
     // Convex Auth sign-up (docs/specs/auth-adapters.md#email-verification). Unset means "required".
     AUTH_EMAIL_VERIFICATION: v.optional(v.union(v.literal("required"), v.literal("off"))),
+    // Resend, for invitation and auth emails. Without a key, verified sign-up is refused.
+    RESEND_API_KEY: v.optional(v.string()),
+    EMAIL_FROM: v.optional(v.string()),
+    // The help line at the bottom of every email. Unset leaves the line out.
+    SUPPORT_EMAIL: v.optional(v.string()),
   },
 });
 // Convex Auth (docs/specs/auth-adapters.md). Mounted in every auth mode; empty outside `convex`.

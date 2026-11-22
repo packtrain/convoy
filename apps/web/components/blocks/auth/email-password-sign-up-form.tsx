@@ -3,13 +3,14 @@
 import { useState } from "react";
 import { useMutation } from "convex/react";
 import { useAuthActions } from "@convex-dev/auth/react";
+import { useSignUpWithEmailPassword } from "@convex-dev/auth/methods/email-password/react";
 import { DEFAULT_MIN_PASSWORD_LENGTH } from "@convex-dev/auth/methods/email-password";
 import type { FunctionReturnType } from "convex/server";
 import { api } from "@/convex/_generated/api";
 import { AppLink, appRoute, useNavigation } from "@/lib/navigation";
-import { AUTH_REDIRECT_PARAM } from "@/lib/routing/auth-redirects";
+import { AUTH_REDIRECT_PARAM, rememberSignUpRedirect } from "@/lib/routing/auth-redirects";
 import { getMutationErrorMessage } from "@/lib/errors";
-import { EmailPasswordForm, type EmailPasswordCredentials } from "./email-password-form";
+import { AuthCardHeading, AuthCardPage, EmailPasswordForm, type EmailPasswordCredentials } from "./email-password-form";
 
 type SignUpResult = FunctionReturnType<typeof api.auth.signUpWithoutEmailVerification>;
 type SignUpErrorCode = Extract<SignUpResult, { status: "error" }>["userError"]["error"];
@@ -26,24 +27,39 @@ const SIGN_UP_ERRORS: Record<SignUpErrorCode, string> = {
 const SIGN_UP_FAILED = "Could not create your account. Try again.";
 
 /**
- * Convex Auth sign-up with verification off: one mutation creates the account and
- * returns a session. See docs/specs/auth-adapters.md.
+ * Convex Auth sign-up. With verification off one mutation returns a session; with it
+ * required the package emails a link and keeps its secret here. See docs/specs/auth-adapters.md.
  */
 export function EmailPasswordSignUpForm() {
-  const signUp = useMutation(api.auth.signUpWithoutEmailVerification);
+  const signUpNow = useMutation(api.auth.signUpWithoutEmailVerification);
+  const { signUp: startEmailedSignUp } = useSignUpWithEmailPassword(api.auth);
   const { setSession } = useAuthActions();
   const [pending, setPending] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [sentTo, setSentTo] = useState<string | null>(null);
   const redirectUrl = new URLSearchParams(useNavigation().location.search).get(AUTH_REDIRECT_PARAM);
+
+  const startWithEmail = async (credentials: EmailPasswordCredentials) => {
+    const started = await startEmailedSignUp(credentials);
+    if (started.success) {
+      rememberSignUpRedirect(redirectUrl);
+      setSentTo(credentials.email);
+    } else if (started.userError.error === "OTHER_ERROR") {
+      setError(getMutationErrorMessage(started.userError.cause, SIGN_UP_FAILED));
+    } else {
+      setError(SIGN_UP_ERRORS[started.userError.error]);
+    }
+  };
 
   const handleSubmit = async (credentials: EmailPasswordCredentials) => {
     setError(null);
     setPending(true);
     try {
-      const result = await signUp(credentials);
+      const result = await signUpNow(credentials);
       // On success the auth page wrapper forwards to /auth/callback.
       if (result.status === "complete") await setSession(result.tokens);
-      else setError(SIGN_UP_ERRORS[result.userError.error]);
+      else if (result.status === "error") setError(SIGN_UP_ERRORS[result.userError.error]);
+      else await startWithEmail(credentials);
     } catch (err) {
       // A ConvexError carries the deployment's reason, e.g. email sending not configured.
       setError(getMutationErrorMessage(err, SIGN_UP_FAILED));
@@ -51,6 +67,31 @@ export function EmailPasswordSignUpForm() {
       setPending(false);
     }
   };
+
+  const signInLink = (
+    <AppLink href={appRoute.authSignIn(redirectUrl)} className="text-foreground underline underline-offset-4">
+      Sign in
+    </AppLink>
+  );
+
+  if (sentTo !== null) {
+    return (
+      <AuthCardPage>
+        <div className="flex flex-col gap-6">
+          <AuthCardHeading
+            title="Check your email"
+            description={`We sent a link to ${sentTo}. Open it in this browser to finish creating your account.`}
+          />
+          <p className="text-center text-sm text-muted-foreground">
+            No email?{" "}
+            <button type="button" className="text-foreground underline underline-offset-4" onClick={() => setSentTo(null)}>
+              Sign up again
+            </button>
+          </p>
+        </div>
+      </AuthCardPage>
+    );
+  }
 
   return (
     <EmailPasswordForm
@@ -61,14 +102,7 @@ export function EmailPasswordSignUpForm() {
       error={error}
       pending={pending}
       onSubmit={(credentials) => void handleSubmit(credentials)}
-      footer={
-        <>
-          Have an account?{" "}
-          <AppLink href={appRoute.authSignIn(redirectUrl)} className="text-foreground underline underline-offset-4">
-            Sign in
-          </AppLink>
-        </>
-      }
+      footer={<>Have an account? {signInLink}</>}
     />
   );
 }

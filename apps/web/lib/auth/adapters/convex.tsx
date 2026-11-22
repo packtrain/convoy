@@ -6,13 +6,14 @@ import { useConvexAuth, type ConvexReactClient } from "convex/react";
 import { api } from "@/convex/_generated/api";
 import { EmailPasswordSignInForm } from "@/components/blocks/auth/email-password-sign-in-form";
 import { EmailPasswordSignUpForm } from "@/components/blocks/auth/email-password-sign-up-form";
+import { VerifyEmailScreen } from "@/components/blocks/auth/verify-email-screen";
 import { buildAuthPathWithRedirect } from "@/lib/routing/auth-redirects";
 import { appRoute } from "@/lib/navigation/routes";
 import { useNavigationLocation } from "@/lib/navigation";
 import type { AppAuthState, AppSignOut, AuthAdapter } from "../hooks";
 import { useConvexUpdateProfileName, useConvexUser } from "./convex-user";
 
-const PUBLIC_PATHS = [appRoute.authSignIn().pathname, appRoute.authSignUp().pathname];
+const PUBLIC_PATHS = [appRoute.authSignIn().pathname, appRoute.authSignUp().pathname, appRoute.authVerifyEmail().pathname];
 
 // Set by sign-out, which navigates itself; the gate must not race it to sign-in.
 let isSigningOut = false;
@@ -93,6 +94,7 @@ export const convexAdapter: AuthAdapter = {
   Provider: ConvexAuthAdapterProvider,
   SignInScreen: EmailPasswordSignInForm,
   SignUpScreen: EmailPasswordSignUpForm,
+  VerifyEmailScreen,
   useAuth: useConvexAppAuth,
   useUser: useConvexUser,
   useSignOut: useConvexSignOut,
