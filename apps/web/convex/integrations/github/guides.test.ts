@@ -287,6 +287,24 @@ describe("guides", () => {
     await expect(submit([step("All", ["convex/schema.ts", "src/reader.tsx"])], "head-1", threadId)).rejects.toThrow("This thread is not writing a guide.");
   });
 
+  test("a Guide run stays a background thread, also after a Retry takes its guide (OS-2513)", async () => {
+    const { threadId, project, asUser, list, reportFailure, request } = await setupGuideRun();
+    const listed = async (background?: true) =>
+      (await asUser.query(api.cli.threads.lists.listByProject, { projectId: project._id, paginationOpts: { numItems: 10, cursor: null }, background })).page.map((row) => row._id);
+    expect(await listed()).toEqual([]);
+    expect(await listed(true)).toEqual([threadId]);
+
+    const [guide] = (await list())!;
+    await reportFailure("Not a clone");
+    const retryThreadId = await request("head-1", 1, guide._id);
+    expect(await listed()).toEqual([]);
+    expect(await listed(true)).toEqual([retryThreadId, threadId]);
+    // The old thread lost `pullRequestGuide` to the Retry but still reads as a Guide run, renamed or not.
+    await asUser.mutation(api.cli.threads.core.updateTitle, { threadId, title: "Renamed" });
+    const rows = (await asUser.query(api.cli.threads.lists.listByProject, { projectId: project._id, paginationOpts: { numItems: 10, cursor: null }, background: true })).page;
+    expect(rows.map((row) => row.background)).toEqual(["guide", "guide"]);
+  });
+
   test("a submit already past its checks when Retry re-points the guide does not land on the retry", async () => {
     const { t, threadId, apiKey, list, reportFailure, request } = await setupGuideRun();
     const old = await t.query(internal.integrations.github.guides.getSubmitContext, { threadId, apiKey });

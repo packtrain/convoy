@@ -423,6 +423,20 @@ describe("listSummaries (OS-1626)", () => {
   };
   const PAGE = { cursor: null, numItems: 20 };
 
+  test("leaves background threads out unless asked for them (OS-2513)", async () => {
+    const ctx = createTestContext();
+    const { user, project, asUser } = await ctx.setupProject();
+    const profile = await ctx.cliProfile(user._id, project._id, PATHS);
+    const mine = await ctx.cliThread(user._id, project._id, profile._id, { pathId: "path-1", path: "/repo/path-1" });
+    const guide = await ctx.cliThread(user._id, project._id, profile._id, { pathId: "path-1", path: "/repo/path-1", isBackground: true });
+
+    const normal = await asUser.query(api.cli.threads.summaries.listSummaries, { projectId: project._id, paginationOpts: PAGE });
+    const background = await asUser.query(api.cli.threads.summaries.listSummaries, { projectId: project._id, paginationOpts: PAGE, background: true });
+
+    expect(normal.page.map((row) => row.threadId)).toEqual([mine._id]);
+    expect(background.page.map((row) => row.threadId)).toEqual([guide._id]);
+  });
+
   test("returns the project's threads with the same fields as getSummary", async () => {
     const ctx = createTestContext();
     const { user, project, asUser } = await ctx.setupProject();

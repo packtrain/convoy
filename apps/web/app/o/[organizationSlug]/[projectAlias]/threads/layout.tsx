@@ -10,7 +10,7 @@ import type { Id } from "@/convex/_generated/dataModel";
 import { NEW_THREAD_HOTKEY } from "@/lib/browser/hotkeys";
 import { useCliProfiles } from "@/lib/threads/hooks/use-cli-profiles";
 import { useCliThreads } from "@/lib/threads/hooks/use-cli-threads";
-import { useSharedCliThreads } from "@/lib/threads/hooks/use-shared-cli-threads";
+import { useSidebarViewThreads, type ThreadSidebarView } from "@/lib/threads/hooks/use-sidebar-view-threads";
 import { useUserPreferences } from "@/lib/preferences/use-user-preferences";
 import { buildProjectDraftStorageKey } from "@/lib/threads/draft-storage";
 import {
@@ -106,30 +106,29 @@ function ThreadSidebarContainer({
     // right mode instead of flashing an ungrouped list (OS-1394).
     enabled: !preferencesLoading,
   });
-  // Shared-threads view (OS-1576): browser-local and deliberately not a stored
-  // preference — it is a place you visit, not a way you like your list. The
-  // main list's queries stay mounted underneath so leaving the view restores it
-  // with its loaded pages instead of re-paginating from the top.
-  const [sharedViewOpen, setSharedViewOpen] = useState(false);
+  // Shared / Background threads view (OS-1576, OS-2513): browser-local and
+  // deliberately not a stored preference — it is a place you visit, not a way
+  // you like your list. The main list's queries stay mounted underneath so
+  // leaving the view restores it with its loaded pages.
+  const [sidebarView, setSidebarView] = useState<ThreadSidebarView | null>(null);
 
   // Switching projects leaves the view, the way it resets multiselect (the
   // sidebar is keyed on `projectId` for that). This container is not keyed, so
   // it adjusts the state during render instead of remounting and losing the
   // resolved sidebar width.
-  const [sharedViewProjectId, setSharedViewProjectId] = useState(projectId);
-  if (sharedViewProjectId !== projectId) {
-    setSharedViewProjectId(projectId);
-    setSharedViewOpen(false);
+  const [sidebarViewProjectId, setSidebarViewProjectId] = useState(projectId);
+  if (sidebarViewProjectId !== projectId) {
+    setSidebarViewProjectId(projectId);
+    setSidebarView(null);
   }
   const {
-    sharedThreads,
-    isLoading: isLoadingShared,
-    isLoadingMore: isLoadingMoreShared,
-    hasMore: hasMoreShared,
-    loadMore: loadMoreShared,
-  } = useSharedCliThreads(projectId, { enabled: sharedViewOpen });
-  const handleOpenSharedView = useCallback(() => setSharedViewOpen(true), []);
-  const handleCloseSharedView = useCallback(() => setSharedViewOpen(false), []);
+    threads: viewThreads,
+    isLoading: isLoadingView,
+    isLoadingMore: isLoadingMoreView,
+    hasMore: hasMoreView,
+    loadMore: loadMoreView,
+  } = useSidebarViewThreads(projectId, sidebarView);
+  const handleCloseView = useCallback(() => setSidebarView(null), []);
 
   const getThreadSidebarWidthFromPointer = useCallback(
     ({ clientX, containerRect }: { clientX: number; containerRect: DOMRect }) => clientX - containerRect.left,
@@ -289,14 +288,14 @@ function ThreadSidebarContainer({
         hasMoreDone={hasMoreDone}
         isLoadingMoreDone={isLoadingMoreDone}
         onLoadMoreDone={loadMoreDone}
-        sharedThreads={sharedThreads}
-        isLoadingShared={isLoadingShared}
-        hasMoreShared={hasMoreShared}
-        isLoadingMoreShared={isLoadingMoreShared}
-        onLoadMoreShared={loadMoreShared}
-        sharedViewOpen={sharedViewOpen}
-        onOpenSharedView={handleOpenSharedView}
-        onCloseSharedView={handleCloseSharedView}
+        view={sidebarView}
+        viewThreads={viewThreads}
+        isLoadingView={isLoadingView}
+        hasMoreView={hasMoreView}
+        isLoadingMoreView={isLoadingMoreView}
+        onLoadMoreView={loadMoreView}
+        onOpenView={setSidebarView}
+        onCloseView={handleCloseView}
         onResizeMouseDown={handleMouseDown}
         onResizeByStep={adjustWidthBy}
       />

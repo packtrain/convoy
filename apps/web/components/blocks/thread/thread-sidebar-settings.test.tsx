@@ -40,7 +40,7 @@ vi.mock("@/components/ui/dropdown-menu", () => ({
 function renderSettings(
   callbacks: {
     onEnableMultiSelect?: () => void;
-    onViewSharedThreads?: () => void;
+    onOpenView?: (view: "shared" | "background") => void;
     onHideList?: () => void;
   } = {}
 ) {
@@ -53,7 +53,7 @@ function renderSettings(
       onCompactLayoutChange={vi.fn()}
       onGroupDoneChange={vi.fn()}
       onEnableMultiSelect={callbacks.onEnableMultiSelect}
-      onViewSharedThreads={callbacks.onViewSharedThreads}
+      onOpenView={callbacks.onOpenView}
       onHideList={callbacks.onHideList}
     />
   );
@@ -87,19 +87,21 @@ describe("ThreadSidebarSettings", () => {
     expect(onEnableMultiSelect).toHaveBeenCalledTimes(1);
   });
 
-  test("omits Shared threads when no callback is provided (mobile)", () => {
+  test("omits the views when no callback is provided (mobile)", () => {
     renderSettings();
 
     expect(screen.queryByText("Shared threads")).toBeNull();
+    expect(screen.queryByText("Background threads")).toBeNull();
   });
 
-  test("shows Shared threads and invokes the callback (OS-1576)", () => {
-    const onViewSharedThreads = vi.fn();
-    renderSettings({ onViewSharedThreads });
+  test("opens the Shared and Background threads views (OS-1576, OS-2513)", () => {
+    const onOpenView = vi.fn();
+    renderSettings({ onOpenView });
 
     fireEvent.click(screen.getByText("Shared threads"));
+    fireEvent.click(screen.getByText("Background threads"));
 
-    expect(onViewSharedThreads).toHaveBeenCalledTimes(1);
+    expect(onOpenView.mock.calls).toEqual([["shared"], ["background"]]);
   });
 
   test("omits Hide thread list when no callback is provided (mobile)", () => {

@@ -580,6 +580,9 @@ status changes rather than being true last-activity.
   output wraps it in the same `{ page, isDone: true, continueCursor: "" }` envelope
   the flat list returns.
 - Supports `--include-done` (default off) and cursor pagination on the flat list.
+- `--background` lists background threads (Guide and checks runs) instead of the
+  normal list, which leaves them out (OS-2513, see
+  [cli-thread-list.md](cli-thread-list.md#background-threads-view-os-2513)).
 - Text output prints one row per unit of work: a thread group shows its child count
   and raw `aggregateStatus`; an ordinary thread shows status, runtime, and target
   profile with online state.

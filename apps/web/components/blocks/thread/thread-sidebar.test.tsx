@@ -67,14 +67,15 @@ vi.mock("@/components/ui/scroll-area", () => ({
   ScrollArea: ({ children }: { children: ReactNode }) => <div>{children}</div>,
 }));
 
-vi.mock("@/components/blocks/thread/thread-sidebar-settings", () => ({
+vi.mock("@/components/blocks/thread/thread-sidebar-settings", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("@/components/blocks/thread/thread-sidebar-settings")>()),
   ThreadSidebarSettings: ({
     onEnableMultiSelect,
-    onViewSharedThreads,
+    onOpenView,
     onHideList,
   }: {
     onEnableMultiSelect?: () => void;
-    onViewSharedThreads?: () => void;
+    onOpenView?: (view: "shared" | "background") => void;
     onHideList?: () => void;
   }) => (
     <div>
@@ -89,10 +90,15 @@ vi.mock("@/components/blocks/thread/thread-sidebar-settings", () => ({
           Select multiple
         </button>
       ) : null}
-      {onViewSharedThreads ? (
-        <button type="button" onClick={onViewSharedThreads}>
-          Shared threads
-        </button>
+      {onOpenView ? (
+        <>
+          <button type="button" onClick={() => onOpenView("shared")}>
+            Shared threads
+          </button>
+          <button type="button" onClick={() => onOpenView("background")}>
+            Background threads
+          </button>
+        </>
       ) : null}
     </div>
   ),
@@ -185,14 +191,14 @@ function buildThreadSidebarProps(
     hasMore: false,
     isLoadingMore: false,
     onLoadMore: vi.fn(),
-    sharedThreads: [],
-    isLoadingShared: false,
-    hasMoreShared: false,
-    isLoadingMoreShared: false,
-    onLoadMoreShared: vi.fn(),
-    sharedViewOpen: false,
-    onOpenSharedView: vi.fn(),
-    onCloseSharedView: vi.fn(),
+    view: null,
+    viewThreads: [],
+    isLoadingView: false,
+    hasMoreView: false,
+    isLoadingMoreView: false,
+    onLoadMoreView: vi.fn(),
+    onOpenView: vi.fn(),
+    onCloseView: vi.fn(),
     onResizeMouseDown: vi.fn(),
     onResizeByStep: vi.fn(),
     ...overrides,
@@ -665,20 +671,20 @@ describe("ThreadSidebar shared-threads view (OS-1576)", () => {
   });
 
   test("the settings entry asks the container to open the view", () => {
-    const onOpenSharedView = vi.fn();
-    renderThreadSidebar({ threads: [makeThread(1)], onOpenSharedView });
+    const onOpenView = vi.fn();
+    renderThreadSidebar({ threads: [makeThread(1)], onOpenView });
 
     fireEvent.click(screen.getByText("Shared threads"));
 
-    expect(onOpenSharedView).toHaveBeenCalledTimes(1);
+    expect(onOpenView).toHaveBeenCalledWith("shared");
   });
 
   test("replaces the thread list rather than mixing shared rows into it", () => {
     renderThreadSidebar({
       threads: [makeThread(1)],
       pinnedThreads: [makeThread(2)],
-      sharedThreads: [makeThread(3, { sharedAt: 1000 })],
-      sharedViewOpen: true,
+      viewThreads: [makeThread(3, { sharedAt: 1000 })],
+      view: "shared",
     });
 
     expect(screen.getByText("Thread 3")).toBeDefined();
@@ -692,8 +698,8 @@ describe("ThreadSidebar shared-threads view (OS-1576)", () => {
   test("the header names the view and the settings gear steps aside", () => {
     renderThreadSidebar({
       threads: [makeThread(1)],
-      sharedThreads: [makeThread(3, { sharedAt: 1000 })],
-      sharedViewOpen: true,
+      viewThreads: [makeThread(3, { sharedAt: 1000 })],
+      view: "shared",
     });
 
     expect(screen.getByText("Shared threads")).toBeDefined();
@@ -703,54 +709,54 @@ describe("ThreadSidebar shared-threads view (OS-1576)", () => {
   });
 
   test("X exits the view", () => {
-    const onCloseSharedView = vi.fn();
+    const onCloseView = vi.fn();
     renderThreadSidebar({
       threads: [makeThread(1)],
-      sharedThreads: [makeThread(3, { sharedAt: 1000 })],
-      sharedViewOpen: true,
-      onCloseSharedView,
+      viewThreads: [makeThread(3, { sharedAt: 1000 })],
+      view: "shared",
+      onCloseView,
     });
 
     fireEvent.click(screen.getByRole("button", { name: "Exit shared threads" }));
 
-    expect(onCloseSharedView).toHaveBeenCalledTimes(1);
+    expect(onCloseView).toHaveBeenCalledTimes(1);
   });
 
   test("Escape exits the view", () => {
-    const onCloseSharedView = vi.fn();
+    const onCloseView = vi.fn();
     renderThreadSidebar({
       threads: [makeThread(1)],
-      sharedThreads: [],
-      sharedViewOpen: true,
-      onCloseSharedView,
+      viewThreads: [],
+      view: "shared",
+      onCloseView,
     });
 
     pressEscape();
 
-    expect(onCloseSharedView).toHaveBeenCalledTimes(1);
+    expect(onCloseView).toHaveBeenCalledTimes(1);
   });
 
   test("pages the rest in with Load more", () => {
-    const onLoadMoreShared = vi.fn();
+    const onLoadMoreView = vi.fn();
     renderThreadSidebar({
       threads: [makeThread(1)],
-      sharedThreads: [makeThread(3, { sharedAt: 1000 })],
-      sharedViewOpen: true,
-      hasMoreShared: true,
-      onLoadMoreShared,
+      viewThreads: [makeThread(3, { sharedAt: 1000 })],
+      view: "shared",
+      hasMoreView: true,
+      onLoadMoreView,
     });
 
     fireEvent.click(screen.getByRole("button", { name: "Load more" }));
 
-    expect(onLoadMoreShared).toHaveBeenCalledTimes(1);
+    expect(onLoadMoreView).toHaveBeenCalledTimes(1);
   });
 
   test("offers no Load more once the last page is in", () => {
     renderThreadSidebar({
       threads: [makeThread(1)],
-      sharedThreads: [makeThread(3, { sharedAt: 1000 })],
-      sharedViewOpen: true,
-      hasMoreShared: false,
+      viewThreads: [makeThread(3, { sharedAt: 1000 })],
+      view: "shared",
+      hasMoreView: false,
     });
 
     expect(screen.queryByRole("button", { name: "Load more" })).toBeNull();
@@ -759,8 +765,8 @@ describe("ThreadSidebar shared-threads view (OS-1576)", () => {
   test("says nothing is shared instead of reading as an empty project", () => {
     renderThreadSidebar({
       threads: [makeThread(1)],
-      sharedThreads: [],
-      sharedViewOpen: true,
+      viewThreads: [],
+      view: "shared",
     });
 
     expectEmptyState("No shared threads");
@@ -770,12 +776,37 @@ describe("ThreadSidebar shared-threads view (OS-1576)", () => {
   test("holds the empty state back while the shared query is still loading", () => {
     renderThreadSidebar({
       threads: [makeThread(1)],
-      sharedThreads: [],
-      isLoadingShared: true,
-      sharedViewOpen: true,
+      viewThreads: [],
+      isLoadingView: true,
+      view: "shared",
     });
 
     expect(screen.queryByText("No shared threads")).toBeNull();
+  });
+});
+
+describe("ThreadSidebar background-threads view (OS-2513)", () => {
+  afterEach(() => {
+    cleanup();
+  });
+
+  test("the settings entry opens it", () => {
+    const onOpenView = vi.fn();
+    renderThreadSidebar({ threads: [makeThread(1)], onOpenView });
+
+    fireEvent.click(screen.getByText("Background threads"));
+
+    expect(onOpenView).toHaveBeenCalledWith("background");
+  });
+
+  test("names itself in the header and exit button, and says when it is empty", () => {
+    const onCloseView = vi.fn();
+    renderThreadSidebar({ threads: [makeThread(1)], viewThreads: [], view: "background", onCloseView });
+
+    expect(screen.getByText("Background threads")).toBeDefined();
+    expectEmptyState("No background threads");
+    fireEvent.click(screen.getByRole("button", { name: "Exit background threads" }));
+    expect(onCloseView).toHaveBeenCalledTimes(1);
   });
 });
 

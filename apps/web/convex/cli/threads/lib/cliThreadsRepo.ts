@@ -85,23 +85,26 @@ type ProjectThreadsPageArgs = {
   sortBy: ThreadSortBy;
   /** Restrict to done / not-done threads (the list's sections, OS-1451); omitted = one ungrouped list. */
   isDone?: boolean;
+  /** The Background threads view instead of the normal list (OS-2513). */
+  background?: boolean;
   paginationOpts: { cursor: string | null; numItems: number };
 };
 
 /**
  * A page of a user's non-deleted threads in a project, newest first. `isDone`
- * splits the list on parallel indexes. Container children are excluded — the
- * flat list shows containers and plain threads only.
+ * splits the list on parallel indexes, `background` picks the normal or the
+ * Background list. Container children are excluded.
  */
 export async function paginateProjectThreads(ctx: Ctx, args: ProjectThreadsPageArgs): Promise<PaginationResult<Doc<"cliThreads">>> {
   const isDone = args.isDone;
+  const isBackground = args.background ? true : undefined;
   if (isDone !== undefined) {
     return ctx.db
       .query("cliThreads")
       .withIndex(
         args.sortBy === "created"
-          ? "by_user_project_deleted_isDone_parent_createdAt"
-          : "by_user_project_deleted_isDone_parent_lastActivity",
+          ? "by_user_project_deleted_isDone_parent_background_createdAt"
+          : "by_user_project_deleted_isDone_parent_background_lastActivity",
         (q) =>
           q
             .eq("userId", args.userId)
@@ -109,6 +112,7 @@ export async function paginateProjectThreads(ctx: Ctx, args: ProjectThreadsPageA
             .eq("isDeleted", false)
             .eq("statusProjection.isDone", isDone)
             .eq("parentThreadId", undefined)
+            .eq("isBackground", isBackground)
       )
       .order("desc")
       .paginate(args.paginationOpts);
@@ -117,8 +121,8 @@ export async function paginateProjectThreads(ctx: Ctx, args: ProjectThreadsPageA
   return ctx.db
     .query("cliThreads")
     .withIndex(
-      args.sortBy === "created" ? "by_user_project_deleted_parent_createdAt" : "by_user_project_deleted_parent_lastActivity",
-      (q) => q.eq("userId", args.userId).eq("projectId", args.projectId).eq("isDeleted", false).eq("parentThreadId", undefined)
+      args.sortBy === "created" ? "by_user_project_deleted_parent_background_createdAt" : "by_user_project_deleted_parent_background_lastActivity",
+      (q) => q.eq("userId", args.userId).eq("projectId", args.projectId).eq("isDeleted", false).eq("parentThreadId", undefined).eq("isBackground", isBackground)
     )
     .order("desc")
     .paginate(args.paginationOpts);
@@ -647,6 +651,8 @@ export async function insertCliThread(ctx: MutationCtx, thread: ThreadInsert, no
     attachedPullRequest: thread.attachedPullRequest,
     pullRequestChecks: thread.pullRequestChecks,
     pullRequestGuide: thread.pullRequestGuide,
+    // Stamped from the markers because Retry clears `pullRequestGuide` later (OS-2513).
+    isBackground: thread.pullRequestGuide || thread.pullRequestChecks ? true : undefined,
     projectAgentId: thread.projectAgentId,
     agentPromptSnapshot: thread.agentPromptSnapshot,
     ...(thread.worktree || thread.executionBranch ? {

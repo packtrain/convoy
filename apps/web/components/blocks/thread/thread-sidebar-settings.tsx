@@ -1,7 +1,7 @@
 "use client";
 
 import { useId } from "react";
-import { Settings, Clock, CalendarPlus, ListChecks, PanelLeftClose, Share2 } from "lucide-react";
+import { Settings, Clock, CalendarPlus, Layers, ListChecks, PanelLeftClose, Share2, type LucideIcon } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import {
   DropdownMenu,
@@ -17,6 +17,26 @@ import { THREAD_LIST_TOGGLE_HOTKEY } from "@/lib/browser/hotkeys";
 import { MenuShortcut } from "@/components/blocks/tasks/task-action-menu-items";
 import { Switch } from "@/components/ui/switch";
 import type { ThreadSortBy } from "@/convex/lib/contracts/validators";
+import type { ThreadSidebarView } from "@/lib/threads/hooks/use-sidebar-view-threads";
+
+/** The views the settings menu opens, in menu order (OS-1576, OS-2513). */
+export const THREAD_SIDEBAR_VIEWS: Record<
+  ThreadSidebarView,
+  { icon: LucideIcon; label: string; emptyTitle: string; emptyDescription: string }
+> = {
+  shared: {
+    icon: Share2,
+    label: "Shared threads",
+    emptyTitle: "No shared threads",
+    emptyDescription: "Threads you share with your project appear here.",
+  },
+  background: {
+    icon: Layers,
+    label: "Background threads",
+    emptyTitle: "No background threads",
+    emptyDescription: "Guide and checks runs you start on a pull request appear here.",
+  },
+};
 
 const SORT_OPTIONS: {
   value: ThreadSortBy;
@@ -40,10 +60,10 @@ interface ThreadSidebarSettingsProps {
    */
   onEnableMultiSelect?: () => void;
   /**
-   * Opens the shared-threads view (OS-1576). Desktop sidebar only, like
-   * multiselect; the mobile panel omits it.
+   * Opens a separate view, Shared or Background threads. Desktop sidebar
+   * only, like multiselect; the mobile panel omits it.
    */
-  onViewSharedThreads?: () => void;
+  onOpenView?: (view: ThreadSidebarView) => void;
   /** Collapses the thread list (desktop only; the mobile panel omits it). */
   onHideList?: () => void;
 }
@@ -56,7 +76,7 @@ export function ThreadSidebarSettings({
   onCompactLayoutChange,
   onGroupDoneChange,
   onEnableMultiSelect,
-  onViewSharedThreads,
+  onOpenView,
   onHideList,
 }: ThreadSidebarSettingsProps) {
   const compactLayoutId = useId();
@@ -114,18 +134,23 @@ export function ThreadSidebarSettings({
           ))}
         </DropdownMenuRadioGroup>
 
-        {(onEnableMultiSelect || onViewSharedThreads) && (
+        {(onEnableMultiSelect || onOpenView) && (
           <DropdownMenuSeparator />
         )}
-        {onViewSharedThreads && (
-          <DropdownMenuItem
-            className="cursor-pointer"
-            onSelect={onViewSharedThreads}
-          >
-            <Share2 className="size-4" />
-            Shared threads
-          </DropdownMenuItem>
-        )}
+        {onOpenView &&
+          (Object.keys(THREAD_SIDEBAR_VIEWS) as ThreadSidebarView[]).map((view) => {
+            const { icon: Icon, label } = THREAD_SIDEBAR_VIEWS[view];
+            return (
+              <DropdownMenuItem
+                key={view}
+                className="cursor-pointer"
+                onSelect={() => onOpenView(view)}
+              >
+                <Icon className="size-4" />
+                {label}
+              </DropdownMenuItem>
+            );
+          })}
         {onEnableMultiSelect && (
           <DropdownMenuItem
             className="cursor-pointer"

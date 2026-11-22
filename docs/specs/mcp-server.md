@@ -1475,7 +1475,8 @@ argument could only ever be redundant with it — and requiring one would reject
 answerable call on a server with no default project configured.
 
 `includeDone` defaults to `false`: "what threads do I have" almost never means the
-finished ones. There is no `includeArchived` — threads have had no archived state
+finished ones. Background threads (Guide and checks runs, OS-2513) never appear;
+`convoy threads list --background` lists them. There is no `includeArchived` — threads have had no archived state
 since OS-1561 (see [thread-groups.md](thread-groups.md)). Soft-deleted threads and
 soft-deleted members never appear.
 

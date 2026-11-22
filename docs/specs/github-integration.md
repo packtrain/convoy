@@ -418,7 +418,9 @@ guide in the corner menu.
   need a pull request in a connected repository"). The same transaction
   inserts the Guide (`integrationPullRequestGuides`, status writing, the
   stored PR's base and head) and marks the thread
-  (`cliThreads.pullRequestGuide.headSha`).
+  (`cliThreads.pullRequestGuide.headSha`). The thread is a background thread:
+  it stays out of the thread list and shows under Background threads
+  ([cli-thread-list.md](cli-thread-list.md#background-threads-view-os-2513)).
 - The agent checks out the PR with `gh`; that needs `gh` signed in with
   access to the repository and a Working path that is a clone of it. The
   prompt has the agent check the remote first and, if it fails, report the
@@ -721,6 +723,8 @@ Convoy (OS-2406).
   - The run is a CLI thread with the PR as its Attached pull request.
     `cli.threads.core.create` takes `pullRequestChecks: { headSha }`, the head
     the card shows, and stores it as `cliThreads.pullRequestChecks.headSha`.
+    Like a Guide run, it is a background thread
+    ([cli-thread-list.md](cli-thread-list.md#background-threads-view-os-2513)).
     It must still be the stored PR's head, else "The pull request has new
     commits. Run the checks again." A PR outside the project's connected
     repositories is rejected: "Pull request checks need a pull request in a

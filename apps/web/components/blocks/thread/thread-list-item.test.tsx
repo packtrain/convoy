@@ -1518,6 +1518,43 @@ describe("ThreadListItem", () => {
 
   // Read-only sharing (OS-1575, docs/specs/cli-thread-sharing.md). The owner
   // toggles it from the same menu the row, the tab and the detail header share.
+  describe("background badge (OS-2513)", () => {
+    function renderRow(compactLayout: boolean, chat: Partial<ThreadRowChat> = {}) {
+      render(
+        <ThreadListItem
+          chat={{
+            _id: "thread_1" as Id<"cliThreads">,
+            title: "Renamed by the user",
+            status: "completed",
+            cliType: "codex",
+            hasUnread: false,
+            requiresAttention: false,
+            lastActivityAt: Date.now(),
+            ...chat,
+          }}
+          isActive={false}
+          compactLayout={compactLayout}
+          organizationSlug="contoso"
+          projectAlias="OS"
+          showActions={false}
+        />
+      );
+    }
+
+    test.each([true, false])("names a Guide run and a checks run (compactLayout: %s)", (compactLayout) => {
+      renderRow(compactLayout, { background: "guide" });
+      expect(screen.getByRole("img", { name: "Guide run" }).className).toContain("pointer-events-auto");
+      cleanup();
+      renderRow(compactLayout, { background: "checks" });
+      expect(screen.getByRole("img", { name: "Checks run" })).toBeDefined();
+    });
+
+    test.each([true, false])("leaves an ordinary row unmarked (compactLayout: %s)", (compactLayout) => {
+      renderRow(compactLayout);
+      expect(screen.queryByRole("img", { name: /run$/ })).toBeNull();
+    });
+  });
+
   describe("shared badge (OS-1576)", () => {
     function renderSharedRow(
       compactLayout: boolean,

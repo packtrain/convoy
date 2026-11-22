@@ -153,6 +153,8 @@ export const listByProject = query({
     // Omit for one ungrouped list (today's behavior); set to page a single
     // Active/Done section (OS-1451).
     isDone: v.optional(v.boolean()),
+    // The Background threads view (OS-2513) instead of the normal list.
+    background: v.optional(v.boolean()),
   },
   returns: paginationResultValidator(cliThreadItemValidator),
   handler: async (ctx, args) => {
@@ -172,6 +174,7 @@ export const listByProject = query({
       projectId: args.projectId,
       sortBy: args.sortBy ?? "lastActivity",
       isDone: args.isDone,
+      background: args.background,
       paginationOpts: args.paginationOpts,
     });
 

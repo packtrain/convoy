@@ -82,6 +82,8 @@ export const listSummaries = query({
     // Off by default: "what threads do I have" almost never means the finished ones.
     // (No `includeArchived` — no archived state since OS-1561.)
     includeDone: v.optional(v.boolean()),
+    // Background threads (OS-2513) instead of the normal list.
+    background: v.optional(v.boolean()),
     paginationOpts: paginationOptsValidator,
     apiKey: v.optional(v.string()),
   },
@@ -104,6 +106,7 @@ export const listSummaries = query({
       // `undefined` is the ungrouped list; `false` is Active-only. `true` is not a call
       // shape here — nothing asks for *only* the done threads.
       isDone: args.includeDone === true ? undefined : false,
+      background: args.background,
       paginationOpts: args.paginationOpts,
     });
 

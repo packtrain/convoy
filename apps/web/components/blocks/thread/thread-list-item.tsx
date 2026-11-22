@@ -63,10 +63,12 @@ import { isContainerThread } from "@/lib/threads/containers";
 import { copyThreadShareLink } from "@/lib/threads/share-link";
 import type { Id } from "@/convex/_generated/dataModel";
 import type { CliThreadKind, CliType } from "@/convex/lib/contracts/validators";
+import type { CliThreadBackground } from "@/convex/cli/threads/lib/validators";
 import { ThreadAgentChip, type ThreadAgentChipAgent } from "./thread-agent-chip";
 import { ThreadDiffStat } from "./thread-diff-stat";
 import { ThreadAttachedPrBadge, ThreadPrBadge } from "./thread-pr-badge";
 import { ThreadSharedRowBadge } from "./thread-shared-row-badge";
+import { ThreadBackgroundRowBadge } from "./thread-background-row-badge";
 import { ThreadWorkflowRowBadge } from "./thread-workflow-row-badge";
 import { ThreadStatusIndicator } from "./thread-status-indicator";
 import { CompactThreadRowContent } from "./compact-thread-row-content";
@@ -105,6 +107,8 @@ export interface ThreadListItemData {
   kind?: CliThreadKind;
   /** Set while the thread — or, on a container, the whole group (OS-1579) — is shared read-only with the project (OS-1575). */
   sharedAt?: number;
+  /** Why a background thread exists (OS-2513); absent on ordinary threads. */
+  background?: CliThreadBackground;
   /** Container membership. Group children inherit sharing from their container. */
   parentThreadId?: Id<"cliThreads">;
   /** The container's `sharedAt`, mirrored on detail surfaces. Only groups can be shared. */
@@ -944,9 +948,10 @@ function ThreadListItemComponent({
           agent={chat.agent}
           leadingControl={selectCheckbox}
           titlePrefix={
-            (showAssociatedTask && associatedTask) || chat.attachedPullRequest || chat.pullRequest || isShared || isWorkflowRun ? (
+            (showAssociatedTask && associatedTask) || chat.attachedPullRequest || chat.pullRequest || isShared || isWorkflowRun || chat.background ? (
               <>
                 {workflowBadge}
+                {chat.background ? <ThreadBackgroundRowBadge background={chat.background} /> : null}
                 {showAssociatedTask && associatedTask ? (
                   <ThreadTaskRefLink
                     task={associatedTask}
@@ -1145,9 +1150,10 @@ function ThreadListItemComponent({
           )}
         </div>
         <div className="mt-1.5 grid min-w-0 grid-cols-[minmax(0,1fr)_auto] items-center gap-2">
-          {chat.branch || chat.pullRequest || isShared || isWorkflowRun ? (
+          {chat.branch || chat.pullRequest || isShared || isWorkflowRun || chat.background ? (
             <span className="flex min-w-0 items-center gap-1.5">
               {workflowBadge}
+              {chat.background ? <ThreadBackgroundRowBadge background={chat.background} /> : null}
               {chat.pullRequest ? <ThreadPrBadge pullRequest={chat.pullRequest} /> : null}
               {isShared ? <ThreadSharedRowBadge /> : null}
               {chat.branch ? (

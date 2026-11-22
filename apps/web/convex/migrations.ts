@@ -353,6 +353,17 @@ export const backfillOrgLeaderProjectMemberships = migrations.define({
   },
 });
 
+/** Mark Guide and checks runs created before OS-2513 as background threads. A retried Guide's old thread lost its marker and stays. */
+export const backfillCliThreadIsBackground = migrations.define({
+  table: "cliThreads",
+  migrateOne: async (ctx, thread) => {
+    if (thread.isBackground || !(thread.pullRequestGuide || thread.pullRequestChecks)) {
+      return;
+    }
+    await ctx.db.patch("cliThreads", thread._id, { isBackground: true });
+  },
+});
+
 export const runAll = migrations.runner([
   internal.migrations.ensureProjectInbox,
   internal.migrations.backfillDefaultListTasks,
@@ -366,6 +377,7 @@ export const runAll = migrations.runner([
   internal.migrations.backfillCliThreadLastUsedCli,
   internal.migrations.backfillOrgLeaderProjectMemberships,
   internal.migrations.backfillCliMessageAttachmentRefRole,
+  internal.migrations.backfillCliThreadIsBackground,
 ]);
 
 const MAX_ORG_LEADER_GRANT_VERIFY_REPORT_ROWS = 10;

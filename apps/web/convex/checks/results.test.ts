@@ -482,6 +482,16 @@ describe("pull request checks (OS-2400)", () => {
     expect(pushed?.checks[0]?.results[0]?.headSha).toBe("head-1");
   });
 
+  test("a checks run is a background thread (OS-2513)", async () => {
+    const { project, asUser, threadId } = await setupChecksRun();
+    const listed = async (background?: true) =>
+      (await asUser.query(api.cli.threads.lists.listByProject, { projectId: project._id, paginationOpts: { numItems: 10, cursor: null }, background })).page.map((row) => row._id);
+    expect(await listed()).toEqual([]);
+    expect(await listed(true)).toEqual([threadId]);
+    const [row] = (await asUser.query(api.cli.threads.lists.listByProject, { projectId: project._id, paginationOpts: { numItems: 10, cursor: null }, background: true })).page;
+    expect(row.background).toBe("checks");
+  });
+
   test("a task attached later neither owns the results nor moves them; deleting the thread keeps them", async () => {
     const { ctx, user, project, asUser, threadId, attach } = await setupChecksRun();
     const task = await ctx.task(project._id, user._id);

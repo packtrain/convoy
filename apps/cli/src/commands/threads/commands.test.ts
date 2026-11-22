@@ -158,6 +158,26 @@ describe("threads commands", () => {
       });
     });
 
+    it("lists background threads with --background and keeps the flag in the next-page command (OS-2513)", async () => {
+      query.mockResolvedValueOnce(accessibleProjects).mockResolvedValueOnce({
+        page: [threadRow],
+        isDone: false,
+        continueCursor: "cursor_next",
+      });
+      listThreadsCommand.setOptionValue("background", true);
+
+      await invoke(listThreadsCommand, [undefined]);
+
+      expect(query).toHaveBeenCalledWith(api.cli.threads.summaries.listSummaries, {
+        projectId: "proj_web_1",
+        includeDone: false,
+        background: true,
+        paginationOpts: { numItems: 20, cursor: null },
+      });
+      const output = vi.mocked(console.log).mock.calls.flat().join("\n");
+      expect(output).toContain("--background --cursor 'cursor_next'");
+    });
+
     it("wraps the drill-down in the same page envelope in json mode", async () => {
       query.mockResolvedValueOnce([threadRow]);
       listThreadsCommand.setOptionValue("json", true);

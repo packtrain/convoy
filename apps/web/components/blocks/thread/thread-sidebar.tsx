@@ -15,7 +15,6 @@ import {
   CircleCheck,
   CircleDashed,
   Eye,
-  Share2,
   Trash2,
   X,
 } from "lucide-react";
@@ -51,7 +50,8 @@ import { EmptyState } from "@/components/custom/empty-state";
 import type { Id } from "@/convex/_generated/dataModel";
 import type { ThreadSortBy } from "@/convex/lib/contracts/validators";
 import { areThreadListsEqual } from "@/lib/threads/thread-list-item-equality";
-import { ThreadSidebarSettings } from "./thread-sidebar-settings";
+import type { ThreadSidebarView } from "@/lib/threads/hooks/use-sidebar-view-threads";
+import { THREAD_SIDEBAR_VIEWS, ThreadSidebarSettings } from "./thread-sidebar-settings";
 import { useThreadListCollapse } from "./thread-list-collapse-context";
 import { RenameThreadDialog } from "./rename-thread-dialog";
 import { ThreadListItem, type ThreadListItemData } from "./thread-list-item";
@@ -110,19 +110,18 @@ interface ThreadSidebarProps {
   isLoadingMoreDone: boolean;
   onLoadMoreDone: () => void;
   /**
-   * The shared-threads view (OS-1576): a separate list of the user's own
-   * shared threads, entered from the settings menu and left with X or Escape.
-   * The container owns the open state because it also gates the query, which
-   * is mounted only while the view is open.
+   * The open separate view, Shared (OS-1576) or Background (OS-2513) threads,
+   * entered from the settings menu and left with X or Escape. The container
+   * owns it because it also gates the query, mounted only while a view is open.
    */
-  sharedThreads: ThreadListItemData[];
-  isLoadingShared: boolean;
-  hasMoreShared: boolean;
-  isLoadingMoreShared: boolean;
-  onLoadMoreShared: () => void;
-  sharedViewOpen: boolean;
-  onOpenSharedView: () => void;
-  onCloseSharedView: () => void;
+  view: ThreadSidebarView | null;
+  viewThreads: ThreadListItemData[];
+  isLoadingView: boolean;
+  hasMoreView: boolean;
+  isLoadingMoreView: boolean;
+  onLoadMoreView: () => void;
+  onOpenView: (view: ThreadSidebarView) => void;
+  onCloseView: () => void;
   onResizeMouseDown: (event: ReactMouseEvent<HTMLDivElement>) => void;
   onResizeByStep: (delta: number, options?: { persist?: boolean }) => void;
 }
@@ -136,14 +135,14 @@ function areThreadSidebarPropsEqual(
     areThreadListsEqual(prevProps.threads, nextProps.threads) &&
     areThreadListsEqual(prevProps.doneThreads, nextProps.doneThreads) &&
     areThreadListsEqual(prevProps.pinnedThreads, nextProps.pinnedThreads) &&
-    areThreadListsEqual(prevProps.sharedThreads, nextProps.sharedThreads) &&
-    prevProps.isLoadingShared === nextProps.isLoadingShared &&
-    prevProps.hasMoreShared === nextProps.hasMoreShared &&
-    prevProps.isLoadingMoreShared === nextProps.isLoadingMoreShared &&
-    prevProps.onLoadMoreShared === nextProps.onLoadMoreShared &&
-    prevProps.sharedViewOpen === nextProps.sharedViewOpen &&
-    prevProps.onOpenSharedView === nextProps.onOpenSharedView &&
-    prevProps.onCloseSharedView === nextProps.onCloseSharedView &&
+    prevProps.view === nextProps.view &&
+    areThreadListsEqual(prevProps.viewThreads, nextProps.viewThreads) &&
+    prevProps.isLoadingView === nextProps.isLoadingView &&
+    prevProps.hasMoreView === nextProps.hasMoreView &&
+    prevProps.isLoadingMoreView === nextProps.isLoadingMoreView &&
+    prevProps.onLoadMoreView === nextProps.onLoadMoreView &&
+    prevProps.onOpenView === nextProps.onOpenView &&
+    prevProps.onCloseView === nextProps.onCloseView &&
     prevProps.currentThreadId === nextProps.currentThreadId &&
     prevProps.organizationSlug === nextProps.organizationSlug &&
     prevProps.projectAlias === nextProps.projectAlias &&
@@ -210,14 +209,14 @@ function ThreadSidebarComponent({
   hasMoreDone,
   isLoadingMoreDone,
   onLoadMoreDone,
-  sharedThreads,
-  isLoadingShared,
-  hasMoreShared,
-  isLoadingMoreShared,
-  onLoadMoreShared,
-  sharedViewOpen,
-  onOpenSharedView,
-  onCloseSharedView,
+  view,
+  viewThreads,
+  isLoadingView,
+  hasMoreView,
+  isLoadingMoreView,
+  onLoadMoreView,
+  onOpenView,
+  onCloseView,
   onResizeMouseDown,
   onResizeByStep,
 }: ThreadSidebarProps) {
@@ -300,12 +299,12 @@ function ThreadSidebarComponent({
       handleExitMultiSelect();
       return;
     }
-    onCloseSharedView();
-  }, [handleExitMultiSelect, multiSelectEnabled, onCloseSharedView]);
+    onCloseView();
+  }, [handleExitMultiSelect, multiSelectEnabled, onCloseView]);
 
   useHotkey("Escape", handleEscape, {
     enabled:
-      (multiSelectEnabled || sharedViewOpen) &&
+      (multiSelectEnabled || view !== null) &&
       pendingBatchDeleteIds === null &&
       pendingRename === null &&
       pendingDelete === null,
@@ -470,25 +469,8 @@ function ThreadSidebarComponent({
                   </Button>
                 </div>
               </>
-            ) : sharedViewOpen ? (
-              <>
-                <div className="flex items-center gap-2">
-                  <Share2 className="size-4 shrink-0 text-muted-foreground" />
-                  <span className="text-sm font-medium text-foreground">
-                    Shared threads
-                  </span>
-                </div>
-                <Button
-                  variant="ghost"
-                  size="icon-sm"
-                  className="size-8 cursor-pointer"
-                  aria-label="Exit shared threads"
-                  title="Exit shared threads"
-                  onClick={onCloseSharedView}
-                >
-                  <X className="size-4" />
-                </Button>
-              </>
+            ) : view !== null ? (
+              <ThreadViewHeader view={view} onClose={onCloseView} />
             ) : (
               <>
                 <div className="flex items-center gap-3">
@@ -510,7 +492,7 @@ function ThreadSidebarComponent({
                     onCompactLayoutChange={onCompactLayoutChange}
                     onGroupDoneChange={onGroupDoneChange}
                     onEnableMultiSelect={handleEnableMultiSelect}
-                    onViewSharedThreads={onOpenSharedView}
+                    onOpenView={onOpenView}
                     onHideList={threadList?.toggle}
                   />
                 </div>
@@ -519,14 +501,15 @@ function ThreadSidebarComponent({
           </div>
           <ScrollArea className="min-h-0 flex-1">
             <div className="flex flex-col">
-              {sharedViewOpen ? (
-                <ThreadSharedList
-                  threads={sharedThreads}
-                  isLoading={isLoadingShared}
+              {view !== null ? (
+                <ThreadViewList
+                  view={view}
+                  threads={viewThreads}
+                  isLoading={isLoadingView}
                   compactLayout={compactLayout}
-                  hasMore={hasMoreShared}
-                  isLoadingMore={isLoadingMoreShared}
-                  onLoadMore={onLoadMoreShared}
+                  hasMore={hasMoreView}
+                  isLoadingMore={isLoadingMoreView}
+                  onLoadMore={onLoadMoreView}
                   renderRow={renderRow}
                 />
               ) : isLoading ? (
@@ -643,13 +626,36 @@ export const ThreadSidebar = memo(
   areThreadSidebarPropsEqual
 );
 
+function ThreadViewHeader({ view, onClose }: { view: ThreadSidebarView; onClose: () => void }) {
+  const { icon: Icon, label } = THREAD_SIDEBAR_VIEWS[view];
+  return (
+    <>
+      <div className="flex items-center gap-2">
+        <Icon className="size-4 shrink-0 text-muted-foreground" />
+        <span className="text-sm font-medium text-foreground">{label}</span>
+      </div>
+      <Button
+        variant="ghost"
+        size="icon-sm"
+        className="size-8 cursor-pointer"
+        aria-label={`Exit ${label.toLowerCase()}`}
+        title={`Exit ${label.toLowerCase()}`}
+        onClick={onClose}
+      >
+        <X className="size-4" />
+      </Button>
+    </>
+  );
+}
+
 /**
- * The shared-threads view body (OS-1576). A component rather than an inline
+ * A separate view's body (OS-1576, OS-2513). A component rather than an inline
  * branch so `renderRow` is invoked behind a prop, the way `ThreadListSections`
  * invokes it — calling it inline made the React Compiler drop the sidebar's
  * manual memoization.
  */
-function ThreadSharedList({
+function ThreadViewList({
+  view,
   threads,
   isLoading,
   compactLayout,
@@ -658,6 +664,7 @@ function ThreadSharedList({
   onLoadMore,
   renderRow,
 }: {
+  view: ThreadSidebarView;
   threads: ThreadListItemData[];
   isLoading: boolean;
   compactLayout: boolean;
@@ -671,15 +678,10 @@ function ThreadSharedList({
   }
 
   // Distinct from the list's "No threads yet": this view is empty because
-  // nothing is shared, not because the project is.
+  // nothing is in it, not because the project is.
   if (threads.length === 0) {
-    return (
-      <EmptyState
-        icon={Share2}
-        title="No shared threads"
-        description="Threads you share with your project appear here."
-      />
-    );
+    const { icon, emptyTitle, emptyDescription } = THREAD_SIDEBAR_VIEWS[view];
+    return <EmptyState icon={icon} title={emptyTitle} description={emptyDescription} />;
   }
 
   return (

@@ -20,6 +20,7 @@ import { formatThreadRow, type ThreadRow } from "./formatters.js";
 interface ListThreadsOptions extends OutputOptions, PaginationOptions {
   org?: string;
   includeDone?: boolean;
+  background?: boolean;
 }
 
 /**
@@ -30,6 +31,9 @@ function buildNextCommand(projectId: string, options: ListThreadsOptions, nextCu
   const segments = ["convoy", "threads", "list", "--project", shellQuote(projectId)];
   if (options.includeDone) {
     segments.push("--include-done");
+  }
+  if (options.background) {
+    segments.push("--background");
   }
   if (options.limit !== undefined) {
     segments.push("--limit", shellQuote(String(options.limit)));
@@ -46,6 +50,7 @@ export const listThreadsCommand = addGlobalOptions(
         .argument("[containerId]", "Thread group container ID: list that group's members")
         .option("--org <org>", "Organization ID or slug (used with --project alias)")
         .option("--include-done", "Include threads marked done")
+        .option("--background", "List background threads (Guide and checks runs) instead")
     )
   )
 ).action(async (containerId: string | undefined, options: ListThreadsOptions, cmd: Command) => {
@@ -71,6 +76,7 @@ export const listThreadsCommand = addGlobalOptions(
     const results: CursorPageResult<ThreadRow> = await client.query(api.cli.threads.summaries.listSummaries, {
       projectId,
       includeDone,
+      ...(options.background ? { background: true } : {}),
       paginationOpts: {
         numItems: parsePageSize(options.limit),
         cursor: parsePaginationCursor(options.cursor),

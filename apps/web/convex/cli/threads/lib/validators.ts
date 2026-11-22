@@ -34,6 +34,16 @@ export const cliThreadWorkflowValidator = v.object({
 export type CliThreadWorkflow = Infer<typeof cliThreadWorkflowValidator>;
 
 /** Return validator for a single chat item, shared by `core.get` and the list queries. */
+/** Why a background thread exists (OS-2513), for its row badge. */
+export const cliThreadBackgroundValidator = v.union(v.literal("guide"), v.literal("checks"));
+export type CliThreadBackground = Infer<typeof cliThreadBackgroundValidator>;
+
+/** Derived, not stored: `pullRequestChecks` is never cleared, and every other background thread is a Guide run. */
+function toThreadBackground(chat: Doc<"cliThreads">): CliThreadBackground | undefined {
+  if (!chat.isBackground) return undefined;
+  return chat.pullRequestChecks ? "checks" : "guide";
+}
+
 export const cliThreadItemValidator = v.object({
   _id: v.id("cliThreads"),
   userId: v.id("users"),
@@ -70,6 +80,7 @@ export const cliThreadItemValidator = v.object({
   pinnedAt: v.optional(v.number()),
   // Set while the thread is shared read-only with project teammates (OS-1574).
   sharedAt: v.optional(v.number()),
+  background: v.optional(cliThreadBackgroundValidator),
   // Container fields (OS-1364): set only on group/workflowRun rows. The list card
   // has no consumer for `childCount`/`aggregateStatus` (projected into `status`
   // server-side) — they're for the tabs view / run navigator, don't wire cards to them.
@@ -224,6 +235,7 @@ export function toThreadItem(
     isPinned: chat.isPinned ?? false,
     pinnedAt: chat.pinnedAt,
     sharedAt: chat.sharedAt,
+    background: toThreadBackground(chat),
     kind: chat.kind,
     parentThreadId: chat.parentThreadId,
     workflowRunId: chat.workflowRunId,

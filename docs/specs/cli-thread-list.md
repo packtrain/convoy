@@ -119,7 +119,7 @@ Desktop-only, like multiselect; the mobile thread list omits it.
   link is dropped as an affordance, not as a route.
 - The list is flat — no Pinned/Active/Done sections. Ordering is most recently
   shared first (`sharedAt` descending), paginated at
-  `SHARED_THREADS_PAGE_SIZE` with the same **Load more** button the thread list
+  `SIDEBAR_VIEW_THREADS_PAGE_SIZE` with the same **Load more** button the thread list
   uses. Paginated rather than capped at a `take(N)` ceiling: a cap truncates
   silently, and a shared thread the owner cannot find is a link they cannot
   revoke.
@@ -145,7 +145,7 @@ Desktop-only, like multiselect; the mobile thread list omits it.
 
 ### Reactivity and its cost
 
-`useSharedCliThreads` is a normal `usePaginatedQuery`, mounted only while the
+`useSidebarViewThreads` is a normal `usePaginatedQuery`, mounted only while the
 view is open. It is live, so unsharing from inside the view takes the row away
 and a share made elsewhere appears on its own — the row menu's "no handler
 prop, no optimistic update, the row re-renders from the subscription" rule
@@ -162,6 +162,46 @@ against that.
 A skipped paginated query reports `LoadingFirstPage`, so the closed view gates
 its loading flag on `enabled`; otherwise it would keep a skeleton behind it for
 a read it never issued.
+
+## Background Threads View (OS-2513)
+
+Guide runs and pull request checks runs are threads Convoy starts for a
+feature, from the pull request page. Their output lands on that page (the Guide
+tab, the Checks card), so in the thread list they are noise. They are
+**background threads** and leave the project list for a view of their own.
+
+- `cliThreads.isBackground` (`true` or unset) marks one. `insertCliThread` sets
+  it when the thread is created with `pullRequestGuide` or `pullRequestChecks`,
+  and nothing changes it afterwards: not a Retry (which clears the old thread's
+  `pullRequestGuide`), not a message the user sends it. A future feature that
+  starts threads sets the same flag.
+- A flag rather than a purpose enum: the view lists every background thread by
+  last activity, and an index range over an enum would order by purpose first.
+- Each background row shows an icon-only badge naming its purpose, **Guide run**
+  (book) or **Checks run** (checklist), in the same slot as the Shared badge.
+  `toThreadItem` derives the item's `background` (`"guide"` / `"checks"`) rather
+  than storing it: `pullRequestChecks` is never cleared, so a background thread
+  without it is a Guide run, including an old one whose `pullRequestGuide` a
+  Retry cleared. A third kind of background thread would store its purpose.
+- The flat-list index family carries `isBackground` after `parentThreadId`, so
+  `paginateProjectThreads` reads the normal list with `eq("isBackground",
+  undefined)` and the view with `eq("isBackground", true)` on the same indexes.
+  Every caller of that read follows: the sidebar and mobile list,
+  `convoy threads list`, and MCP `list_threads`.
+- The settings menu has a **Background threads** entry below **Shared
+  threads**. It opens a view that behaves exactly like the Shared threads view
+  above (desktop only, header with X, Escape, flat list, Load more, live), backed
+  by `listByProject` with `background: true` and ordered by last activity.
+  Empty reads **No background threads**.
+- Background threads still appear everywhere else: Watch Tower and the desktop
+  attention feed, the pull request page's thread list, a task's threads, the
+  Pinned section if the user pins one, the Shared view if they share one, and by
+  URL.
+- `convoy threads list --background` lists them instead of the normal list.
+  `list_threads` has no such argument: an agent asking what threads it has means
+  its own work.
+- `migrations.backfillCliThreadIsBackground` marks earlier runs. A Guide's
+  pre-Retry thread lost its marker before this existed and stays in the list.
 
 ### Shared row badge
 

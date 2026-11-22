@@ -982,3 +982,19 @@ describe("OS-1398 notification organization backfill", () => {
     });
   });
 });
+
+describe("OS-2513 background thread backfill", () => {
+  test("marks Guide and checks runs as background and leaves other threads alone", async () => {
+    const ctx = createTestContext();
+    const { user, project } = await ctx.setupProject();
+    const profile = await ctx.cliProfile(user._id, project._id);
+    const guide = await ctx.cliThread(user._id, project._id, profile._id, { pullRequestGuide: { headSha: "a" } });
+    const checks = await ctx.cliThread(user._id, project._id, profile._id, { pullRequestChecks: { headSha: "a" } });
+    const plain = await ctx.cliThread(user._id, project._id, profile._id);
+
+    await ctx.t.mutation(internal.migrations.backfillCliThreadIsBackground, { reset: true });
+
+    const stored = await ctx.t.run(async (run) => Promise.all([guide, checks, plain].map((thread) => run.db.get("cliThreads", thread._id))));
+    expect(stored.map((thread) => thread?.isBackground)).toEqual([true, true, undefined]);
+  });
+});

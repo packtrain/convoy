@@ -88,6 +88,7 @@ const THREAD_FIELD_CHECKS: ThreadFieldChecks = {
   // actions that need a transcript of its own.
   kind: field("kind"),
   sharedAt: field("sharedAt"),
+  background: field("background"),
   // A tab's share state lives on its container (OS-1579), so the row has to
   // watch it too — the badge and the share menu items both read it.
   containerSharedAt: field("containerSharedAt"),

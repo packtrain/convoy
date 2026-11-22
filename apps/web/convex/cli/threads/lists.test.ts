@@ -1066,6 +1066,35 @@ describe("listPinnedByProject", () => {
 
 });
 
+describe("background threads (OS-2513)", () => {
+  async function setup() {
+    const ctx = createTestContext();
+    const { user, project, asUser } = await ctx.setupProject();
+    const profile = await ctx.cliProfile(user._id, project._id);
+    await ctx.cliThread(user._id, project._id, profile._id, { title: "Mine", lastActivityAt: 1 });
+    await ctx.cliThread(user._id, project._id, profile._id, { title: "Guide older", isBackground: true, lastActivityAt: 2 });
+    await ctx.cliThread(user._id, project._id, profile._id, { title: "Guide newer", isBackground: true, lastActivityAt: 3 });
+    await ctx.cliThread(user._id, project._id, profile._id, { title: "Guide deleted", isBackground: true, isDeleted: true });
+    return { project, asUser };
+  }
+  const titles = (page: { title: string }[]) => page.map((thread) => thread.title);
+  const PAGE = { numItems: 10, cursor: null };
+
+  test("the project list leaves background threads out, in every section and sort", async () => {
+    const { project, asUser } = await setup();
+    for (const args of [{}, { sortBy: "created" as const }, { isDone: false }, { isDone: false, sortBy: "created" as const }]) {
+      const result = await asUser.query(api.cli.threads.lists.listByProject, { projectId: project._id, paginationOpts: PAGE, ...args });
+      expect(titles(result.page)).toEqual(["Mine"]);
+    }
+  });
+
+  test("the background list holds only live background threads, newest activity first", async () => {
+    const { project, asUser } = await setup();
+    const result = await asUser.query(api.cli.threads.lists.listByProject, { projectId: project._id, paginationOpts: PAGE, background: true });
+    expect(titles(result.page)).toEqual(["Guide newer", "Guide older"]);
+  });
+});
+
 describe("done projection and sections (OS-1451)", () => {
   test("batchMarkDone sets the indexed isDone and batchMarkNotDone clears it", async () => {
     const ctx = createTestContext();

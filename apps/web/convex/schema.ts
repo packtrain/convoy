@@ -996,6 +996,8 @@ export default defineSchema({
     pullRequestChecks: v.optional(v.object({ headSha: v.string() })),
     // Marks a Guide run (OS-2412), set at creation; its `integrationPullRequestGuides` row is found by thread. The head is the one requested.
     pullRequestGuide: v.optional(v.object({ headSha: v.string() })),
+    // A thread Convoy starts for a feature, kept out of the thread list (OS-2513). Set at creation, never changed. Spec: cli-thread-list.md.
+    isBackground: v.optional(v.literal(true)),
     // A task-less thread's own Checklist (OS-2293); unset means no Checks, since a thread has no type.
     checklistId: v.optional(v.id("checklists")),
     // Immutable Project agent binding (OS-1138): set only at thread creation,
@@ -1066,7 +1068,8 @@ export default defineSchema({
     // Flat thread list (OS-1364): the sort × done index family all
     // discriminate on `parentThreadId` so container children (field set) drop
     // out; `eq(..., undefined)` matches legacy rows with the field unset.
-    .index("by_user_project_deleted_parent_lastActivity", ["userId", "projectId", "isDeleted", "parentThreadId", "lastActivityAt"])
+    // `isBackground` splits off the Background threads view (OS-2513); `eq(..., undefined)` is the normal list.
+    .index("by_user_project_deleted_parent_background_lastActivity", ["userId", "projectId", "isDeleted", "parentThreadId", "isBackground", "lastActivityAt"])
     .index("by_parentThreadId", ["parentThreadId"])
     .index("by_workflowRunId", ["workflowRunId"])
     // No reader yet — the engine resolves a lane's thread from the lane row's
@@ -1101,22 +1104,24 @@ export default defineSchema({
     .index("by_project_attachedPullRequestRef_deleted_lastActivity", ["projectId", "attachedPullRequest.ref", "isDeleted", "lastActivityAt"])
     .index("by_profile", ["profileId"])
     .index("by_profile_pending_deleted_lastActivityAt", ["profileId", "hasPendingUserMessages", "isDeleted", "lastActivityAt"])
-    .index("by_user_project_deleted_parent_createdAt", ["userId", "projectId", "isDeleted", "parentThreadId", "createdAt"])
+    .index("by_user_project_deleted_parent_background_createdAt", ["userId", "projectId", "isDeleted", "parentThreadId", "isBackground", "createdAt"])
     // Thread-list sections (OS-1451): the two above × the isDone filter.
-    .index("by_user_project_deleted_isDone_parent_lastActivity", [
+    .index("by_user_project_deleted_isDone_parent_background_lastActivity", [
       "userId",
       "projectId",
       "isDeleted",
       "statusProjection.isDone",
       "parentThreadId",
+      "isBackground",
       "lastActivityAt",
     ])
-    .index("by_user_project_deleted_isDone_parent_createdAt", [
+    .index("by_user_project_deleted_isDone_parent_background_createdAt", [
       "userId",
       "projectId",
       "isDeleted",
       "statusProjection.isDone",
       "parentThreadId",
+      "isBackground",
       "createdAt",
     ])
     // Pinned section (OS-1173).

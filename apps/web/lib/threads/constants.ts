@@ -44,11 +44,11 @@ export const PINNED_THREADS_MAX = 100;
 export const TASK_THREADS_MAX = 100;
 
 /**
- * Page size for the shared-threads view (OS-1576). Paginated rather than
+ * Page size for the Shared and Background threads views (OS-1576, OS-2513). Paginated rather than
  * capped: a `take(N)` ceiling truncates silently, and a shared thread the
  * owner cannot find is a link they cannot revoke.
  */
-export const SHARED_THREADS_PAGE_SIZE = 50;
+export const SIDEBAR_VIEW_THREADS_PAGE_SIZE = 50;
 
 export const THREAD_SIDEBAR_RESIZE_BOUNDS = {
   min: 256,
