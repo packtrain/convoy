@@ -11,7 +11,10 @@ is normally already running there.
 `pnpm web:dev`.** It serves an isolated instance at
 `https://<branch-slug>.app.convoy.localhost`, backed by that worktree's own
 Convex preview deployment. Agent browser login works on that host too (see
-[ui-verification.md](ui-verification.md)).
+[ui-verification.md](ui-verification.md)). With `NEXT_PUBLIC_AUTH_MODE=convex`
+in `apps/web/.env.local` before setup, the preview runs Convex Auth and setup
+creates the agent user with the copied organizations
+([spec](../specs/worktree-preview-deployments.md#convex-auth-mode)).
 
 ## Creating a worktree
 

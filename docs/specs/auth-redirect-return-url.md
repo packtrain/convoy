@@ -60,7 +60,7 @@ Defines how authentication redirects preserve the user's intended in-app destina
   message that production may redact.
 - Direct visits to `/auth/callback` without a redirect continue to fall back to the user's organization route.
 - Direct visits to `/o/<organizationSlug>` continue to use the existing last-project redirect behavior.
-- When local agent browser login is enabled, `/api/agent/browser-login` mints a short-lived Clerk sign-in-token URL for the configured preview user and points it at `/auth/callback?redirect_url=<target>` so Convex user sync/onboarding still runs before the protected destination is opened.
+- When local agent browser login is enabled, `/api/agent/browser-login` signs in the configured preview user and sends the browser to `/auth/callback?redirect_url=<target>` so Convex user sync/onboarding still runs before the protected destination is opened. In Clerk mode it mints a short-lived Clerk sign-in-token URL; in Convex Auth mode it signs in by password and sets the session cookies on the redirect. That redirect is a relative `Location`, so the browser stays on the host that received the host-only cookies: a worktree copies the primary checkout's `NEXT_PUBLIC_APP_URL`, and an absolute redirect would leave the new session behind.
 
 ## Redirect URL Safety
 
@@ -71,12 +71,14 @@ Defines how authentication redirects preserve the user's intended in-app destina
 
 ## Agent Browser Login Safety
 
-- Agent browser login is disabled unless `CONVOY_AGENT_BROWSER_LOGIN_ENABLED=true`, `CONVOY_AGENT_BROWSER_AUTH_SECRET`, and `CONVOY_AGENT_BROWSER_USER_EMAIL` are configured.
+- Agent browser login is disabled unless `CONVOY_AGENT_BROWSER_LOGIN_ENABLED=true`, `CONVOY_AGENT_BROWSER_AUTH_SECRET`, and `CONVOY_AGENT_BROWSER_USER_EMAIL` are configured. Convex Auth mode also needs `CONVOY_AGENT_BROWSER_USER_PASSWORD`.
 - The endpoint is public at the Clerk middleware layer but must reject requests without the configured secret.
-- The endpoint must only accept requests for allowed local hosts. The default allowlist is `localhost`, `127.0.0.1`, `::1`, `app.convoy`, and `app.convoy.localhost`; deployments can override it with `CONVOY_AGENT_BROWSER_ALLOWED_HOSTS`.
+- The endpoint must only accept requests for allowed local hosts. The default allowlist is `localhost`, `127.0.0.1`, `::1`, `app.convoy`, and `app.convoy.localhost`; deployments can override it with `CONVOY_AGENT_BROWSER_ALLOWED_HOSTS`. The hostname comes from `request.url`, which under `next start` is the server's bind address rather than the client's `Host`, so behind a reverse proxy this check only catches misconfiguration. The enable flag and the secret are the real gates.
 - POST requests accept the secret through the `x-convoy-agent-browser-secret` header and return JSON containing the Clerk login URL.
 - GET requests may accept the secret in the `secret` query parameter and redirect directly to Clerk. This is for browser-tool convenience only; POST is preferred when a shell is available.
+- In Convex Auth mode only GET works, answering 405 to POST: the session lives in httpOnly cookies, which must be set on the agent's browser, not on a shell that called the endpoint. A refused password sign-in answers 401 and sets no cookie.
 - Sign-in tokens must be short-lived. Agents must use a dedicated preview user, not a real human user.
+- The Convex Auth password is a credential on its own: the deployment's sign-in functions are public, so anyone with the password and the deployment URL can sign in without this endpoint. It is random per worktree and never a shared value ([worktree-preview-deployments.md](worktree-preview-deployments.md#convex-auth-mode)).
 
 ## Regression Case
 

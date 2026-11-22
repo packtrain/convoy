@@ -14,7 +14,12 @@ Open a named session with the configuration from AGENTS.md, then navigate with
 https://app.convoy.localhost/api/agent/browser-login?secret=$CONVOY_AGENT_BROWSER_AUTH_SECRET&redirect_url=/
 ```
 
-## With shell access (preferred)
+In Convex Auth mode (`NEXT_PUBLIC_AUTH_MODE=convex`) this is the only way: the
+endpoint sets the session cookies on its redirect, so they must land in the
+agent's browser. It answers 405 to POST. It also needs
+`CONVOY_AGENT_BROWSER_USER_PASSWORD`, which worktree setup writes.
+
+## With shell access (Clerk mode, preferred)
 
 POST keeps the secret out of the URL:
 

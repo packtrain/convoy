@@ -19,6 +19,8 @@ export type AgentBrowserLoginConfig = {
   enabled: boolean;
   secret: string | undefined;
   userEmail: string | undefined;
+  /** Convex Auth mode only: the agent user's password. */
+  userPassword: string | undefined;
   allowedHosts: ReadonlySet<string>;
   appOrigin: string | undefined;
 };
@@ -34,6 +36,7 @@ export function getAgentBrowserLoginConfig(): AgentBrowserLoginConfig {
     enabled: process.env.CONVOY_AGENT_BROWSER_LOGIN_ENABLED === "true",
     secret: process.env.CONVOY_AGENT_BROWSER_AUTH_SECRET,
     userEmail: process.env.CONVOY_AGENT_BROWSER_USER_EMAIL,
+    userPassword: process.env.CONVOY_AGENT_BROWSER_USER_PASSWORD || undefined,
     allowedHosts: parseAllowedHosts(process.env.CONVOY_AGENT_BROWSER_ALLOWED_HOSTS),
     appOrigin: process.env.NEXT_PUBLIC_APP_URL,
   };

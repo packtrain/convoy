@@ -45,6 +45,8 @@ worktree is fully usable the moment creation finishes:
      preview deployment, records `CONVEX_PREVIEW_NAME` and
      `CONVEX_PREVIEW_DEPLOYMENT`, and appends the branch host to
      `CONVOY_AGENT_BROWSER_ALLOWED_HOSTS`.
+   - In Convex Auth mode, creates the agent user (see
+     [Convex Auth mode](#convex-auth-mode)).
 
 ## URLs
 
@@ -107,20 +109,53 @@ otherwise prints names only, and the copy sets no values. CLIs older than
 
 ## Convex Auth mode
 
-A preview can run the `convex` auth mode ([auth-adapters.md](auth-adapters.md)).
-Until S5 (OS-2499) the setup script does not do this for you:
+A preview runs the `convex` auth mode ([auth-adapters.md](auth-adapters.md))
+when the worktree's `apps/web/.env.local` has `NEXT_PUBLIC_AUTH_MODE=convex`
+before setup. Setup then:
 
-1. Add `NEXT_PUBLIC_AUTH_MODE=convex` to the worktree's `apps/web/.env.local`.
-2. Set `AUTH_MODE=convex` and `AUTH_EMAIL_VERIFICATION=off` on the preview
-   deployment with `npx convex env set --deployment <preview-name> <NAME> <value>`,
-   using the preview deploy key and no inherited `CONVEX_DEPLOYMENT`.
-3. Restart `pnpm worktree:dev` and sign up with a new address.
+1. Sets `AUTH_MODE=convex` and `AUTH_EMAIL_VERIFICATION=off` on the preview
+   deployment, after copying the dev env vars.
+2. After the data import, if `CONVOY_AGENT_BROWSER_USER_EMAIL` is set, signs the
+   agent user up with `auth:signUpWithoutEmailVerification` and a random
+   password. The password goes to the worktree's
+   `CONVOY_AGENT_BROWSER_USER_PASSWORD` in the same write as
+   `CONVEX_PREVIEW_NAME`, after step 3 succeeds.
+3. Runs `organizations/members:copyMembershipsFromEmail` with the new user's id.
+   This internal mutation gives that user the org and project roles of every
+   other user with the agent's address, which are the users copied from dev. It
+   skips roles the user already has.
+
+Both calls go through `npx convex run` with the preview deploy key.
 
 The preview needs no auth secrets, because the deployment signs its own tokens.
-The copied `CLERK_JWT_ISSUER_DOMAIN` stays as it is. Users copied from dev have
-no Convex Auth password, and a new account does not see the copied
-organizations. The agent browser login still uses Clerk, so it does not work in
-this mode yet.
+The copied `CLERK_JWT_ISSUER_DOMAIN` stays as it is. Users copied from a Clerk
+dev deployment have no Convex Auth password.
+
+### Security
+
+The preview's Convex Auth sign-up and sign-in functions are public, so the
+browser-login endpoint's host and secret checks do not protect them.
+
+- **The password is a credential on its own.** Anyone with it and the
+  deployment URL can sign in as the agent user directly. It is random per
+  worktree and lives only in that worktree's `.env.local`.
+- **The membership copy targets a user id, never an email lookup.** With
+  verification off, anyone who knows the deployment URL could sign up with the
+  agent's address first. Setup creates the user itself and passes the id it got
+  back, so such an account never receives the copied organizations.
+- **A taken address stops setup.** If the sign-up answers `EMAIL_TAKEN`, setup
+  fails and copies nothing, even when the account came from a dev deployment
+  that runs Convex Auth. Keeping that account would share the dev password with
+  every preview. Previews of a dev deployment whose agent user has a Convex
+  Auth password are not supported.
+- **A failed step leaves no marker.** Setup writes `CONVEX_PREVIEW_NAME` only
+  after the agent user exists and has its memberships, so a rerun starts over
+  instead of reporting the worktree as provisioned. To retry, run setup
+  again: `--preview-create` with the same name gives a new deployment, so
+  nothing the failed run created carries over (verified on OS-2499).
+
+Outside worktree previews, someone signs the agent user up once and sets the
+password by hand.
 
 ## Lifecycle & Limitations
 

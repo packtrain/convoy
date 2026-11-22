@@ -173,6 +173,12 @@ local-demo builds never create its Convex client.
 - The cookie is `Secure` when `NEXT_PUBLIC_APP_URL` is `https`, or, with no app
   URL, in a production build. An install served over plain http, such as the
   self-hosted default `http://127.0.0.1:3000`, still gets its cookie.
+- The agent browser login (`app/api/agent/browser-login`) signs its configured
+  user in with `signInWithPasswordCookies`: it calls `signInWithEmailPassword`
+  from the server with `CONVOY_AGENT_BROWSER_USER_PASSWORD` and sets the same
+  cookies on its redirect. Convex Auth has no "sign in as" call app code may
+  use, so it needs the password. Rules:
+  [auth-redirect-return-url.md](auth-redirect-return-url.md#agent-browser-login-safety).
 
 The access token lasts 60 seconds. The client refreshes it about once a minute
 through `/auth/refresh`, and the proxy refreshes it when a page load finds it
@@ -406,8 +412,7 @@ The deployment signs its own tokens, so there are no auth secrets.
 
 The self-hosted script (S7a, which also asks for the Resend key), password reset
 with verification off, change password and change email while signed in,
-resending a verification link, agent browser
-login (S5, `app/api/agent/browser-login` still calls Clerk), and Google (S6).
+resending a verification link, and Google (S6).
 
 ## Testing
 

@@ -12,6 +12,7 @@
 // See docs/specs/worktree-preview-deployments.md.
 
 import { execFileSync, spawnSync } from "node:child_process";
+import { randomBytes } from "node:crypto";
 import fs from "node:fs";
 import net from "node:net";
 import os from "node:os";
@@ -99,6 +100,27 @@ export function devDeployKey(key, devcontainer) {
   return key;
 }
 
+/**
+ * Convex Auth worktrees: creates the agent user before anyone else can claim its address
+ * on the preview, then copies the dev memberships to that user's id
+ * (docs/specs/worktree-preview-deployments.md#convex-auth-mode). `run` calls a Convex function.
+ */
+export function provisionAgentUser({ email, run, newPassword = randomBytes(24).toString("base64url") }) {
+  const signUp = run("auth:signUpWithoutEmailVerification", { email, password: newPassword });
+  if (signUp?.status === "complete") {
+    const copied = run("organizations/members:copyMembershipsFromEmail", { email, toUserId: signUp.tokens.userId });
+    if (!copied) throw new Error("copying the dev memberships to the agent user failed. Run setup again; it creates a fresh preview deployment.");
+    return { password: newPassword, copied };
+  }
+  if (signUp?.userError?.error === "EMAIL_TAKEN") {
+    throw new Error(
+      `an account with ${email} already exists on the preview, so setup will not use it. ` +
+        "Run setup again; it creates a fresh preview deployment."
+    );
+  }
+  throw new Error(`creating the agent user failed: ${JSON.stringify(signUp?.userError ?? signUp)}`);
+}
+
 function branchSlug() {
   const branch = git("rev-parse", "--abbrev-ref", "HEAD");
   const slug = previewSlug(branch, repoRoot);
@@ -139,6 +161,7 @@ async function setup() {
   requireLinkedWorktree();
   let lines = readEnvLines();
   const previewKey = requirePreviewKey(lines);
+  const convexAuth = getEnv(lines, "NEXT_PUBLIC_AUTH_MODE") === "convex";
 
   if (getEnv(lines, "CONVEX_PREVIEW_NAME")) {
     log("CONVEX_PREVIEW_NAME already set — worktree is provisioned. Use `pnpm worktree:convex:deploy` to redeploy.");
@@ -210,6 +233,12 @@ async function setup() {
   if (inDevcontainer && !convex(["env", "set", "--deployment", deploymentName, "NEXT_PUBLIC_APP_URL", appUrl], { env: previewEnv }).ok) {
     fail("setting NEXT_PUBLIC_APP_URL on the preview deployment failed");
   }
+  // Convex Auth worktree: accounts allowed, and no mailbox needed for the agent user.
+  for (const [key, value] of convexAuth ? [["AUTH_MODE", "convex"], ["AUTH_EMAIL_VERIFICATION", "off"]] : []) {
+    if (!convex(["env", "set", "--deployment", deploymentName, key, value], { env: previewEnv }).ok) {
+      fail(`setting ${key} on the preview deployment failed`);
+    }
+  }
 
   // 5. If the first push failed (auth config needed the env vars), push again.
   if (!firstDeploy.ok) {
@@ -225,13 +254,34 @@ async function setup() {
     fail("data import into the preview deployment failed");
   }
 
-  // 7. Point the worktree's app at the preview deployment.
+  // 7. Convex Auth: the agent user for /api/agent/browser-login, before the
+  //    provisioned marker, so a failure leaves setup to rerun from scratch.
+  const agentEmail = getEnv(lines, "CONVOY_AGENT_BROWSER_USER_EMAIL");
+  let agent;
+  if (convexAuth && agentEmail) {
+    log(`creating the agent user ${agentEmail} on the preview deployment...`);
+    const run = (fn, args) => {
+      const res = convex(["run", "--deployment", deploymentName, fn, JSON.stringify(args)], { env: previewEnv, capture: true });
+      return res.ok ? JSON.parse(res.stdout) : null;
+    };
+    try {
+      agent = provisionAgentUser({ email: agentEmail, run });
+    } catch (error) {
+      fail(error.message);
+    }
+    log(`  copied ${agent.copied.organizations} organization and ${agent.copied.projects} project memberships`);
+  } else if (convexAuth) {
+    log("CONVOY_AGENT_BROWSER_USER_EMAIL is not set — skipping the agent user.");
+  }
+
+  // 8. Point the worktree's app at the preview deployment.
   lines = readEnvLines();
   lines = removeEnv(lines, "CONVEX_DEPLOYMENT");
   upsertEnv(lines, "NEXT_PUBLIC_CONVEX_URL", previewUrl);
   upsertEnv(lines, "NEXT_PUBLIC_CONVEX_SITE_URL", previewUrl.replace(".convex.cloud", ".convex.site"));
   upsertEnv(lines, "CONVEX_PREVIEW_NAME", slug);
   upsertEnv(lines, "CONVEX_PREVIEW_DEPLOYMENT", deploymentName);
+  if (agent) upsertEnv(lines, "CONVOY_AGENT_BROWSER_USER_PASSWORD", agent.password);
   if (inDevcontainer) {
     upsertEnv(lines, "NEXT_PUBLIC_APP_URL", appUrl);
     upsertEnv(lines, "WORKTREE_DEV_PORT", String(port));

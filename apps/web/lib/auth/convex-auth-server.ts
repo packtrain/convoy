@@ -1,4 +1,11 @@
-import { setupConvexAuthServer, type RequestHandler } from "@convex-dev/auth/ssr";
+import {
+  httpCookies,
+  setupConvexAuthServer,
+  writeAuthCookies,
+  type HttpCookies,
+  type RequestHandler,
+} from "@convex-dev/auth/ssr";
+import { ConvexHttpClient } from "convex/browser";
 import { setupConvexAuthNextjs, type ConvexAuthNextjsProxyHandler } from "@convex-dev/auth/ssr/nextjs";
 import type { ReactNode } from "react";
 import { api } from "@/convex/_generated/api";
@@ -39,6 +46,8 @@ function setup() {
       cookieOptions,
     });
   return {
+    convexUrl,
+    cookieOptions,
     server,
     proxy: nextjs(convexUrl).convexAuthNextjsProxy,
     Provider: nextjs(browserUrl).ConvexAuthNextjsServerProvider,
@@ -55,6 +64,20 @@ type RouteName = "convexProxyHandler" | "refreshHandler" | "signOutHandler";
 export function convexAuthRoute(name: RouteName): RequestHandler {
   return async (request) =>
     authMode === "convex" ? convexAuth().server[name](request) : new Response(null, { status: 404 });
+}
+
+/** Signs in by password on this server; the cookies to set, or null when the sign-in is refused. */
+export async function signInWithPasswordCookies(
+  request: Request,
+  email: string,
+  password: string
+): Promise<HttpCookies | null> {
+  const { convexUrl, cookieOptions } = convexAuth();
+  const result = await new ConvexHttpClient(convexUrl).mutation(api.auth.signInWithEmailPassword, { email, password });
+  if (result.status !== "complete") return null;
+  const cookies = httpCookies(request);
+  await writeAuthCookies(cookies, result.tokens, cookieOptions);
+  return cookies;
 }
 
 export function buildConvexAuthProxy(handler: ConvexAuthNextjsProxyHandler) {

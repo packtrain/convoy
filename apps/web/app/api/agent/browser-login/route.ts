@@ -1,6 +1,9 @@
 import { clerkClient } from "@clerk/nextjs/server";
 
-import { isLocalDemoAuthMode } from "@/lib/auth/auth-mode";
+import type { HttpCookies } from "@convex-dev/auth/ssr";
+
+import { authMode, isLocalDemoAuthMode } from "@/lib/auth/auth-mode";
+import { signInWithPasswordCookies } from "@/lib/auth/convex-auth-server";
 import {
   buildAgentBrowserAppSignInUrl,
   buildAgentBrowserRedirectUrl,
@@ -19,6 +22,8 @@ export const runtime = "nodejs";
 type BrowserLoginResponse = {
   url: string;
   redirectUrl: string;
+  /** Convex Auth mode: the session cookies the redirect sets. */
+  cookies?: HttpCookies;
 };
 
 function jsonError(message: string, status: number): Response {
@@ -61,6 +66,11 @@ async function createBrowserLogin(request: Request): Promise<BrowserLoginRespons
     return jsonError("Unauthorized.", 401);
   }
 
+  // Convex Auth mode: the session is a cookie, so it must be set on the agent's browser itself.
+  if (authMode === "convex" && request.method !== "GET") {
+    return jsonError("In Convex Auth mode, open this endpoint with GET in the browser to sign in.", 405);
+  }
+
   const requestedRedirectUrl = request.method === "POST" ? await getPostRedirectUrl(request) : getRedirectUrlFromSearchParams(request.url);
   const redirectUrl = buildAgentBrowserRedirectUrl(requestedRedirectUrl, request, config.appOrigin);
 
@@ -74,6 +84,15 @@ async function createBrowserLogin(request: Request): Promise<BrowserLoginRespons
   const userEmail = config.userEmail;
   if (!userEmail) {
     return jsonError("Agent browser login is not configured.", 404);
+  }
+
+  if (authMode === "convex") {
+    if (!config.userPassword) return jsonError("Agent browser login is not configured.", 404);
+    const cookies = await signInWithPasswordCookies(request, userEmail, config.userPassword);
+    if (!cookies) return jsonError("The configured agent browser user could not sign in.", 401);
+    // Relative, so the browser stays on the host that got the cookies (worktrees copy the primary's app URL).
+    const { pathname, search } = new URL(redirectUrl);
+    return { url: pathname + search, redirectUrl, cookies };
   }
 
   const client = await clerkClient();
@@ -116,5 +135,10 @@ export async function GET(request: Request): Promise<Response> {
   const result = await createBrowserLogin(request);
   if (result instanceof Response) return result;
 
-  return Response.redirect(result.url, 307);
+  const response = new Response(null, {
+    status: 307,
+    headers: { Location: result.url, "Cache-Control": "no-store, max-age=0" },
+  });
+  result.cookies?.applyTo(response.headers);
+  return response;
 }

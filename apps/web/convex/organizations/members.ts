@@ -1,5 +1,5 @@
 import { v } from "convex/values";
-import { mutation, query } from "../_generated/server";
+import { internalMutation, mutation, query } from "../_generated/server";
 import { requireOrgPermission } from "../lib/access/permissions";
 import { getAuthenticatedUser, getOptionalAuthenticatedUser } from "../lib/access/auth";
 import { OrgPermission } from "../../lib/authz/permissions";
@@ -9,11 +9,15 @@ import { organizationMemberListItemValidator } from "./lib/validators";
 import {
   getMembership,
   hasOtherOwner,
+  insertMembership,
   listMembershipsForOrganization,
+  listMembershipsForUser,
   removeMembershipWithProjectCleanup,
   updateMembershipRole,
 } from "./lib/membersRepo";
-import { getUsersByIds } from "../users/lib/usersRepo";
+import * as projectMembersRepo from "../projects/lib/membersRepo";
+import { getUsersByIds, listUsersByEmail } from "../users/lib/usersRepo";
+import { normalizeEmail } from "../lib/shared/strings";
 import { ensure } from "../lib/shared/ensure";
 import { join } from "../lib/shared/join";
 import { errors } from "./errors";
@@ -171,5 +175,32 @@ export const getMyRole = query({
     const membership = await getMembership(ctx, args.organizationId, user._id);
 
     return membership?.role || null;
+  },
+});
+
+/**
+ * Operator action for worktree previews: gives `toUserId` the org and project roles of every
+ * other user with `email`. Run with the deploy key only (docs/specs/worktree-preview-deployments.md#convex-auth-mode).
+ */
+export const copyMembershipsFromEmail = internalMutation({
+  args: { email: v.string(), toUserId: v.id("users") },
+  returns: v.object({ organizations: v.number(), projects: v.number() }),
+  handler: async (ctx, { email, toUserId }) => {
+    const sources = (await listUsersByEmail(ctx, normalizeEmail(email))).filter((user) => user._id !== toUserId);
+    let organizations = 0;
+    let projects = 0;
+    for (const source of sources) {
+      for (const membership of await listMembershipsForUser(ctx, source._id)) {
+        if (await getMembership(ctx, membership.organizationId, toUserId)) continue;
+        await insertMembership(ctx, membership.organizationId, toUserId, membership.role);
+        organizations++;
+      }
+      for (const membership of await projectMembersRepo.listMembershipsForUser(ctx, source._id)) {
+        if (await projectMembersRepo.getMembership(ctx, membership.projectId, toUserId)) continue;
+        await projectMembersRepo.insertMembership(ctx, membership.projectId, toUserId, membership.role);
+        projects++;
+      }
+    }
+    return { organizations, projects };
   },
 });

@@ -1,5 +1,5 @@
 import { expect, test, describe } from "vitest";
-import { api } from "../_generated/api";
+import { api, internal } from "../_generated/api";
 import { createTestContext } from "../../convex-testing";
 import { OrgRole } from "../../lib/authz/roles";
 
@@ -637,6 +637,59 @@ describe("organizations.members", () => {
       });
 
       expect(role).toBeNull();
+    });
+  });
+
+  describe("copyMembershipsFromEmail", () => {
+    test("gives the target user the org and project roles of every other user with the address", async () => {
+      const ctx = createTestContext();
+      const { user: source, org, project } = await ctx.setupProject({ user: { email: "agent@example.com" } });
+      const target = await ctx.user({ email: "agent@example.com" });
+
+      const copied = await ctx.t.mutation(internal.organizations.members.copyMembershipsFromEmail, {
+        email: "Agent@Example.com",
+        toUserId: target._id,
+      });
+
+      expect(copied).toEqual({ organizations: 1, projects: 1 });
+      const memberships = await ctx.t.run(async (runCtx) => ({
+        org: await runCtx.db
+          .query("organizationMembers")
+          .withIndex("by_organization_and_user", (q) => q.eq("organizationId", org._id).eq("userId", target._id))
+          .unique(),
+        project: await runCtx.db
+          .query("projectMembers")
+          .withIndex("by_project_and_user", (q) => q.eq("projectId", project._id).eq("userId", target._id))
+          .unique(),
+      }));
+      expect(memberships.org?.role).toBe("owner");
+      expect(memberships.project?.role).toBe("project-admin");
+      expect(source._id).not.toBe(target._id);
+    });
+
+    test("skips memberships the target already has, so a rerun adds nothing", async () => {
+      const ctx = createTestContext();
+      await ctx.setupProject({ user: { email: "agent@example.com" } });
+      const target = await ctx.user({ email: "agent@example.com" });
+      const args = { email: "agent@example.com", toUserId: target._id };
+
+      await ctx.t.mutation(internal.organizations.members.copyMembershipsFromEmail, args);
+      const second = await ctx.t.mutation(internal.organizations.members.copyMembershipsFromEmail, args);
+
+      expect(second).toEqual({ organizations: 0, projects: 0 });
+    });
+
+    test("copies nothing from users with another address", async () => {
+      const ctx = createTestContext();
+      await ctx.setupProject({ user: { email: "someone@example.com" } });
+      const target = await ctx.user({ email: "agent@example.com" });
+
+      const copied = await ctx.t.mutation(internal.organizations.members.copyMembershipsFromEmail, {
+        email: "agent@example.com",
+        toUserId: target._id,
+      });
+
+      expect(copied).toEqual({ organizations: 0, projects: 0 });
     });
   });
 });
