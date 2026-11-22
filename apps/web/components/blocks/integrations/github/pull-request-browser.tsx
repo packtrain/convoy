@@ -114,7 +114,7 @@ export function PullRequestBrowser({
       ref={asideRef}
       aria-label="Pull request browser"
       style={{ "--browser-width": `${resize.width}px` } as CSSProperties}
-      className="relative flex max-h-72 shrink-0 flex-col border-b md:max-h-none md:w-(--browser-width) md:border-r md:border-b-0"
+      className="relative hidden shrink-0 flex-col border-r md:flex md:w-(--browser-width)"
     >
       <header className="flex h-14 shrink-0 items-center gap-2 border-b px-3">
         <Button variant="ghost" size="icon-sm" aria-label="Back to pull requests" title="Back to pull requests" asChild>
@@ -287,7 +287,7 @@ export function PullRequestBrowserSkeleton() {
       ref={asideRef}
       aria-label="Pull request browser"
       style={{ "--browser-width": `${resize.width}px` } as CSSProperties}
-      className="relative flex max-h-72 shrink-0 flex-col border-b md:max-h-none md:w-(--browser-width) md:border-r md:border-b-0"
+      className="relative hidden shrink-0 flex-col border-r md:flex md:w-(--browser-width)"
     >
       <header className="flex h-14 shrink-0 items-center gap-2 border-b px-3">
         <Skeleton className="size-7" />

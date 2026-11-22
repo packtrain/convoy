@@ -3,7 +3,7 @@
 import { useEffect, useState, type ReactNode } from "react";
 import { useAction, useQuery } from "convex/react";
 import { useHotkey } from "@tanstack/react-hotkeys";
-import { ArrowUpRight, GitPullRequest, RefreshCw, RotateCcw } from "lucide-react";
+import { ArrowLeft, ArrowUpRight, GitPullRequest, RefreshCw, RotateCcw } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { api } from "@/convex/_generated/api";
 import type { Id } from "@/convex/_generated/dataModel";
@@ -15,7 +15,7 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { PR_STACK_LAYER_ABOVE_HOTKEY, PR_STACK_LAYER_BELOW_HOTKEY } from "@/lib/browser/hotkeys";
 import { getErrorMessage } from "@/lib/errors";
-import { PULL_REQUEST_TABS, useNavigation, type PullRequestTab, type RouteTarget } from "@/lib/navigation";
+import { AppLink, PULL_REQUEST_TABS, useNavigation, type PullRequestTab, type RouteTarget } from "@/lib/navigation";
 import type { DiffState } from "./github-patch";
 import { PullRequestChanges, PullRequestChangesSkeleton } from "./pull-request-changes";
 import { GuideMenu, GuideSkeleton, PullRequestGuideTab, usePullRequestGuides } from "./pull-request-guide";
@@ -57,6 +57,7 @@ export function PullRequestReader({
   stackHotkeys = true,
   defaultTab = "overview",
   onTabChange,
+  backHref,
 }: {
   projectId: Id<"projects">;
   repositoryId: string;
@@ -70,6 +71,8 @@ export function PullRequestReader({
   defaultTab?: PullRequestTab;
   /** The PR page mirrors the tab into its URL. */
   onTabChange?: (tab: PullRequestTab) => void;
+  /** The PR page's list, linked from the header on phones, where the browser pane hides. */
+  backHref?: RouteTarget;
 }) {
   const args = { projectId, repositoryId, number };
   const result = useQuery(api.integrations.github.pullRequests.get, args);
@@ -242,7 +245,7 @@ export function PullRequestReader({
       />
     );
   }
-  if (!pr) return <PullRequestReaderSkeleton />;
+  if (!pr) return <PullRequestReaderSkeleton backHref={backHref} />;
 
   const githubUrl = repository ? `${repository.htmlUrl}/pull/${number}` : null;
   const loadedDiff = diffState.kind === "loaded" ? diffState.diff : null;
@@ -253,6 +256,7 @@ export function PullRequestReader({
   return (
     <div className="flex min-h-0 min-w-0 flex-1 flex-col">
       <header className="flex h-14 shrink-0 items-center gap-3 border-b px-4">
+        {backHref ? <MobileBackButton href={backHref} /> : null}
         <PullRequestStateIcon pr={pr} />
         <h1 className="min-w-0 flex-1 truncate text-sm font-medium" title={pr.title}>
           {pr.title}
@@ -414,11 +418,22 @@ const TAB_SKELETONS: Record<PullRequestTab, ReactNode> = {
   ),
 };
 
+function MobileBackButton({ href }: { href: RouteTarget }) {
+  return (
+    <Button variant="ghost" size="icon-sm" aria-label="Back to pull requests" title="Back to pull requests" className="-ml-2 md:hidden" asChild>
+      <AppLink href={href}>
+        <ArrowLeft />
+      </AppLink>
+    </Button>
+  );
+}
+
 /** The reader's header, tab row, and the open tab, outlined until the PR loads. */
-export function PullRequestReaderSkeleton({ tab = "overview" }: { tab?: PullRequestTab }) {
+export function PullRequestReaderSkeleton({ tab = "overview", backHref }: { tab?: PullRequestTab; backHref?: RouteTarget }) {
   return (
     <div aria-label="Loading pull request" className="flex min-h-0 min-w-0 flex-1 flex-col">
       <header className="flex h-14 shrink-0 items-center gap-3 border-b px-4">
+        {backHref ? <MobileBackButton href={backHref} /> : null}
         <Skeleton className="size-4 rounded-full" />
         <Skeleton className="h-4 w-1/3" />
       </header>

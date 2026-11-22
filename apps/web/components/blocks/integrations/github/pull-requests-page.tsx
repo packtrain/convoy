@@ -76,6 +76,7 @@ export function PullRequestsPage() {
   const active = status?.connections.filter((connection) => connection.status === "active") ?? [];
 
   const prHref = (repository: string, pr: number) => appRoute.projectPullRequest(organizationSlug, projectAlias, repository, pr);
+  const listHref = appRoute.projectPullRequests(organizationSlug, projectAlias);
 
   if (repositoryId && Number.isInteger(number) && number > 0) {
     return (
@@ -83,7 +84,7 @@ export function PullRequestsPage() {
         {!projectId || status === undefined ? (
           <>
             <PullRequestBrowserSkeleton />
-            <PullRequestReaderSkeleton tab={tab} />
+            <PullRequestReaderSkeleton tab={tab} backHref={listHref} />
           </>
         ) : (
           <>
@@ -99,7 +100,7 @@ export function PullRequestsPage() {
                 }}
                 current={{ repositoryId, number }}
                 hrefFor={prHref}
-                backHref={appRoute.projectPullRequests(organizationSlug, projectAlias)}
+                backHref={listHref}
               />
             ) : null}
             <PullRequestReader
@@ -112,6 +113,7 @@ export function PullRequestsPage() {
               organizationSlug={organizationSlug}
               projectAlias={projectAlias}
               defaultTab={tab}
+              backHref={listHref}
               onTabChange={(next) =>
                 navigation.replace(appRoute.projectPullRequest(organizationSlug, projectAlias, repositoryId, number, next))
               }

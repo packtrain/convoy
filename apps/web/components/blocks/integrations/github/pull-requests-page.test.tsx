@@ -65,8 +65,8 @@ const replace = vi.fn();
 // The reader has its own tests; this file checks only what the page hands it.
 vi.mock("./pull-request-reader", async (importActual) => ({
   ...(await importActual<typeof import("./pull-request-reader")>()),
-  PullRequestReader: ({ defaultTab, onTabChange }: { defaultTab?: string; onTabChange?: (tab: string) => void }) => (
-    <div aria-label="Reader" data-tab={defaultTab}>
+  PullRequestReader: ({ defaultTab, onTabChange, backHref }: { defaultTab?: string; onTabChange?: (tab: string) => void; backHref?: unknown }) => (
+    <div aria-label="Reader" data-tab={defaultTab} data-back={JSON.stringify(backHref)}>
       <button onClick={() => onTabChange?.("guide")}>Guide</button>
       <button onClick={() => onTabChange?.("overview")}>Overview</button>
     </div>
@@ -315,6 +315,22 @@ describe("PullRequestsPage", () => {
     expect(replace).toHaveBeenCalledWith(appRoute.projectPullRequest("org", "WEB", "repo_1", 2, "guide"));
     fireEvent.click(screen.getByRole("button", { name: "Overview" }));
     expect(replace).toHaveBeenLastCalledWith(appRoute.projectPullRequest("org", "WEB", "repo_1", 2));
+  });
+
+  test("on a phone the reader fills the screen: the browser pane hides and the reader links back to the list (OS-2512)", () => {
+    const hiddenOnPhones = (element: HTMLElement) => expect(element.className.split(" ")).toEqual(expect.arrayContaining(["hidden", "md:flex"]));
+    locationSearch = "?repo=repo_1&pr=2";
+    status = undefined;
+    render(<PullRequestsPage />);
+    hiddenOnPhones(screen.getByLabelText("Pull request browser"));
+    const back = screen.getByRole("link", { name: "Back to pull requests" });
+    expect(back.className.split(" ")).toContain("md:hidden");
+    expect(back.getAttribute("href")).toBe("/o/org/WEB/pull-requests");
+    cleanup();
+    status = connected({ syncStatus: "synced" });
+    render(<PullRequestsPage />);
+    hiddenOnPhones(screen.getByLabelText("Pull request browser"));
+    expect(JSON.parse(screen.getByLabelText("Reader").dataset.back ?? "null")).toEqual(appRoute.projectPullRequests("org", "WEB"));
   });
 
   test("a PR link's unknown tab falls back to the reader's default", () => {

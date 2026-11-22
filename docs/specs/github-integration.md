@@ -1177,7 +1177,9 @@ configured.
 ### The reader
 
 `?repo=&pr=` turns the PR page into the reader: the PR browser pane on the
-left (stacked above on narrow screens) and the reader beside it.
+left and the reader beside it. Below the `md` breakpoint the browser pane
+hides and the reader fills the screen, with a back arrow in its header to
+the list (OS-2512).
 While the project, its connections, or the PR load, both panes show
 skeletons in their real shape: the pane's header, search bar, and rows in
 the current layout (compact or cards; Closed and search rows always
