@@ -112,8 +112,7 @@ export function TaskTypeGlyph({
   const Icon = ICON_BY_KEY[normalizedIcon];
   return (
     <Icon
-      // Search is a thin ring that reads smaller than the other glyphs at the same size.
-      className={cn("size-4", normalizedIcon === "Search" && "scale-125", className, sizeClassName)}
+      className={cn("size-4", className, sizeClassName)}
       style={{ color: taskType.color }}
     />
   );

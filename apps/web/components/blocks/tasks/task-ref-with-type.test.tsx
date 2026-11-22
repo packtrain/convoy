@@ -57,8 +57,8 @@ describe("TaskRefWithType", () => {
   });
 });
 
-// Lucide's Search is a thin ring that reads smaller than the other type glyphs (OS-2149).
-test("scales the investigation glyph up to match the other task types", () => {
+// The investigation glyph renders at the same size as the other task types.
+test("does not scale the investigation glyph", () => {
   const { container } = render(
     <>
       <TaskTypeGlyph taskType={resolveTaskTypeSummary("investigation")} />
@@ -67,6 +67,7 @@ test("scales the investigation glyph up to match the other task types", () => {
   );
   const [investigation, chore] = container.querySelectorAll("svg");
 
-  expect(investigation.classList).toContain("scale-125");
-  expect(chore.classList).not.toContain("scale-125");
+  expect(investigation.classList).not.toContain("scale-125");
+  expect(investigation.classList).toContain("size-4");
+  expect(chore.classList).toContain("size-4");
 });
