@@ -1,4 +1,5 @@
 import type { Metadata, Viewport } from "next";
+import { Suspense, type ComponentType, type ReactNode } from "react";
 import { Geist, Geist_Mono, Inter } from "next/font/google";
 import "./globals.css";
 import { ConvexClientProvider } from "../providers/convex-client-provider";
@@ -9,6 +10,8 @@ import { SpeedInsights } from "@vercel/speed-insights/next";
 import { NavigationProvider } from "@/lib/navigation";
 import { AppVersionWatcher } from "@/components/blocks/app-version-watcher";
 import { APP_THEME_COLORS } from "@/lib/theme/constants";
+import { authMode, type AuthMode } from "@/lib/auth/auth-mode";
+import { ConvexAuthServerProvider } from "@/lib/auth/convex-auth-server";
 
 const inter = Inter({ subsets: ["latin"], variable: "--font-sans" });
 
@@ -24,6 +27,22 @@ const geistMono = Geist_Mono({
 
 const isVercelAnalyticsEnabled =
   process.env.NEXT_PUBLIC_VERCEL_ANALYTICS_ENABLED === "true";
+
+function ConvexAuthSessionProvider({ children }: { children: ReactNode }) {
+  return (
+    <Suspense>
+      <ConvexAuthServerProvider>{children}</ConvexAuthServerProvider>
+    </Suspense>
+  );
+}
+
+// Convex Auth reads the session cookie here, so its pages render dynamically (docs/specs/auth-adapters.md#session).
+const SessionProviders: Record<AuthMode, ComponentType<{ children: ReactNode }>> = {
+  clerk: ({ children }) => children,
+  "local-demo": ({ children }) => children,
+  convex: ConvexAuthSessionProvider,
+};
+const SessionProvider = SessionProviders[authMode];
 
 export const metadata: Metadata = {
   title: "Convoy",
@@ -59,9 +78,11 @@ export default function RootLayout({
         className={`${geistSans.variable} ${geistMono.variable} antialiased`}
       >
         <ThemeProvider>
-          <ConvexClientProvider>
-            <NavigationProvider>{children}</NavigationProvider>
-          </ConvexClientProvider>
+          <SessionProvider>
+            <ConvexClientProvider>
+              <NavigationProvider>{children}</NavigationProvider>
+            </ConvexClientProvider>
+          </SessionProvider>
           <Toaster position="bottom-right" />
           <AppVersionWatcher />
           {isVercelAnalyticsEnabled ? <Analytics /> : null}

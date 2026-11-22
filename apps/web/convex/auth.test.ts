@@ -178,7 +178,8 @@ describe("Convex Auth email and password, verification required", () => {
     const t = client();
 
     const result = await t.mutation(api.auth.signUpWithoutEmailVerification, { email: "robin@example.com", password: PASSWORD });
-    expect(result).toEqual({ status: "emailVerificationRequired" });
+    // A sign-in envelope error, because the auth proxy route refuses any other shape.
+    expect(result).toEqual({ status: "error", userError: { error: "EMAIL_VERIFICATION_REQUIRED" } });
     expect(await t.run((ctx) => ctx.db.query("users").collect())).toEqual([]);
     expect(await sentEmails(t)).toEqual([]);
   });

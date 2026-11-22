@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { useMutation } from "convex/react";
+import { ConvexHttpClient } from "convex/browser";
 import { useAuthActions } from "@convex-dev/auth/react";
 import { useSignUpWithEmailPassword } from "@convex-dev/auth/methods/email-password/react";
 import { DEFAULT_MIN_PASSWORD_LENGTH } from "@convex-dev/auth/methods/email-password";
@@ -13,7 +13,10 @@ import { getMutationErrorMessage } from "@/lib/errors";
 import { AuthCardHeading, AuthCardPage, EmailPasswordForm, type EmailPasswordCredentials } from "./email-password-form";
 
 type SignUpResult = FunctionReturnType<typeof api.auth.signUpWithoutEmailVerification>;
-type SignUpErrorCode = Extract<SignUpResult, { status: "error" }>["userError"]["error"];
+type SignUpErrorCode = Exclude<
+  Extract<SignUpResult, { status: "error" }>["userError"]["error"],
+  "EMAIL_VERIFICATION_REQUIRED"
+>;
 
 const SIGN_UP_ERRORS: Record<SignUpErrorCode, string> = {
   INVALID_EMAIL: "Enter a valid email address.",
@@ -26,12 +29,18 @@ const SIGN_UP_ERRORS: Record<SignUpErrorCode, string> = {
 };
 const SIGN_UP_FAILED = "Could not create your account. Try again.";
 
+/** Runs a session-minting mutation through the package's auth proxy route, which keeps the refresh token in an httpOnly cookie. */
+function signUpThroughAuthProxy(credentials: EmailPasswordCredentials): Promise<SignUpResult> {
+  // The route path and `?path=` suffix are what the package's own sign-in client uses.
+  const proxy = new ConvexHttpClient("/auth/signin?path=", { skipConvexDeploymentUrlCheck: true });
+  return proxy.mutation(api.auth.signUpWithoutEmailVerification, credentials);
+}
+
 /**
  * Convex Auth sign-up. With verification off one mutation returns a session; with it
  * required the package emails a link and keeps its secret here. See docs/specs/auth-adapters.md.
  */
 export function EmailPasswordSignUpForm() {
-  const signUpNow = useMutation(api.auth.signUpWithoutEmailVerification);
   const { signUp: startEmailedSignUp } = useSignUpWithEmailPassword(api.auth);
   const { setSession } = useAuthActions();
   const [pending, setPending] = useState(false);
@@ -55,11 +64,11 @@ export function EmailPasswordSignUpForm() {
     setError(null);
     setPending(true);
     try {
-      const result = await signUpNow(credentials);
+      const result = await signUpThroughAuthProxy(credentials);
       // On success the auth page wrapper forwards to /auth/callback.
       if (result.status === "complete") await setSession(result.tokens);
-      else if (result.status === "error") setError(SIGN_UP_ERRORS[result.userError.error]);
-      else await startWithEmail(credentials);
+      else if (result.userError.error === "EMAIL_VERIFICATION_REQUIRED") await startWithEmail(credentials);
+      else setError(SIGN_UP_ERRORS[result.userError.error]);
     } catch (err) {
       // A ConvexError carries the deployment's reason, e.g. email sending not configured.
       setError(getMutationErrorMessage(err, SIGN_UP_FAILED));

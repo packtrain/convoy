@@ -1,6 +1,6 @@
 # Auth adapters
 
-Status: S1 (OS-2492), S2 (OS-2493), S1b (OS-2495) and S3 (OS-2496) implemented. Parent plan: OS-2491.
+Status: S1 (OS-2492), S2 (OS-2493), S1b (OS-2495), S3 (OS-2496) and S4 (OS-2497) implemented. Parent plan: OS-2491.
 
 Convoy signs people in through one of three adapters, chosen at build time:
 
@@ -40,8 +40,9 @@ Each adapter lives in `apps/web/lib/auth/adapters/`:
 - `VerifyEmailScreen`, `ForgotPasswordScreen` and `ResetPasswordScreen` render
   nothing in Clerk and local-demo mode. Clerk verifies the address and resets
   passwords inside its own screens.
-- `convex.tsx` renders `ConvexAuthProvider`. Sign-out calls
-  `useAuthActions().signOut` and then loads `redirectUrl`, or the sign-in page.
+- `convex.tsx` renders only the client route gate. The session provider sits
+  in the root layout (see Session). Sign-out calls `useAuthActions().signOut`
+  and then loads `redirectUrl`, or the sign-in page.
 - `convex-user.ts` holds the profile hooks backed by our `users` row
   (`users.core.current`, `users.core.syncProfile`). The Convex and local-demo
   adapters both use them, and no adapter imports another.
@@ -51,8 +52,8 @@ Direct `@clerk/nextjs` imports are allowed only in `adapters/clerk.tsx`,
 route.
 
 `proxy.ts` picks its handler from a `Record<AuthMode, () => NextProxy>`.
-Clerk mode runs `clerkMiddleware`. The other two pass every request through
-and keep only the link-preview response.
+Clerk mode runs `clerkMiddleware`, Convex mode runs the route gate below, and
+local-demo passes every request through with only the link-preview response.
 
 `AuthPageWrapper` sends a signed-in visitor of `/auth/sign-in` or
 `/auth/sign-up` to `/auth/callback`, carrying `redirect_url`. The callback runs
@@ -84,7 +85,7 @@ that text.
 ### Verification screens
 
 With verification required, `auth.signUpWithoutEmailVerification` answers
-`emailVerificationRequired` and changes nothing. The form then calls the
+the error `EMAIL_VERIFICATION_REQUIRED` and changes nothing. The form then calls the
 package's `useSignUpWithEmailPassword`, which runs `signUpWithEmailPassword` and
 keeps the returned browser secret in the auth client's storage. The form swaps
 to a "Check your email" card that names the address and says to open the link
@@ -108,20 +109,75 @@ started from an invitation still ends on the invitation.
 
 ### Route gate
 
-Until S4 there is no server-side gate in Convex mode. `SignedOutRedirect`, inside
-the Convex adapter's provider, sends a signed-out visitor of any page other than
-`/auth/sign-in`, `/auth/sign-up`, `/auth/verify-email`, `/auth/forgot-password` and
-`/auth/reset-password` to the sign-in page with `redirect_url` set
-to the page they asked for. It reloads the page instead of using client
-navigation, because the provider sits outside `NavigationProvider`. Sign-out
-navigates itself, so the gate stands down while it runs. Otherwise the gate
-would win and send the next person to sign in to the page the last one left.
+`convexAuthGate` in `proxy.ts` runs inside the package's `convexAuthNextjsProxy`.
+A request for any page other than Clerk mode's public routes plus
+`/auth/verify-email`, `/auth/forgot-password` and `/auth/reset-password` needs a
+session, or it is redirected to the sign-in page with `redirect_url` set to the
+path and query it asked for, before the page renders. A link-preview crawler
+gets the generic preview instead, as in Clerk mode.
+
+The gate checks that the proxy has an unexpired access token, refreshed from
+the cookie when it is close to expiry. It does not ask the backend whether the
+session is live: that would be one Convex query per page load and prefetch,
+and every Convex call verifies the token anyway. A forged or revoked token
+gets the page shell and no data, and the client gate below then sends it to
+sign-in.
+
+The proxy matcher skips `/auth/signin`, `/auth/refresh` and `/auth/signout`, so
+the proxy's own refresh never races the handler's cookie writes.
+
+`SignedOutRedirect`, inside the Convex adapter's provider, covers a session
+that ends while a page is open, such as a sign-out in another tab. It sends a
+signed-out visitor of any page other than those five auth pages to the sign-in
+page with `redirect_url` set to the page. It reloads the page instead of using
+client navigation, because the provider sits outside `NavigationProvider`.
+Sign-out navigates itself, so the gate stands down while it runs. Otherwise the
+gate would win and send the next person to sign in to the page the last one
+left.
 
 ### Session
 
-`ConvexAuthProvider` keeps the tokens in `localStorage` and falls back to memory
-during server render. The access token lasts 60 seconds and the client refreshes
-it about once a minute. S4 moves the refresh token into an httpOnly cookie.
+The refresh token lives in an httpOnly cookie, never in browser storage.
+`lib/auth/convex-auth-server.ts` sets up the package's server side once
+(`setupConvexAuthServer`, `setupConvexAuthNextjs`), lazily, so Clerk and
+local-demo builds never create its Convex client.
+
+- The root layout wraps the app in `ConvexAuthNextjsServerProvider`, inside a
+  `Suspense` boundary, in Convex mode only. It reads the access token from the
+  cookie and renders the package's client provider, which creates its own
+  Convex client. The client keeps only the access token in `localStorage`.
+  Reading cookies makes every page render dynamically in Convex mode. Clerk and
+  local-demo stay as they were.
+- The package's client posts to three fixed route handlers:
+  `app/auth/signin/route.ts`, `app/auth/refresh/route.ts` and
+  `app/auth/signout/route.ts`. Next routes are static, so they exist in every
+  build and answer 404 outside Convex mode. `/auth/signin` and `/auth/signout`
+  sit next to our pages `/auth/sign-in` and `/auth/sign-up`; the package fixes
+  its paths.
+- `/auth/signin` forwards a call to the deployment only for the functions that
+  mint a session, and answers 403 for anything else:
+  `signInWithEmailPassword`, `completeSignUpWithEmailPassword`,
+  `completePasswordRecovery` and `signUpWithoutEmailVerification`. It moves the
+  refresh token from the result into the cookie. A new session-minting
+  function must join this list. Each must return the package's sign-in
+  envelope, `{ status: "complete", tokens }` or `{ status: "error", userError }`;
+  the route answers 500 for any other shape.
+- The three routes accept a request only when its `Origin` host equals `Host`,
+  `NEXT_PUBLIC_APP_URL`'s host, or, in dev, `localhost:$PORT`, because portless
+  rewrites `Origin` to that.
+- The routes and the proxy call the deployment at `CONVEX_SERVER_URL`, read at
+  runtime, or `NEXT_PUBLIC_CONVEX_URL` when it is unset. The self-hosted
+  compose file sets `http://backend:3210`, because the browser's
+  `http://127.0.0.1:3210` points into the web container. The rendered client
+  provider keeps the browser's URL.
+- The cookie is `Secure` when `NEXT_PUBLIC_APP_URL` is `https`, or, with no app
+  URL, in a production build. An install served over plain http, such as the
+  self-hosted default `http://127.0.0.1:3000`, still gets its cookie.
+
+The access token lasts 60 seconds. The client refreshes it about once a minute
+through `/auth/refresh`, and the proxy refreshes it when a page load finds it
+close to expiry. Sessions made before S4 lived in browser storage and do not
+carry over; those people sign in once more.
 
 `useAppAuth().userId` is the session id from the token's `sub` claim. It stays
 the same across refreshes and changes on the next sign-in, which is all the
@@ -235,10 +291,13 @@ With verification off it sends nothing:
 - Any other link, recovery or change-email, is dropped. Handing a recovery code
   to whoever asks would be an account takeover.
 
-The sign-up form calls `auth.signUpWithoutEmailVerification`, one mutation that
-runs the package's `signUpWithEmailPassword`, takes the stored code, runs
-`completeSignUpWithEmailPassword` and returns the session tokens. The form hands
-them to `useAuthActions().setSession`. Because it is one transaction, the code
+The sign-up form calls `auth.signUpWithoutEmailVerification` through the
+`/auth/signin` route, one mutation that runs the package's
+`signUpWithEmailPassword`, takes the stored code, runs
+`completeSignUpWithEmailPassword` and returns the session tokens. The route
+keeps the refresh token in the cookie, and the form hands the rest to
+`useAuthActions().setSession`. With verification required it answers the error
+`EMAIL_VERIFICATION_REQUIRED` and changes nothing. Because it is one transaction, the code
 row never outlives the call, nothing can read or steal the code in between, and
 a failure rolls back the user row with everything else. Expected errors
 (`EMAIL_TAKEN`, a weak password, `RATE_LIMITED`) come back as `userError`; the
@@ -304,8 +363,8 @@ The emailed link carries no `redirect_url`, so a reset always ends in
 `/auth/callback`'s default target, the first workspace. Someone who came from an
 invitation opens the invitation link again.
 
-`completePasswordRecovery` mints a session, so it joins the sign-in allowlist
-when S4 lands.
+`completePasswordRecovery` mints a session, so it is on the `/auth/signin`
+allowlist (see Session).
 
 ## Switching auth mode
 
@@ -337,7 +396,9 @@ A Convex mode deployment sets:
 - A placeholder `CLERK_JWT_ISSUER_DOMAIN`, as local-demo does, because
   `auth.config.ts` always lists the Clerk provider.
 - `NEXT_PUBLIC_APP_URL` on the Convex deployment, with a scheme, so the landing
-  URLs point at the right host.
+  URLs point at the right host. Set it for the web build too: it decides
+  whether the session cookie is `Secure`, and behind a proxy that rewrites
+  `Host` the auth routes trust its origin.
 
 The deployment signs its own tokens, so there are no auth secrets.
 
@@ -345,7 +406,7 @@ The deployment signs its own tokens, so there are no auth secrets.
 
 The self-hosted script (S7a, which also asks for the Resend key), password reset
 with verification off, change password and change email while signed in,
-resending a verification link, the cookie session and server-side redirect (S4), agent browser
+resending a verification link, agent browser
 login (S5, `app/api/agent/browser-login` still calls Clerk), and Google (S6).
 
 ## Testing
@@ -366,7 +427,9 @@ session and refuses the old password. It also covers `getSettings`. It records e
 covers accepting an invitation as a Convex Auth session, the wrong-account
 reply, and inviting an address two users share. `convex/users/localDemo.test.ts`
 covers anonymous `onboard` in local-demo. `lib/auth/adapters/convex.test.tsx`
-covers the route gate and sign-out,
+covers the client route gate and sign-out, `proxy.test.ts` the server route gate
+and the matcher, `lib/auth/convex-auth-server.test.ts` the server and browser
+Convex URLs,
 `components/blocks/auth/email-password-sign-in-form.test.tsx` the
 "Forgot password?" link, `forgot-password-form.test.tsx` and
 `reset-password-form.test.tsx` the two recovery pages,

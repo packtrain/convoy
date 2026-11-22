@@ -11,7 +11,16 @@ const startEmailedSignUp = vi.fn();
 const setSession = vi.fn(async () => {});
 let search = "";
 
-vi.mock("convex/react", () => ({ useMutation: () => signUp }));
+const proxyUrls: string[] = [];
+
+vi.mock("convex/browser", () => ({
+  ConvexHttpClient: class {
+    constructor(url: string) {
+      proxyUrls.push(url);
+    }
+    mutation = signUp;
+  },
+}));
 vi.mock("@convex-dev/auth/react", () => ({ useAuthActions: () => ({ setSession }) }));
 vi.mock("@convex-dev/auth/methods/email-password/react", () => ({
   useSignUpWithEmailPassword: () => ({ signUp: startEmailedSignUp, pending: false }),
@@ -34,6 +43,7 @@ function submit(email = "robin@example.com", password = "correct horse battery",
 describe("EmailPasswordSignUpForm", () => {
   beforeEach(() => {
     signUp.mockReset();
+    proxyUrls.length = 0;
     startEmailedSignUp.mockReset();
     setSession.mockClear();
     search = "";
@@ -47,7 +57,9 @@ describe("EmailPasswordSignUpForm", () => {
     submit();
 
     await waitFor(() => expect(setSession).toHaveBeenCalledWith(tokens));
-    expect(signUp).toHaveBeenCalledWith({ email: "robin@example.com", password: "correct horse battery" });
+    expect(signUp).toHaveBeenCalledWith("signUp", { email: "robin@example.com", password: "correct horse battery" });
+    // Through the auth proxy route, which keeps the refresh token in an httpOnly cookie.
+    expect(proxyUrls).toEqual(["/auth/signin?path="]);
   });
 
   test("refuses to sign up when the confirmation differs", async () => {
@@ -82,7 +94,7 @@ describe("EmailPasswordSignUpForm", () => {
 
   describe("with verification required", () => {
     beforeEach(() => {
-      signUp.mockResolvedValue({ status: "emailVerificationRequired" });
+      signUp.mockResolvedValue({ status: "error", userError: { error: "EMAIL_VERIFICATION_REQUIRED" } });
     });
 
     test("starts the emailed sign-up and asks to open the link in this browser", async () => {

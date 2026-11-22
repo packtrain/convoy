@@ -1,9 +1,8 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, type ReactNode } from "react";
-import { ConvexAuthProvider, useAuthActions, useAuthToken } from "@convex-dev/auth/react";
-import { useConvexAuth, type ConvexReactClient } from "convex/react";
-import { api } from "@/convex/_generated/api";
+import { useAuthActions, useAuthToken } from "@convex-dev/auth/react";
+import { useConvexAuth } from "convex/react";
 import { EmailPasswordSignInForm } from "@/components/blocks/auth/email-password-sign-in-form";
 import { EmailPasswordSignUpForm } from "@/components/blocks/auth/email-password-sign-up-form";
 import { VerifyEmailScreen } from "@/components/blocks/auth/verify-email-screen";
@@ -26,7 +25,7 @@ const PUBLIC_PATHS = [
 // Set by sign-out, which navigates itself; the gate must not race it to sign-in.
 let isSigningOut = false;
 
-/** Client-side route gate until S4 moves it into proxy.ts; see docs/specs/auth-adapters.md. */
+/** Sends a page whose session ends while open to sign-in; proxy.ts gates page loads (docs/specs/auth-adapters.md#route-gate). */
 function SignedOutRedirect() {
   const { isLoading, isAuthenticated } = useConvexAuth();
   // The provider sits outside NavigationProvider; the location hook works without it.
@@ -42,17 +41,13 @@ function SignedOutRedirect() {
   return null;
 }
 
-function ConvexAuthAdapterProvider({ client, children }: { client: ConvexReactClient; children: ReactNode }) {
+// The session provider, with its own Convex client, is ConvexAuthServerProvider in the root layout.
+function ConvexAuthAdapterProvider({ children }: { children: ReactNode }) {
   return (
-    // No OAuth methods yet, so nothing reads sign-in params from the URL.
-    <ConvexAuthProvider
-      client={client}
-      api={{ refreshSession: api.auth.refreshSession, signOut: api.auth.signOut, isAuthenticated: api.auth.isAuthenticated }}
-      ambientSignIns={[]}
-    >
+    <>
       <SignedOutRedirect />
       {children}
-    </ConvexAuthProvider>
+    </>
   );
 }
 

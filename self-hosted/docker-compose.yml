@@ -68,6 +68,8 @@ services:
       - "${BIND_HOST:-127.0.0.1}:${WEB_PORT:-3000}:3000"
     environment:
       - CLERK_SECRET_KEY=${CLERK_SECRET_KEY}
+      # Convex Auth's server routes reach the backend by service name; the browser keeps NEXT_PUBLIC_CONVEX_URL.
+      - CONVEX_SERVER_URL=http://backend:3210
     depends_on:
       backend:
         condition: service_healthy

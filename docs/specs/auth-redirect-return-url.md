@@ -2,7 +2,7 @@
 
 ## Scope
 
-Defines how authentication redirects preserve the user's intended in-app destination when a protected page is opened with no valid Clerk session.
+Defines how authentication redirects preserve the user's intended in-app destination when a protected page is opened with no valid Clerk session. Convex Auth mode redirects the same way from `proxy.ts`, with the session cookie in place of Clerk's ([auth-adapters.md](auth-adapters.md#route-gate)).
 
 ## Expected Behavior
 

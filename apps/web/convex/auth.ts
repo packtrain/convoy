@@ -176,9 +176,8 @@ const SIGN_UP_ERROR_CODES: Record<SignUpErrorCode, null> = {
   PASSWORD_TOO_COMMON: null,
 };
 
+// A sign-in envelope, because the auth proxy route refuses any other shape.
 const vSignUpWithoutVerificationResult = v.union(
-  // Verification is on: the browser starts the sign-up with `signUpWithEmailPassword` instead.
-  v.object({ status: v.literal("emailVerificationRequired") }),
   v.object({
     status: v.literal("complete"),
     tokens: v.object({
@@ -191,7 +190,11 @@ const vSignUpWithoutVerificationResult = v.union(
   v.object({
     status: v.literal("error"),
     userError: v.object({
-      error: v.union(...(Object.keys(SIGN_UP_ERROR_CODES) as SignUpErrorCode[]).map((code) => v.literal(code))),
+      error: v.union(
+        ...(Object.keys(SIGN_UP_ERROR_CODES) as SignUpErrorCode[]).map((code) => v.literal(code)),
+        // Verification is on: the browser starts the sign-up with `signUpWithEmailPassword` instead.
+        v.literal("EMAIL_VERIFICATION_REQUIRED")
+      ),
     }),
   })
 );
@@ -215,7 +218,7 @@ export const signUpWithoutEmailVerification = mutation({
   returns: vSignUpWithoutVerificationResult,
   handler: async (ctx, args): Promise<SignUpWithoutVerificationResult> => {
     if (!isEmailVerificationOff()) {
-      return { status: "emailVerificationRequired" };
+      return { status: "error", userError: { error: "EMAIL_VERIFICATION_REQUIRED" } };
     }
     const started = await ctx.runMutation(signUpRef, args);
     if (!started.success) {

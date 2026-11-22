@@ -14,13 +14,11 @@ const state = vi.hoisted(() => ({
 }));
 
 vi.mock("@convex-dev/auth/react", () => ({
-  ConvexAuthProvider: ({ children }: { children: ReactNode }) => <>{children}</>,
   useAuthActions: () => ({ signOut: state.signOut }),
   useAuthToken: () => null,
 }));
 vi.mock("convex/react", () => ({ useConvexAuth: () => state.convexAuth }));
 vi.mock("@/lib/navigation", () => ({ useNavigationLocation: () => ({ pathname: state.pathname }) }));
-vi.mock("@/convex/_generated/api", () => ({ api: { auth: {} } }));
 vi.mock("@/components/blocks/auth/email-password-sign-in-form", () => ({ EmailPasswordSignInForm: () => null }));
 vi.mock("@/components/blocks/auth/email-password-sign-up-form", () => ({ EmailPasswordSignUpForm: () => null }));
 vi.mock("@/components/blocks/auth/verify-email-screen", () => ({ VerifyEmailScreen: () => null }));

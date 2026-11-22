@@ -1,7 +1,8 @@
 import { describe, expect, test } from "vitest";
 import { NextRequest } from "next/server";
+import { unstable_doesMiddlewareMatch } from "next/experimental/testing/server";
 
-import { createGenericLinkPreviewResponse, isLinkPreviewCrawler, isPublicRoute } from "./proxy";
+import { config, convexAuthGate, createGenericLinkPreviewResponse, isLinkPreviewCrawler, isPublicRoute } from "./proxy";
 
 describe("proxy link previews", () => {
   test("detects common link-preview crawler user agents", () => {
@@ -28,5 +29,50 @@ describe("proxy public routes", () => {
     expect(isPublicRoute(new NextRequest("https://app.convoy.build/api/app-version"))).toBe(true);
     expect(isPublicRoute(new NextRequest("https://app.convoy.build/api/app-version-secret"))).toBe(false);
     expect(isPublicRoute(new NextRequest("https://app.convoy.build/api/app-version/anything"))).toBe(false);
+  });
+});
+
+describe("Convex Auth route gate", () => {
+  const signedOut = { getToken: async () => null };
+
+  test("sends a signed-out deep link to sign-in with the page as redirect_url", async () => {
+    const response = await convexAuthGate(new NextRequest("https://convoy.example/o/acme/WEB?task=WEB-7"), signedOut);
+
+    expect(response?.status).toBe(307);
+    expect(response?.headers.get("location")).toBe(
+      "https://convoy.example/auth/sign-in?redirect_url=%2Fo%2Facme%2FWEB%3Ftask%3DWEB-7"
+    );
+  });
+
+  test("lets a request with a session through", async () => {
+    const response = await convexAuthGate(new NextRequest("https://convoy.example/o/acme/WEB"), {
+      getToken: async () => "token",
+    });
+
+    expect(response).toBeUndefined();
+  });
+
+  test("leaves the sign-in, verification and password reset pages public", async () => {
+    for (const path of ["/auth/sign-in", "/auth/sign-up", "/auth/verify-email?code=x", "/auth/forgot-password", "/auth/reset-password", "/api/app-version"]) {
+      expect(await convexAuthGate(new NextRequest(`https://convoy.example${path}`), signedOut)).toBeUndefined();
+    }
+  });
+
+  test("answers a link-preview crawler with the generic preview", async () => {
+    const request = new NextRequest("https://convoy.example/o/acme/WEB?task=WEB-7", {
+      headers: { "user-agent": "Slackbot-LinkExpanding 1.0" },
+    });
+
+    const response = await convexAuthGate(request, signedOut);
+
+    expect(response?.status).toBe(200);
+    expect(await response?.text()).toContain("<title>Convoy</title>");
+  });
+
+  test("the matcher skips the package's auth routes and still runs for the auth pages", () => {
+    const matches = (url: string) => unstable_doesMiddlewareMatch({ config, url });
+
+    expect(["/auth/signin", "/auth/refresh", "/auth/signout"].map(matches)).toEqual([false, false, false]);
+    expect(["/auth/sign-in", "/auth/signing", "/o/acme/WEB"].map(matches)).toEqual([true, true, true]);
   });
 });
