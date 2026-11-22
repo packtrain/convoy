@@ -18,10 +18,11 @@ vi.mock("@/lib/navigation", () => ({
   useNavigation: () => ({ location: { search: "" } }),
 }));
 
-function submit(email = "robin@example.com", password = "correct horse battery") {
+function submit(email = "robin@example.com", password = "correct horse battery", confirmation = password) {
   render(<EmailPasswordSignUpForm />);
   fireEvent.change(screen.getByLabelText("Email"), { target: { value: email } });
   fireEvent.change(screen.getByLabelText("Password"), { target: { value: password } });
+  fireEvent.change(screen.getByLabelText("Confirm password"), { target: { value: confirmation } });
   fireEvent.submit(screen.getByRole("button", { name: "Create account" }));
 }
 
@@ -39,6 +40,13 @@ describe("EmailPasswordSignUpForm", () => {
 
     await waitFor(() => expect(setSession).toHaveBeenCalledWith(tokens));
     expect(signUp).toHaveBeenCalledWith({ email: "robin@example.com", password: "correct horse battery" });
+  });
+
+  test("refuses to sign up when the confirmation differs", async () => {
+    submit("robin@example.com", "correct horse battery", "correct horse batery");
+
+    expect(await screen.findByRole("alert")).toHaveProperty("textContent", "Passwords don't match.");
+    expect(signUp).not.toHaveBeenCalled();
   });
 
   test("shows a plain message for each error code", async () => {

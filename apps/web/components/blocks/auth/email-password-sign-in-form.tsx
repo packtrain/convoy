@@ -45,7 +45,7 @@ export function EmailPasswordSignInForm() {
       footer={
         <>
           No account?{" "}
-          <AppLink href={appRoute.authSignUp(redirectUrl)} className="font-medium text-foreground underline-offset-4 hover:underline">
+          <AppLink href={appRoute.authSignUp(redirectUrl)} className="text-foreground underline underline-offset-4">
             Sign up
           </AppLink>
         </>

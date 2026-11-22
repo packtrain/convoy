@@ -54,8 +54,8 @@ export function EmailPasswordSignUpForm() {
 
   return (
     <EmailPasswordForm
-      title="Create your Convoy account"
-      description="Sign up with your email and a password."
+      title="Create your account"
+      description="Fill in the form below to create your account"
       submitLabel="Create account"
       passwordAutoComplete="new-password"
       error={error}
@@ -64,7 +64,7 @@ export function EmailPasswordSignUpForm() {
       footer={
         <>
           Have an account?{" "}
-          <AppLink href={appRoute.authSignIn(redirectUrl)} className="font-medium text-foreground underline-offset-4 hover:underline">
+          <AppLink href={appRoute.authSignIn(redirectUrl)} className="text-foreground underline underline-offset-4">
             Sign in
           </AppLink>
         </>

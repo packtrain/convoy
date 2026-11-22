@@ -59,7 +59,18 @@ is how a new Convex Auth account gets its workspace right after sign-up.
 
 `/auth/sign-in` renders `EmailPasswordSignInForm` and `/auth/sign-up` renders
 `EmailPasswordSignUpForm` (both in `components/blocks/auth/`), on the shared
-`EmailPasswordForm` card. Each links to the other and keeps `redirect_url`.
+`EmailPasswordForm` page. Each links to the other and keeps `redirect_url`.
+Sign-up shows "At least 10 characters." under the password and asks for it a
+second time in a "Confirm password" field. If the two differ, the form shows
+"Passwords don't match." and does not call the backend. The package enforces
+the password rules on the server either way.
+
+The landing hero's animated halftone fills the page on its dark background, in
+light and dark mode. The Convoy wordmark sits centered above a card that holds
+the form. `components/custom/halftone-hero.tsx`
+copies `apps/landing/components/effects/halftone-hero.tsx`, and
+`public/gradient.jpg` copies the landing's source image. Change both copies
+together. Clerk mode keeps Clerk's own centered card on the plain page.
 Every error code the package returns maps to one plain message through an
 exhaustive `Record`. A wrong password and an unknown address both show "Wrong
 email or password." When the backend refuses with a `ConvexError`, such as
