@@ -26,7 +26,7 @@ export function normalizeApiKeyScope(
 
 /** New Convex Auth accounts need AUTH_MODE=convex on the deployment; tokens dispatch on issuer alone. */
 export function isConvexAuthDeployment(): boolean {
-  return process.env.AUTH_MODE === "convex";
+  return env.AUTH_MODE === "convex";
 }
 
 /** Convex Auth tokens are issued by the `auth` component of this deployment. */
