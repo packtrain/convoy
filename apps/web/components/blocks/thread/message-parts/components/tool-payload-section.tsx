@@ -9,19 +9,21 @@ function stringifyForCodeBlock(value: unknown): string {
   }
 }
 
-/** A labeled, line-capped block of a raw tool input or output. */
+/** A labeled, line-capped block of a raw tool input or output, inside a `ToolSurface`. */
 export function ToolPayloadSection({ label, value }: { label: string; value: unknown }) {
   if (value === undefined) return null;
   return (
-    <div className="flex flex-col gap-1">
+    <div className="group/payload flex flex-col gap-1">
       <span className="text-xs font-medium text-muted-foreground">{label}</span>
       <ExpandableLines
         text={stringifyForCodeBlock(value)}
         lineLimit={TOOL_OUTPUT_LINE_LIMIT}
-        className="overflow-hidden rounded-sm"
+        // Bleed through ToolSurface's p-3 so "Show all" spans its edges.
+        className="-mx-3"
+        buttonClassName="group-last/payload:-mb-3 group-last/payload:rounded-b-md"
       >
         {(displayText) => (
-          <pre className="overflow-x-auto font-mono text-xs text-foreground">
+          <pre className="overflow-x-auto px-3 font-mono text-xs text-foreground">
             <code>{displayText}</code>
           </pre>
         )}

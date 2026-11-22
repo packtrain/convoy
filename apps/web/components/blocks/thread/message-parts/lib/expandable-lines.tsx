@@ -3,6 +3,7 @@
 import { useMemo, useState, type ReactNode } from "react";
 import { ChevronDown } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { cn } from "@/lib/utils";
 
 /** Default cap for terminal output and raw tool payloads. */
 export const TOOL_OUTPUT_LINE_LIMIT = 40;
@@ -28,6 +29,7 @@ interface ExpandableLinesProps {
   text: string;
   lineLimit: number;
   className: string;
+  buttonClassName?: string;
   footer?: ReactNode;
   children: (displayText: string) => ReactNode;
 }
@@ -36,6 +38,7 @@ export function ExpandableLines({
   text,
   lineLimit,
   className,
+  buttonClassName,
   footer,
   children,
 }: ExpandableLinesProps) {
@@ -55,7 +58,10 @@ export function ExpandableLines({
           variant="ghost"
           size="sm"
           onClick={() => setExpanded(true)}
-          className="w-full cursor-pointer rounded-none border-0 border-t border-border text-xs text-muted-foreground"
+          className={cn(
+            "w-full cursor-pointer rounded-none border-0 border-t border-border text-xs text-muted-foreground",
+            buttonClassName
+          )}
         >
           <ChevronDown className="mr-1.5 size-3" />
           Show all {totalLines} lines
