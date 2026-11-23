@@ -42,19 +42,27 @@ Add the following environment variables in Vercel (Settings → Environment Vari
 | Variable | Required | Description |
 | --- | --- | --- |
 | `CONVEX_DEPLOY_KEY` | Yes | Deploy key from Convex dashboard (Settings → General → Deploy Keys). Only needed if using the integrated build command above |
-| `NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY` | Yes | Production Clerk publishable key |
-| `CLERK_SECRET_KEY` | Yes | Production Clerk secret key |
-| `NEXT_PUBLIC_CLERK_SIGN_IN_URL` | Yes | `/auth/sign-in` |
-| `NEXT_PUBLIC_CLERK_SIGN_UP_URL` | Yes | `/auth/sign-up` |
-| `NEXT_PUBLIC_CLERK_SIGN_IN_FALLBACK_REDIRECT_URL` | Yes | `/auth/callback` |
-| `NEXT_PUBLIC_CLERK_SIGN_UP_FALLBACK_REDIRECT_URL` | Yes | `/auth/callback` |
+| `NEXT_PUBLIC_AUTH_MODE` | No | `convex` (default when unset) or `clerk` |
+| `NEXT_PUBLIC_APP_URL` | Convex Auth | The app's URL, the same as on the Convex deployment |
+| `NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY` | Clerk | Production Clerk publishable key |
+| `CLERK_SECRET_KEY` | Clerk | Production Clerk secret key |
+| `NEXT_PUBLIC_CLERK_SIGN_IN_URL` | Clerk | `/auth/sign-in` |
+| `NEXT_PUBLIC_CLERK_SIGN_UP_URL` | Clerk | `/auth/sign-up` |
+| `NEXT_PUBLIC_CLERK_SIGN_IN_FALLBACK_REDIRECT_URL` | Clerk | `/auth/callback` |
+| `NEXT_PUBLIC_CLERK_SIGN_UP_FALLBACK_REDIRECT_URL` | Clerk | `/auth/callback` |
 | `NEXT_PUBLIC_VERCEL_ANALYTICS_ENABLED` | No | Set to `true` only if you enabled Vercel Web Analytics for this Vercel project |
+
+"Convex Auth" and "Clerk" mean required in that auth mode only. A Convex Auth
+build needs no Clerk variables. See [Authentication](/docs/deployment/auth-and-clerk).
 
 ### Variables you do NOT need in Vercel
 
 These are Convex server-side variables — set them in the **Convex dashboard** (Settings → Environment Variables), not in Vercel:
 
+- `AUTH_MODE`
+- `AUTH_EMAIL_VERIFICATION`
 - `CLERK_JWT_ISSUER_DOMAIN`
+- `AUTH_GOOGLE_CLIENT_ID` and `AUTH_GOOGLE_CLIENT_SECRET`
 - `RESEND_API_KEY`
 - `EMAIL_FROM`
 - `SUPPORT_EMAIL`

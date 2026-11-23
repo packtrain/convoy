@@ -1,33 +1,64 @@
 ---
 title: Email and Resend
-description: Configure transactional email delivery for invitations and onboarding flows.
+description: Configure Resend for invitation, sign-up verification and password reset emails, and set the help address every email names.
 ---
 
-Convoy can send live transactional emails through Resend.
+Convoy sends its email through [Resend](https://resend.com). Every email uses
+the same HTML layout, with a plain-text part.
 
-## Current Email Use Cases
+## What Convoy sends
 
-- organization invitations
-- onboarding or welcome flows tied to invitations
-- project-add invitation notifications
+| Email | Subject | When | Mode |
+|---|---|---|---|
+| Organization invitation | "You're invited to join *organization*" | An admin invites an address, or resends the invitation | Both |
+| Welcome | "Welcome to Convoy" | The invited person accepts | Both |
+| Project invitation | "You've been added to *project*" | Someone adds a member to a project | Both |
+| Sign-up verification | "Verify your email address" | Someone signs up while `AUTH_EMAIL_VERIFICATION` is `required`. The link works for 1 hour, only in the browser they signed up in. | Convex Auth |
+| Password reset | "Reset your password" | Someone uses "Forgot password?". The link works for 10 minutes. | Convex Auth |
+| Password changed | "Your password was changed" | A reset sets a new password | Convex Auth |
 
-## Required Configuration
+In Clerk mode, Clerk sends its own sign-up and password emails. Convoy's
+settings don't change them.
 
-Set:
+## Configuration
 
-- `RESEND_API_KEY`
-- `EMAIL_FROM`
-- `NEXT_PUBLIC_APP_URL` in the Convex dashboard if email links should target a non-default app host
+Set these on the Convex deployment (dashboard → Settings → Environment
+Variables), not on your web host:
 
-Optional:
+| Variable | Purpose |
+|---|---|
+| `RESEND_API_KEY` | Resend API key. Without it Convoy sends no email. |
+| `EMAIL_FROM` | Sender, e.g. `Convoy <noreply@example.com>`, on a domain verified in Resend |
+| `NEXT_PUBLIC_APP_URL` | The app's URL with its scheme. Every link in every email is built from it. Unset, links point at `https://app.convoy.build`, so a self-hosted deployment must set it. |
+| `SUPPORT_EMAIL` | Optional. See [Support address](#support-address). |
 
-- `SUPPORT_EMAIL`, the address in the line at the bottom of every email: "If you have any questions or need any help, reach out to …". Without it the line is left out, so set it to an inbox your users can write to.
+Verify the sending domain in Resend before launch. Without a verified domain,
+Resend delivers only to the Resend account owner's own address. Everyone else
+gets nothing.
 
-All of these go in the Convex dashboard (Settings → Environment Variables), not in your web hosting.
+## Support address
 
-## Best Practices
+`SUPPORT_EMAIL` fills the line at the bottom of every email: "If you have any
+questions or need any help, reach out to …". It applies to every email above,
+in both auth modes.
 
-- use a verified sending domain
-- verify that links resolve to the correct production URL. If `NEXT_PUBLIC_APP_URL` is unset, email links default to `https://app.convoy.build`
-- test invitation flows end to end before launch
+Set it to an inbox your users can write to and someone reads. Left unset, the
+line is left out, so your users are never pointed at an address that isn't
+yours.
 
+## Without Resend
+
+- Invitations still work. Settings → Members shows **Copy link** in place of
+  **Resend**; pass the link on yourself.
+- In Convex Auth mode, set `AUTH_EMAIL_VERIFICATION=off`. While verification is
+  required, sign-up fails with "Email sending is not configured on this
+  deployment". With it off there is no password reset. See
+  [Email verification](/docs/deployment/auth-and-clerk#email-verification).
+
+## Before launch
+
+- Send yourself an invitation and check that its link opens your app, not
+  `app.convoy.build`.
+- In Convex Auth mode with verification required, sign up with an address
+  outside your Resend account and open the link.
+- Check that the footer names your `SUPPORT_EMAIL`.

@@ -9,13 +9,15 @@ Convoy uses environment variables across three different contexts. Each variable
 
 | Variable | Convex Dashboard | Web Hosting (Vercel, etc.) | Local `.env.local` |
 | --- | :---: | :---: | :---: |
+| `AUTH_MODE` | Yes | — | — |
+| `AUTH_EMAIL_VERIFICATION` | Yes | — | — |
 | `CLERK_JWT_ISSUER_DOMAIN` | Yes | — | — |
 | `AUTH_GOOGLE_CLIENT_ID` | Yes | — | — |
 | `AUTH_GOOGLE_CLIENT_SECRET` | Yes | — | — |
 | `RESEND_API_KEY` | Yes | — | — |
 | `EMAIL_FROM` | Yes | — | — |
 | `SUPPORT_EMAIL` | Yes | — | — |
-| `NEXT_PUBLIC_APP_URL` | Yes | — | — |
+| `NEXT_PUBLIC_APP_URL` | Yes | Yes (Convex Auth) | — |
 | `CONVOY_BACKEND_BUILD_ID` | Yes | — | — |
 | `CONVOY_BACKEND_BUILD_TIME` | Yes | — | — |
 | `CONVOY_BACKEND_GIT_REF` | Yes | — | — |
@@ -28,12 +30,13 @@ Convoy uses environment variables across three different contexts. Each variable
 | `GITHUB_APP_WEBHOOK_SECRET` | Yes | — | — |
 | `CONVEX_DEPLOY_KEY` | — | Yes (if integrated build) | — |
 | `NEXT_PUBLIC_CONVEX_URL` | — | Yes (if separate deploy) | Yes |
-| `NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY` | — | Yes | Yes |
-| `CLERK_SECRET_KEY` | — | Yes | Yes |
-| `NEXT_PUBLIC_CLERK_SIGN_IN_URL` | — | Yes | Yes |
-| `NEXT_PUBLIC_CLERK_SIGN_UP_URL` | — | Yes | Yes |
-| `NEXT_PUBLIC_CLERK_SIGN_IN_FALLBACK_REDIRECT_URL` | — | Yes | Yes |
-| `NEXT_PUBLIC_CLERK_SIGN_UP_FALLBACK_REDIRECT_URL` | — | Yes | Yes |
+| `NEXT_PUBLIC_AUTH_MODE` | — | Yes | Yes |
+| `NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY` | — | Yes (Clerk) | Yes (Clerk) |
+| `CLERK_SECRET_KEY` | — | Yes (Clerk) | Yes (Clerk) |
+| `NEXT_PUBLIC_CLERK_SIGN_IN_URL` | — | Yes (Clerk) | Yes (Clerk) |
+| `NEXT_PUBLIC_CLERK_SIGN_UP_URL` | — | Yes (Clerk) | Yes (Clerk) |
+| `NEXT_PUBLIC_CLERK_SIGN_IN_FALLBACK_REDIRECT_URL` | — | Yes (Clerk) | Yes (Clerk) |
+| `NEXT_PUBLIC_CLERK_SIGN_UP_FALLBACK_REDIRECT_URL` | — | Yes (Clerk) | Yes (Clerk) |
 | `NEXT_PUBLIC_APP_ENV` | — | Yes | Yes |
 | `NEXT_PUBLIC_APP_BUILD_ID` | — | Yes | Yes |
 | `NEXT_PUBLIC_APP_BUILD_TIME` | — | Yes | Yes |
@@ -49,13 +52,15 @@ Set these in the Convex dashboard under **Settings → Environment Variables** f
 
 | Variable | Required | Purpose |
 | --- | --- | --- |
-| `CLERK_JWT_ISSUER_DOMAIN` | Yes | Clerk JWT issuer domain for token verification |
-| `AUTH_GOOGLE_CLIENT_ID` | No | Google OAuth client ID for "Continue with Google" in Convex Auth mode. Unset hides the button |
+| `AUTH_MODE` | Convex Auth | `convex` allows new Convex Auth accounts. `clerk` or unset refuses them. Any other value is rejected |
+| `AUTH_EMAIL_VERIFICATION` | No | `required` (default when unset) or `off`. While required, Convex Auth sign-up emails a link and fails without `RESEND_API_KEY`. See [Email verification](/docs/deployment/auth-and-clerk#email-verification) |
+| `CLERK_JWT_ISSUER_DOMAIN` | Yes | Clerk JWT issuer domain for token verification. Convex Auth deployments set a placeholder such as `https://convex.invalid` |
+| `AUTH_GOOGLE_CLIENT_ID` | No | Google OAuth client ID for "Continue with Google" in Convex Auth mode. Unset or `none` hides the button. See [Google sign-in](/docs/deployment/auth-and-clerk#google-sign-in) |
 | `AUTH_GOOGLE_CLIENT_SECRET` | No | Google OAuth client secret |
-| `RESEND_API_KEY` | No | Resend API key for transactional email |
-| `EMAIL_FROM` | No | Verified sender identity (e.g. `Convoy <noreply@example.com>`) |
-| `SUPPORT_EMAIL` | No | Help address named at the bottom of every email. Unset leaves that line out |
-| `NEXT_PUBLIC_APP_URL` | No | Base URL for email links. Defaults to `https://app.convoy.build` when unset |
+| `RESEND_API_KEY` | No | Resend API key for transactional email. Required in Convex Auth mode while email verification is required |
+| `EMAIL_FROM` | No | Sender on a domain verified in Resend (e.g. `Convoy <noreply@example.com>`) |
+| `SUPPORT_EMAIL` | No | Help address named at the bottom of every email, in both auth modes. Unset leaves that line out |
+| `NEXT_PUBLIC_APP_URL` | Convex Auth | Base URL, with scheme, for invitation, sign-up and password reset links. Defaults to `https://app.convoy.build` when unset. A value without a scheme fails `convex deploy` |
 | `CONVOY_BACKEND_BUILD_ID` | No | Backend build or commit id shown in Settings → Developer. Vercel integrated builds should set this from `VERCEL_GIT_COMMIT_SHA` before `convex deploy` |
 | `CONVOY_BACKEND_BUILD_TIME` | No | Backend deploy timestamp shown in Settings → Developer |
 | `CONVOY_BACKEND_GIT_REF` | No | Backend branch/ref shown in Settings → Developer |
@@ -75,12 +80,14 @@ Set these in your web hosting provider (Vercel, Cloudflare, etc.). They are used
 | --- | --- | --- |
 | `CONVEX_DEPLOY_KEY` | If integrated build | Deploy key for CI/CD Convex deploys (Settings → General → Deploy Keys) |
 | `NEXT_PUBLIC_CONVEX_URL` | If separate deploy | Convex deployment URL (e.g. `https://friendly-wolf-872.convex.cloud`) |
-| `NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY` | Yes | Clerk publishable key for browser auth |
-| `CLERK_SECRET_KEY` | Yes | Clerk server-side secret |
-| `NEXT_PUBLIC_CLERK_SIGN_IN_URL` | Yes | Sign-in route (typically `/auth/sign-in`) |
-| `NEXT_PUBLIC_CLERK_SIGN_UP_URL` | Yes | Sign-up route (typically `/auth/sign-up`) |
-| `NEXT_PUBLIC_CLERK_SIGN_IN_FALLBACK_REDIRECT_URL` | Yes | Post-sign-in redirect (typically `/auth/callback`) |
-| `NEXT_PUBLIC_CLERK_SIGN_UP_FALLBACK_REDIRECT_URL` | Yes | Post-sign-up redirect (typically `/auth/callback`) |
+| `NEXT_PUBLIC_AUTH_MODE` | No | `convex` (default when unset) or `clerk`. Baked in at build time; any other value fails the build. See [Authentication](/docs/deployment/auth-and-clerk) |
+| `NEXT_PUBLIC_APP_URL` | Convex Auth | The app's URL. Decides whether the session cookie is `Secure`, and is the origin the auth routes trust behind a proxy that rewrites `Host` |
+| `NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY` | Clerk | Clerk publishable key for browser auth |
+| `CLERK_SECRET_KEY` | Clerk | Clerk server-side secret |
+| `NEXT_PUBLIC_CLERK_SIGN_IN_URL` | Clerk | Sign-in route (typically `/auth/sign-in`) |
+| `NEXT_PUBLIC_CLERK_SIGN_UP_URL` | Clerk | Sign-up route (typically `/auth/sign-up`) |
+| `NEXT_PUBLIC_CLERK_SIGN_IN_FALLBACK_REDIRECT_URL` | Clerk | Post-sign-in redirect (typically `/auth/callback`) |
+| `NEXT_PUBLIC_CLERK_SIGN_UP_FALLBACK_REDIRECT_URL` | Clerk | Post-sign-up redirect (typically `/auth/callback`) |
 | `NEXT_PUBLIC_APP_ENV` | No | Environment label (`dev`, `staging`, or `production`). Non-production values show a colored indicator card in the sidebar. Defaults to `production` |
 | `NEXT_PUBLIC_APP_BUILD_ID` | No | Frontend build or commit id shown in Settings → Developer. Vercel builds derive this from `VERCEL_GIT_COMMIT_SHA` when unset |
 | `NEXT_PUBLIC_APP_BUILD_TIME` | No | Frontend build timestamp shown in Settings → Developer. The Next.js build fills this automatically when unset |
@@ -88,6 +95,8 @@ Set these in your web hosting provider (Vercel, Cloudflare, etc.). They are used
 | `NEXT_PUBLIC_APP_VERCEL_ENV` | No | Frontend Vercel environment label shown in Settings → Developer. Vercel builds derive this from `VERCEL_ENV` when unset |
 | `NEXT_PUBLIC_APP_VERSION_POLL_INTERVAL_MS` | No | Frontend update-check interval in milliseconds. Defaults to `120000` (2 minutes) |
 | `NEXT_PUBLIC_VERCEL_ANALYTICS_ENABLED` | No | Enables Vercel Web Analytics only when set to `true`. Defaults to off so self-hosted installs do not send analytics events to Vercel unless explicitly opted in |
+
+"Convex Auth" and "Clerk" in the Required column mean required in that auth mode only.
 
 When using the integrated Convex build command, the `NEXT_PUBLIC_CONVEX_URL` is injected automatically and does not need to be set separately. See [Deploy to Vercel](/docs/deployment/deploy-to-vercel) for the full command, including backend version metadata setup.
 
@@ -104,7 +113,7 @@ Use one or the other. See [Deploy the Convex Backend](/docs/deployment/deploy-wi
 
 ## Local Development
 
-For local development, `apps/web/.env.local` only needs:
+For local development in Clerk mode, `apps/web/.env.local` only needs:
 
 ```
 NEXT_PUBLIC_APP_ENV=dev
@@ -114,6 +123,7 @@ NEXT_PUBLIC_VERCEL_ANALYTICS_ENABLED=false
 CONVEX_DEPLOYMENT=dev:your-dev-deployment-123
 NEXT_PUBLIC_CONVEX_URL=https://your-dev-deployment-123.convex.cloud
 
+NEXT_PUBLIC_AUTH_MODE=clerk
 NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY=pk_test_...
 CLERK_SECRET_KEY=sk_test_...
 
@@ -123,9 +133,18 @@ NEXT_PUBLIC_CLERK_SIGN_IN_FALLBACK_REDIRECT_URL=/auth/callback
 NEXT_PUBLIC_CLERK_SIGN_UP_FALLBACK_REDIRECT_URL=/auth/callback
 ```
 
+For Convex Auth, leave out `NEXT_PUBLIC_AUTH_MODE` and the Clerk lines. Then set these on your dev deployment:
+
+```bash
+npx convex env set AUTH_MODE convex
+npx convex env set AUTH_EMAIL_VERIFICATION off   # or set up Resend
+npx convex env set CLERK_JWT_ISSUER_DOMAIN https://convex.invalid
+npx convex env set NEXT_PUBLIC_APP_URL http://localhost:3000
+```
+
 The `dev:` prefix indicates a development deployment. Production deployments use `prod:` instead.
 
-Convex server-side variables (`CLERK_JWT_ISSUER_DOMAIN`, `RESEND_API_KEY`, `EMAIL_FROM`, `SUPPORT_EMAIL`, `NEXT_PUBLIC_APP_URL`) go in the Convex dashboard for your dev deployment — they are not needed in `.env.local`.
+Convex server-side variables (`AUTH_MODE`, `AUTH_EMAIL_VERIFICATION`, `CLERK_JWT_ISSUER_DOMAIN`, `RESEND_API_KEY`, `EMAIL_FROM`, `SUPPORT_EMAIL`, `NEXT_PUBLIC_APP_URL`) go in the Convex dashboard for your dev deployment — they are not needed in `.env.local`.
 
 ## Guidance
 
@@ -138,5 +157,5 @@ Convex server-side variables (`CLERK_JWT_ISSUER_DOMAIN`, `RESEND_API_KEY`, `EMAI
 
 - [Deploy the Convex Backend](/docs/deployment/deploy-with-convex)
 - [Deploy to Vercel](/docs/deployment/deploy-to-vercel)
-- [Auth and Clerk](/docs/deployment/auth-and-clerk)
+- [Authentication](/docs/deployment/auth-and-clerk)
 - [Email and Resend](/docs/deployment/email-and-resend)

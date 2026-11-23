@@ -14,14 +14,16 @@ Use managed Convex for the backend and a Next.js host for the web app. The
 documented web-host example is Vercel. Follow this order so each credential
 is ready before the next step needs it:
 
-1. [Auth and Clerk](/docs/deployment/auth-and-clerk). Create the Clerk app,
-   configure the `convex` JWT template, and copy the issuer and app keys.
+1. [Authentication](/docs/deployment/auth-and-clerk). Choose Convex Auth
+   (the default, no outside account) or Clerk, and collect the values your
+   mode needs.
 2. [Deploy the Convex backend](/docs/deployment/deploy-with-convex). Set the
    issuer, deploy the functions and schema, and record the deployment URL.
 3. [Deploy the web app](/docs/deployment/deploy-to-vercel). Configure the
-   backend connection and Clerk keys on your web host.
-4. [Email and Resend](/docs/deployment/email-and-resend). Configure email if
-   your team needs invitation delivery.
+   backend connection and auth mode on your web host.
+4. [Email and Resend](/docs/deployment/email-and-resend). Configure email for
+   invitations, and for sign-up verification and password reset in Convex
+   Auth mode.
 5. [GitHub integration](/docs/deployment/github-integration). Register a
    GitHub App if projects should browse pull requests in Convoy.
 6. [Production checklist](/docs/deployment/production-checklist). Verify
@@ -30,8 +32,8 @@ is ready before the next step needs it:
 ## Docker
 
 [Docker deployment](/docs/deployment/self-hosting-convex) runs the backend,
-dashboard, and web app using the bundled Compose setup. It still requires
-Clerk; Resend is optional. Follow that recipe directly instead of the
+dashboard, and web app using the bundled Compose setup. Convex Auth needs no
+outside service; Clerk and Resend are optional. Follow that recipe directly instead of the
 managed Convex and Vercel steps above.
 
 You own backups, upgrades, network access, and availability on this path.

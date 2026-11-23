@@ -11,7 +11,7 @@ has its own deeper troubleshooting page linked below.
 
 - web app availability
 - Convex deployment health
-- Clerk configuration
+- auth configuration (Convex Auth variables, or Clerk)
 - Resend configuration
 - connected CLI session status
 
@@ -19,7 +19,7 @@ has its own deeper troubleshooting page linked below.
 
 | Symptom | Start at |
 |---|---|
-| Users cannot sign in, 4xx/5xx after login | [`Auth and Clerk`](/docs/deployment/auth-and-clerk) — verify Clerk keys, allowed domains, JWT issuer. |
+| Users cannot sign in, 4xx/5xx after login | [`Authentication`](/docs/deployment/auth-and-clerk) — in Convex Auth mode check `AUTH_MODE`, `NEXT_PUBLIC_APP_URL` and Resend; in Clerk mode the keys, allowed domains and JWT issuer. |
 | Tasks load slowly or fail | [`Monitoring and logs`](/docs/operations/monitoring-and-logs) — check Convex function error rate and latency. |
 | Threads stay pending, never execute | [`CLI Troubleshooting`](/docs/cli/troubleshooting) — verify a compatible profile is online and the runtime is installed. |
 | MCP client cannot reach Convoy | [`MCP Troubleshooting`](/docs/cli/mcp/troubleshooting) — config path, client scope, API key validity. |

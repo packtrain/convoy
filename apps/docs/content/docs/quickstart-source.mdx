@@ -16,7 +16,7 @@ wired up, see [`Quickstart: join a deployment`](/docs/quickstart-join).
 - Node.js 18+
 - pnpm
 - a Convex dev deployment (free tier is fine)
-- Clerk keys for local authentication
+- Clerk keys, only if you run in Clerk mode
 - An installed, authenticated [supported runtime](/docs/reference/roadmap#runtime-execution)
 
 Verify the runtime before starting the bridge. For Claude Code:
@@ -34,9 +34,10 @@ pnpm install
 cp apps/web/.env.example apps/web/.env.local
 ```
 
-Fill `apps/web/.env.local` with your Convex and Clerk values. At minimum, the
-web app needs `NEXT_PUBLIC_CONVEX_URL`, `NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY`, and
-`CLERK_SECRET_KEY`. See
+Fill `apps/web/.env.local` with your Convex values. At minimum, the web app
+needs `NEXT_PUBLIC_CONVEX_URL`. That runs Convex Auth, which also needs [a few
+variables](/docs/reference/environment-variables#local-development) on your dev deployment. Clerk mode needs `NEXT_PUBLIC_AUTH_MODE=clerk`,
+`NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY`, and `CLERK_SECRET_KEY`. See
 [`Environment variables`](/docs/reference/environment-variables) for the full
 matrix.
 

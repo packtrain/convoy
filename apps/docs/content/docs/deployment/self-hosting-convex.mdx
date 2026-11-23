@@ -21,36 +21,49 @@ runs the whole stack on one machine:
 
 ## What still lives in the cloud
 
-There is no fully offline, single-image Convoy. Two things cannot be
-bundled:
+Nothing has to. The default auth mode, Convex Auth, keeps accounts in your own
+backend. These outside services are optional:
 
-- **Clerk (required).** All authentication goes through Clerk, which has no
-  self-hosted offering. A free-tier Clerk app works fine for a local
-  deployment; the login flow needs internet access to `*.clerk.accounts.dev`.
-- **Resend (optional).** Invitation and notification emails go through
-  Resend. Skip it and everything else works — invitations can be accepted
-  via link instead of email.
+- **Resend.** Sends invitation emails and, in Convex Auth mode, the sign-up
+  verification and password reset links. Without it, set
+  `AUTH_EMAIL_VERIFICATION=off`: sign-up checks no mailbox and there is no
+  password reset. Invitations still work through a copied link. See
+  [Email verification](/docs/deployment/auth-and-clerk#email-verification).
+- **Google.** "Continue with Google" needs a Google OAuth client.
+- **Clerk.** Clerk mode signs people in through Clerk, which has no
+  self-hosted offering. A free-tier Clerk app works for a local deployment;
+  the login flow needs internet access to `*.clerk.accounts.dev`.
 
-A single pull-and-run image is also ruled out by Next.js itself: the
-`NEXT_PUBLIC_*` values (Convex URL, Clerk publishable key) are baked into
+A single pull-and-run image is ruled out by Next.js itself: the
+`NEXT_PUBLIC_*` values (Convex URL, auth mode, Clerk publishable key) are baked into
 the JavaScript bundle at build time, so the web image must be built per
 installation. `docker compose build` handles that.
 
 ## Quick start
 
-Prerequisites: Docker with Compose, and a Clerk application set up per
-[Auth and Clerk](/docs/deployment/auth-and-clerk) (create the `convex` JWT
-template).
+Prerequisites: Docker with Compose. For Clerk mode, also a Clerk application
+set up per [Authentication](/docs/deployment/auth-and-clerk#clerk) (create the
+`convex` JWT template).
 
 ```bash
 ./self-hosted/start.sh
 ```
 
-The script asks for your two Clerk API keys on the first run and does the
-rest: writes `.env`, generates the instance secret and admin key, derives
-the Clerk JWT issuer domain from the publishable key, starts the backend
-and dashboard, builds the web image, deploys Convoy's functions from
-inside Docker (no Node.js needed on the host), and starts the web app.
+On the first run the script asks for the auth mode, `convex` (default) or
+`clerk`. Choose before the first user signs up; accounts don't move between
+modes.
+
+- **convex** asks for an optional Resend API key and `EMAIL_FROM`. With a key
+  it sets `AUTH_EMAIL_VERIFICATION=required`, without one `off`. It also sets
+  `AUTH_MODE`, `NEXT_PUBLIC_APP_URL` (from `APP_URL`) and the placeholder
+  `CLERK_JWT_ISSUER_DOMAIN` on the backend.
+- **clerk** asks for your two Clerk API keys and derives the Clerk JWT issuer
+  domain from the publishable key.
+
+Then it does the rest: writes `.env`, generates the instance secret and admin
+key, starts the backend and dashboard, builds the web image, deploys Convoy's
+functions from inside Docker (no Node.js needed on the host), and starts the
+web app.
 On later runs, review the existing `.env` and back up the data before
 upgrading.
 
@@ -65,8 +78,9 @@ cd self-hosted
 cp .env.example .env
 ```
 
-Fill in `.env`: `INSTANCE_SECRET` (`openssl rand -hex 32`),
-`NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY`, and `CLERK_SECRET_KEY`.
+Fill in `.env`: `INSTANCE_SECRET` (`openssl rand -hex 32`) and `AUTH_MODE`
+(`convex` or `clerk`). In Clerk mode also `NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY`
+and `CLERK_SECRET_KEY`.
 
 **1. Start the Convex backend and dashboard:**
 
@@ -91,8 +105,15 @@ set -a; source ../../self-hosted/.env; set +a
 # If apps/web/.env.local exists (dev checkout), its CONVEX_DEPLOYMENT
 # conflicts with self-hosted deploys — clear it for these commands:
 export CONVEX_DEPLOYMENT=
-npx convex env set CLERK_JWT_ISSUER_DOMAIN "https://<your-clerk-issuer-domain>"
-# Optional, for invitation emails:
+npx convex env set AUTH_MODE "$AUTH_MODE"
+npx convex env set NEXT_PUBLIC_APP_URL "$APP_URL"
+# Convex Auth mode (a placeholder; no Clerk token ever arrives):
+npx convex env set CLERK_JWT_ISSUER_DOMAIN "https://convex.invalid"
+# Clerk mode instead:
+# npx convex env set CLERK_JWT_ISSUER_DOMAIN "https://<your-clerk-issuer-domain>"
+# Convex Auth without email:
+# npx convex env set AUTH_EMAIL_VERIFICATION off
+# Email through Resend (sign-up links in Convex Auth mode, invitations in both):
 # npx convex env set RESEND_API_KEY "re_..."
 # npx convex env set EMAIL_FROM "Convoy <noreply@yourdomain>"
 # npx convex env set SUPPORT_EMAIL "help@yourdomain"
@@ -106,8 +127,8 @@ cd ../../self-hosted
 docker compose up -d --build web
 ```
 
-Open `http://127.0.0.1:3000`, sign in through Clerk, and create your first
-organization. The Convex dashboard is at `http://127.0.0.1:6791` (log in
+Open `http://127.0.0.1:3000` and sign up (Convex Auth) or sign in through
+Clerk. Your first workspace is created for you. The Convex dashboard is at `http://127.0.0.1:6791` (log in
 with the admin key).
 
 **5. Connect the CLI.** Nothing changes for CLI users — `convoy setup`
@@ -125,6 +146,8 @@ The defaults assume one machine. To serve a team:
   are embedded in tokens and the web bundle — they must match exactly).
 - Put TLS in front (Caddy/nginx/Traefik). Preserve the `:3210`/`:3211`
   pairing, e.g. `convex.example.com:3210` and `convex.example.com:3211`.
+- Turn on email verification before opening sign-up to the internet. With it
+  off, anyone who reaches the app can sign up under any address.
 - Rebuild the web image after changing `.env`
   (`docker compose up -d --build web`) — the values are baked in at build.
 
@@ -179,11 +202,15 @@ The `self-hosted/` compose file follows the
 [official Convex self-hosting guide](https://docs.convex.dev/self-hosting)
 and Convoy's URL handling supports the self-hosted port convention, but
 if you hit issues the most likely suspects are the ones any self-host
-deployer should verify first: Clerk JWT validation from inside your
-network, file uploads, scheduled jobs (task hard-delete, stream
+deployer should verify first: token validation from inside your
+network (Clerk's issuer, or the backend's own JWKS in Convex Auth mode), file uploads, scheduled jobs (task hard-delete, stream
 watchdogs), and CLI agent registration over `:3211`.
 
 ## Next steps
 
-Configure [Email and Resend](/docs/deployment/email-and-resend) if needed,
-then run through the [production checklist](/docs/deployment/production-checklist).
+Configure [Email and Resend](/docs/deployment/email-and-resend) if needed.
+`start.sh` doesn't ask for `SUPPORT_EMAIL`; set it once with
+`npx convex env set` or in the Convex dashboard, and later runs leave it alone.
+For "Continue with Google", see
+[Google sign-in](/docs/deployment/auth-and-clerk#google-sign-in) and put the
+client ID and secret in `.env`. Then run through the [production checklist](/docs/deployment/production-checklist).

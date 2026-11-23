@@ -1,55 +1,202 @@
 ---
-title: Auth and Clerk
-description: Configure Clerk as the authentication layer for Convoy deployments, including the JWT template and user sync flow.
+title: Authentication
+description: Choose Convex Auth or Clerk, then set the variables each mode needs, including email verification and Google sign-in.
 ---
 
-Convoy uses Clerk for user authentication. The web app signs users in
-through Clerk; Convex validates those sessions through a JWT issuer
-configured to match the same Clerk instance. Authorization (who can do
-what inside Convoy) is separate from this and lives in the project's
-organization/project permission model.
+Convoy signs people in through one of two modes, chosen when you build the web
+app:
 
-A build that sets no `NEXT_PUBLIC_AUTH_MODE` runs Convex Auth, not Clerk. Set
-`NEXT_PUBLIC_AUTH_MODE=clerk` on the web host to use the Clerk setup on this page.
+| Mode | Sign-in | Outside services |
+|---|---|---|
+| `convex` | Email and password on Convoy's own forms, plus Google when you configure it. Accounts live in your Convex deployment. | Resend to email sign-up links (optional), a Google OAuth client (optional) |
+| `clerk` | Clerk's hosted sign-in. Accounts live in Clerk. | A Clerk application |
 
-## Required env vars
+A build that sets no mode runs `convex`. Pick the mode before the first user
+signs up: accounts do not move between modes (see
+[Switching auth mode](#switching-auth-mode)).
 
-Set these Clerk-related env vars in the places listed.
+Authentication answers "who is this?". What that person can do inside Convoy is
+decided by organization and project roles, the same in both modes.
+
+## Choose the mode
+
+The mode is set in three places:
+
+| Variable | Where | Value |
+|---|---|---|
+| `NEXT_PUBLIC_AUTH_MODE` | Web build | `convex` or `clerk`. Unset means `convex`. Any other value fails the build. |
+| `AUTH_MODE` | Convex deployment | `convex` lets people create Convex Auth accounts. `clerk` or unset refuses them. Convex rejects any other value. |
+| `CLERK_JWT_ISSUER_DOMAIN` | Convex deployment | The Clerk issuer in Clerk mode. In Convex mode, a placeholder such as `https://convex.invalid`. The backend always registers the Clerk provider, so it needs a value either way. |
+
+`NEXT_PUBLIC_AUTH_MODE` is baked into the JavaScript bundle. Rebuild the web
+app after you change it.
+
+## Convex Auth
+
+The deployment signs its own tokens, so Convex mode has no auth secrets to
+generate. Set these on the Convex deployment (dashboard → Settings →
+Environment Variables, or `npx convex env set`):
+
+| Variable | Required | Purpose |
+|---|---|---|
+| `AUTH_MODE` | Yes | `convex`. Without it sign-up fails with "Convex Auth sign-up is not enabled on this deployment". |
+| `CLERK_JWT_ISSUER_DOMAIN` | Yes | Placeholder, e.g. `https://convex.invalid` |
+| `NEXT_PUBLIC_APP_URL` | Yes | The app's URL with its scheme, e.g. `https://convoy.example.com`. Sign-up, password reset and invitation links are built from it. A value without a scheme, such as `localhost:3000`, fails `convex deploy`. |
+| `AUTH_EMAIL_VERIFICATION` | No | `required` (the default when unset) or `off`. See [Email verification](#email-verification). |
+| `RESEND_API_KEY` | While verification is required | Sends the sign-up and password reset emails |
+| `EMAIL_FROM` | While verification is required | Sender on a domain verified in Resend, e.g. `Convoy <noreply@example.com>` |
+| `SUPPORT_EMAIL` | No | Help address at the bottom of every email. See [Email and Resend](/docs/deployment/email-and-resend#support-address). |
+| `AUTH_GOOGLE_CLIENT_ID` | No | Turns on "Continue with Google". See [Google sign-in](#google-sign-in). |
+| `AUTH_GOOGLE_CLIENT_SECRET` | No | Google OAuth client secret |
+
+```bash
+npx convex env set AUTH_MODE convex
+npx convex env set CLERK_JWT_ISSUER_DOMAIN https://convex.invalid
+npx convex env set NEXT_PUBLIC_APP_URL https://convoy.example.com
+```
+
+On the web host, set `NEXT_PUBLIC_AUTH_MODE=convex` (or leave it unset) and
+`NEXT_PUBLIC_APP_URL` to the same URL as on the deployment. The web app uses it
+to decide whether the session cookie is `Secure`, and behind a proxy that
+rewrites `Host` its auth routes trust that origin. No Clerk variables are
+needed.
+
+The [Docker deployment](/docs/deployment/self-hosting-convex) script sets all
+of this for you when you pick `convex`.
+
+### Email verification
+
+`AUTH_EMAIL_VERIFICATION` decides whether sign-up proves the address.
+
+**`required` (default).** Sign-up emails a "Verify your email address" link
+through Resend, and the person can sign in once they open it. The link works for
+1 hour, and only in the browser where they signed up; opened anywhere else, the
+page says to open it there. To get a new link, they sign up again. "Forgot
+password?" appears on the sign-in page and emails a reset link that works for
+10 minutes.
+
+Without `RESEND_API_KEY`, sign-up fails with "Email sending is not configured
+on this deployment" and creates no account. Without a domain verified in
+Resend, Resend delivers only to the Resend account owner's address, so every
+other sign-up waits for an email that never comes.
+
+**`off`.** Sign-up sends nothing and lands the person in a new workspace right
+away. Use it for an instance that is not open to the internet, or one without
+Resend. The cost:
+
+- Nobody checks the mailbox, so anyone who can reach the app can sign up under
+  any address, including one you invited. Accepting an invitation then rests on
+  holding the invitation link alone.
+- There is no password reset. "Forgot password?" is hidden.
+- Without `RESEND_API_KEY` no email goes out at all. Copy invitation links from
+  Settings → Members and pass them on yourself.
+
+You can turn verification on later. Accounts made while it was off keep signing
+in.
+
+Sign-up is open to anyone who can reach the app in both settings. A new account
+gets an empty personal workspace and sees an organization only after accepting
+an invitation.
+
+### Google sign-in
+
+With a Google OAuth client, the sign-in and sign-up pages show "Continue with
+Google". Without one they show email and password only. Google sign-in works
+only in Convex mode.
+
+**1. Create the OAuth client.** In the
+[Google Cloud console](https://console.cloud.google.com/), in the project that
+should own the client:
+
+1. Under Google Auth Platform, fill in Branding (app name, support email) and
+   Audience. "External" lets any Google account sign in. Convoy asks only for
+   `openid email profile`, so publishing needs no Google review.
+2. Under Clients, create a client of type "Web application".
+3. Add one authorized redirect URI for each deployment the client serves:
+   `<Convex site URL>/auth/google/callback`. The site URL is the deployment's
+   `.convex.site` URL ("HTTP Actions URL" in the Convex dashboard), or
+   `CONVEX_SITE_ORIGIN` on a Docker install. It is not the app URL and not the
+   `.convex.cloud` URL. Authorized JavaScript origins can stay empty.
+4. Copy the client ID and secret.
+
+Google can take a few minutes to apply a new redirect URI. Use one client for
+production and another for everything else, so a test change can't break
+production sign-in.
+
+**2. Set the variables** on the Convex deployment, never on the web host:
+
+```bash
+npx convex env set AUTH_GOOGLE_CLIENT_ID 1234-abc.apps.googleusercontent.com
+npx convex env set AUTH_GOOGLE_CLIENT_SECRET GOCSPX-...
+```
+
+No redeploy is needed. The button appears on the next page load. A Google
+sign-in also needs `AUTH_MODE=convex`, and `NEXT_PUBLIC_APP_URL` must be the
+app's real origin, or the deployment refuses to send the person back.
+
+To turn Google off, remove both variables or set both to `none`. The button
+disappears, and `convex deploy` succeeds with them unset.
+
+**Which account a Google sign-in opens.** Google sign-in joins an existing
+email account only when that account proved its address through the emailed
+link. Everyone else gets a separate account:
+
+- accounts made while `AUTH_EMAIL_VERIFICATION` was `off`, even after you turn
+  it on
+- accounts made before Google sign-in shipped
+- accounts made by email after the person had already used Google on that
+  address
+
+| What you see | Cause |
+|---|---|
+| No button | One of the two variables is unset or `none`, or the page loaded before you set them. Reload. |
+| `redirect_uri_mismatch` at Google | The client lacks this deployment's `/auth/google/callback` URI, or Google hasn't applied it yet. |
+| `invalid_client` at Google | Wrong client ID, or the client was deleted in the console. |
+| `redirectTo origin ... is not in allowedRedirectOrigins` | `NEXT_PUBLIC_APP_URL` on the Convex deployment doesn't match the app's origin. |
+| "Convex Auth sign-up is not enabled on this deployment" | `AUTH_MODE=convex` is missing on the Convex deployment. |
+
+## Clerk
+
+Clerk mode signs people in through Clerk's hosted components. The web app gets
+a Clerk session, and Convex validates it through a JWT template on the same
+Clerk application.
+
+### Clerk variables
 
 | Variable | Where | Purpose |
 |---|---|---|
+| `NEXT_PUBLIC_AUTH_MODE` | Web host | `clerk` |
 | `NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY` | Web host | Browser-side Clerk client |
 | `CLERK_SECRET_KEY` | Web host | Server-side Clerk client |
 | `NEXT_PUBLIC_CLERK_SIGN_IN_URL` | Web host | Typically `/auth/sign-in` |
 | `NEXT_PUBLIC_CLERK_SIGN_UP_URL` | Web host | Typically `/auth/sign-up` |
 | `NEXT_PUBLIC_CLERK_SIGN_IN_FALLBACK_REDIRECT_URL` | Web host | Post-sign-in, typically `/auth/callback` |
 | `NEXT_PUBLIC_CLERK_SIGN_UP_FALLBACK_REDIRECT_URL` | Web host | Post-sign-up, typically `/auth/callback` |
-| `CLERK_JWT_ISSUER_DOMAIN` | Convex dashboard | Issuer domain Convex validates JWTs against |
+| `CLERK_JWT_ISSUER_DOMAIN` | Convex deployment | Issuer domain Convex validates JWTs against |
 
-See [`Environment Variables`](/docs/reference/environment-variables) for
-the full matrix.
+Leave `AUTH_MODE` unset or `clerk` on the Convex deployment. Clerk verifies
+addresses and resets passwords in its own screens, so `AUTH_EMAIL_VERIFICATION`
+does nothing here. Resend still sends invitation emails when configured.
 
-## How Clerk and Convex are wired
+See [Environment Variables](/docs/reference/environment-variables) for the full
+matrix.
 
-Convoy's `apps/web/convex/auth.config.ts` registers a single JWT
-provider, keyed on the Clerk issuer domain you configure in the Convex
-dashboard:
+### How Clerk and Convex are wired
+
+`apps/web/convex/auth.config.ts` registers the Clerk issuer you set on the
+Convex deployment:
 
 ```ts
-export default {
-  providers: [
-    {
-      domain: process.env.CLERK_JWT_ISSUER_DOMAIN!,
-      applicationID: "convex",
-    },
-  ],
-} satisfies AuthConfig;
+{
+  domain: process.env.CLERK_JWT_ISSUER_DOMAIN!,
+  applicationID: "convex",
+}
 ```
 
-That `applicationID: "convex"` value is what the Clerk JWT template's
-audience (`aud`) must be set to for Convex to accept the token.
+The Clerk JWT template's audience (`aud`) must be `convex` for Convex to accept
+the token.
 
-## Configure the JWT template in Clerk
+### Configure the JWT template in Clerk
 
 1. Open the Clerk dashboard for the app you want Convex to trust.
 2. Go to **JWT Templates** → **New template**.
@@ -59,15 +206,15 @@ audience (`aud`) must be set to for Convex to accept the token.
    - **Signing algorithm**: `RS256` (default)
    - **Lifetime** / **Allowed clock skew**: defaults are fine
    - **Claims**: at minimum, `"aud": "convex"`. Clerk's preset also
-     populates the Clerk standard claims Convoy expects
+     populates the standard claims Convoy expects
      (`sub`, `email`, `name`, `picture_url`).
 4. Save.
 5. Copy the **Issuer** field from Clerk (looks like
    `https://your-app.clerk.accounts.dev` in dev, or your configured
-   custom domain in prod). That is the value `CLERK_JWT_ISSUER_DOMAIN`
-   must match in your Convex dashboard environment variables.
+   custom domain in prod). `CLERK_JWT_ISSUER_DOMAIN` on the Convex deployment
+   must match it.
 
-## Allowed origins and redirect URLs
+### Allowed origins and redirect URLs
 
 In the Clerk dashboard, under **Paths** / **Domains** and **Frontend
 API**, make sure:
@@ -78,37 +225,26 @@ API**, make sure:
 - OAuth/social provider redirect URIs on the Clerk side match the
   deployed host
 
-Mismatches usually surface as "invalid session" errors immediately after
-a user signs in.
+Mismatches usually show up as "invalid session" errors right after a user
+signs in.
 
-## User sync flow (how a Clerk user becomes a Convoy user)
+### How a Clerk user becomes a Convoy user
 
-On sign-in, the web app calls the Convex `users.store` mutation. That
-mutation reads `ctx.auth.getUserIdentity()` (which Convex populates from
-the validated Clerk JWT) and upserts a row in `users` keyed on
-`tokenIdentifier`:
+On sign-in, the web app calls the Convex `users.store` mutation. It reads the
+identity Convex built from the validated Clerk JWT and upserts a `users` row
+keyed on `tokenIdentifier`. The first call creates the row with `email`,
+`name`, and `avatarUrl`; later calls update them when they change.
+`users.onboard` then gives a new user their first organization.
 
-- First call: creates a `users` row with `email`, `name`, and
-  `avatarUrl` from the Clerk identity.
-- Subsequent calls: updates `email` / `name` / `avatarUrl` if they have
-  changed since the last sign-in.
+If sign-in succeeds in Clerk but Convoy never sees the user, check the JWT
+template and `CLERK_JWT_ISSUER_DOMAIN`. Convex's Functions → Logs tab shows
+failed `users.store` calls when the identity is missing.
 
-On first onboarding, `users.onboard` additionally bootstraps the
-user's first organization membership. A `tokenIdentifier` that doesn't
-match any existing `users` row is an implicit "new user" signal — the
-onboarding path handles it.
-
-If sign-in succeeds in Clerk but Convoy never sees the user, the
-Clerk JWT template or the Convex `CLERK_JWT_ISSUER_DOMAIN` is usually
-the problem. Convex's Functions → Logs tab will show failed
-`users.store` calls when the identity is missing.
-
-## Environment separation
+### Environment separation
 
 Keep production and non-production Clerk instances separate. A
-non-production deployment that points at a production Clerk app will
-happily sync production users into its own Convex, which is almost
-never what you want.
+non-production deployment that points at a production Clerk app syncs
+production users into its own Convex.
 
 | Environment | Clerk app | Convex deployment | `CLERK_JWT_ISSUER_DOMAIN` |
 |---|---|---|---|
@@ -116,23 +252,30 @@ never what you want.
 | Staging | staging Clerk app | staging Convex | issuer of the staging Clerk app |
 | Prod | prod Clerk app | `prod:...` Convex | issuer of the prod Clerk app |
 
-## Enterprise / SSO
+### Enterprise / SSO
 
 Clerk supports SSO (SAML, OIDC), domain restriction, machine users, and
-allowlists — Convoy inherits whatever Clerk exposes. The setup lives
-in the Clerk dashboard, not in Convoy. See Clerk's own docs for the
-authoritative list; once configured, nothing in Convoy needs to
-change.
+allowlists, and Convoy gets whatever Clerk exposes. You set these up in the
+Clerk dashboard; nothing in Convoy changes. See Clerk's own docs for the list.
 
-## What this does not replace
+## Switching auth mode
 
-Clerk answers "is this request authenticated and who is it?". It does
-not answer "can this user do this?". Authorization decisions happen
-inside Convex functions via Convoy's organization and project
-permission helpers (`convex/lib/access/permissions.ts`).
+There is no migration between modes. On a deployment that already has users:
+
+- Each mode finds only its own accounts, by Clerk token or by Convex Auth user
+  id, never by email.
+- A person who signs up again with the same address after a switch gets a new,
+  empty user.
+- Nothing is deleted. The old users, organizations, tasks, API keys and CLI
+  logins stay in the database, and switching back restores access.
+- API keys and CLI logins keep working as the old user.
+
+The `local-demo` mode, which had no sign-in, is gone. A Docker install still set
+to it is moved to `convex` by `start.sh`, which keeps the demo user's data (see
+`self-hosted/README.md`).
 
 ## Next steps
 
 Continue to [Deploy the Convex backend](/docs/deployment/deploy-with-convex)
-with the issuer value and Clerk keys ready. For the Docker path, return to
+with your mode's variables ready. For the Docker path, return to
 [Docker deployment](/docs/deployment/self-hosting-convex).

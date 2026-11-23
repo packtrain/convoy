@@ -6,8 +6,9 @@ description: Create a Convex deployment, configure environment variables, and pu
 
 The Convex backend hosts your schema, queries, mutations, actions, and scheduled jobs. This page covers deploying it — the web app is deployed separately to a hosting provider of your choice (see [Deploy to Vercel](/docs/deployment/deploy-to-vercel) for one option).
 
-Before you start, complete [Auth and Clerk](/docs/deployment/auth-and-clerk).
-You need the `convex` JWT template's issuer for `CLERK_JWT_ISSUER_DOMAIN`.
+Before you start, choose an auth mode on [Authentication](/docs/deployment/auth-and-clerk).
+In Clerk mode you need the `convex` JWT template's issuer for
+`CLERK_JWT_ISSUER_DOMAIN`. Convex Auth needs no outside account.
 
 ## 1. Create a deployment
 
@@ -26,13 +27,19 @@ In the Convex dashboard, select your deployment and go to **Settings → Environ
 
 | Variable | Required | Description |
 | --- | --- | --- |
-| `CLERK_JWT_ISSUER_DOMAIN` | Yes | Clerk JWT issuer domain for token verification |
+| `AUTH_MODE` | Convex Auth | `convex` to allow Convex Auth sign-up |
+| `CLERK_JWT_ISSUER_DOMAIN` | Yes | Clerk JWT issuer domain. In Convex Auth mode, a placeholder such as `https://convex.invalid` |
+| `AUTH_EMAIL_VERIFICATION` | No | `required` (default) or `off`. While required, Convex Auth sign-up needs `RESEND_API_KEY` |
 | `AUTH_GOOGLE_CLIENT_ID` | No | Google OAuth client ID for "Continue with Google" in Convex Auth mode. Unset hides the button |
 | `AUTH_GOOGLE_CLIENT_SECRET` | No | Google OAuth client secret |
 | `EMAIL_FROM` | No | Verified sender address (e.g. `Convoy <noreply@convoy.build>`) |
 | `RESEND_API_KEY` | No | Resend API key for transactional email |
 | `SUPPORT_EMAIL` | No | Help address named at the bottom of every email. Unset leaves that line out |
-| `NEXT_PUBLIC_APP_URL` | No | Base URL for email links. Defaults to `https://app.convoy.build` |
+| `NEXT_PUBLIC_APP_URL` | Convex Auth | App URL with scheme, for invitation, sign-up and reset links. Defaults to `https://app.convoy.build` |
+
+"Convex Auth" in the Required column means required in that mode. See
+[Authentication](/docs/deployment/auth-and-clerk#convex-auth) for what each
+setting changes.
 
 These run inside Convex functions at runtime. They are **not** the same as the Next.js environment variables you configure in your web hosting provider — see [Environment Variables](/docs/reference/environment-variables) for the full breakdown.
 
