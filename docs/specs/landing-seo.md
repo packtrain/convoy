@@ -62,8 +62,7 @@ the year. "AI project management" is falling and draws unrelated intent.
 - The body uses the words of the exact-fit queries: "web UI" in the coding-agent
   introduction, "remotely" in the phone card, "Self-host" in "Run Convoy
   yourself".
-- The page never says "open source". Convoy ships under the Elastic License 2.0,
-  which is source-available. Say "self-hosted" instead.
+- Convoy ships under the Apache License 2.0, so the title says "open-source".
 
 ## Crawling
 

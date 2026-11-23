@@ -112,7 +112,7 @@ test('GitHub buttons are glass pills', async () => {
   await serve(page);
   try {
     await page.goto('https://convoy.localhost/');
-    const styles = await page.getByRole('link', { name: 'View on GitHub' }).evaluateAll(links => links.map(link => {
+    const styles = await page.getByRole('link', { name: /^(View on GitHub|Open source)$/ }).evaluateAll(links => links.map(link => {
       const style = getComputedStyle(link);
       return { radius: parseFloat(style.borderTopLeftRadius) >= link.getBoundingClientRect().height / 2, blur: style.backdropFilter, opaque: style.backgroundColor.startsWith('rgb(') };
     }));
@@ -141,10 +141,10 @@ test('built homepage renders all shared previews and keeps interactions local', 
     assert.equal(await page.evaluate(() => window.scrollY), 0);
     assert.doesNotMatch(await page.locator('body').innerText(), /2\.1k/, 'no placeholder star count');
     assert.doesNotMatch(await page.locator('body').innerText(), /Get started/, 'GitHub is the only call to action');
-    for (const scope of ['nav', 'main > section', '#cta']) {
-      const links = page.locator(scope).first().getByRole('link', { name: /GitHub/ });
+    for (const [scope, label] of [['nav', 'View on GitHub'], ['main > section', 'Open source'], ['#cta', 'View on GitHub']]) {
+      const links = page.locator(scope).first().getByRole('link', { name: label, exact: true });
       assert.equal(await links.count(), 1, `${scope} has one GitHub button`);
-      assert.equal((await links.innerText()).trim(), 'View on GitHub');
+      assert.equal((await links.innerText()).trim(), label);
       assert.ok((await links.locator('svg').first().boundingBox()).width >= 16, `${scope} GitHub button shows the GitHub mark`);
     }
     await mkdir('/tmp/convoy-homepage-check', { recursive: true });

@@ -49,7 +49,7 @@ that uses the same wording. Reasoning and the Trends data:
 
 Descriptions stay within 160 characters. The Skills title says "agent skills",
 not "Claude Code skills": Convoy delivers Skills through MCP and does not write
-them into a local client's configuration. Docs never call Convoy open source.
+them into a local client's configuration.
 
 ## Share card
 

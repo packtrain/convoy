@@ -2,7 +2,7 @@
 
 export const site = {
   name: "Convoy",
-  title: "Convoy | The software factory for AI coding agents",
+  title: "Convoy | The open-source software factory for AI coding agents",
   description:
     "Run Claude Code, Codex, OpenCode, Cursor and Antigravity from one web UI. Share agents, skills and workflows across your team, assign tasks and review results.",
   url: "https://convoy.build",
@@ -66,7 +66,7 @@ export const featureGroups: FeatureGroup[] = [
   {
     title: "Open & extensible",
     features: [
-      { name: "Code on GitHub", body: "Read exactly what runs between you and your agents. Licensed under the Elastic License 2.0." },
+      { name: "Code on GitHub", body: "Read exactly what runs between you and your agents. Open source." },
       { name: "Self-hostable", body: "Run Convoy's web app and backend on your own infrastructure." },
       { name: "MCP server", body: "AI tools can read and update tasks, artifacts, comments, skills and prompts over MCP, and start agent threads. Claude Code connects with a browser sign-in, no API key needed." },
       { name: "Environment management", body: "Manage local and Docker environments with convoy tui. Attach projects, inspect service status, and retry connections from a keyboard-driven terminal interface." },

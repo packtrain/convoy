@@ -78,8 +78,9 @@ The landing hero in `apps/landing` introduces Convoy as a shared way for teams
 to make their work with AI repeatable.
 
 There is no Get started action. The header, hero and closing CTA each have one
-View on GitHub button with the GitHub mark, and no star count appears
-anywhere. The button is a glass pill: a fully rounded, translucent white fill
+GitHub button with the GitHub mark, and no star count appears anywhere. The
+hero button says Open source; the header and CTA buttons say View on GitHub.
+Each button is a glass pill: a fully rounded, translucent white fill
 with a thin light border and backdrop blur. The hero and CTA buttons end in an
 arrow that nudges right on hover; the smaller header button has no arrow.
 
@@ -160,7 +161,7 @@ The closing CTA reads "Build your team's way of working with AI." Its supporting
 paragraph reads "Start with one workflow. Give your team a process they can reuse
 and improve."
 
-The site title reads "Convoy | The software factory for AI coding agents". The
+The site title reads "Convoy | The open-source software factory for AI coding agents". The
 metadata description reads "Run Claude Code, Codex, OpenCode, Cursor and
 Antigravity from one web UI. Share agents, skills and workflows across your team,
 assign tasks and review results." Why these words:

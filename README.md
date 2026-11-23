@@ -120,7 +120,7 @@ covers credentials and connecting a local agent.
 
 ## License
 
-[Elastic License 2.0](LICENSE)
+[Apache License 2.0](LICENSE)
 
 ## Screenshots
 

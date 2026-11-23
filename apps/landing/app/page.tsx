@@ -46,13 +46,13 @@ const LINE = "border-white/[0.07]";
 const DIM = "text-[#8f94a1]";
 const GLASS_PILL = "group inline-flex cursor-pointer items-center rounded-full border border-white/15 bg-white/[0.04] font-[510] text-[#f2f3f5] backdrop-blur-md transition-[background-color,border-color,transform] duration-150 ease-[var(--ease-out)] hover:border-white/25 hover:bg-white/[0.08] active:scale-[0.97] motion-reduce:active:scale-[1]";
 
-function GitHubButton() {
+function GitHubButton({ label }: { label: string }) {
   return (
     <a
       href={site.repoUrl}
       className={`${GLASS_PILL} h-11 gap-2.5 pr-4 pl-5 text-[14px]`}
     >
-      <GitHubIcon className="size-[18px]" /> View on GitHub
+      <GitHubIcon className="size-[18px]" /> {label}
       <ArrowRight aria-hidden className="size-4 transition-transform duration-200 ease-[var(--ease-out)] group-hover:translate-x-0.5" />
     </a>
   );
@@ -121,7 +121,7 @@ export default function Home() {
           <div className="pointer-events-none relative mx-auto flex w-full max-w-[1200px] flex-1 flex-col justify-end px-6 pt-32 sm:pt-44">
             <HeroCopy />
             <div className="enter pointer-events-auto mt-8 flex gap-3 [animation-delay:160ms]">
-              <GitHubButton />
+              <GitHubButton label="Open source" />
             </div>
             <HeroProcess />
             <div aria-hidden className="h-7 shrink-0" />
@@ -316,7 +316,7 @@ export default function Home() {
               Start with one workflow. Give your team a process they can reuse and improve.
             </p>
             <div className="mt-9 flex justify-center gap-3">
-              <GitHubButton />
+              <GitHubButton label="View on GitHub" />
             </div>
           </section>
         </div>
