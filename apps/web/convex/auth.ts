@@ -48,7 +48,7 @@ const FORGOT_PASSWORD_URL = `${appUrl}${href(appRoute.authForgotPassword())}`;
 
 const EMAIL_NOT_CONFIGURED = "Email sending is not configured on this deployment";
 
-// Convex refuses to deploy without the Google credentials, so an install without Google sets this.
+// Installs set this before the credentials were optional.
 const GOOGLE_CREDENTIAL_PLACEHOLDER = "none";
 
 function isGoogleConfigured(): boolean {

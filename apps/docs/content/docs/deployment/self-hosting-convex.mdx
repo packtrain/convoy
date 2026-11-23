@@ -92,9 +92,6 @@ set -a; source ../../self-hosted/.env; set +a
 # conflicts with self-hosted deploys — clear it for these commands:
 export CONVEX_DEPLOYMENT=
 npx convex env set CLERK_JWT_ISSUER_DOMAIN "https://<your-clerk-issuer-domain>"
-# Required; `none` turns Google sign-in off:
-npx convex env set AUTH_GOOGLE_CLIENT_ID none
-npx convex env set AUTH_GOOGLE_CLIENT_SECRET none
 # Optional, for invitation emails:
 # npx convex env set RESEND_API_KEY "re_..."
 # npx convex env set EMAIL_FROM "Convoy <noreply@yourdomain>"

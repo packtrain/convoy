@@ -50,8 +50,8 @@ Set these in the Convex dashboard under **Settings → Environment Variables** f
 | Variable | Required | Purpose |
 | --- | --- | --- |
 | `CLERK_JWT_ISSUER_DOMAIN` | Yes | Clerk JWT issuer domain for token verification |
-| `AUTH_GOOGLE_CLIENT_ID` | Yes | Google OAuth client ID for "Continue with Google" in Convex Auth mode. `none` turns Google off; the deploy fails while it is unset |
-| `AUTH_GOOGLE_CLIENT_SECRET` | Yes | Google OAuth client secret, or `none` |
+| `AUTH_GOOGLE_CLIENT_ID` | No | Google OAuth client ID for "Continue with Google" in Convex Auth mode. Unset hides the button |
+| `AUTH_GOOGLE_CLIENT_SECRET` | No | Google OAuth client secret |
 | `RESEND_API_KEY` | No | Resend API key for transactional email |
 | `EMAIL_FROM` | No | Verified sender identity (e.g. `Convoy <noreply@example.com>`) |
 | `SUPPORT_EMAIL` | No | Help address named at the bottom of every email. Unset leaves that line out |

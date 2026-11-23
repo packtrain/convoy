@@ -120,9 +120,6 @@ npx convex env set CLERK_JWT_ISSUER_DOMAIN "https://convex.invalid"
 # npx convex env set AUTH_EMAIL_VERIFICATION required
 # npx convex env set RESEND_API_KEY "$RESEND_API_KEY"
 # npx convex env set EMAIL_FROM "$EMAIL_FROM"
-# Required on every install; `none` turns Google sign-in off (see below):
-npx convex env set AUTH_GOOGLE_CLIENT_ID none
-npx convex env set AUTH_GOOGLE_CLIENT_SECRET none
 npx convex deploy
 
 # 4. Build and start the web app
@@ -145,9 +142,8 @@ pages. Create a "Web application" OAuth client in the
 [Google Cloud console](https://console.cloud.google.com/apis/credentials),
 register `<CONVEX_SITE_ORIGIN>/auth/google/callback` as its redirect URI, and
 put the client ID and secret in `.env` as `AUTH_GOOGLE_CLIENT_ID` and
-`AUTH_GOOGLE_CLIENT_SECRET`. Re-run `./start.sh`. Convex refuses to deploy
-without the two variables, so an install without Google keeps both at `none`,
-which hides the button.
+`AUTH_GOOGLE_CLIENT_SECRET`. Re-run `./start.sh`. Left empty, the button
+stays hidden.
 
 ## Cost estimation
 

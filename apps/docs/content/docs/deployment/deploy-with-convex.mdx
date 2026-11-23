@@ -27,8 +27,8 @@ In the Convex dashboard, select your deployment and go to **Settings → Environ
 | Variable | Required | Description |
 | --- | --- | --- |
 | `CLERK_JWT_ISSUER_DOMAIN` | Yes | Clerk JWT issuer domain for token verification |
-| `AUTH_GOOGLE_CLIENT_ID` | Yes | Google OAuth client ID for "Continue with Google" in Convex Auth mode. Set `none` to turn Google off; the deploy fails while it is unset |
-| `AUTH_GOOGLE_CLIENT_SECRET` | Yes | Google OAuth client secret, or `none` |
+| `AUTH_GOOGLE_CLIENT_ID` | No | Google OAuth client ID for "Continue with Google" in Convex Auth mode. Unset hides the button |
+| `AUTH_GOOGLE_CLIENT_SECRET` | No | Google OAuth client secret |
 | `EMAIL_FROM` | No | Verified sender address (e.g. `Convoy <noreply@convoy.build>`) |
 | `RESEND_API_KEY` | No | Resend API key for transactional email |
 | `SUPPORT_EMAIL` | No | Help address named at the bottom of every email. Unset leaves that line out |

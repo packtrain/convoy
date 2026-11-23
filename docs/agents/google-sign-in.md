@@ -4,30 +4,22 @@ How to turn on "Continue with Google" for a Convex Auth deployment, and how
 to test it on a worktree preview. The behavior and the reasons behind it are
 in [the spec](../specs/auth-adapters.md#google). This page is the steps.
 
-## Every deployment needs the two variables
+## Without Google, set nothing
 
-`convex/convex.config.ts` declares `AUTH_GOOGLE_CLIENT_ID` and
-`AUTH_GOOGLE_CLIENT_SECRET` as required, because the package's `authGoogle`
-component requires them and Convex checks that at push time. A deployment
-without them fails `convex deploy` with:
-
-```
-Environment variables AUTH_GOOGLE_CLIENT_ID, AUTH_GOOGLE_CLIENT_SECRET are declared as required in convex.config.ts but their values were not set.
-```
-
-This holds for Clerk deployments too. A deployment that
-doesn't offer Google sets both to `none`, which hides the button:
+`AUTH_GOOGLE_CLIENT_ID` and `AUTH_GOOGLE_CLIENT_SECRET` are optional. With
+either unset, the button is hidden. A deployment that set both to `none`
+while they were required can keep them or remove them:
 
 ```bash
-npx convex env set AUTH_GOOGLE_CLIENT_ID none
-npx convex env set AUTH_GOOGLE_CLIENT_SECRET none
+npx convex env remove AUTH_GOOGLE_CLIENT_ID
+npx convex env remove AUTH_GOOGLE_CLIENT_SECRET
 ```
 
-Rollout order for OS-2500: set `none` on the prod and dev deployments
-before the commit reaches them. The first deploy without the variables
-fails. Worktree previews copy dev's variables at setup, so once dev has
-them every new preview does too. A preview created before that needs them
-set by hand (see below).
+The package's `authGoogle` component declares them required, and Convex
+refuses an optional app variable bound to a required component one.
+`patches/@convex-dev__auth@2.1.0.patch` makes them optional in the component.
+Upgrading `@convex-dev/auth` means re-checking that patch; `auth.test.ts`
+fails if it is lost.
 
 ## Create the OAuth client
 
@@ -119,13 +111,13 @@ browser saves a pending flow. Read its `state` from the
 ```
 
 The component redirects back to the sign-in page, which shows "Sign-in was
-cancelled." Put the variables back to `none` afterwards.
+cancelled." Remove the variables afterwards.
 
 ## Troubleshooting
 
 | What you see | Cause |
 | --- | --- |
-| No button | One of the variables is `none` or unset, or the page loaded before you set them. Reload. |
+| No button | One of the variables is unset or `none`, or the page loaded before you set them. Reload. |
 | `redirect_uri_mismatch` at Google | The client lacks this deployment's `/auth/google/callback` URI, or Google hasn't applied it yet. |
 | `invalid_client` at Google | Wrong client ID, or a client deleted in the console. |
 | `redirectTo origin ... is not in allowedRedirectOrigins` | `NEXT_PUBLIC_APP_URL` on the Convex deployment doesn't match the app's origin. |

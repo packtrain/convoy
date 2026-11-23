@@ -1,0 +1,31 @@
+diff --git a/dist/components/google/convex.config.d.ts b/dist/components/google/convex.config.d.ts
+index c066a2fe4bf84b57d9171f7dee36a44c69aa532d..ad96cb4708cf253a9b73d67796ceb23c930f942a 100644
+--- a/dist/components/google/convex.config.d.ts
++++ b/dist/components/google/convex.config.d.ts
+@@ -13,8 +13,8 @@
+  * ```
+  */
+ declare const component: import("convex/server").ComponentDefinition<any, {
+-    readonly CLIENT_ID: import("convex/values").VString<string, "required">;
+-    readonly CLIENT_SECRET: import("convex/values").VString<string, "required">;
++    readonly CLIENT_ID: import("convex/values").VOptional<import("convex/values").VString<string, "required">>;
++    readonly CLIENT_SECRET: import("convex/values").VOptional<import("convex/values").VString<string, "required">>;
+ }>;
+ export default component;
+ //# sourceMappingURL=convex.config.d.ts.map
+\ No newline at end of file
+diff --git a/dist/components/google/convex.config.js b/dist/components/google/convex.config.js
+index 2b6645aadf46874989f149d7535327619d93573b..4462d539caac5dc48e9f588306ccbd978a94ec21 100644
+--- a/dist/components/google/convex.config.js
++++ b/dist/components/google/convex.config.js
+@@ -16,8 +16,8 @@ import { v } from "convex/values";
+  */
+ const component = defineComponent("authGoogle", {
+     env: {
+-        CLIENT_ID: v.string(),
+-        CLIENT_SECRET: v.string(),
++        CLIENT_ID: v.optional(v.string()),
++        CLIENT_SECRET: v.optional(v.string()),
+     },
+ });
+ export default component;

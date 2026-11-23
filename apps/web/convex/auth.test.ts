@@ -1,6 +1,7 @@
 import { afterEach, beforeEach, expect, test, describe, vi } from "vitest";
 import { api, internal } from "./_generated/api";
 import { sentEmails } from "@convex-dev/auth/components/email/test";
+import authGoogle from "@convex-dev/auth/components/google/convex.config.js";
 import { createTestContext } from "../convex-testing";
 import { getAppUrlBase } from "./lib/shared/appUrl";
 
@@ -295,9 +296,20 @@ test("getSettings reports email as on unless verification is off", async () => {
   vi.unstubAllEnvs();
 });
 
-test("getSettings reports Google as on only when neither credential is the placeholder", async () => {
+test("the Google component's credentials are optional, so a deployment without Google deploys", () => {
+  // Convex refuses an optional app var bound to a required component var; patches/@convex-dev__auth@2.1.0.patch.
+  expect(authGoogle).toMatchObject({
+    _env: { CLIENT_ID: { isOptional: "optional" }, CLIENT_SECRET: { isOptional: "optional" } },
+  });
+});
+
+test("getSettings reports Google as on only when both credentials are set", async () => {
   const { t } = createTestContext();
+  vi.stubEnv("AUTH_GOOGLE_CLIENT_ID", undefined);
+  vi.stubEnv("AUTH_GOOGLE_CLIENT_SECRET", undefined);
+  expect(await t.query(api.auth.getSettings, {})).toMatchObject({ googleEnabled: false });
   vi.stubEnv("AUTH_GOOGLE_CLIENT_ID", "none");
+  vi.stubEnv("AUTH_GOOGLE_CLIENT_SECRET", "none");
   vi.stubEnv("AUTH_GOOGLE_CLIENT_SECRET", "none");
   expect(await t.query(api.auth.getSettings, {})).toMatchObject({ googleEnabled: false });
   vi.stubEnv("AUTH_GOOGLE_CLIENT_ID", "1234.apps.googleusercontent.com");

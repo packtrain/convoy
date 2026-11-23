@@ -388,13 +388,16 @@ the app's `AUTH_GOOGLE_CLIENT_ID` and `AUTH_GOOGLE_CLIENT_SECRET`. The prefix
 is not the package's `/oauth/google`, because `http.ts` already serves
 `/oauth/register` and `/oauth/token` for MCP.
 
-The component declares both credentials as required strings, and Convex
-checks that at push time. Bound to optional app variables, the push fails
-("env var CLIENT_ID is required, but parent env var AUTH_GOOGLE_CLIENT_ID is
-optional"). Declared required, it fails while they are unset. So the app
-declares them required, and every deployment sets both, Clerk included. A deployment without Google sets them to `none`.
-`auth.getSettings` reports `googleEnabled` when both are set and neither is
-`none`, and the button shows only then.
+Both app variables are optional, so a deployment without Google sets
+nothing. The component declares its credentials as required strings, and
+Convex refuses an optional app variable bound to one at push time ("env var
+CLIENT_ID is required, but parent env var AUTH_GOOGLE_CLIENT_ID is
+optional"). `patches/@convex-dev__auth@2.1.0.patch` (a `pnpm patch`) makes
+them optional in the component; the component reads them only inside the
+OAuth flow, which the hidden button never starts. `auth.getSettings` reports
+`googleEnabled` when both are set and neither is `none`, the value
+deployments used while the variables were required. The button shows only
+then.
 
 The OAuth client is a "Web application" client whose redirect URI is
 `<CONVEX_SITE_URL>/auth/google/callback`. The redirect URI is per deployment,
@@ -481,10 +484,9 @@ A Convex mode deployment sets:
   bottom of every email ([email-templates.md](email-templates.md#support-address)).
 - A placeholder `CLERK_JWT_ISSUER_DOMAIN`, because
   `auth.config.ts` always lists the Clerk provider.
-- `AUTH_GOOGLE_CLIENT_ID` and `AUTH_GOOGLE_CLIENT_SECRET` on the Convex
-  deployment, from a Google OAuth client, or `none` for both to turn Google
-  off. Every deployment needs them, whatever its mode: Convex refuses to
-  deploy without them (see [Google](#google)).
+- Optionally `AUTH_GOOGLE_CLIENT_ID` and `AUTH_GOOGLE_CLIENT_SECRET` on the
+  Convex deployment, from a Google OAuth client, to offer Google sign-in (see
+  [Google](#google)).
 - `NEXT_PUBLIC_APP_URL` on the Convex deployment, with a scheme, so the landing
   URLs point at the right host. Set it for the web build too: it decides
   whether the session cookie is `Secure`, and behind a proxy that rewrites
@@ -565,7 +567,7 @@ mutation answering `emailVerificationRequired`, the emailed link completing
 the sign-up and sign-in, sign-in refused before the link is opened, an account
 made with verification off still signing in, sign-up refused without
 `RESEND_API_KEY`, and a recovery link that sets the new password, ends the old
-session and refuses the old password. It also covers `getSettings`, including `googleEnabled` with `none`. It records email through the package's Resend stub
+session and refuses the old password. It also covers `getSettings`, including `googleEnabled` unset and with `none`, and that the patched component's credentials are optional. It records email through the package's Resend stub
 (`registerResendStub`, `sentEmails`). `convex/organizations/invitations.test.ts`
 covers accepting an invitation as a Convex Auth session, the wrong-account
 reply, and inviting an address two users share. It also covers `claimDemoUser`: the claimed row signs in
