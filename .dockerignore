@@ -7,3 +7,5 @@ reference
 data
 **/.env
 **/.env.*
+# Tests aren't shipped, and some import apps/cli source whose deps the web image doesn't install.
+**/*.test.*

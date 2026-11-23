@@ -9,6 +9,9 @@ configured to match the same Clerk instance. Authorization (who can do
 what inside Convoy) is separate from this and lives in the project's
 organization/project permission model.
 
+A build that sets no `NEXT_PUBLIC_AUTH_MODE` runs Convex Auth, not Clerk. Set
+`NEXT_PUBLIC_AUTH_MODE=clerk` on the web host to use the Clerk setup on this page.
+
 ## Required env vars
 
 Set these Clerk-related env vars in the places listed.

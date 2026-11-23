@@ -18,6 +18,7 @@ import net from "node:net";
 import os from "node:os";
 import path from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
+import { parseEnv } from "node:util";
 
 const repoRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 const webDir = path.join(repoRoot, "apps", "web");
@@ -59,6 +60,13 @@ function readEnvLines() {
 function getEnv(lines, key) {
   const line = lines.find((l) => l.startsWith(`${key}=`));
   return line ? line.slice(key.length + 1).trim() : undefined;
+}
+
+/** Unset means convex, as in apps/web/lib/auth/auth-mode.ts. Parsed like dotenv, so quotes and comments match Next. */
+export function usesConvexAuth(lines) {
+  const mode = parseEnv(lines.join("\n")).NEXT_PUBLIC_AUTH_MODE || "convex";
+  if (mode !== "clerk" && mode !== "convex") throw new Error(`NEXT_PUBLIC_AUTH_MODE must be clerk or convex, not "${mode}"`);
+  return mode === "convex";
 }
 
 function upsertEnv(lines, key, value) {
@@ -161,7 +169,12 @@ async function setup() {
   requireLinkedWorktree();
   let lines = readEnvLines();
   const previewKey = requirePreviewKey(lines);
-  const convexAuth = getEnv(lines, "NEXT_PUBLIC_AUTH_MODE") === "convex";
+  let convexAuth;
+  try {
+    convexAuth = usesConvexAuth(lines);
+  } catch (error) {
+    fail(error.message);
+  }
 
   if (getEnv(lines, "CONVEX_PREVIEW_NAME")) {
     log("CONVEX_PREVIEW_NAME already set — worktree is provisioned. Use `pnpm worktree:convex:deploy` to redeploy.");

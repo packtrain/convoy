@@ -1,6 +1,8 @@
-import { describe, expect, test } from "vitest";
+import { describe, expect, test, vi } from "vitest";
 import { NextRequest } from "next/server";
 import { unstable_doesMiddlewareMatch } from "next/experimental/testing/server";
+
+vi.mock("@/lib/auth/auth-mode", () => ({ authMode: "clerk" }));
 
 import { config, convexAuthGate, createGenericLinkPreviewResponse, isLinkPreviewCrawler, isPublicRoute } from "./proxy";
 

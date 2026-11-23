@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 
-import { convexEnv, devDeployKey, previewSlug, provisionAgentUser } from "./worktree-setup.mjs";
+import { convexEnv, devDeployKey, previewSlug, provisionAgentUser, usesConvexAuth } from "./worktree-setup.mjs";
 
 test("convexEnv drops an inherited CONVEX_DEPLOYMENT so .env.local picks the deployment", () => {
   const env = convexEnv({ CONVEX_DEPLOYMENT: "brave-fox-456", PATH: "/bin" });
@@ -19,6 +19,16 @@ test("devDeployKey accepts only dev: keys and requires one in a devcontainer", (
   assert.equal(devDeployKey(undefined, false), undefined);
   assert.throws(() => devDeployKey("prod:brave-fox-456|abc", true), /dev:/);
   assert.throws(() => devDeployKey(undefined, true), /CONVEX_DEV_DEPLOY_KEY/);
+});
+
+test("usesConvexAuth follows the web app's default: only an explicit clerk keeps Clerk", () => {
+  assert.equal(usesConvexAuth([]), true);
+  assert.equal(usesConvexAuth(["NEXT_PUBLIC_AUTH_MODE="]), true);
+  assert.equal(usesConvexAuth(["NEXT_PUBLIC_AUTH_MODE=convex"]), true);
+  assert.equal(usesConvexAuth(["NEXT_PUBLIC_AUTH_MODE=clerk"]), false);
+  assert.equal(usesConvexAuth(['NEXT_PUBLIC_AUTH_MODE="clerk"']), false);
+  assert.equal(usesConvexAuth(["NEXT_PUBLIC_AUTH_MODE='clerk' # hosted"]), false);
+  assert.throws(() => usesConvexAuth(["NEXT_PUBLIC_AUTH_MODE=Clerk"]), /clerk or convex/);
 });
 
 function fakeRun(results) {

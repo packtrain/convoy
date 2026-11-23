@@ -34,15 +34,21 @@ AUTH_MODE="$(env_get AUTH_MODE)"
 CLAIM_EMAIL=""
 if [ "$AUTH_MODE" = "local-demo" ]; then
   say "Local demo mode has been removed. Switching this install to convex mode."
+  AUTH_MODE=convex
+  env_set AUTH_MODE "$AUTH_MODE"
+  # Cleared once the claim succeeds or is skipped, so a run that fails first asks again.
+  env_set DEMO_CLAIM_PENDING 1
+fi
+if [ -n "$(env_get DEMO_CLAIM_PENDING)" ]; then
   echo "Give the demo user an email and password: that account keeps its"
   echo "organizations, tasks, API keys and CLI logins. Leave the email empty to"
   echo "skip; self-hosted/README.md shows how to do it later."
   read -r -p "Email: " CLAIM_EMAIL
   if [ -n "$CLAIM_EMAIL" ]; then
     read -r -s -p "Password (at least 8 characters): " CLAIM_PASSWORD; echo
+  else
+    env_set DEMO_CLAIM_PENDING ""
   fi
-  AUTH_MODE=convex
-  env_set AUTH_MODE "$AUTH_MODE"
 fi
 if [ -z "$AUTH_MODE" ]; then
   say "Choose an authentication mode:"
@@ -165,7 +171,7 @@ docker compose run --rm --no-deps \
 
 if [ -n "$CLAIM_EMAIL" ]; then
   say "Giving the demo user its account..."
-  claim_demo_user "$CLAIM_EMAIL" "$CLAIM_PASSWORD" ||
+  claim_demo_user "$CLAIM_EMAIL" "$CLAIM_PASSWORD" && env_set DEMO_CLAIM_PENDING "" ||
     echo "The claim failed. Fix the cause above, then see \"Installs from the removed local demo mode\" in self-hosted/README.md."
 fi
 

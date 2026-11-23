@@ -41,7 +41,7 @@ Waiting for approval...
 ## Flow
 
 ```
-CLI                          Backend (Convex HTTP)              Web app (Clerk-authed)
+CLI                          Backend (Convex HTTP)              Web app (signed-in)
  │ gen verifier (32 random bytes, hex)
  │ POST /api/cli/login/start {verifierHash, hostname} ──▶ create cliLoginRequests row
  │ ◀── {challengeId, userCode, loginUrl, deviceUrl, expiresAt}
@@ -92,16 +92,16 @@ HTTP (Convex router, unauthenticated by design — the CLI has no key yet):
 
 Convex functions (`convex/cli/login.ts`):
 
-- `getByChallenge` (query, Clerk-authed) — approve page data; returns `null`
+- `getByChallenge` (query, signed-in) — approve page data; returns `null`
   when missing/expired.
-- `lookupByUserCode` (mutation, Clerk-authed) — /device lookup. A mutation so
+- `lookupByUserCode` (mutation, signed-in) — /device lookup. A mutation so
   failed lookups can be recorded (see Throttling).
-- `approve` / `deny` (mutations, Clerk-authed) — require `pending` and
+- `approve` / `deny` (mutations, signed-in) — require `pending` and
   unexpired; approve records `approvedByUserId`. **Approve mints nothing.**
 
 ## Web pages
 
-- `/cli-login?challenge=…` — approve page (link path). Clerk-protected by
+- `/cli-login?challenge=…` — approve page (link path). Sign-in protected by
   default via `proxy.ts`; signing in preserves the query string.
 - `/device` — code entry; on match redirects to `/cli-login?challenge=…`.
   Segmented OTP-style input (4+4 slots, shadcn `input-otp`): uppercases,
@@ -134,7 +134,7 @@ Convex functions (`convex/cli/login.ts`):
 - The challenge id and user code only *select* a request; neither can
   retrieve a key. Retrieval requires the verifier, held only by the
   initiating CLI process; the server stores only its hash.
-- Approve requires an authenticated Clerk session; the key is minted for the
+- Approve requires a signed-in session; the key is minted for the
   approving user (unscoped, 1-year expiry, named `CLI login (<hostname>)`,
   `kind: "cli-login"`). A re-login from the same hostname replaces the
   previous key, so repeated logins do not pile up. Expired keys are swept by

@@ -1,16 +1,20 @@
 # Auth adapters
 
-Status: S1 (OS-2492), S2 (OS-2493), S1b (OS-2495), S3 (OS-2496), S4 (OS-2497), S6 (OS-2500), S7a (OS-2494) and S8 (OS-2515) implemented. Parent plan: OS-2491.
+Status: S1 (OS-2492), S2 (OS-2493), S1b (OS-2495), S3 (OS-2496), S4 (OS-2497), S6 (OS-2500), S7a (OS-2494), S7b (OS-2498) and S8 (OS-2515) implemented. Parent plan: OS-2491.
 
 Convoy signs people in through one of two adapters, chosen at build time:
 
 | Mode | Sign-in | Accounts | Used by |
 | --- | --- | --- | --- |
-| `clerk` | Clerk's hosted components | Clerk users, matched by `tokenIdentifier` | The hosted app. Default when the mode is unset. |
-| `convex` | Our own email and password forms on Convex Auth 2, plus Google when configured | Convex Auth users, matched by user id | Self-hosted multi-user installs |
+| `clerk` | Clerk's hosted components | Clerk users, matched by `tokenIdentifier` | The hosted app, which sets the mode explicitly |
+| `convex` | Our own email and password forms on Convex Auth 2, plus Google when configured | Convex Auth users, matched by user id | Self-hosted installs. Default when the mode is unset. |
 
 `NEXT_PUBLIC_AUTH_MODE` sets the mode for the web bundle. `apps/web/lib/auth/auth-mode.ts`
-parses it with one `z.enum`, and an unknown value fails the build.
+parses it with one `z.enum`, and an unknown value fails the build. A build
+that sets no mode runs Convex Auth, so the hosted Vercel project and the primary
+dev checkout's `apps/web/.env.local` set `NEXT_PUBLIC_AUTH_MODE=clerk`. The
+Convex backend has no default to flip: it dispatches on the token issuer, and
+new accounts still need `AUTH_MODE=convex` (see [Opt-in](#opt-in)).
 
 There is no `convoy` CLI command for any of this. Sign-in happens in a browser,
 and the CLI keeps authenticating with API keys.
@@ -474,7 +478,7 @@ accounts:
 
 A Convex mode deployment sets:
 
-- `NEXT_PUBLIC_AUTH_MODE=convex` for the web build.
+- `NEXT_PUBLIC_AUTH_MODE=convex` for the web build, or no value at all.
 - `AUTH_MODE=convex` on the Convex deployment, to allow new accounts.
 - `RESEND_API_KEY` on the Convex deployment, and `EMAIL_FROM` with an address
   on a domain verified in Resend. Without a verified domain Resend delivers
@@ -502,6 +506,37 @@ asks for a Resend key and `EMAIL_FROM`; with a key it sets
 mode switch never leaves the backend on the old one. The README tells the
 operator to pick the mode before the first sign-up.
 
+#### Self-hosted ports
+
+The backend checks a Convex Auth token against
+`${CONVEX_CLOUD_URL}/.well-known/jwks.json`, which it fetches itself, from
+inside its container. Inside the container the backend listens on 3210 and
+3211 whatever ports `.env` publishes. A loopback origin on another port, such
+as `http://127.0.0.1:3212` for a second install, would reach nothing there and
+every sign-in would fail with `InvalidAuthHeader`. So the backend service
+starts `self-hosted/loopback-forward.js` before the backend. For each origin
+whose host is loopback and whose port differs, it listens on that port and
+forwards to 3210 or 3211. A default or public origin starts no listener.
+
+Why a forwarder and not the obvious fixes:
+
+- **Compose port mapping** (`ports:`) only routes traffic that comes into the
+  container from outside. The JWKS request starts inside the container, on its
+  own loopback, so the mapping never sees it.
+- **Running the backend on the published port** would be the clean fix, but the
+  image does not allow it. Its `run_backend.sh` always passes `--port 3210
+  --site-proxy-port 3211`, after any arguments we give, and the backend's clap
+  parser rejects `--port` given twice. Copying the script (database, storage
+  and credential setup) or patching it with `sed` breaks without warning when
+  Convex changes the image.
+- **A different JWKS URL in `auth.config.ts`** would need a new environment
+  variable, and Convex requires every variable that file reads on every
+  deployment, cloud ones included.
+
+Once the image takes the listen ports from the environment, map
+`${CONVEX_PORT}:${CONVEX_PORT}`, have the backend listen there, and delete the
+forwarder.
+
 ### Former demo installs
 
 Convoy had a third mode, `local-demo`, with no sign-in: every anonymous call
@@ -518,6 +553,10 @@ An old demo install keeps its data:
 - After the deploy, `start.sh` runs the internal mutation `auth.claimDemoUser`
   with the admin key. The self-hosted README gives the same command for an
   operator who skipped the question.
+- The switch writes `DEMO_CLAIM_PENDING=1` to `.env`, and `start.sh` asks for
+  the demo account on every run while it is set. A successful claim or an empty
+  email clears it, so a run that fails before the claim asks again next time.
+  The password is never written to `.env`.
 - `claimDemoUser` clears the demo row's profile, marks it with the
   `tokenIdentifier` `local-demo|claiming`, and runs a whole email and password
   sign-up in the same transaction, the way `signUpWithoutEmailVerification`
@@ -576,7 +615,8 @@ required, public sign-ups (finished or abandoned) never take the row, a taken
 address rolls the claim back, and a second claim or a claim without a demo row
 fails. `lib/auth/adapters/convex.test.tsx`
 covers the client route gate and sign-out, `proxy.test.ts` the server route gate
-and the matcher, `lib/auth/convex-auth-server.test.ts` the server and browser
+and the matcher, `lib/auth/auth-mode.test.ts` the unset default,
+`lib/auth/convex-auth-server.test.ts` the server and browser
 Convex URLs,
 `components/blocks/auth/email-password-sign-in-form.test.tsx` the
 "Forgot password?" link, `forgot-password-form.test.tsx` and

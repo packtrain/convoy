@@ -110,8 +110,9 @@ otherwise prints names only, and the copy sets no values. CLIs older than
 ## Convex Auth mode
 
 A preview runs the `convex` auth mode ([auth-adapters.md](auth-adapters.md))
-when the worktree's `apps/web/.env.local` has `NEXT_PUBLIC_AUTH_MODE=convex`
-before setup. Setup then:
+unless the worktree's `apps/web/.env.local` sets `NEXT_PUBLIC_AUTH_MODE=clerk`
+before setup, the same default as the web build. The primary checkout sets
+`clerk`, and its `.env.local` is copied into new worktrees. Setup then:
 
 1. Sets `AUTH_MODE=convex` and `AUTH_EMAIL_VERIFICATION=off` on the preview
    deployment, after copying the dev env vars.

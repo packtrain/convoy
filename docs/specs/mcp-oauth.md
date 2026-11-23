@@ -90,7 +90,7 @@ the consent page (early validation + safe deny):
 ## Validation & failure cases
 
 - `register`: 1–10 redirect URIs, each registrable; name capped at 100 chars.
-- `approve` (Clerk-authed): `response_type=code` required, known client,
+- `approve` (signed-in): `response_type=code` required, known client,
   registered redirect URI, valid S256 challenge (43 base64url chars),
   state ≤ 2000 chars. Approving stamps `lastApprovedAt` on the client.
 - Authorize page: protocol errors for a valid client + registered redirect

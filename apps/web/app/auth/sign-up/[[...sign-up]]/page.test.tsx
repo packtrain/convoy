@@ -9,6 +9,7 @@ import SignUpPage from "./page";
 const signUpProps = vi.fn();
 let search = "";
 
+vi.mock("@/lib/auth/auth-mode", () => ({ authMode: "clerk" }));
 vi.mock("@clerk/nextjs", () => ({
   SignUp: (props: Record<string, unknown>) => {
     signUpProps(props);

@@ -11,10 +11,10 @@ Convoy's backend is Convex, and Convex ships an official self-hosted
 build. The repo bundles a Docker Compose setup under `self-hosted/` that
 runs the whole stack on one machine:
 
-- **`backend`** — self-hosted Convex (`ghcr.io/get-convex/convex-backend`);
+- **`backend`** — self-hosted Convex (`ghcr.io/convex/convex-backend`);
   database, functions, scheduler, file storage. Client API on port `3210`,
   HTTP actions (`/api/mcp`, `/api/agent/*`) on port `3211`.
-- **`dashboard`** — the Convex dashboard (`ghcr.io/get-convex/convex-dashboard`)
+- **`dashboard`** — the Convex dashboard (`ghcr.io/convex/convex-dashboard`)
   on port `6791`; data browser, logs, function runner.
 - **`web`** — the Convoy Next.js app, built locally from your checkout,
   on port `3000`.

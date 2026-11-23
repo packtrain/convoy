@@ -14,7 +14,7 @@ ARG NEXT_PUBLIC_APP_URL
 ARG NEXT_PUBLIC_APP_ENV=production
 # clerk | convex — the auth mode is baked into the bundle; switching
 # modes requires rebuilding this image.
-ARG NEXT_PUBLIC_AUTH_MODE=clerk
+ARG NEXT_PUBLIC_AUTH_MODE=convex
 ARG NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY
 ARG NEXT_PUBLIC_CLERK_SIGN_IN_URL=/auth/sign-in
 ARG NEXT_PUBLIC_CLERK_SIGN_UP_URL=/auth/sign-up

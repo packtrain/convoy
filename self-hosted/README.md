@@ -79,8 +79,9 @@ an email and password for the demo user. That account keeps the demo user's
 organizations, tasks, API keys and CLI logins; sign in with it once the app is
 up. Sign-ups from the browser always get a new, empty user.
 
-If you skipped the question or the claim failed, run it from `self-hosted/`
-(the address is not emailed):
+If a run fails before the claim, or the claim itself fails, the next
+`./start.sh` asks again. If you skipped the question, run the claim from
+`self-hosted/` (the address is not emailed):
 
 ```bash
 docker compose run --rm --no-deps \
@@ -162,6 +163,12 @@ recalculated.
   Only set `BIND_HOST=0.0.0.0` for installs that must be reachable on a
   network, and for convex mode only with email verification on if the
   network is the internet.
+- To run a second install next to the first, set `CONVEX_PORT`,
+  `CONVEX_SITE_PORT` and both origins in `.env` to other ports. The backend
+  image always listens on 3210 and 3211 inside its container, so
+  `loopback-forward.js` answers the remapped ports there too. Without it every
+  Convex Auth sign-in fails with `InvalidAuthHeader`
+  ([why](../docs/specs/auth-adapters.md#self-hosted-ports)).
 - Optional backend flags (`DATABASE_URL`, `DO_NOT_REQUIRE_SSL`,
   `REDACT_LOGS_TO_CLIENT`) are commented out in `docker-compose.yml`; the
   backend rejects empty values, so uncomment them only together with a value

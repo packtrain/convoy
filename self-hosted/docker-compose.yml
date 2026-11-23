@@ -2,7 +2,7 @@ name: convoy
 
 services:
   backend:
-    image: ghcr.io/get-convex/convex-backend:latest
+    image: ghcr.io/convex/convex-backend:latest
     stop_grace_period: 10s
     stop_signal: SIGINT
     ports:
@@ -10,8 +10,11 @@ services:
       # installs that must be reachable on a network.
       - "${BIND_HOST:-127.0.0.1}:${CONVEX_PORT:-3210}:3210" # client API (queries/mutations, deploys)
       - "${BIND_HOST:-127.0.0.1}:${CONVEX_SITE_PORT:-3211}:3211" # HTTP actions (/api/mcp, /api/agent/*)
+    # Answers a remapped loopback origin inside the container too, where Convex Auth fetches its JWKS.
+    entrypoint: ["sh", "-c", "node /convex/loopback-forward.js & exec ./run_backend.sh"]
     volumes:
       - convex_data:/convex/data
+      - ./loopback-forward.js:/convex/loopback-forward.js:ro
     environment:
       # Public URLs as seen by browsers and CLI agents. Must match
       # NEXT_PUBLIC_CONVEX_URL used for the web build.
@@ -36,7 +39,7 @@ services:
       start_period: 10s
 
   dashboard:
-    image: ghcr.io/get-convex/convex-dashboard:latest
+    image: ghcr.io/convex/convex-dashboard:latest
     ports:
       - "${BIND_HOST:-127.0.0.1}:${DASHBOARD_PORT:-6791}:6791"
     environment:
@@ -58,7 +61,7 @@ services:
         # clerk | convex — must match the AUTH_MODE set on the
         # Convex deployment (start.sh keeps them in sync). Only clerk needs
         # the Clerk keys below.
-        NEXT_PUBLIC_AUTH_MODE: ${AUTH_MODE:-clerk}
+        NEXT_PUBLIC_AUTH_MODE: ${AUTH_MODE:-convex}
         NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY: ${NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY}
         NEXT_PUBLIC_CLERK_SIGN_IN_URL: /auth/sign-in
         NEXT_PUBLIC_CLERK_SIGN_UP_URL: /auth/sign-up
