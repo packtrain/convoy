@@ -55,8 +55,9 @@ Wording follows a Google Trends comparison from 2026-11-16 (worldwide, 12
 months). People search by tool name and by "coding agent(s)", which doubled over
 the year. "AI project management" is falling and draws unrelated intent.
 
-- The title carries the category term "AI coding agents" beside the "software
-  factory" tagline.
+- The title carries the category term "AI coding agents" beside "open-source
+  workspace". "Software factory" moved to the hero copy: teams build one with
+  Convoy, it doesn't ship as one.
 - The description names Claude Code, Codex, OpenCode, Cursor and Antigravity
   and stays within 160 characters.
 - The body uses the words of the exact-fit queries: "web UI" in the coding-agent

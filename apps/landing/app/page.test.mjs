@@ -63,7 +63,7 @@ test('the hero headline rolls between working and building on two lines', async 
         await page.goto('https://convoy.localhost/');
         await page.evaluate(() => document.fonts.ready);
         assert.equal(await page.getByRole('heading', { level: 1, name: 'Your best way of working with AI.', exact: true }).count(), 1);
-        assert.equal(await page.getByText("Turn your team's expertise into reusable workflows for AI agents. Assign tasks, guide the work, and review results in one place.", { exact: true }).count(), 1);
+        assert.equal(await page.getByText("Convoy is an open-source workspace for AI coding agents. Build your team's software factory and run it on your own machines.", { exact: true }).count(), 1);
         let height;
         for (const [index, word] of words.entries()) {
           const state = await at(page, index);

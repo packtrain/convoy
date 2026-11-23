@@ -96,8 +96,9 @@ Reduced motion uses a short fade
 without movement or letter stagger. Screen readers get the stable headline
 "Your best way of working with AI." The halftone background keeps its own colours.
 
-The supporting copy reads "Turn your team's expertise into reusable workflows
-for AI agents. Assign tasks, guide the work, and review results in one place."
+The supporting copy reads "Convoy is an open-source workspace for AI coding
+agents. Build your team's software factory and run it on your own machines." Its first sentence matches the page title and says what Convoy is.
+The software factory is what a team builds with Convoy, not what it ships as.
 
 The headline and description precede the hero's button. A process
 strip sits between that button and the product screenshot. The three steps are:
@@ -161,7 +162,7 @@ The closing CTA reads "Build your team's way of working with AI." Its supporting
 paragraph reads "Start with one workflow. Give your team a process they can reuse
 and improve."
 
-The site title reads "Convoy | The open-source software factory for AI coding agents". The
+The site title reads "Convoy | The open-source workspace for AI coding agents". The
 metadata description reads "Run Claude Code, Codex, OpenCode, Cursor and
 Antigravity from one web UI. Share agents, skills and workflows across your team,
 assign tasks and review results." Why these words:

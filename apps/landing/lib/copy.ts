@@ -2,7 +2,7 @@
 
 export const site = {
   name: "Convoy",
-  title: "Convoy | The open-source software factory for AI coding agents",
+  title: "Convoy | The open-source workspace for AI coding agents",
   description:
     "Run Claude Code, Codex, OpenCode, Cursor and Antigravity from one web UI. Share agents, skills and workflows across your team, assign tasks and review results.",
   url: "https://convoy.build",

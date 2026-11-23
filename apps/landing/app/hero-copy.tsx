@@ -20,8 +20,8 @@ export function HeroCopy() {
         </span>
       </h1>
       <p className="enter mt-6 max-w-[60ch] text-[17px] leading-[1.65] text-[#c6cad3] [text-shadow:0_1px_16px_rgba(8,8,13,0.95)] [animation-delay:80ms]">
-        Turn your team&apos;s expertise into reusable workflows for AI agents.
-        Assign tasks, guide the work, and review results in one place.
+        Convoy is an open-source workspace for AI coding agents. Build your team&apos;s
+        software factory and run it on your own machines.
       </p>
     </>
   );
