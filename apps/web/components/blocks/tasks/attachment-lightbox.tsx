@@ -1,5 +1,6 @@
 "use client";
 
+import { useState } from "react";
 import { Download as DownloadIcon, X, ZoomIn, ZoomOut } from "lucide-react";
 import Lightbox, {
   isImageSlide,
@@ -84,6 +85,10 @@ export function AttachmentLightbox({
   onDownload,
   textPreview,
 }: AttachmentLightboxProps) {
+  // The library jumps back to `index` whenever `slides` changes identity, so feed it the slide in view.
+  const [viewed, setViewed] = useState<{ from: number; index: number } | null>(null);
+  const index = viewed?.from === initialIndex ? viewed.index : initialIndex;
+
   if (textPreview) {
     return <TextAttachmentDialog preview={textPreview} onClose={onClose} />;
   }
@@ -91,8 +96,12 @@ export function AttachmentLightbox({
   return (
     <Lightbox
       open={open}
-      close={onClose}
-      index={initialIndex}
+      close={() => {
+        setViewed(null);
+        onClose();
+      }}
+      index={index}
+      on={{ view: ({ index: viewIndex }) => setViewed({ from: initialIndex, index: viewIndex }) }}
       slides={slides}
       plugins={[Zoom, Video, DownloadPlugin]}
       carousel={{ imageFit: "contain", finite: true }}

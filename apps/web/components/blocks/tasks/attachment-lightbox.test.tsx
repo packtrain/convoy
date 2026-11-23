@@ -2,7 +2,7 @@
  * @vitest-environment jsdom
  */
 import { afterEach, describe, expect, test, vi } from "vitest";
-import { cleanup, fireEvent, render, screen } from "@testing-library/react";
+import { act, cleanup, fireEvent, render, screen } from "@testing-library/react";
 import type { ReactNode } from "react";
 import { AttachmentLightbox } from "./attachment-lightbox";
 
@@ -189,6 +189,26 @@ describe("AttachmentLightbox", () => {
     // The slide reserves a top band, so the header pill never covers the picture.
     const props = lightboxSpy.mock.calls.at(-1)?.[0] as { styles: { slide?: { paddingTop?: number } } };
     expect(props.styles.slide?.paddingTop).toBeGreaterThan(48);
+  });
+
+  test("keeps the viewed slide when the parent re-renders with fresh slides", () => {
+    const slide = (name: string) => ({
+      src: `https://example.com/${name}`,
+      fileName: name,
+      alt: name,
+      download: { url: `https://example.com/${name}`, filename: name },
+    });
+    const view = (slides: ReturnType<typeof slide>[]) => (
+      <AttachmentLightbox open initialIndex={0} slides={slides} onClose={vi.fn()} onDownload={vi.fn()} />
+    );
+    const { rerender } = render(view([slide("a.png"), slide("b.png")]));
+    type Props = { index: number; on: { view: (args: { index: number }) => void } };
+    act(() => (lightboxSpy.mock.calls.at(-1)?.[0] as Props).on.view({ index: 1 }));
+
+    // The library resets to `index` whenever `slides` changes identity.
+    rerender(view([slide("a.png"), slide("b.png")]));
+
+    expect((lightboxSpy.mock.calls.at(-1)?.[0] as Props).index).toBe(1);
   });
 
   test("renders the file name header for video slides and maps video download to the right index", () => {
