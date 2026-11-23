@@ -54,6 +54,9 @@ vi.mock("convex/react", () => ({
     if (getFunctionName(query as never) === "projects/members:getMyRole") {
       return projectRoleMock.value;
     }
+    if (getFunctionName(query as never) === "organizations/members:getMyRole") {
+      return "member";
+    }
     if (args && "slug" in args) {
       return { _id: "org-1" };
     }

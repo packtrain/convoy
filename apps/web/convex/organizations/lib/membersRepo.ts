@@ -115,7 +115,7 @@ export async function removeMembershipWithProjectCleanup(
 
   const orgProjects = await ctx.db
     .query("projects")
-    .withIndex("by_organization_and_isDeleted", (q) =>
+    .withIndex("by_organization_and_isDeleted_and_isArchived", (q) =>
       q.eq("organizationId", membership.organizationId).eq("isDeleted", false)
     )
     .collect();

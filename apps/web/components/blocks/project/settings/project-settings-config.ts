@@ -228,9 +228,12 @@ export function isSectionPermitted(
   projectRole: ProjectRole | null | undefined,
   orgRole: OrgRole | null | undefined
 ): boolean {
-  // Project delete is an org permission (`requireOrgPermission` in convex/projects/core.ts).
+  // Delete is an org permission, Archive a project one (docs/specs/project-archive.md).
   if (id === "danger") {
-    return hasOrgPermission(orgRole, OrgPermission.PROJECT_DELETE);
+    return (
+      hasOrgPermission(orgRole, OrgPermission.PROJECT_DELETE) ||
+      hasProjectPermission(projectRole, ProjectPermission.PROJECT_ARCHIVE)
+    );
   }
   const permission = SECTION_PERMISSIONS[id];
   return !permission || hasProjectPermission(projectRole, permission);

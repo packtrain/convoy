@@ -754,9 +754,11 @@ const NavProjectsContent = memo(function NavProjectsContent({
     loadCollapsedProjectIds
   );
 
-  const projects = useQuery(api.projects.core.listByOrganization, {
+  const allProjects = useQuery(api.projects.core.listByOrganization, {
     organizationId,
   });
+  // Archived projects leave the sidebar (docs/specs/project-archive.md).
+  const projects = useMemo(() => allProjects?.filter((project) => !project.isArchived), [allProjects]);
   // Project delete is an org permission; the row's project role cannot answer it.
   const orgRole = useQuery(api.organizations.members.getMyRole, { organizationId });
   // An open delete confirmation closes when the org permission goes away mid-session.

@@ -240,12 +240,15 @@ cannot be undone." above one bordered row per action. The organization renders
 the same rows in a two-column "Danger zone" section of its General page. Both
 render rows through `SettingsDangerRow` (`components/custom/settings-layout.tsx`).
 
-Only members with the org `project:delete` permission (owners and admins) can
-open the section. Project delete is an org permission, so a project role cannot
-grant it. The layout redirects anyone else to General.
+The section opens for members with the org `project:delete` permission (owners
+and admins) or the project `project:archive` permission (project admins). The
+layout redirects anyone else to General. Project delete is an org permission,
+so a project role cannot grant it, and Delete stays disabled for a project
+admin who is only an org member.
 
-- **Archive project** stays disabled. The dimmed row says archiving will come in
-  a future update, the way the org row explains its disabled Delete.
+- **Archive project** archives the project, and **Unarchive project** reverses
+  it. Both confirm first and stay on the page. Rules are in
+  [project-archive.md](project-archive.md).
 - **Delete project** opens a confirmation dialog naming the project. Confirming
   calls `projects.core.remove`, the mutation the org Projects section and the
   sidebar row menu use, then replaces the route with the organization home,

@@ -262,6 +262,23 @@ describe("NavProjects", () => {
     expect(screen.queryByLabelText("Threads for Beta")).toBeNull();
   });
 
+  test("leaves archived projects out of the sidebar", () => {
+    useQueryMock.mockImplementation((fn: Parameters<typeof getFunctionName>[0]) =>
+      getFunctionName(fn) === getFunctionName(api.projects.core.listByOrganization)
+        ? [
+            { _id: "project_abc", name: "Alpha", alias: "ABC", myRole: "member", isArchived: false },
+            { _id: "project_old", name: "Old", alias: "OLD", myRole: "member", isArchived: true },
+          ]
+        : undefined
+    );
+    useMutationMock.mockReturnValue(createMutationMock());
+
+    render(<NavProjects organizationId={"org_1" as Id<"organizations">} organizationSlug="org" />);
+
+    expect(screen.getByRole("link", { name: "Alpha" })).toBeDefined();
+    expect(screen.queryByRole("link", { name: "Old" })).toBeNull();
+  });
+
   test("renders Threads as the first sub-item under every project", () => {
     usePathnameMock.mockReturnValue("/o/org/ABC/threads/thread_1");
     window.history.replaceState(null, "", "/o/org/ABC/threads/thread_1");

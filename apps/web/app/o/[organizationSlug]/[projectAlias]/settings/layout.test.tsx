@@ -107,11 +107,16 @@ describe("ProjectSettingsLayout", () => {
     expect(replaceMock).not.toHaveBeenCalled();
   });
 
-  test("Danger Zone needs the org delete permission", async () => {
-    await renderAt("/o/acme/WEB/settings/danger", "project-admin", "member");
+  test("Danger Zone needs org project:delete or project:archive", async () => {
+    await renderAt("/o/acme/WEB/settings/danger", "member", "member");
     expect(replaceMock).toHaveBeenCalledWith(generalTarget);
     cleanup();
     replaceMock.mockClear();
+
+    await renderAt("/o/acme/WEB/settings/danger", "project-admin", "member");
+    expect(screen.getByText("Section content")).toBeTruthy();
+    expect(replaceMock).not.toHaveBeenCalled();
+    cleanup();
 
     await renderAt("/o/acme/WEB/settings/danger", "viewer", "admin");
     expect(screen.getByText("Section content")).toBeTruthy();

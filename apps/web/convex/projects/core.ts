@@ -120,6 +120,8 @@ export const listByOrganization = query({
       return [];
     }
 
+    // Includes archived rows: callers resolve the current or selected project
+    // from this list, so each navigation caller drops them (docs/specs/project-archive.md).
     const projects = await listActiveProjectsByOrganization(ctx, args.organizationId);
 
     // Efficiently filter projects by access (one query for all memberships)
@@ -397,6 +399,18 @@ export const updateAlias = mutation({
 
     await updateProject(ctx, args.id, { alias });
 
+    return null;
+  },
+});
+
+/** Spec: docs/specs/project-archive.md */
+export const setArchived = mutation({
+  args: { apiKey: v.optional(v.string()), id: v.id("projects"), isArchived: v.boolean() },
+  returns: v.null(),
+  handler: async (ctx, args) => {
+    const { principal } = await getAuthenticatedAccess(ctx, args.apiKey);
+    await requireProjectAdministration(ctx, principal, args.id, ProjectPermission.PROJECT_ARCHIVE);
+    await updateProject(ctx, args.id, { isArchived: args.isArchived });
     return null;
   },
 });

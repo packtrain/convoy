@@ -25,7 +25,9 @@ This specification defines behavior for project actions shown in the sidebar `..
    open the target section in a new tab natively.
 6. `Archive` is hidden from the sidebar action menu, or shown disabled under
    [`Show unfinished items`](user-settings-developer-section.md#unfinished-items).
-7. `Archive` is also disabled in Project settings `Danger zone`.
+7. Project settings `Danger zone` archives and unarchives the project
+   ([project-archive.md](project-archive.md)). The sidebar item stays
+   disabled until the next OS-2528 slice.
 8. `Delete` behavior is unchanged.
 9. Items follow the caller's permissions
    ([read-only-viewer-ux.md](read-only-viewer-ux.md#settings-sidebar-and-mobile-chrome-slice-6-os-1546)).
@@ -68,5 +70,5 @@ The menu takes the organization slug and project alias and builds each href with
 - Project `...` menu shows `Prompts`, `Skills`, `Workflows`, `Integrations`, and `Lists` linking to their sections.
 - Middle-clicking any settings action opens that section in a new tab.
 - Sidebar `Archive` item is hidden by default and disabled under `Show unfinished items`.
-- Danger Zone `Archive` button is disabled.
+- Danger Zone `Archive` button archives the project after confirmation.
 - A project viewer sees only `Settings`, plus `Delete` when their org role allows it.

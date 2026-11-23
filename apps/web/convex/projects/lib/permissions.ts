@@ -2,7 +2,13 @@ import type { MutationCtx, QueryCtx } from "../../_generated/server";
 import type { Doc, Id } from "../../_generated/dataModel";
 import { OrgPermission, type ProjectPermission } from "../../../lib/authz/permissions";
 import { OrgRole } from "../../../lib/authz/roles";
-import { authorizeProjectAccess, hasOrgPermission, requireAuthorizedProject } from "../../lib/access/permissions";
+import {
+  apiKeyScopeAllowsProject,
+  authorizeProjectAccess,
+  hasOrgPermission,
+  requireAuthorizedProject,
+  type ProjectAccessPrincipal,
+} from "../../lib/access/permissions";
 import { getOrgMembership } from "../../lib/accessRepo";
 import { ensure } from "../../lib/shared/ensure";
 import { getActiveProjectById } from "./projectsRepo";
@@ -31,20 +37,28 @@ export async function authorizeProjectAuthority(
   return access?.project ?? null;
 }
 
-/** Throwing counterpart of `authorizeProjectAuthority`, for mutations. */
+/**
+ * Throwing counterpart of `authorizeProjectAuthority`, for mutations. An API key
+ * principal must also have the project in scope, org authority included.
+ */
 export async function requireProjectAdministration(
   ctx: MutationCtx,
-  userId: Id<"users">,
+  principal: ProjectAccessPrincipal,
   projectId: Id<"projects">,
   permission: ProjectPermission
 ): Promise<Doc<"projects">> {
   const project = await ensure(getActiveProjectById(ctx, projectId)).notNull(errors.PROJECT_NOT_FOUND);
+  const [userId, scope] = typeof principal === "string" ? [principal, null] : [principal.userId, principal.apiKeyScope];
 
-  if (await hasOrgPermission(ctx, userId, project.organizationId, OrgPermission.PROJECTS_MANAGE_ALL)) {
+  if (
+    apiKeyScopeAllowsProject(scope, project) &&
+    (await hasOrgPermission(ctx, userId, project.organizationId, OrgPermission.PROJECTS_MANAGE_ALL))
+  ) {
     return project;
   }
 
-  const { project: authorizedProject } = await requireAuthorizedProject(ctx, userId, project, permission);
+  // Denies an out-of-scope key before checking the project role.
+  const { project: authorizedProject } = await requireAuthorizedProject(ctx, principal, project, permission);
   return authorizedProject;
 }
 

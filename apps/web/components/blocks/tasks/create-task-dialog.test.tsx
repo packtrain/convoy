@@ -302,6 +302,31 @@ describe("CreateTaskDialog", () => {
     ).toContain("Alpha");
   });
 
+  test("keeps an archived current project selectable and hides other archived ones", () => {
+    const withArchived = [
+      ...projects,
+      { _id: "project_old" as Id<"projects">, name: "Old", alias: "OLD", myRole: "member", isArchived: true },
+      { _id: "project_gone" as Id<"projects">, name: "Gone", alias: "GONE", myRole: "member", isArchived: true },
+    ];
+    useQueryMock.mockImplementation((_query: unknown, args: unknown) =>
+      isOrganizationProjectsArgs(args) ? withArchived : []
+    );
+    useMutationMock.mockReturnValue(createTaskMock);
+
+    render(
+      <CreateTaskDialog
+        dialog={dialog}
+        organizationId={"org_1" as Id<"organizations">}
+        organizationSlug="org"
+        activeProjectAlias="OLD"
+      />
+    );
+
+    expect(screen.getAllByRole("button", { name: /OLD\s*Old/i })[0].textContent).toContain("Old");
+    expect(screen.queryByText("Gone")).toBeNull();
+    expect(screen.getAllByText("Beta").length).toBeGreaterThan(0);
+  });
+
   test("the status and priority triggers are named with their values", () => {
     useQueryMock.mockImplementation((_query: unknown, args: unknown) =>
       isOrganizationProjectsArgs(args) ? projects : []

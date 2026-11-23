@@ -222,6 +222,16 @@ convoy projects list --profile work
 convoy projects list --org org_abc123
 ```
 
+### `projects archive` / `projects unarchive`
+
+Hide a project from the sidebar and project pickers, or show it again. The
+project keeps working by URL, CLI, and MCP.
+
+```bash
+convoy projects archive WEB
+convoy projects unarchive WEB --org acme
+```
+
 ### `orgs list`
 
 List accessible organizations (derived from accessible projects).

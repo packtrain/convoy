@@ -11,6 +11,7 @@ Commands covered:
 
 - `convoy orgs list`
 - `convoy projects list`
+- `convoy projects archive|unarchive <project>`
 - `convoy task-types list`
 - `convoy project-agents list`
 - `convoy project-agents create ...`
@@ -149,6 +150,13 @@ caller is missing is `--org`.
 
 - Source of truth: `projects.listAccessible`.
 - `--org` filters by org ID or slug.
+
+### `projects archive` / `projects unarchive`
+
+- `convoy projects archive <project>` and `convoy projects unarchive <project>`
+  call `projects.core.setArchived`. `<project>` is an ID or alias; `--org`
+  picks one when the alias exists in several organizations.
+- Rules: [project-archive.md](project-archive.md).
 
 ### `task-types list`
 

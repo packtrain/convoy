@@ -7,17 +7,18 @@ import { DangerZoneSection } from "./danger-section";
 
 const useQueryMock = vi.hoisted(() => vi.fn());
 const removeMock = vi.hoisted(() => vi.fn());
+const setArchivedMock = vi.hoisted(() => vi.fn());
 const replaceMock = vi.hoisted(() => vi.fn());
 
 vi.mock("convex/react", () => ({
   useQuery: useQueryMock,
-  useMutation: () => removeMock,
+  useMutation: (ref: string) => (ref === "setArchived" ? setArchivedMock : removeMock),
 }));
 
 vi.mock("@/convex/_generated/api", () => ({
   api: {
     projects: {
-      core: { remove: "remove" },
+      core: { remove: "remove", setArchived: "setArchived" },
       members: { getMyRole: "projectRole" },
     },
     organizations: { members: { getMyRole: "orgRole" } },
@@ -31,16 +32,19 @@ vi.mock("@/lib/navigation", () => ({
   useNavigation: () => ({ push: vi.fn(), replace: replaceMock }),
 }));
 
-const PROJECT = { _id: "p_1", name: "Website", alias: "WEB" };
+const PROJECT = { _id: "p_1", name: "Website", alias: "WEB", isArchived: false };
 
-function renderSection(orgRole: string | undefined) {
+function renderSection(
+  orgRole: string | undefined,
+  { projectRole = "project-admin", isArchived = false }: { projectRole?: string; isArchived?: boolean } = {}
+) {
   useQueryMock.mockImplementation((ref: string, args: unknown) => {
     if (args === "skip") return undefined;
-    return ref === "orgRole" ? orgRole : "project-admin";
+    return ref === "orgRole" ? orgRole : projectRole;
   });
   return render(
     <DangerZoneSection
-      project={PROJECT as never}
+      project={{ ...PROJECT, isArchived } as never}
       organizationId={"org_1" as never}
       organizationSlug="acme"
     />
@@ -61,15 +65,46 @@ describe("DangerZoneSection", () => {
     expect(screen.getByRole("heading", { name: /Delete project/, level: 4 })).toBeDefined();
   });
 
-  test("keeps Archive disabled and says why", () => {
-    renderSection("owner");
+  test("archives the project after confirmation and stays on the page", async () => {
+    setArchivedMock.mockResolvedValue(null);
+    renderSection("member");
+
+    fireEvent.click(screen.getByRole("button", { name: "Archive" }));
+    expect(setArchivedMock).not.toHaveBeenCalled();
+    expect(screen.getByRole("dialog").textContent).toContain('"Website"');
+
+    await act(async () => {
+      fireEvent.click(screen.getByRole("button", { name: "Archive project" }));
+    });
+
+    expect(setArchivedMock).toHaveBeenCalledWith({ id: "p_1", isArchived: true });
+    expect(replaceMock).not.toHaveBeenCalled();
+  });
+
+  test("offers Unarchive on an archived project", async () => {
+    setArchivedMock.mockResolvedValue(null);
+    renderSection("member", { isArchived: true });
+
+    expect(screen.getByRole("heading", { name: /Unarchive project/, level: 4 })).toBeDefined();
+    fireEvent.click(screen.getByRole("button", { name: "Unarchive" }));
+    await act(async () => {
+      fireEvent.click(screen.getByRole("button", { name: "Unarchive project" }));
+    });
+
+    expect(setArchivedMock).toHaveBeenCalledWith({ id: "p_1", isArchived: false });
+  });
+
+  test("enables Archive for project:archive or org authority, and only then", () => {
+    renderSection("owner", { projectRole: "member" });
 
     expect(
       (screen.getByRole("button", { name: "Archive" }) as HTMLButtonElement).disabled
-    ).toBe(true);
+    ).toBe(false);
+    cleanup();
+    renderSection("member", { projectRole: "member" });
     expect(
-      screen.getByText("Project archiving will be available in a future update.")
-    ).toBeDefined();
+      (screen.getByRole("button", { name: "Archive" }) as HTMLButtonElement).disabled
+    ).toBe(true);
   });
 
   test("deletes the project after confirmation and leaves its settings", async () => {

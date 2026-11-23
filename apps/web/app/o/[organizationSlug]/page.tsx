@@ -1,5 +1,6 @@
 "use client";
 
+import { useMemo } from "react";
 import { useQuery } from "convex/react";
 import { api } from "@/convex/_generated/api";
 import { useRedirectToLastProject } from "@/lib/routing/use-last-project";
@@ -20,7 +21,9 @@ export default function OrganizationPage() {
   // Get org by slug to get the ID for querying projects
   const org = useQuery(api.organizations.core.getBySlug, { slug: organizationSlug });
 
-  const projects = useQuery(api.projects.core.listByOrganization, org ? { organizationId: org._id } : "skip");
+  const allProjects = useQuery(api.projects.core.listByOrganization, org ? { organizationId: org._id } : "skip");
+  // Never land on an archived project (docs/specs/project-archive.md).
+  const projects = useMemo(() => allProjects?.filter((project) => !project.isArchived), [allProjects]);
   const myRole = useQuery(api.organizations.members.getMyRole, org ? { organizationId: org._id } : "skip");
   const projectDialog = useDialogWithData<ProjectDialogData>();
   const canCreate = hasOrgPermission(myRole, OrgPermission.PROJECT_CREATE);

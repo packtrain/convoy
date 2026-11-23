@@ -128,10 +128,11 @@ describe("getProjectSettingsNavItems", () => {
     ]);
   });
 
-  test("Danger Zone follows the org role, not the project role", () => {
+  test("Danger Zone opens for org project:delete or project:archive", () => {
     expect(isSectionPermitted("danger", "viewer", "admin")).toBe(true);
-    expect(isSectionPermitted("danger", "project-admin", "member")).toBe(false);
-    expect(isSectionPermitted("danger", "project-admin", undefined)).toBe(false);
+    expect(isSectionPermitted("danger", "project-admin", "member")).toBe(true);
+    expect(isSectionPermitted("danger", "member", "member")).toBe(false);
+    expect(isSectionPermitted("danger", undefined, undefined)).toBe(false);
   });
 
   test("gated sections stay closed while the role loads", () => {

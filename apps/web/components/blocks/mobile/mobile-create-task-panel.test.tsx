@@ -296,6 +296,35 @@ describe("MobileCreateTaskPanel", () => {
     });
   });
 
+  test("creates in an archived current project and hides other archived ones", async () => {
+    createTaskMock.mockResolvedValue({ refId: "OLD-1" });
+    useMutationMock.mockReturnValue(createTaskMock);
+    useQueryMock.mockReturnValue([
+      ...projects,
+      { _id: "project_old" as Id<"projects">, name: "Old", alias: "OLD", myRole: "member", isArchived: true },
+      { _id: "project_gone" as Id<"projects">, name: "Gone", alias: "GONE", myRole: "member", isArchived: true },
+    ]);
+
+    render(
+      <MobileCreateTaskPanel
+        open
+        organizationId={"org_1" as Id<"organizations">}
+        organizationSlug="org"
+        activeProjectAlias="OLD"
+        activeListRef={null}
+        onClose={vi.fn()}
+      />
+    );
+
+    expect(screen.queryByText("Gone")).toBeNull();
+    fireEvent.change(screen.getByLabelText("Task title"), { target: { value: "Still works" } });
+    fireEvent.click(screen.getByRole("button", { name: "Create" }));
+
+    await waitFor(() => {
+      expect(createTaskMock).toHaveBeenCalledWith(expect.objectContaining({ projectId: "project_old" }));
+    });
+  });
+
   test("creates the task with the label picked in the panel", async () => {
     createTaskMock.mockResolvedValue({ refId: "ABC-43" });
     useMutationMock.mockReturnValue(createTaskMock);

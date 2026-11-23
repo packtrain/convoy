@@ -1409,6 +1409,124 @@ describe("projects", () => {
     });
   });
 
+  describe("setArchived", () => {
+    test("flags an archived project in listByOrganization and keeps it reachable", async () => {
+      const ctx = createTestContext();
+      const { org, project, asUser } = await ctx.setupProject({ project: { alias: "ARC" } });
+
+      await asUser.mutation(api.projects.core.setArchived, { id: project._id, isArchived: true });
+
+      // Callers resolve the current or selected project from this list, so it
+      // keeps archived rows and each navigation caller drops them.
+      const rows = await asUser.query(api.projects.core.listByOrganization, { organizationId: org._id });
+      expect(rows.find((row) => row._id === project._id)?.isArchived).toBe(true);
+      const byAlias = await asUser.query(api.projects.core.getByAlias, { organizationId: org._id, alias: "ARC" });
+      expect(byAlias?.isArchived).toBe(true);
+
+      await asUser.mutation(api.projects.core.setArchived, { id: project._id, isArchived: false });
+
+      const rowsAfter = await asUser.query(api.projects.core.listByOrganization, { organizationId: org._id });
+      expect(rowsAfter.find((row) => row._id === project._id)?.isArchived).toBe(false);
+    });
+
+    test("hides an archived project's pinned Lists from the sidebar", async () => {
+      const ctx = createTestContext();
+      const { org, project, user, asUser, t } = await ctx.setupProject();
+      await t.run(async (runCtx) => {
+        await runCtx.db.patch("projects", project._id, {
+          pinnedSystemLists: [{ key: "backlog", pinnedAt: 1, pinnedBy: user._id }],
+        });
+      });
+      const before = await asUser.query(api.tasks.lists.listPinnedForOrganization, { organizationId: org._id });
+      expect(before.map((entry) => entry.projectId)).toContain(project._id);
+
+      await asUser.mutation(api.projects.core.setArchived, { id: project._id, isArchived: true });
+
+      const pinned = await asUser.query(api.tasks.lists.listPinnedForOrganization, { organizationId: org._id });
+      expect(pinned.map((entry) => entry.projectId)).not.toContain(project._id);
+    });
+
+    test("is idempotent", async () => {
+      const ctx = createTestContext();
+      const { project, asUser, t } = await ctx.setupProject();
+
+      await asUser.mutation(api.projects.core.setArchived, { id: project._id, isArchived: true });
+      await asUser.mutation(api.projects.core.setArchived, { id: project._id, isArchived: true });
+
+      await t.run(async (runCtx) => {
+        expect((await runCtx.db.get("projects", project._id))?.isArchived).toBe(true);
+      });
+    });
+
+    test("an org admin who is not a project member can archive", async () => {
+      const ctx = createTestContext();
+      const { org, project, t } = await ctx.setupProject();
+      const admin = await ctx.user();
+      await ctx.orgMember(org._id, admin._id, "admin");
+
+      await ctx.asUser(admin).mutation(api.projects.core.setArchived, { id: project._id, isArchived: true });
+
+      await t.run(async (runCtx) => {
+        expect((await runCtx.db.get("projects", project._id))?.isArchived).toBe(true);
+      });
+    });
+
+    test("archives and unarchives with an API key scoped to the project", async () => {
+      const ctx = createTestContext();
+      const { org, project, asUser, t } = await ctx.setupProject();
+      const { key } = await asUser.mutation(api.apiKeys.core.create, {
+        name: "CLI",
+        expiresAt: Date.now() + 86_400_000,
+        scope: { organizationId: org._id, projectIds: [project._id] },
+      });
+
+      await t.mutation(api.projects.core.setArchived, { apiKey: key, id: project._id, isArchived: true });
+      await t.run(async (runCtx) => {
+        expect((await runCtx.db.get("projects", project._id))?.isArchived).toBe(true);
+      });
+
+      await t.mutation(api.projects.core.setArchived, { apiKey: key, id: project._id, isArchived: false });
+      await t.run(async (runCtx) => {
+        expect((await runCtx.db.get("projects", project._id))?.isArchived).toBe(false);
+      });
+    });
+
+    test("rejects an API key scoped to another project, even for an org owner", async () => {
+      const ctx = createTestContext();
+      const { org, user, project, asUser, t } = await ctx.setupProject();
+      const other = await ctx.project(org._id, user._id, { name: "Other", alias: "OTHR" });
+      const { key } = await asUser.mutation(api.apiKeys.core.create, {
+        name: "Other only",
+        expiresAt: Date.now() + 86_400_000,
+        scope: { organizationId: org._id, projectIds: [other._id] },
+      });
+
+      const error = await t
+        .mutation(api.projects.core.setArchived, { apiKey: key, id: project._id, isArchived: true })
+        .catch((caught: unknown) => caught);
+
+      expect(error).toBeInstanceOf(ConvexError);
+      await t.run(async (runCtx) => {
+        expect((await runCtx.db.get("projects", project._id))?.isArchived).toBe(false);
+      });
+    });
+
+    test("rejects a project member without project:archive", async () => {
+      const ctx = createTestContext();
+      const { org, project } = await ctx.setupProject();
+      const member = await ctx.user();
+      await ctx.orgMember(org._id, member._id, "member");
+      await ctx.projectMember(project._id, member._id, "member");
+
+      const error = await ctx
+        .asUser(member)
+        .mutation(api.projects.core.setArchived, { id: project._id, isArchived: true })
+        .catch((caught: unknown) => caught);
+
+      expect(error).toBeInstanceOf(ConvexError);
+    });
+  });
+
   describe("remove", () => {
     test("should soft delete project", async () => {
       const ctx = createTestContext();

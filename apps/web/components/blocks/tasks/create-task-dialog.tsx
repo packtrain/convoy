@@ -243,16 +243,18 @@ export function CreateTaskDialog({
 
   const projectOptions = useMemo<ProjectOption[]>(
     () =>
-      // Only projects the caller can create tasks in (read-only-viewer-ux.md).
+      // Only projects the caller can create tasks in (read-only-viewer-ux.md);
+      // archived ones only when current (docs/specs/project-archive.md).
       (projects ?? [])
         .filter((project) => hasProjectPermission(project.myRole, ProjectPermission.TASK_CREATE))
+        .filter((project) => !project.isArchived || project.alias === activeProjectAlias)
         .map((project) => ({
           value: String(project._id),
           label: project.name,
           alias: project.alias,
           projectId: project._id,
         })),
-    [projects]
+    [activeProjectAlias, projects]
   );
   const defaultProject = useMemo(
     () =>

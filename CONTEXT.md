@@ -99,6 +99,10 @@ _Avoid_: List, bucket
 The built-in list for tasks removed from active planning.
 _Avoid_: Archive flag as the canonical domain concept
 
+**Archived project**:
+A project hidden from the sidebar and project pickers. It still opens by URL, CLI, and MCP and stays editable. Unrelated to the Archived List.
+_Avoid_: Closed project, read-only project
+
 **Recurring List**:
 The built-in list that holds Recurring task templates. Hidden from default task queries like archived work; queried explicitly.
 _Avoid_: Templates list, schedules

@@ -130,7 +130,7 @@ describe("users", () => {
         // Check project was created
         const projects = await runCtx.db
           .query("projects")
-          .withIndex("by_organization_and_isDeleted", (q) => q.eq("organizationId", result.organizationId).eq("isDeleted", false))
+          .withIndex("by_organization_and_isDeleted_and_isArchived", (q) => q.eq("organizationId", result.organizationId).eq("isDeleted", false))
           .collect();
         expect(projects).toHaveLength(1);
         expect(projects[0].name).toBe("My First Project");
@@ -152,7 +152,7 @@ describe("users", () => {
       await ctx.t.run(async (runCtx) => {
         const projects = await runCtx.db
           .query("projects")
-          .withIndex("by_organization_and_isDeleted", (q) => q.eq("organizationId", result.organizationId).eq("isDeleted", false))
+          .withIndex("by_organization_and_isDeleted_and_isArchived", (q) => q.eq("organizationId", result.organizationId).eq("isDeleted", false))
           .collect();
         expect(projects).toHaveLength(1);
 

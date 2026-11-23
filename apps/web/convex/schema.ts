@@ -305,7 +305,7 @@ export default defineSchema({
     deletedBy: v.optional(v.id("users")),
   })
     .index("by_organization", ["organizationId"])
-    .index("by_organization_and_isDeleted", ["organizationId", "isDeleted"])
+    .index("by_organization_and_isDeleted_and_isArchived", ["organizationId", "isDeleted", "isArchived"])
     .index("by_organization_and_alias", ["organizationId", "alias"])
     .index("by_defaultListId", ["defaultListId"])
     .index("by_isDeleted_and_defaultListId", ["isDeleted", "defaultListId"])

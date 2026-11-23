@@ -73,7 +73,7 @@ import {
 } from "./lib/taskListsRepo";
 import { appendRank, validateRank } from "./lib/ranking";
 import {
-  listActiveProjectsByOrganization,
+  listUnarchivedProjectsByOrganization,
   updateProject,
 } from "../projects/lib/projectsRepo";
 
@@ -445,7 +445,7 @@ export const listPinnedForOrganization = query({
       return [];
     }
 
-    const projects = await listActiveProjectsByOrganization(
+    const projects = await listUnarchivedProjectsByOrganization(
       ctx,
       args.organizationId
     );

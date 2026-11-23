@@ -51,6 +51,8 @@ export function ApiKeyScopePicker({ value, onChange }: ApiKeyScopePickerProps) {
   const isProjectSelectorDisabled = !value;
   const selectedProjects =
     projects?.filter((project) => selectedProjectIds.has(project._id)) ?? [];
+  // Archived projects are offered only while selected (docs/specs/project-archive.md).
+  const projectChoices = projects?.filter((project) => !project.isArchived || selectedProjectIds.has(project._id));
 
   useEffect(() => {
     if (!value || projects === undefined) {
@@ -60,7 +62,9 @@ export function ApiKeyScopePicker({ value, onChange }: ApiKeyScopePickerProps) {
     const reconciledProjectIds = value.projectIds.filter((projectId) =>
       availableProjectIds.has(projectId)
     );
-    if (reconciledProjectIds.length === value.projectIds.length) {
+    // An empty list means every project, so dropping the last one would widen
+    // the key. Leave it; the server rejects the stale ID on save.
+    if (reconciledProjectIds.length === value.projectIds.length || reconciledProjectIds.length === 0) {
       return;
     }
 
@@ -142,7 +146,7 @@ export function ApiKeyScopePicker({ value, onChange }: ApiKeyScopePickerProps) {
             </Button>
           </PopoverTrigger>
           <PopoverContent className="w-72 p-1" align="start">
-            {projects === undefined ? (
+            {projectChoices === undefined ? (
               <div aria-label="Loading projects" className="space-y-1 p-1">
                 {[0, 1, 2].map((index) => (
                   <div key={index} className="flex items-center gap-2 px-1 py-1.5">
@@ -152,13 +156,13 @@ export function ApiKeyScopePicker({ value, onChange }: ApiKeyScopePickerProps) {
                   </div>
                 ))}
               </div>
-            ) : projects.length === 0 ? (
+            ) : projectChoices.length === 0 ? (
               <p className="px-2 py-3 text-sm text-muted-foreground">
                 No accessible projects.
               </p>
             ) : (
               <div className="max-h-64 overflow-y-auto">
-                {projects.map((project) => (
+                {projectChoices.map((project) => (
                   <label
                     key={project._id}
                     className="flex cursor-pointer items-center gap-2 rounded-sm px-2 py-1.5 text-sm hover:bg-muted"

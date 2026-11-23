@@ -4,6 +4,7 @@
 import { cleanup, fireEvent, render, screen } from "@testing-library/react";
 import { afterEach, describe, expect, test, vi } from "vitest";
 import OrganizationPage from "./page";
+import { useRedirectToLastProject } from "@/lib/routing/use-last-project";
 
 const useQueryMock = vi.hoisted(() => vi.fn());
 
@@ -53,6 +54,18 @@ describe("OrganizationPage", () => {
     expect(screen.getByText(/no projects yet/i)).toBeDefined();
     fireEvent.click(screen.getByRole("button", { name: "Create project" }));
     expect(screen.getByRole("dialog").textContent).toBe("New project dialog");
+  });
+
+  test("never redirects into an archived project", () => {
+    const active = { _id: "p_1", alias: "WEB", isArchived: false };
+    useQueryMock.mockImplementation((ref: string) => {
+      if (ref === "getBySlug") return { _id: "org_1" };
+      if (ref === "listByOrganization") return [active, { _id: "p_2", alias: "OLD", isArchived: true }];
+      return "member";
+    });
+    render(<OrganizationPage />);
+
+    expect(vi.mocked(useRedirectToLastProject)).toHaveBeenLastCalledWith("acme", [active]);
   });
 
   test("hides the create action while the role loads", () => {

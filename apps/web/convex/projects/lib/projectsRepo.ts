@@ -28,10 +28,26 @@ export async function getActiveProjectById(ctx: Ctx, projectId: Id<"projects">):
   return project;
 }
 
+/** Every non-deleted project, archived ones included. */
 export async function listActiveProjectsByOrganization(ctx: Ctx, organizationId: Id<"organizations">): Promise<Doc<"projects">[]> {
   return ctx.db
     .query("projects")
-    .withIndex("by_organization_and_isDeleted", (q) => q.eq("organizationId", organizationId).eq("isDeleted", false))
+    .withIndex("by_organization_and_isDeleted_and_isArchived", (q) =>
+      q.eq("organizationId", organizationId).eq("isDeleted", false)
+    )
+    .collect();
+}
+
+/** Non-deleted, non-archived projects: what navigation shows (docs/specs/project-archive.md). */
+export async function listUnarchivedProjectsByOrganization(
+  ctx: Ctx,
+  organizationId: Id<"organizations">
+): Promise<Doc<"projects">[]> {
+  return ctx.db
+    .query("projects")
+    .withIndex("by_organization_and_isDeleted_and_isArchived", (q) =>
+      q.eq("organizationId", organizationId).eq("isDeleted", false).eq("isArchived", false)
+    )
     .collect();
 }
 
@@ -107,6 +123,7 @@ export type ProjectUpdatePatch = {
   // patched to `undefined`).
   color?: string;
   alias?: string;
+  isArchived?: boolean;
   disabledStatuses?: Status[];
   hiddenTaskTableColumns?: TaskTableColumnId[];
   defaultViewMode?: ProjectViewMode;

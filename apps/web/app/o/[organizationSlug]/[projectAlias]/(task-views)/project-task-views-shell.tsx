@@ -13,6 +13,7 @@ import { useQuery } from "convex/react";
 import { api } from "@/convex/_generated/api";
 import { ProjectHeader } from "@/components/blocks/project/project-header";
 import { ViewOnlyBadge } from "@/components/blocks/project/view-only-badge";
+import { ArchivedProjectBanner } from "@/components/blocks/project/archive";
 import { useSelectedTaskList } from "@/components/blocks/project/task-lists/use-selected-task-list";
 import { useActiveTaskListResults } from "@/components/blocks/project/task-lists/use-task-list-results";
 import { NoAccess } from "@/components/blocks/no-access";
@@ -117,7 +118,7 @@ export function ProjectTaskViewsShell({ children }: { children: ReactNode }) {
     value: queriedProject,
   });
   const convexUser = useQuery(api.users.core.current);
-  const { canCreateTask, myRole } = useProjectPermissions(project?._id ?? null);
+  const { canCreateTask, canArchiveProject, myRole } = useProjectPermissions(project?._id ?? null, org?._id ?? null);
   const viewOnlyBadge = <ViewOnlyBadge role={myRole} />;
   const allowedStatuses = getAllowedTaskStatuses(project);
   const clearInvalidSelectedListRef = useCallback(() => {
@@ -451,6 +452,8 @@ export function ProjectTaskViewsShell({ children }: { children: ReactNode }) {
               />
             )}
           />
+
+          <ArchivedProjectBanner project={project} canUnarchive={canArchiveProject} />
 
           <div className="flex min-w-0 flex-1 flex-col overflow-hidden">
             {children}

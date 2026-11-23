@@ -58,6 +58,10 @@ export function useProjectPermissions(
     readOnlyReason: canUpdateTask ? null : VIEW_ONLY_REASON,
     orgRole,
     canDeleteProject: hasOrgPermission(orgRole, OrgPermission.PROJECT_DELETE),
+    // Mirrors `requireProjectAdministration` (docs/specs/project-archive.md).
+    canArchiveProject:
+      hasProjectPermission(myRole, ProjectPermission.PROJECT_ARCHIVE) ||
+      hasOrgPermission(orgRole, OrgPermission.PROJECTS_MANAGE_ALL),
     isLoading: myRole === undefined,
   };
 }

@@ -207,16 +207,18 @@ export function MobileCreateTaskPanel({
 
   const projectOptions = useMemo<ProjectOption[]>(
     () =>
-      // Only projects the caller can create tasks in (read-only-viewer-ux.md).
+      // Only projects the caller can create tasks in (read-only-viewer-ux.md);
+      // archived ones only when current (docs/specs/project-archive.md).
       (projects ?? [])
         .filter((p) => hasProjectPermission(p.myRole, ProjectPermission.TASK_CREATE))
+        .filter((p) => !p.isArchived || p.alias === activeProjectAlias)
         .map((p) => ({
           value: String(p._id),
           label: p.name,
           alias: p.alias,
           projectId: p._id,
         })),
-    [projects]
+    [activeProjectAlias, projects]
   );
   const defaultProject = useMemo(
     () =>
