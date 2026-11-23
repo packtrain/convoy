@@ -7,8 +7,9 @@ export function MiddleTruncate({ text, tailLength = 15, className }: { text: str
   }
   return (
     <span className={cn("flex min-w-0", className)}>
-      <span className="min-w-0 truncate">{text.slice(0, -tailLength)}</span>
-      <span className="shrink-0 whitespace-pre">{text.slice(-tailLength)}</span>
+      {/* The head absorbs nearly all shrinking; the tail truncates only once the head is gone. */}
+      <span className="min-w-0 shrink-[999] truncate">{text.slice(0, -tailLength)}</span>
+      <span className="min-w-0 truncate whitespace-pre">{text.slice(-tailLength)}</span>
     </span>
   );
 }

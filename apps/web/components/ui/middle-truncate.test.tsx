@@ -13,7 +13,16 @@ describe("MiddleTruncate", () => {
     expect(root.textContent).toBe("feat/os-2289-evidence-tab-with-agent-attached");
     expect(root.children[0].className).toContain("truncate");
     expect(root.children[1].textContent).toBe("-agent-attached");
-    expect(root.children[1].className).toContain("shrink-0");
+  });
+
+  test("truncates the tail too once the head is gone, so a narrow chip never overflows", () => {
+    const { container } = render(<MiddleTruncate text="feat/os-2289-evidence-tab-with-agent-attached" />);
+    const [head, tail] = Array.from(container.firstElementChild!.children);
+
+    expect(head.className).toContain("shrink-[999]");
+    expect(tail.className).not.toContain("shrink-0");
+    expect(tail.className).toContain("min-w-0");
+    expect(tail.className).toContain("truncate");
   });
 
   test("renders short text as one truncating span", () => {

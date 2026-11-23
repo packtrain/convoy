@@ -222,8 +222,7 @@ describe("WorkingDirectorySelector", () => {
       />
     );
 
-    const tail = screen.getByText("-agent-attached");
-    expect(tail.classList.contains("shrink-0")).toBe(true);
+    expect(screen.getByText("-agent-attached")).toBeDefined();
     expect(screen.getByTitle(`Default profile / ${label}`).textContent).toContain(label);
   });
 
