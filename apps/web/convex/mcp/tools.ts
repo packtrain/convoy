@@ -338,7 +338,7 @@ export function getToolDefinitions(
   return [
     {
       name: "list_projects",
-      description: "List all projects you have access to",
+      description: "List the active (not archived) projects you have access to",
       inputSchema: {
         type: "object",
         properties: {},

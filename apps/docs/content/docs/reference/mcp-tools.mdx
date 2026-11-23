@@ -41,7 +41,7 @@ MCP schema only validates built-in keys.
 
 ### `list_projects`
 
-List all projects the authenticated user has access to.
+List the projects the authenticated user has access to. Archived projects are left out, but tools that take a `projectId` still work on them.
 
 | Argument | Type | Required | Notes |
 |---|---|---|---|

@@ -2,8 +2,9 @@
 
 import { useState } from "react";
 import { formatDistanceToNow } from "date-fns";
-import { Ellipsis, FolderKanban, Hash, Plus, Settings, Trash2 } from "lucide-react";
+import { Archive, ArchiveRestore, Ellipsis, FolderKanban, Hash, Plus, Settings, Trash2 } from "lucide-react";
 
+import { ProjectArchiveDialog } from "@/components/blocks/project/archive";
 import { ProjectDialog, type ProjectDialogData } from "@/components/blocks/project/project-dialog";
 import { SettingsCatalogListFrame } from "@/components/blocks/settings-catalog/settings-catalog-list-frame";
 import { ConfirmDialog } from "@/components/ui/dialog";
@@ -17,6 +18,7 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Skeleton } from "@/components/ui/skeleton";
 import { useDialogWithData } from "@/hooks/ui/use-dialog";
 import { useMutation, useQuery } from "convex/react";
@@ -36,6 +38,15 @@ type OrgManagedProject = {
   creator: { name: string } | null;
 };
 
+type StatusFilter = "active" | "archived" | "all";
+
+// Spec: docs/specs/project-archive.md (Org settings).
+const STATUS_FILTERS: Record<StatusFilter, { label: string; empty: string; matches: (isArchived: boolean) => boolean }> = {
+  active: { label: "Active", empty: "No active projects.", matches: (isArchived) => !isArchived },
+  archived: { label: "Archived", empty: "No archived projects.", matches: (isArchived) => isArchived },
+  all: { label: "All", empty: "No projects.", matches: () => true },
+};
+
 export function ProjectsSection({
   organizationId,
   organizationSlug,
@@ -48,6 +59,8 @@ export function ProjectsSection({
   const [projectToDelete, setProjectToDelete] = useState<OrgManagedProject | null>(null);
   const [isDeleting, setIsDeleting] = useState(false);
   const [search, setSearch] = useState("");
+  const [status, setStatus] = useState<StatusFilter>("active");
+  const [projectToArchive, setProjectToArchive] = useState<OrgManagedProject | null>(null);
 
   const projects = useQuery(api.projects.core.listAllForOrganization, {
     organizationId,
@@ -78,8 +91,10 @@ export function ProjectsSection({
   }
 
   const query = search.trim().toLowerCase();
-  const visibleProjects = (projects ?? []).filter((project) =>
-    `${project.name} ${project.alias}`.toLowerCase().includes(query)
+  const visibleProjects = (projects ?? []).filter(
+    (project) =>
+      STATUS_FILTERS[status].matches(project.isArchived) &&
+      `${project.name} ${project.alias}`.toLowerCase().includes(query)
   );
 
   if (projects === undefined || myRole === undefined) {
@@ -112,13 +127,27 @@ export function ProjectsSection({
       ) : (
         <>
           <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-            <SearchInput
-              value={search}
-              onChange={(event) => setSearch(event.target.value)}
-              placeholder="Search projects"
-              aria-label="Search projects"
-              className="sm:max-w-sm"
-            />
+            <div className="flex min-w-0 flex-1 items-center gap-2">
+              <SearchInput
+                value={search}
+                onChange={(event) => setSearch(event.target.value)}
+                placeholder="Search projects"
+                aria-label="Search projects"
+                className="sm:max-w-sm"
+              />
+              <Select value={status} onValueChange={(value) => setStatus(value as StatusFilter)}>
+                <SelectTrigger aria-label="Project status" className="w-28 shrink-0">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  {Object.entries(STATUS_FILTERS).map(([value, { label }]) => (
+                    <SelectItem key={value} value={value}>
+                      {label}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
             {canCreate ? (
               <Button variant="outline" size="settings" onClick={() => projectDialog.open({})}>
                 <Plus className="size-4" />
@@ -128,7 +157,9 @@ export function ProjectsSection({
           </div>
 
           {visibleProjects.length === 0 ? (
-            <Empty variant="dashed">No projects match this search.</Empty>
+            <Empty variant="dashed">
+              {query ? "No projects match this search." : STATUS_FILTERS[status].empty}
+            </Empty>
           ) : (
             <SettingsCatalogListFrame>
               {visibleProjects.map((project) => (
@@ -140,6 +171,7 @@ export function ProjectsSection({
                       appRoute.organizationProjectDetail(organizationSlug, project._id)
                     )
                   }
+                  onArchive={() => setProjectToArchive(project)}
                   onDelete={canDelete ? () => setProjectToDelete(project) : undefined}
                 />
               ))}
@@ -149,6 +181,8 @@ export function ProjectsSection({
       )}
 
       <ProjectDialog organizationId={organizationId} dialog={projectDialog} />
+
+      <ProjectArchiveDialog project={projectToArchive} onClose={() => setProjectToArchive(null)} />
 
       <ConfirmDialog
         open={projectToDelete !== null}
@@ -171,10 +205,12 @@ export function ProjectsSection({
 function ProjectRow({
   project,
   onOpen,
+  onArchive,
   onDelete,
 }: {
   project: OrgManagedProject;
   onOpen: () => void;
+  onArchive: () => void;
   onDelete?: () => void;
 }) {
   return (
@@ -209,19 +245,21 @@ function ProjectRow({
         </div>
       </button>
       <div className="flex shrink-0 items-center py-4 pr-4 pl-0">
-        <ProjectRowMenu projectName={project.name} onOpen={onOpen} onDelete={onDelete} />
+        <ProjectRowMenu project={project} onOpen={onOpen} onArchive={onArchive} onDelete={onDelete} />
       </div>
     </div>
   );
 }
 
 function ProjectRowMenu({
-  projectName,
+  project,
   onOpen,
+  onArchive,
   onDelete,
 }: {
-  projectName: string;
+  project: OrgManagedProject;
   onOpen: () => void;
+  onArchive: () => void;
   onDelete?: () => void;
 }) {
   return (
@@ -231,7 +269,7 @@ function ProjectRowMenu({
           type="button"
           variant="secondary"
           size="icon-sm"
-          aria-label={`${projectName} actions`}
+          aria-label={`${project.name} actions`}
           className="shrink-0 text-muted-foreground"
         >
           <Ellipsis />
@@ -241,6 +279,10 @@ function ProjectRowMenu({
         <DropdownMenuItem onClick={onOpen}>
           <Settings className="size-4" />
           Manage
+        </DropdownMenuItem>
+        <DropdownMenuItem onClick={onArchive}>
+          {project.isArchived ? <ArchiveRestore className="size-4" /> : <Archive className="size-4" />}
+          {project.isArchived ? "Unarchive" : "Archive"}
         </DropdownMenuItem>
         {onDelete ? (
           <DropdownMenuItem variant="destructive" onClick={onDelete}>
@@ -257,7 +299,10 @@ function ProjectsSectionSkeleton() {
   return (
     <div className="space-y-5">
       <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-        <Skeleton className="h-8 w-full max-w-sm rounded-md" />
+        <div className="flex min-w-0 flex-1 items-center gap-2">
+          <Skeleton className="h-8 w-full max-w-sm rounded-md" />
+          <Skeleton className="h-8 w-28 shrink-0 rounded-md" />
+        </div>
         <Skeleton className="h-8 w-32 rounded-md" />
       </div>
       <SettingsCatalogListFrame>

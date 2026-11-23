@@ -3492,9 +3492,11 @@ describe("handleMcpRequest URL-based default projectId", () => {
     });
   });
 
-  test("list_projects delegates to scoped project discovery with apiKey", async () => {
-    const scopedProjects = [{ _id: "project_allowed", name: "Allowed" }];
-    const runQuery = vi.fn().mockResolvedValueOnce(scopedProjects);
+  test("list_projects delegates to scoped project discovery with apiKey and drops archived projects", async () => {
+    const scopedProjects = [{ _id: "project_allowed", name: "Allowed", isArchived: false }];
+    const runQuery = vi
+      .fn()
+      .mockResolvedValueOnce([...scopedProjects, { _id: "project_old", name: "Old", isArchived: true }]);
     const ctx = { runQuery, runMutation: vi.fn() } as unknown as ActionCtx;
 
     const response = await handleMcpRequest(ctx, "sk_user_test", {

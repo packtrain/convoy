@@ -9,10 +9,11 @@ import {
   type OutputOptions,
 } from "../../lib/output.js";
 import { runOneShotCommand } from "../../lib/one-shot-command.js";
-import { filterProjectsByOrgRef } from "../../lib/project-resolution.js";
+import { filterProjectsByOrgRef, type AccessibleProject } from "../../lib/project-resolution.js";
 
 interface ListProjectsOptions extends OutputOptions {
   org?: string;
+  archived?: boolean;
 }
 
 export const listProjectsCommand = addGlobalOptions(
@@ -20,18 +21,21 @@ export const listProjectsCommand = addGlobalOptions(
     new Command("list")
       .description("List projects")
       .option("--org <org>", "Filter by organization ID or slug")
+      .option("--archived", "List archived projects instead of active ones")
   )
 ).action(async (options: ListProjectsOptions, cmd: Command) => {
   await runOneShotCommand(cmd, async ({ client }) => {
     const outputMode = resolveOutputMode(options);
     const projects = await client.query(api.projects.core.listAccessible, {});
-    const filtered = options.org
-      ? filterProjectsByOrgRef(projects, options.org)
-      : projects;
+    const inOrg = options.org ? filterProjectsByOrgRef(projects, options.org) : projects;
+    // Older servers omit `isArchived`; count those rows as active. Spec: docs/specs/project-archive.md
+    const filtered = inOrg.filter(
+      (project: AccessibleProject) => Boolean(project.isArchived) === Boolean(options.archived)
+    );
 
     printOutput(outputMode, filtered, (rows) => {
       if (rows.length === 0) {
-        console.log(chalk.dim("\nNo projects found."));
+        console.log(chalk.dim(options.archived ? "\nNo archived projects found." : "\nNo projects found."));
         return;
       }
 

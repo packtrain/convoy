@@ -150,6 +150,8 @@ caller is missing is `--org`.
 
 - Source of truth: `projects.listAccessible`.
 - `--org` filters by org ID or slug.
+- Archived projects are left out. `--archived` lists only the archived ones
+  ([project-archive.md](project-archive.md)).
 
 ### `projects archive` / `projects unarchive`
 

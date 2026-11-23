@@ -5,10 +5,6 @@ import { afterEach, describe, expect, test, vi } from "vitest";
 import { cleanup, render, screen } from "@testing-library/react";
 import type { ReactNode } from "react";
 import { ProjectActionsDropdown } from "./project-actions-dropdown";
-import {
-  DEV_SETTINGS,
-  DEV_SETTING_ENABLED_VALUE,
-} from "@/lib/dev-mode/constants";
 
 vi.mock("@/components/ui/dropdown-menu", () => ({
   DropdownMenu: ({ children }: { children: ReactNode }) => <div>{children}</div>,
@@ -73,7 +69,7 @@ describe("ProjectActionsDropdown", () => {
   } as const;
 
   test("renders navigating actions as links so the browser can open them in a new tab", () => {
-    render(<ProjectActionsDropdown {...project} onDelete={vi.fn()} />);
+    render(<ProjectActionsDropdown {...project} onDelete={vi.fn()} onArchive={vi.fn()} />);
 
     expect(screen.queryByText("Share")).toBeNull();
     const hrefFor = (name: string) =>
@@ -98,26 +94,30 @@ describe("ProjectActionsDropdown", () => {
     ]);
   });
 
-  test("hides the unfinished Archive action", () => {
-    render(<ProjectActionsDropdown {...project} onDelete={vi.fn()} />);
+  test("Archive asks the caller to confirm", () => {
+    const onArchive = vi.fn();
+    render(<ProjectActionsDropdown {...project} onDelete={vi.fn()} onArchive={onArchive} />);
 
-    expect(screen.queryByRole("button", { name: "Archive" })).toBeNull();
+    screen.getByRole("button", { name: "Archive" }).click();
+    expect(onArchive).toHaveBeenCalledTimes(1);
   });
 
-  test("shows Archive disabled when the developer toggle is on", () => {
-    window.localStorage.setItem(
-      DEV_SETTINGS.showUnfinishedItems.storageKey,
-      DEV_SETTING_ENABLED_VALUE
+  test("Archive needs project:archive or org projects:manage_all", () => {
+    render(
+      <ProjectActionsDropdown {...project} myRole="member" orgRole="member" onDelete={vi.fn()} onArchive={vi.fn()} />
     );
-    render(<ProjectActionsDropdown {...project} onDelete={vi.fn()} />);
+    expect(screen.queryByRole("button", { name: "Archive" })).toBeNull();
+    cleanup();
 
-    const archiveButton = screen.getByRole("button", { name: "Archive" });
-    expect((archiveButton as HTMLButtonElement).disabled).toBe(true);
+    render(
+      <ProjectActionsDropdown {...project} myRole="viewer" orgRole="admin" onDelete={vi.fn()} onArchive={vi.fn()} />
+    );
+    expect(screen.getByRole("button", { name: "Archive" })).toBeTruthy();
   });
 
   test("a viewer gets Settings only, and Delete only with the org permission", () => {
     render(
-      <ProjectActionsDropdown {...project} myRole="viewer" orgRole="member" onDelete={vi.fn()} />
+      <ProjectActionsDropdown {...project} myRole="viewer" orgRole="member" onDelete={vi.fn()} onArchive={vi.fn()} />
     );
 
     expect(screen.getAllByRole("link").map((link) => link.textContent)).toEqual(["Settings"]);
@@ -126,7 +126,7 @@ describe("ProjectActionsDropdown", () => {
 
     // No project-admin bypass: an org admin viewing a project can still delete it.
     render(
-      <ProjectActionsDropdown {...project} myRole="viewer" orgRole="admin" onDelete={vi.fn()} />
+      <ProjectActionsDropdown {...project} myRole="viewer" orgRole="admin" onDelete={vi.fn()} onArchive={vi.fn()} />
     );
     expect(screen.getAllByRole("link").map((link) => link.textContent)).toEqual(["Settings"]);
     expect(screen.getByRole("button", { name: "Delete" })).toBeTruthy();
@@ -134,7 +134,7 @@ describe("ProjectActionsDropdown", () => {
 
   test("a member manages everything but members, integrations, and delete", () => {
     render(
-      <ProjectActionsDropdown {...project} myRole="member" orgRole="member" onDelete={vi.fn()} />
+      <ProjectActionsDropdown {...project} myRole="member" orgRole="member" onDelete={vi.fn()} onArchive={vi.fn()} />
     );
 
     expect(screen.queryByRole("link", { name: "Add members" })).toBeNull();
@@ -145,7 +145,7 @@ describe("ProjectActionsDropdown", () => {
 
   test("offers nothing gated while the roles load", () => {
     render(
-      <ProjectActionsDropdown {...project} myRole={undefined} orgRole={undefined} onDelete={vi.fn()} />
+      <ProjectActionsDropdown {...project} myRole={undefined} orgRole={undefined} onDelete={vi.fn()} onArchive={vi.fn()} />
     );
 
     expect(screen.getAllByRole("link").map((link) => link.textContent)).toEqual(["Settings"]);

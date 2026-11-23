@@ -28,8 +28,9 @@ import {
   href,
   type ProjectSettingsSection,
 } from "@/lib/navigation";
-import { useDevSettings, useShowUnfinishedItems } from "@/lib/dev-mode/use-dev-mode";
+import { useDevSettings } from "@/lib/dev-mode/use-dev-mode";
 import {
+  canArchiveProject,
   hasOrgPermission,
   hasProjectPermission,
   OrgPermission,
@@ -67,6 +68,7 @@ interface ProjectActionsDropdownProps {
   myRole: ProjectRole | null | undefined;
   orgRole: OrgRole | null | undefined;
   onDelete: () => void;
+  onArchive: () => void;
 }
 
 export function ProjectActionsDropdown({
@@ -75,9 +77,9 @@ export function ProjectActionsDropdown({
   myRole,
   orgRole,
   onDelete,
+  onArchive,
 }: ProjectActionsDropdownProps) {
   const { isMobile } = useSidebar();
-  const showUnfinishedItems = useShowUnfinishedItems();
   const devSettings = useDevSettings();
   const actions = SECTION_ACTIONS.filter(
     ({ section, permission }) =>
@@ -112,8 +114,8 @@ export function ProjectActionsDropdown({
             </AppLink>
           </DropdownMenuItem>
         ))}
-        {showUnfinishedItems && (
-          <DropdownMenuItem disabled>
+        {canArchiveProject(myRole, orgRole) && (
+          <DropdownMenuItem className="cursor-pointer" onClick={onArchive}>
             <Archive className="text-muted-foreground" />
             <span>Archive</span>
           </DropdownMenuItem>

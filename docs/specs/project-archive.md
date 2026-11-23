@@ -52,28 +52,34 @@ B cannot archive project A even when its owner is an org owner.
   member can reach Archive while Delete stays disabled for them.
 - **Banner.** Shown on the project's task views while archived. Unarchive
   opens the same confirmation.
+- **Sidebar `...` menu.** Archive opens the same confirmation, for callers who
+  can archive. The sidebar lists no archived project, so it has no Unarchive.
+- **Org settings, Projects.** A status filter next to the search: Active (the
+  default), Archived, All. It filters on the client, because
+  `listAllForOrganization` already returns archived rows. Each row's menu has
+  Archive or Unarchive, opening the same confirmation. The page is for org
+  owners and admins, who can always archive.
 
 ## CLI
 
 ```bash
 convoy projects archive <project> [--org <org>] [--json]
 convoy projects unarchive <project> [--org <org>] [--json]
+convoy projects list [--archived] [--org <org>] [--json]
 ```
 
 `<project>` is an ID or alias. `projects.core.listAccessible` still returns
-archived projects, so both commands resolve them. `listAccessible` only lists
-projects the caller is a member of. An org admin may archive without being a
-member, so an ID that does not resolve goes to the server unchanged, and the
-server decides. Aliases are 2 to 5 characters, so a longer value is treated as
-an ID.
+archived projects, flagged `isArchived`, so both commands resolve them.
+`listAccessible` only lists projects the caller is a member of. An org admin
+may archive without being a member, so an ID that does not resolve goes to the
+server unchanged, and the server decides. Aliases are 2 to 5 characters, so a
+longer value is treated as an ID.
 
-## Not built yet
+`convoy projects list` leaves archived projects out. `--archived` lists only
+the archived ones. A row from an older server with no `isArchived` counts as
+active.
 
-These land in the next slice of OS-2528.
+## MCP
 
-- The Archive item in the sidebar `...` menu
-  ([project-sidebar-actions.md](project-sidebar-actions.md)).
-- Org settings, Projects: a status filter (Active by default, Archived, All)
-  and Archive / Unarchive in the row menu.
-- `isArchived` on `listAccessible` rows, `convoy projects list --archived`,
-  and MCP `list_projects` hiding archived projects.
+`list_projects` leaves archived projects out. Tools that take a `projectId`
+still work on an archived project, as the CLI commands do.

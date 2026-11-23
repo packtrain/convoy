@@ -1,2 +1,2 @@
 export { ArchivedProjectBanner } from "./archived-project-banner";
-export { ProjectArchiveDialog } from "./project-archive-dialog";
+export { ProjectArchiveDialog, type ArchivableProject } from "./project-archive-dialog";

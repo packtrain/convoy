@@ -1266,6 +1266,18 @@ describe("projects", () => {
       ]);
     });
 
+    test("keeps archived projects, flagged, so callers can resolve them", async () => {
+      const ctx = createTestContext();
+      const { project, asUser } = await ctx.setupProject();
+      await asUser.mutation(api.projects.core.setArchived, { id: project._id, isArchived: true });
+
+      const projects = await asUser.query(api.projects.core.listAccessible, {});
+
+      expect(projects.map(({ _id, isArchived }) => ({ _id, isArchived }))).toEqual([
+        { _id: project._id, isArchived: true },
+      ]);
+    });
+
     test("should return empty when unauthenticated", async () => {
       const ctx = createTestContext();
 

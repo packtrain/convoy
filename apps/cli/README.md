@@ -214,12 +214,14 @@ convoy update
 
 ### `projects list`
 
-List accessible projects.
+List accessible projects. Archived projects are left out; `--archived` lists
+only those.
 
 ```bash
 convoy projects list
 convoy projects list --profile work
 convoy projects list --org org_abc123
+convoy projects list --archived
 ```
 
 ### `projects archive` / `projects unarchive`

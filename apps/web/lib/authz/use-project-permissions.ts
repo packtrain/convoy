@@ -2,6 +2,7 @@ import { useQuery } from "convex/react";
 import { api } from "@/convex/_generated/api";
 import { Id } from "@/convex/_generated/dataModel";
 import {
+  canArchiveProject,
   hasOrgPermission,
   hasProjectPermission,
   OrgPermission,
@@ -58,10 +59,7 @@ export function useProjectPermissions(
     readOnlyReason: canUpdateTask ? null : VIEW_ONLY_REASON,
     orgRole,
     canDeleteProject: hasOrgPermission(orgRole, OrgPermission.PROJECT_DELETE),
-    // Mirrors `requireProjectAdministration` (docs/specs/project-archive.md).
-    canArchiveProject:
-      hasProjectPermission(myRole, ProjectPermission.PROJECT_ARCHIVE) ||
-      hasOrgPermission(orgRole, OrgPermission.PROJECTS_MANAGE_ALL),
+    canArchiveProject: canArchiveProject(myRole, orgRole),
     isLoading: myRole === undefined,
   };
 }

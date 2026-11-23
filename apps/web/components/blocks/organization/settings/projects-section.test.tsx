@@ -2,7 +2,7 @@
  * @vitest-environment jsdom
  */
 import { cleanup, fireEvent, render, screen } from "@testing-library/react";
-import { afterEach, describe, expect, test, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, test, vi } from "vitest";
 import { ProjectsSection } from "./projects-section";
 import { expectEmptyState, expectVerticallyCentered } from "@/test-utils/empty-state";
 
@@ -17,7 +17,7 @@ vi.mock("convex/react", () => ({
 
 vi.mock("@/convex/_generated/api", () => ({
   api: {
-    projects: { core: { listAllForOrganization: "listAll", remove: "remove" } },
+    projects: { core: { listAllForOrganization: "listAll", remove: "remove", setArchived: "setArchived" } },
     organizations: { members: { getMyRole: "getMyRole" } },
   },
 }));
@@ -71,7 +71,21 @@ function renderSection() {
   );
 }
 
+const setArchivedMock = vi.fn();
+
+function pickStatus(name: "Active" | "Archived" | "All") {
+  fireEvent.click(screen.getByRole("combobox", { name: "Project status" }));
+  fireEvent.click(screen.getByRole("option", { name }));
+}
+
 describe("ProjectsSection", () => {
+  // Radix Select scrolls the picked option into view, which jsdom lacks.
+  beforeEach(() => {
+    Element.prototype.scrollIntoView = vi.fn();
+    setArchivedMock.mockReset().mockResolvedValue(null);
+    useMutationMock.mockImplementation((ref: string) => (ref === "setArchived" ? setArchivedMock : vi.fn()));
+  });
+
   afterEach(() => {
     cleanup();
     useQueryMock.mockReset();
@@ -82,10 +96,11 @@ describe("ProjectsSection", () => {
     mockQueries({ role: "owner", projects: PROJECTS });
 
     renderSection();
+    pickStatus("All");
 
     expect(screen.getByText("Website Redesign")).toBeDefined();
     expect(screen.getByText("WEB")).toBeDefined();
-    expect(screen.getByText("Archived")).toBeDefined();
+    expect(screen.getByText("Archived", { selector: '[data-slot="badge"]' })).toBeDefined();
     // memberCount was dropped: one membership read per row is not worth it.
     expect(screen.queryByText(/member/)).toBeNull();
   });
@@ -94,6 +109,7 @@ describe("ProjectsSection", () => {
     mockQueries({ role: "owner", projects: PROJECTS });
 
     renderSection();
+    pickStatus("All");
 
     expect(
       screen.getByText(/^created by Ada Lovelace, .* days? ago$/)
@@ -173,6 +189,7 @@ describe("ProjectsSection", () => {
   test("filters projects by name or alias", () => {
     mockQueries({ role: "owner", projects: PROJECTS });
     renderSection();
+    pickStatus("All");
     const [first, second] = PROJECTS;
     const search = screen.getByRole("searchbox", { name: "Search projects" });
 
@@ -182,6 +199,50 @@ describe("ProjectsSection", () => {
 
     fireEvent.change(search, { target: { value: "zzz" } });
     expect(screen.getByText("No projects match this search.")).toBeDefined();
+  });
+
+  test("lists active projects by default and archived ones on request", () => {
+    mockQueries({ role: "owner", projects: PROJECTS });
+    renderSection();
+
+    expect(screen.getByText("Website Redesign")).toBeDefined();
+    expect(screen.queryByText("Mobile App")).toBeNull();
+
+    pickStatus("Archived");
+    expect(screen.queryByText("Website Redesign")).toBeNull();
+    expect(screen.getByText("Mobile App")).toBeDefined();
+  });
+
+  test("names the filter when it leaves nothing to show", () => {
+    mockQueries({ role: "owner", projects: [PROJECTS[0]] });
+    renderSection();
+
+    pickStatus("Archived");
+    expect(screen.getByText("No archived projects.")).toBeDefined();
+  });
+
+  test("archives an active project from its row menu", async () => {
+    mockQueries({ role: "owner", projects: PROJECTS });
+    renderSection();
+
+    fireEvent.pointerDown(screen.getByRole("button", { name: "Website Redesign actions" }));
+    fireEvent.click(screen.getByRole("menuitem", { name: "Archive" }));
+    fireEvent.click(await screen.findByRole("button", { name: "Archive project" }));
+
+    expect(setArchivedMock).toHaveBeenCalledWith({ id: "p_1", isArchived: true });
+  });
+
+  test("unarchives an archived project from its row menu", async () => {
+    mockQueries({ role: "owner", projects: PROJECTS });
+    renderSection();
+    pickStatus("Archived");
+
+    fireEvent.pointerDown(screen.getByRole("button", { name: "Mobile App actions" }));
+    expect(screen.queryByRole("menuitem", { name: "Archive" })).toBeNull();
+    fireEvent.click(screen.getByRole("menuitem", { name: "Unarchive" }));
+    fireEvent.click(await screen.findByRole("button", { name: "Unarchive project" }));
+
+    expect(setArchivedMock).toHaveBeenCalledWith({ id: "p_2", isArchived: false });
   });
 
   test("shows an empty state with a create action", () => {
@@ -220,5 +281,8 @@ describe("ProjectsSection", () => {
 
     expect(container.querySelector('[data-slot="skeleton"]')).not.toBeNull();
     expect(screen.queryByText("No projects yet")).toBeNull();
+    // Search, status filter, New project: the loaded toolbar's three controls.
+    const toolbar = container.firstElementChild?.firstElementChild;
+    expect(toolbar?.querySelectorAll('[data-slot="skeleton"]')).toHaveLength(3);
   });
 });

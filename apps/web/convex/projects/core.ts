@@ -450,6 +450,7 @@ export const listAccessible = query({
       _id: v.id("projects"),
       name: v.string(),
       alias: v.string(),
+      isArchived: v.boolean(),
       organizationId: v.id("organizations"),
       organizationName: v.string(),
       organizationSlug: v.string(),
@@ -518,6 +519,7 @@ export const listAccessible = query({
       _id: Id<"projects">;
       name: string;
       alias: string;
+      isArchived: boolean;
       organizationId: Id<"organizations">;
       organizationName: string;
       organizationSlug: string;
@@ -540,6 +542,7 @@ export const listAccessible = query({
             _id: project._id,
             name: project.name,
             alias: project.alias,
+            isArchived: project.isArchived,
             organizationId: org._id,
             organizationName: org.name,
             organizationSlug: org.slug,

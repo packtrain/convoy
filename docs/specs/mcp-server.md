@@ -352,7 +352,7 @@ prefix. See [cli-thread-message-links.md](cli-thread-message-links.md).
 
 | Tool | Description | Needs projectId |
 |------|-------------|-----------------|
-| `list_projects` | List all accessible projects | No |
+| `list_projects` | List accessible projects that are not archived | No |
 | `list_task_types` | List built-in task types | No |
 | `list_task_lists` | List project Lists for discovery | Yes* |
 | `create_task_list` | Create a project List | Yes* |
@@ -497,7 +497,10 @@ No parameters required. Returns the built-in task types (task, bug, feature, epi
 
 #### list_projects
 
-No parameters. Returns all projects the authenticated user can access across all organizations.
+No parameters. Returns the projects the authenticated user can access across
+all organizations, minus archived ones
+([project-archive.md](project-archive.md)). Tools that take a `projectId` still
+work on an archived project.
 Results are sorted using natural, case-insensitive project-name ordering, with deterministic tie-breakers by alias then project ID.
 
 #### list_task_lists

@@ -74,6 +74,7 @@ import { getTaskListPinAction } from "@/components/blocks/project/task-lists/tas
 import { TaskListIdentity } from "@/components/blocks/project/task-lists/task-list-identity";
 import { useTaskListActions } from "@/components/blocks/project/task-lists/use-task-list-actions";
 import { ProjectActionsDropdown } from "@/components/blocks/project/project-actions-dropdown";
+import { ProjectArchiveDialog, type ArchivableProject } from "@/components/blocks/project/archive";
 import {
   NavSectionButton,
   NavItemsSkeleton,
@@ -424,6 +425,7 @@ interface ProjectItemProps {
   isListsCollapsed: boolean;
   iconOnly: boolean;
   onDelete: (project: { _id: Id<"projects">; name: string }) => void;
+  onArchive: (project: ArchivableProject) => void;
   organizationSlug: string;
   onToggleListsCollapsed: (projectId: Id<"projects">) => void;
 }
@@ -445,6 +447,7 @@ const ProjectItem = memo(
     isListsCollapsed,
     iconOnly,
     onDelete,
+    onArchive,
     organizationSlug,
     onToggleListsCollapsed,
   }: ProjectItemProps) {
@@ -452,6 +455,9 @@ const ProjectItem = memo(
     const [pinnedListsOpen, setPinnedListsOpen] = useState(false);
     const handleDelete = () => {
       onDelete({ _id: project._id, name: project.name });
+    };
+    const handleArchive = () => {
+      onArchive({ _id: project._id, name: project.name, isArchived: false });
     };
 
     const handleToggleListsCollapsed = (
@@ -566,6 +572,7 @@ const ProjectItem = memo(
             myRole={myRole}
             orgRole={orgRole}
             onDelete={handleDelete}
+            onArchive={handleArchive}
           />
         </SidebarMenuItem>
         {!isSidebarCollapsed && !isListsCollapsed ? (
@@ -677,6 +684,7 @@ const ProjectItem = memo(
     prevProps.isListsCollapsed === nextProps.isListsCollapsed &&
     prevProps.iconOnly === nextProps.iconOnly &&
     prevProps.onDelete === nextProps.onDelete &&
+    prevProps.onArchive === nextProps.onArchive &&
     prevProps.organizationSlug === nextProps.organizationSlug &&
     prevProps.onToggleListsCollapsed === nextProps.onToggleListsCollapsed
 );
@@ -749,6 +757,7 @@ const NavProjectsContent = memo(function NavProjectsContent({
     project: null,
   });
   const [isDeleting, setIsDeleting] = useState(false);
+  const [projectToArchive, setProjectToArchive] = useState<ArchivableProject | null>(null);
   const hasMountedCollapsedProjectIdsRef = useRef(false);
   const [collapsedProjectIds, setCollapsedProjectIds] = useState(
     loadCollapsedProjectIds
@@ -940,6 +949,7 @@ const NavProjectsContent = memo(function NavProjectsContent({
                   isListsCollapsed={projectRow.isListsCollapsed}
                   iconOnly={iconOnly}
                   onDelete={handleDeleteProject}
+                  onArchive={setProjectToArchive}
                   organizationSlug={organizationSlug}
                   onToggleListsCollapsed={handleToggleListsCollapsed}
                 />
@@ -950,6 +960,8 @@ const NavProjectsContent = memo(function NavProjectsContent({
       </NavSection>
 
       <ProjectDialog organizationId={organizationId} dialog={projectDialog} />
+
+      <ProjectArchiveDialog project={projectToArchive} onClose={() => setProjectToArchive(null)} />
 
       <ConfirmDialog
         open={deleteDialog.open}

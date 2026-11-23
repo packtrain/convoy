@@ -174,6 +174,17 @@ export function hasProjectPermission(
   return PROJECT_ROLE_PERMISSIONS[role].includes(permission);
 }
 
+/** Mirrors `requireProjectAdministration` (docs/specs/project-archive.md). */
+export function canArchiveProject(
+  projectRole: ProjectRole | null | undefined,
+  orgRole: OrgRole | null | undefined
+): boolean {
+  return (
+    hasProjectPermission(projectRole, ProjectPermission.PROJECT_ARCHIVE) ||
+    hasOrgPermission(orgRole, OrgPermission.PROJECTS_MANAGE_ALL)
+  );
+}
+
 // Get all permissions for an organization role
 export function getOrgPermissions(role: OrgRole): readonly OrgPermission[] {
   return ORG_ROLE_PERMISSIONS[role];
