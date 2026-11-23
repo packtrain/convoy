@@ -75,6 +75,25 @@ try {
       const background = (text: string) => [...line.slice(0, line.indexOf(text)).matchAll(new RegExp(`${String.fromCharCode(27)}\\[48;[\\d;]+m`, "g"))].at(-1)?.[0];
       assert(background("Claude Code"), JSON.stringify(line));
       assert.equal(background("Update available"), background("Claude Code"), "Status cell lost the selection background: " + JSON.stringify(line));
+    } else if (scenario === "mouse") {
+      await wait(() => frame.includes("2.1.3 → 2.1.9"));
+      const click = async (text: string) => {
+        const lines = raw.split("\n").map(line => plain(line));
+        const y = lines.findIndex(line => line.includes(text));
+        assert(y >= 0, `${text} is on screen:\n${lines.join("\n")}`);
+        const x = lines[y].indexOf(text) + 1;
+        await key(`\u001b[<0;${x + 1};${y + 1}M\u001b[<0;${x + 1};${y + 1}m`);
+      };
+      await click("OpenCode");
+      assert(/\[x\] OpenCode/.test(frame), "Clicking a runtime row checks it: " + frame);
+      await click("OpenCode");
+      assert(/\[ \] OpenCode/.test(frame), "A second click unchecks it: " + frame);
+      await click("OpenCode"); await click("[ Install / update 1 ]");
+      await wait(() => frame.includes("Cancel leaves the environment unchanged"));
+      await click("[ Cancel ]");
+      await wait(() => !frame.includes("Cancel leaves")); await click("[ Refresh ]");
+      await wait(() => reads === 2);
+      assert.equal(installs.length, 0);
     } else if (scenario === "status-error") {
       await wait(() => frame.includes("Environment is stopped"));
       await key("f");

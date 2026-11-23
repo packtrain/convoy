@@ -2,7 +2,7 @@ import { useEffect, useRef, useState } from "react";
 import { Box, Text, useInput } from "ink";
 import type { Browser } from "../workflow.js";
 import type { BrowseState } from "../validators.js";
-import { Dialog, Spinner } from "../dialog/index.js";
+import { Clickable, Dialog, Spinner } from "../dialog/index.js";
 import { palette, plain } from "../formatters.js";
 import type { RuntimeVersion } from "../../environment/validators.js";
 import type { LoginRuntime } from "../../project/validators.js";
@@ -12,7 +12,7 @@ type Step = { row: RuntimeVersion; mark: "·" | "●" | "✓" | "✗"; detail?: 
 const failure = (error: unknown) => plain(error instanceof Error ? error.message : "Operation failed.");
 
 /** Environment Runtimes row: check runtimes, then install them as one batch. Spec: docs/specs/cli-tui.md#agent-runtimes-cli-01240-os-2236 */
-export function Runtimes({ browser, state, active, onSidebar, width, height }: { browser: Browser; state: BrowseState; active: boolean; onSidebar(): void; width: number; height: number }) {
+export function Runtimes({ browser, state, active, onSidebar, onContent, width, height }: { browser: Browser; state: BrowseState; active: boolean; onSidebar(): void; onContent(): void; width: number; height: number }) {
   const target = browser.targets[state.scope.connection];
   const maintenance = target.maintenance!;
   const [rows, setRows] = useState<RuntimeVersion[]>([]);
@@ -64,9 +64,9 @@ export function Runtimes({ browser, state, active, onSidebar, width, height }: {
     setChecked(old => { const next = new Set(old); if (next.has(row.runtime)) next.delete(row.runtime); else next.add(row.runtime); return next; });
   };
   const count = rows.length + 2;
-  const activate = () => {
-    if (focus < rows.length) { toggle(rows[focus]); return; }
-    if (focus === rows.length + 1) { void load(); return; }
+  const activate = (index = focus) => {
+    if (index < rows.length) { toggle(rows[index]); return; }
+    if (index === rows.length + 1) { void load(); return; }
     if (!chosen.length) setNotice("Check at least one runtime to install or update.");
     else { setNotice(undefined); setPopup("confirm"); }
   };
@@ -112,16 +112,18 @@ export function Runtimes({ browser, state, active, onSidebar, width, height }: {
         const selected = active && focus === index;
         const status = STATUS[row.state];
         // The row Box carries the selection background: nested Text inherits a Box background, not its parent Text's.
-        return <Box key={row.runtime} backgroundColor={selected ? palette.selected : undefined}><Text wrap="truncate" color={selected ? palette.selectedText : palette.text}>
+        return <Clickable key={row.runtime} onClick={() => { onContent(); setFocus(index); toggle(row); }} backgroundColor={selected ? palette.selected : undefined}><Text wrap="truncate" color={selected ? palette.selectedText : palette.text}>
           {selected ? "›" : " "} {actionable(row) ? checked.has(row.runtime) ? "[x]" : "[ ]" : "   "} {row.label.padEnd(label)}
           <Text color={selected ? palette.selectedText : palette[status.tone]}>{status.text.padEnd(22)}</Text>{versions(row)}{row.error ? ` · ${plain(row.error)}` : ""}
-        </Text></Box>;
+        </Text></Clickable>;
       })}
     </Box>
     <Box marginTop={1} gap={2}>
       {[`Install / update${chosen.length ? ` ${chosen.length}` : ""}`, "Refresh"].map((text, i) => {
-        const selected = active && focus === rows.length + i;
-        return <Text key={text} bold color={selected ? palette.selectedText : palette.accent} backgroundColor={selected ? palette.selected : undefined}>{selected ? ">" : " "} [ {text} ]</Text>;
+        const index = rows.length + i, selected = active && focus === index;
+        return <Clickable key={text} onClick={() => { onContent(); setFocus(index); activate(index); }}>
+          <Text bold color={selected ? palette.selectedText : palette.accent} backgroundColor={selected ? palette.selected : undefined}>{selected ? ">" : " "} [ {text} ]</Text>
+        </Clickable>;
       })}
     </Box>
     {notice && <Text color={palette.warning} wrap="wrap">{notice}</Text>}

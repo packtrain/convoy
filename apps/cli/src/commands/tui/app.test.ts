@@ -44,7 +44,7 @@ it.skipIf(process.platform !== "linux").each(["normal", "pause-shell", "nonzero"
   expect(result.stdout).toContain(`PTY project checks passed: ${scenario}`);
 });
 
-it.each(["normal", "cancel", "small", "link", "access", "remount"])("guided onboarding renderer: %s", async scenario => {
+it.each(["normal", "cancel", "small", "link", "access", "remount", "mouse"])("guided onboarding renderer: %s", async scenario => {
   const result = await tsx("onboarding.tsx", [scenario]);
   expect(result.stdout.match(/Onboarding renderer checks passed/g)).toHaveLength(1);
 });
@@ -75,12 +75,12 @@ it.skipIf(process.platform !== "linux").each(["normal", "detach"])("records envi
   expect(result.stdout).toContain("PTY environments passed");
 });
 
-it.each(["sidebar", "scope", "local", "error", "project", "draft", "stopped", "progress", "network", "restricted-network", "separation", "buttons", "stop-result", "delete-confirm", "delete-success", "warnings", "warning-layout", "warning-layout-narrow", "sidebar-views", "sidebar-arrows", "sidebar-loading", "mouse"])("TUI navigation guidelines: %s", async scenario => {
+it.each(["sidebar", "scope", "local", "error", "project", "draft", "stopped", "progress", "network", "restricted-network", "separation", "buttons", "stop-result", "delete-confirm", "delete-success", "warnings", "warning-layout", "warning-layout-narrow", "sidebar-views", "sidebar-arrows", "sidebar-loading", "mouse", "mouse-buttons"])("TUI navigation guidelines: %s", async scenario => {
   const result = await tsx("navigation.tsx", [scenario]);
   expect(result.stdout).toContain("Navigation checks passed: " + scenario);
 });
 
-it.each(["unsupported", "shared", "shared-stale", "status-error", "assign", "leave", "rejection", "narrow", "narrow-forms", "vanish", "add", "add-anthropic", "add-rejected", "rotate", "disable-rollback", "remove", "project", "project-reload", "project-saved", "project-cursor", "add-gemini", "project-antigravity", "environment-reload"])("runtime credentials renderer: %s", async scenario => {
+it.each(["unsupported", "shared", "shared-stale", "status-error", "assign", "leave", "rejection", "narrow", "narrow-forms", "vanish", "add", "add-anthropic", "add-rejected", "rotate", "disable-rollback", "remove", "project", "project-reload", "project-saved", "project-cursor", "add-gemini", "project-antigravity", "environment-reload", "mouse"])("runtime credentials renderer: %s", async scenario => {
   const result = await tsx("credentials.tsx", [scenario]);
   expect(result.stdout).toContain("Credential renderer checks passed: " + scenario);
 });
@@ -90,7 +90,7 @@ it.skipIf(process.platform !== "linux")("records runtime credential management i
   expect(result.stdout).toContain("PTY credentials passed");
 });
 
-it.each(["batch", "failure", "status-error", "local", "loading", "highlight"])("agent runtimes renderer: %s", async scenario => {
+it.each(["batch", "failure", "status-error", "local", "loading", "highlight", "mouse"])("agent runtimes renderer: %s", async scenario => {
   const result = await tsx("runtimes.tsx", [scenario], { FORCE_COLOR: "3", COLORTERM: "truecolor" });
   expect(result.stdout).toContain("Runtime renderer checks passed: " + scenario);
 });

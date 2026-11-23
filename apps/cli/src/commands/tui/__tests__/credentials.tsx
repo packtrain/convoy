@@ -2,6 +2,7 @@ import { mkdtemp } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { PassThrough } from "node:stream";
+import { stripVTControlCharacters } from "node:util";
 import assert from "node:assert/strict";
 import { render } from "ink";
 import { App } from "../app.js";
@@ -83,8 +84,8 @@ const retry = browser.retryNow.bind(browser);
 browser.retryNow = () => { retries++; retry(); };
 const stdout = Object.assign(new PassThrough(), { columns: 110, rows: 34, isTTY: true });
 const stdin = Object.assign(new PassThrough(), { isTTY: true, setRawMode() {}, ref() {}, unref() {} });
-let frame = "", leaked = false;
-stdout.on("data", chunk => { const text = plain(chunk.toString()); if (text.includes(SECRET.slice(3, 12))) leaked = true; if (text.trim()) frame = text; });
+let frame = "", screen = "", leaked = false;
+stdout.on("data", chunk => { const text = plain(chunk.toString()); if (text.includes(SECRET.slice(3, 12))) leaked = true; if (text.trim()) { frame = text; screen = stripVTControlCharacters(chunk.toString()); } });
 const instance = render(<App browser={browser} />, { stdout: stdout as unknown as NodeJS.WriteStream, stdin: stdin as unknown as NodeJS.ReadStream, debug: true, exitOnCtrlC: false, patchConsole: false });
 async function key(...values: string[]) { for (const value of values) { stdin.write(value); await settle(60); } }
 async function until(text: string) {
@@ -108,6 +109,29 @@ try {
     await until("work-openai · enabled · 1 assigned · rev 2");
     const reads = statusReads;
     if (scenario === "status-error") { assert.equal(statusReads, 2); assert.equal(retries, 0, "f rereads status only"); }
+    else if (scenario === "mouse") {
+      // SGR press and release at the first cell of `text`.
+      const click = async (text: string) => {
+        const y = screen.split("\n").findIndex(line => line.includes(text));
+        if (y < 0) throw new Error(`Missing ${text}\n${screen}`);
+        const x = screen.split("\n")[y].indexOf(text) + 1;
+        await key(`\u001b[<0;${x + 1};${y + 1}M\u001b[<0;${x + 1};${y + 1}m`);
+      };
+      await click("work-old · enabled"); await until("Assignments · work-old");
+      assert(!frame.includes("Assign work-old ·"), "The first click on a credential only selects it");
+      await click("work-old · enabled"); await until("Assign work-old");
+      await key(ESC); await until("Assignments · work-old");
+      await click("[o] Rotate"); await until("Rotate work-old");
+      await key(ESC); await until("Assignments · work-old");
+      await key(UP, UP); await until("[Enter/n] Add credential");
+      const before = statusReads;
+      await click("[f] Refresh"); await settle(100);
+      assert.equal(statusReads, before + 1, "Clicking [f] Refresh rereads status");
+      await click("+ Add credential"); await until("Add credential · Fixture");
+      await click("[ Review ]"); await until("Name uses letters");
+      await click("[ Cancel ]"); await until("work-openai · enabled");
+      assert.equal(requests.length, 0);
+    }
     else if (scenario === "vanish") {
       await key(DOWN, DOWN, ENTER); await until("Assign work-old");
       delete entries["work-old"]; delete bindings.codex.b; delete applied.codex.b;

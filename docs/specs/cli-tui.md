@@ -1451,6 +1451,52 @@ must stay a letter. Shift-drag (Ghostty) or
 Option-drag (iTerm2) also selects while tracking is on. A remount after a project
 shell starts with the mouse on.
 
+### Buttons, rows and dialogs, CLI 0.167.0, OS-2452
+
+Step 3 of the mouse plan. A click does what its key does:
+
+- An Actions menu row runs its control, as its letter key does. The click also
+  focuses the panel, so it works while the sidebar has focus.
+- Credentials: `+ Add credential` opens the form. A key's first click selects it,
+  and a click on the selected key opens its assignment editor, as Enter does. The
+  editor's `[ Save changes ]` and `[ Discard ]` are clickable too, and so is each
+  hint in the key-hint line (`[o] Rotate`, `[f] Refresh` and the rest).
+- Form button rows: `[ Cancel ]` and `[ Review ]` in Add environment and Add
+  credential; `[ Cancel ]`, `[ Load choices ]`, `[ Review registration ]`,
+  `[ Back ]` and `[ Register ]` in Add project.
+- Agent runtimes: a row click checks or unchecks it, as Space does.
+  `[ Install / update ]` and `[ Refresh ]` press their buttons.
+- Inline hints on the main screen: `[w] Details` and the "more projects" line open
+  the warnings, the `[c] Cancel selected run` line cancels, and the `[s] Retry check`
+  and `[f] Retry connection` lines run their key. A hint line does nothing where its
+  key does nothing: `[s] Retry check` shows in Credentials, but `s` and the click are
+  off there.
+- The Details toolbar: `[s] Inspect status`, `[f] Retry connection` and
+  `[+] Add project`.
+- A run row: the first click selects it and focuses the table, and a click on the
+  selected row opens it as Enter does (a thread's history, then a run's logs).
+- Every `Dialog` button, including action confirmations. A dialog too small to
+  confirm keeps only its first button, and clicking it cancels, as Enter does.
+
+A dialog's buttons mount after the panel under it, so they win the hit-test. A
+panel that keeps its keys locked under a dialog locks its clicks too: the Actions
+menu ignores clicks while an action is pending or busy, and the main screen's
+`locked` rule covers sidebar rows, tabs, run rows and the toolbar.
+
+The footer's key legend is not clickable: it lists shortcuts, not buttons. The
+Runtime access menu and form fields are OS-2453, step 4 of the plan.
+
+`navigation.tsx mouse-buttons` clicks `[b] Start shared service` in the Actions menu
+and checks that it asks for confirmation. Then it clicks the dialog's confirm button
+where it covers the `[z] Stop environment` row: start runs and no environment
+workflow opens. It also checks that one click selects a run row and a second opens
+its history, and that Review and Cancel work by click in Add environment.
+`credentials.tsx mouse` selects and opens a key by click, clicks `[o] Rotate` and
+`[f] Refresh`, then `+ Add credential`, Review and Cancel. `runtimes.tsx mouse`
+toggles a row and clicks Install, Cancel and Refresh. `navigation.tsx mouse-buttons`
+also clicks `[c] Cancel selected run`, `[w] Details` and `[s] Retry check`. `onboarding.tsx mouse` clicks Load choices,
+Review registration, Back and Register, and checks that Register submits once.
+
 ### Terminal modes
 
 `App` writes `?1002h ?1006h` (button-event tracking, SGR encoding) from an effect

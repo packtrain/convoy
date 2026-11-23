@@ -11,9 +11,10 @@ import type { EnvironmentForm } from "../../environment/validators.js";
 const scenario = process.argv[2];
 const stdout = Object.assign(new PassThrough(), { columns: 110, rows: 38, isTTY: true });
 const stdin = Object.assign(new PassThrough(), { isTTY: true, setRawMode() {}, ref() {}, unref() {} });
-let frame = "", output = "", executed = 0;
+let frame = "", output = "", executed = 0, started = 0;
 stdout.on("data", chunk => { output += chunk.toString(); if (plain(chunk.toString()).trim()) frame = chunk.toString(); });
 const browser = new Browser([...(scenario === "delete-success" ? [{ id: "local", name: "Local", transport: "unix", endpoint: "local", open: async () => { throw new Error("offline"); } }] : []), { id: "test", name: "Test target", transport: "docker", endpoint: "test-container", open: async () => { throw new Error("offline"); },
+  ...(scenario === "mouse-buttons" ? { start: async () => { started++; } } : {}),
   ...(scenario === "local" ? {} : { maintenance: { status: async () => ({}), release: async () => ({ installed: "0.100.0", proposed: "0.103.1" }), execute: async () => { executed++; return scenario === "delete-success" ? { deleted: true } : {}; } } }),
 }], scenario === "delete-success" ? 1 : 0);
 const instance = render(<App browser={browser} />, { stdout: stdout as unknown as NodeJS.WriteStream, stdin: stdin as unknown as NodeJS.ReadStream, debug: true, exitOnCtrlC: false, patchConsole: false });
@@ -299,6 +300,60 @@ try {
     assert(output.includes("\u001b[?1002l\u001b[?1006l"), "The log view turns tracking off for native selection");
     output = ""; browser.logs(); await settle(80);
     assert(output.includes("\u001b[?1002h\u001b[?1006h"), "Leaving the log view turns tracking back on");
+  } else if (scenario === "mouse-buttons") {
+    // Fewer rows lift the confirmation's buttons over the Actions menu's [z] Stop environment row.
+    stdout.rows = 24; stdout.emit("resize"); await settle(80);
+    const lines = () => stripVTControlCharacters(frame).split("\n");
+    const click = async (text: string, line?: number) => {
+      const y = line ?? lines().findIndex(value => value.includes(text));
+      assert(y >= 0, `${text} is on screen:\n${lines().join("\n")}`);
+      const x = lines()[y].indexOf(text) + 1;
+      await key(`\u001b[<0;${x + 1};${y + 1}M\u001b[<0;${x + 1};${y + 1}m`);
+      return y;
+    };
+    await key("a");
+    const menu = lines();
+    await click("[b] Start shared service");
+    assert.equal(browser.getSnapshot().action?.kind, "start", "Clicking a menu row runs its control");
+    assert(browser.getSnapshot().action?.pending, "Start waits for confirmation");
+    const y = lines().findIndex(line => line.includes("[ Start shared service ]"));
+    assert(menu[y]?.includes("[z] Stop environment"), "The confirm button covers a menu row:\n" + lines().join("\n"));
+    await click("[ Start shared service ]", y); await settle(80);
+    assert.equal(started, 1, "Clicking the dialog button confirms");
+    assert.equal(browser.getSnapshot().environment, undefined, "The menu row under the dialog ignores the click");
+    await click("[ Back ]");
+    assert.equal(browser.getSnapshot().action, undefined, "Back on the result closes it");
+    await key("\u001b");
+    browser.getSnapshot().observations[0].profiles = [{ profile: "a", status: "online", attempts: 1, activeRuns: 0 }];
+    browser.select({ connection: 0, profile: "a", details: false }); await settle(80); await click("[r] Runs");
+    const thread = (threadId: string, title: string) => ({ profile: "a", thread: { threadId, title, lastActivityAt: 1 } });
+    (browser as unknown as { set(patch: object): void }).set({ rows: [thread("t1", "First thread"), thread("t2", "Second thread")] }); await settle(80);
+    await click("Second thread");
+    assert.equal(browser.getSnapshot().history, undefined, "The first click on a run row only selects it");
+    assert(lines().some(line => line.includes("› ") && lines()[lines().indexOf(line) + 1]?.includes("Second thread")), "The clicked row is selected:\n" + lines().join("\n"));
+    await click("Second thread");
+    assert.equal(browser.getSnapshot().history?.thread.threadId, "t2", "Clicking the selected row opens its history");
+    const run = { threadId: "t2", messageId: "m1", runId: "r1", status: "streaming", createdAt: 1, updatedAt: 1 };
+    (browser as unknown as { set(patch: object): void }).set({ rows: [{ ...thread("t2", "Second thread"), run }] }); await settle(80);
+    await click("[c] Cancel selected run");
+    assert.equal(browser.getSnapshot().action?.kind, "cancel", "Clicking [c] starts cancel, as the key does");
+    await key("\u001b"); await key("\u001b");
+    browser.getSnapshot().observations[0].profiles = [{ profile: "a", status: "failed", attempts: 4, warning: "a is broken." }];
+    browser.select({ connection: 0, details: true }); await settle(80);
+    await click("[w] Details");
+    assert(lines().some(line => line.includes("Warning details")), "Clicking [w] Details opens the warnings:\n" + lines().join("\n"));
+    await key("\u001b");
+    let inspected = 0;
+    browser.inspectEnvironment = async () => { inspected++; };
+    browser.getSnapshot().observations[0].environmentError = "Service disconnected.";
+    stdout.emit("resize"); await settle(80);
+    await click("[s] Retry check");
+    assert.equal(inspected, 1, "Clicking the [s] Retry check line inspects the environment");
+    browser.getSnapshot().observations[0].environmentError = undefined;
+    await key("E"); await click("[ Review ]");
+    assert(lines().some(line => line.includes("Use a lowercase environment name")), "Clicking Review validates the form:\n" + lines().join("\n"));
+    await click("[ Cancel ]");
+    assert.equal(browser.getSnapshot().environment, undefined, "Clicking Cancel closes an empty form");
   } else if (scenario === "project") {
     browser.select({ connection: 0, profile: "one", details: false }); await settle(80); await key("a");
     assert(plain(frame).includes("Pause project"), plain(frame));

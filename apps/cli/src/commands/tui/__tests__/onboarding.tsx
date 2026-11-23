@@ -1,4 +1,5 @@
 import { PassThrough } from "node:stream";
+import { stripVTControlCharacters } from "node:util";
 import { Box, render } from "ink";
 import assert from "node:assert/strict";
 import { Onboarding } from "../onboarding/index.js";
@@ -9,8 +10,8 @@ import type { ProjectAddOptions } from "../../project/workflow.js";
 const stdout = Object.assign(new PassThrough(), { columns: 80, rows: 24, isTTY: true });
 const stdin = Object.assign(new PassThrough(), { isTTY: true, setRawMode() {}, ref() {}, unref() {} });
 const stderr = new PassThrough();
-let frame = "", output = "", calls = 0;
-stdout.on("data", chunk => { output += chunk.toString(); if (plain(chunk.toString()).trim()) frame = plain(chunk.toString()); });
+let frame = "", screen = "", output = "", calls = 0;
+stdout.on("data", chunk => { output += chunk.toString(); if (plain(chunk.toString()).trim()) { frame = plain(chunk.toString()); screen = stripVTControlCharacters(chunk.toString()); } });
 const requests: ProjectAddOptions[] = [];
 const browser = new Browser([{ id: "fixture", name: "Fixture", transport: "unix", endpoint: "/socket", open: async () => { throw new Error(); },
   addProject: async (_directory, options) => {
@@ -40,8 +41,23 @@ try {
   await key("https://example.convex.cloud"); await key("\t"); await key("PRIVATE_API_KEY_qard");
   assert(!output.includes("PRIVATE_API_KEY_qard"), frame);
   browser.select({ connection: 0, details: false }); assert(browser.getSnapshot().scope.details);
-  await key("\t"); await key("\t"); await key("\r"); await wait(() => frame.includes("Link existing"));
-  if (process.argv[2] === "cancel") {
+  const click = async (text: string) => {
+    const y = screen.split("\n").findIndex(line => line.includes(text));
+    assert(y >= 0, `${text} is on screen:\n${screen}`);
+    const x = screen.split("\n")[y].indexOf(text) + 1;
+    await key(`\u001b[<0;${x + 1};${y + 1}M\u001b[<0;${x + 1};${y + 1}m`);
+  };
+  if (process.argv[2] === "mouse") await click("[ Load choices ]");
+  else { await key("\t"); await key("\t"); await key("\r"); }
+  await wait(() => frame.includes("Link existing"));
+  if (process.argv[2] === "mouse") {
+    await key("\r"); await key("\r"); await wait(() => frame.includes("Profile name"));
+    await click("[ Review registration ]"); await wait(() => frame.includes("[ Register ]"));
+    await click("[ Back ]"); await wait(() => frame.includes("Profile name"));
+    await click("[ Review registration ]"); await wait(() => frame.includes("[ Register ]"));
+    await click("[ Register ]"); await wait(() => frame.includes("preparation failed"));
+    assert.equal(calls, 1, "Clicking Register submits once");
+  } else if (process.argv[2] === "cancel") {
     await key("\u001b"); await key("\u001b");
     assert(frame.includes("Discard project draft"), "Leaving a nonempty form requires an explicit discard");
     await key("\r"); assert(frame.includes("Deployment HTTPS"));

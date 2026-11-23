@@ -1,11 +1,11 @@
 import { loginRuntime, type Action } from "./validators.js";
 import { useState } from "react";
-import { Box, Text, useInput } from "ink";
+import { Text, useInput } from "ink";
 import type { Browser } from "../workflow.js";
 import type { BrowseState, Row } from "../validators.js";
 import { palette, plain, terminalJson, wrapLines } from "../formatters.js";
 import { confirmationLines } from "./formatters.js";
-import { Dialog } from "../dialog/index.js";
+import { Clickable, Dialog } from "../dialog/index.js";
 
 const labels: Record<Action, string> = { status: "Service status", logs: "Saved service JSON logs", start: "Start shared service", stop: "Stop shared service", pause: "Pause project", reload: "Reload project", shell: "Private project shell", "login-codex": "Log in to Codex", "login-claude-code": "Log in to Claude Code", "login-antigravity": "Log in to Antigravity", check: "Check project", remove: "Remove project from environment", cancel: "Cancel selected run" };
 export function ActionDialog({ state, browser, width, height, inline = false }: { state: BrowseState; browser: Browser; width: number; height: number; inline?: boolean }) {
@@ -47,8 +47,8 @@ const project: Control[] = [
   { type: "runtime-access", key: "t", label: "Runtime access", section: "Credentials" },
   { type: "credentials", key: "c", label: "Assign or unassign credentials", section: "Credentials" },
 ];
-export function Actions({ browser, state, row, active, width, height, selectedKey, onSelect }: {
-  browser: Browser; state: BrowseState; row?: Row; active: boolean; width: number; height: number; selectedKey?: string; onSelect?: (key: string) => void;
+export function Actions({ browser, state, row, active, width, height, selectedKey, onSelect, onContent }: {
+  browser: Browser; state: BrowseState; row?: Row; active: boolean; width: number; height: number; selectedKey?: string; onSelect?: (key: string) => void; onContent?: () => void;
 }) {
   const [selected, setSelected] = useState(0);
   const [offset, setOffset] = useState(0);
@@ -72,6 +72,16 @@ export function Actions({ browser, state, row, active, width, height, selectedKe
   const lines = [...(action?.message ?? "").split("\n"), ...(action?.entries ?? []).map(entry => terminalJson(JSON.stringify(entry)))].flatMap(line => wrapLines(plain(line), width));
   const capacity = Math.max(1, height - 2);
   const start = Math.min(offset, Math.max(0, lines.length - capacity));
+  // A control's key, Enter on it, and a click on its row all land here.
+  const run = (control: Control) => {
+    select(controls.indexOf(control)); setOffset(0);
+    if (unavailable(control)) return;
+    if (control.type === "runtime-access") browser.openRuntimeAccess();
+    else if (control.type === "runtimes") browser.showRuntimes(true);
+    else if (control.type === "credentials") browser.showCredentials(true);
+    else if (control.type === "environment") browser.openEnvironment(control.environment);
+    else browser.beginAction(control.kind, row);
+  };
   useInput((input, key) => {
     if (key.ctrl || key.meta || key.escape || action?.busy || action?.pending || !active) return;
     if (action?.message && !action.entries && !controls.some(control => control.key === input)) return;
@@ -85,15 +95,10 @@ export function Actions({ browser, state, row, active, width, height, selectedKe
     if (key.upArrow || input === "k") { select(Math.max(0, choice - 1)); return; }
     if (key.downArrow || input === "j") { select(Math.min(controls.length - 1, choice + 1)); return; }
     const control = key.return ? controls[choice] : controls.find(value => value.key === input);
-    if (!control) return;
-    select(controls.indexOf(control)); setOffset(0);
-    if (unavailable(control)) return;
-    if (control.type === "runtime-access") browser.openRuntimeAccess();
-    else if (control.type === "runtimes") browser.showRuntimes(true);
-    else if (control.type === "credentials") browser.showCredentials(true);
-    else if (control.type === "environment") browser.openEnvironment(control.environment);
-    else browser.beginAction(control.kind, row);
+    if (control) run(control);
   });
+  // A click works from either pane, so it moves focus here; a pending confirmation keeps the menu inert.
+  const click = (control: Control) => () => { if (action?.busy || action?.pending) return; onContent?.(); run(control); };
   if (action && !action.pending && !action.entries) return <ActionDialog inline state={state} browser={browser} width={width} height={height} />;
   if (action?.entries) return <>
     <Text bold color={palette.text}>{plain(target.name)} · Saved service logs</Text>
@@ -117,7 +122,7 @@ export function Actions({ browser, state, row, active, width, height, selectedKe
   const menuStart = Math.max(0, menu.findIndex(line => line.index === choice) - menuCapacity + 1);
   return <>
     {menu.slice(menuStart, menuStart + menuCapacity).map((line, i) => line.index < 0 ? <Text key={i} wrap="truncate" color={palette.muted}>{line.text}</Text>
-      : <Box key={i} backgroundColor={line.index === choice ? active ? palette.selected : palette.idle : undefined}><Text wrap="truncate" color={line.index === choice ? active ? palette.selectedText : palette.idleText : palette.text}>{line.text}</Text></Box>)}
+      : <Clickable key={i} onClick={click(controls[line.index])} backgroundColor={line.index === choice ? active ? palette.selected : palette.idle : undefined}><Text wrap="truncate" color={line.index === choice ? active ? palette.selectedText : palette.idleText : palette.text}>{line.text}</Text></Clickable>)}
     {hintLines.map((line, i) => <Text key={i} color={reason ? palette.warning : palette.muted}>{line}</Text>)}
   </>;
 }

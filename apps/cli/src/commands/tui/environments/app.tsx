@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import { Box, Text, useInput } from "ink";
 import type { Browser } from "../workflow.js";
-import { Dialog } from "../dialog/index.js";
+import { Clickable, Dialog } from "../dialog/index.js";
 import { palette, plain, printable } from "../formatters.js";
 import { getCliVersion } from "../../../lib/version.js";
 import { environmentFormSchema, type EnvironmentProposal, type UpdateProposal, type EnvironmentOperation, type EnvironmentForm } from "../../environment/validators.js";
@@ -89,6 +89,14 @@ export function Environments({ browser, width, height }: { browser: Browser; wid
   const minHeight = 15 + (form.mode === "shared" ? 2 : 0) + (form.networkMode === "strict" ? 5 : 0);
   const small = width < 45 || height < minHeight;
   const labels = { name: "Environment name", mode: "Project separation", mounts: "Mount folders, comma-separated (optional)", networkMode: "Internet access", deployment: "Allowed Convex deployment slug (optional)", domains: "Extra allowed domains, comma-separated (optional)" };
+  // Enter on Cancel or Review; a click on either lands here too.
+  const press = (at: number) => {
+    if (at === cancelIndex) { close(); return; }
+    if (at !== reviewIndex) return;
+    const valid = environmentFormSchema.safeParse(submittedForm);
+    if (!valid.success) setMessage(["Use a lowercase environment name, deployment slug and comma-separated hostnames. No URLs or spaces."]);
+    else void run(async () => { const value = await browser.prepareEnvironment(submittedForm); if (alive.current) setCreation(value); }, "confirm");
+  };
   useInput((input, key) => {
     if (discard || step !== "form") return;
     if (key.escape) { close(); return; }
@@ -104,15 +112,7 @@ export function Environments({ browser, width, height }: { browser: Browser; wid
       setIndex(key.leftArrow ? cancelIndex : reviewIndex); return;
     }
     if (key.tab || key.downArrow || key.upArrow) { setIndex(old => (old + (key.upArrow || key.shift ? count - 1 : 1)) % count); return; }
-    if (key.return) {
-      if (index === cancelIndex) { close(); return; }
-      if (index === reviewIndex) {
-        const valid = environmentFormSchema.safeParse(submittedForm);
-        if (!valid.success) setMessage(["Use a lowercase environment name, deployment slug and comma-separated hostnames. No URLs or spaces."]);
-        else void run(async () => { const value = await browser.prepareEnvironment(submittedForm); if (alive.current) setCreation(value); }, "confirm");
-      }
-      return;
-    }
+    if (key.return) { press(index); return; }
     if (step === "form" && index < fields.length) {
       const field = fields[index];
       if (field === "mode" || field === "networkMode") return;
@@ -146,7 +146,9 @@ export function Environments({ browser, width, height }: { browser: Browser; wid
             {form.networkMode === "strict" && <Text color={palette.muted}>Advanced network settings: add your Convex backend below.</Text>}
           </> : <Text wrap="truncate" color={palette.text}>{index === i ? ">" : " "} <Text backgroundColor={index === i ? palette.idle : palette.surface}>[ {form[field] || " "}{index === i ? "▏" : ""} ]</Text></Text>}
         </Box>)}
-        <Box gap={2}>{([["Cancel", cancelIndex], ["Review", reviewIndex]] as const).map(([label, at]) => <Text key={label} bold color={index === at ? palette.selectedText : palette.accent} backgroundColor={index === at ? palette.selected : undefined}>{index === at ? ">" : " "} [ {label} ]</Text>)}</Box>
+        <Box gap={2}>{([["Cancel", cancelIndex], ["Review", reviewIndex]] as const).map(([label, at]) => <Clickable key={label} onClick={() => { setIndex(at); press(at); }}>
+          <Text bold color={index === at ? palette.selectedText : palette.accent} backgroundColor={index === at ? palette.selected : undefined}>{index === at ? ">" : " "} [ {label} ]</Text>
+        </Clickable>)}</Box>
         {message.map(line => <Text key={line} color={palette.warning}>{line}</Text>)}
       </>
       <Text color={palette.muted}>Tab/↑/↓ focus · ←/→ choose · Enter activate · Esc close</Text>

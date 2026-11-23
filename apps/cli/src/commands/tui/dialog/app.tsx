@@ -1,7 +1,7 @@
-import { useEffect, useState } from "react";
-import { Box, Text, useInput, type Key } from "ink";
+import { useEffect, useRef, useState, type ComponentProps } from "react";
+import { Box, Text, useInput, type DOMElement, type Key } from "ink";
 import { palette, plain, rich, wrapLines } from "../formatters.js";
-import { useWheel } from "../mouse.js";
+import { useClick, useWheel } from "../mouse.js";
 
 const SPINNER = "⠖⠲⢲⢰⣰⣠⣄⣆⡆⡖"; // The classic dots spinner one dot row lower, centered on lowercase text.
 /** Animates only while mounted, so idle views cause no redraws. */
@@ -9,6 +9,13 @@ export function Spinner({ color }: { color?: string }) {
   const [frame, setFrame] = useState(0);
   useEffect(() => { const timer = setInterval(() => setFrame(old => (old + 1) % SPINNER.length), 120); return () => clearInterval(timer); }, []);
   return <Text color={color}>{SPINNER[frame]}</Text>;
+}
+
+/** A Box that runs `onClick` on a left click. */
+export function Clickable({ onClick, ...props }: ComponentProps<typeof Box> & { onClick(): void }) {
+  const ref = useRef<DOMElement>(null);
+  useClick(ref, onClick);
+  return <Box ref={ref} {...props} />;
 }
 
 /** `error` renders first, in the danger color, so a failed submit cannot pass for the review text. */
@@ -57,7 +64,9 @@ export function Dialog({ lines, error, width: columns, height: rows, buttons, on
     width={width} height={inline ? Math.min(rows, height) : height} flexDirection="column" borderStyle={inline ? undefined : "round"} borderColor={palette.accent} backgroundColor={inline ? palette.base ?? "black" : palette.surface ?? "black"} paddingX={2} paddingY={1}>
     {visible.map((line, i) => <Text key={i} bold={i + start < errors.length} color={i + start < errors.length ? palette.danger ?? "red" : palette.text ?? "white"}>{line || " "}</Text>)}
     <Box marginTop={1} gap={2}>
-      {shownButtons.map((button, i) => <Text key={button.label} bold color={i === selected || !enabled ? rich ? palette.selectedText : "black" : rich ? palette.accent : "white"} backgroundColor={i === selected || !enabled ? rich ? palette.selected : "cyan" : rich ? undefined : "black"}>[ {button.label} ]</Text>)}
+      {shownButtons.map((button, i) => <Clickable key={button.label} onClick={() => { if (!enabled) { onCancel(); return; } setSelected(i); button.activate(); }}>
+        <Text bold color={i === selected || !enabled ? rich ? palette.selectedText : "black" : rich ? palette.accent : "white"} backgroundColor={i === selected || !enabled ? rich ? palette.selected : "cyan" : rich ? undefined : "black"}>[ {button.label} ]</Text>
+      </Clickable>)}
     </Box>
   </Box>;
 }

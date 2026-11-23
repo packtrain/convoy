@@ -9,7 +9,7 @@ import { savedDeploymentUrls, loadChoices, validateForm } from "./workflow.js";
 
 import { RuntimeAccess } from "./runtime-access.js";
 import { resultMessage } from "./formatters.js";
-import { Dialog } from "../dialog/index.js";
+import { Clickable, Dialog } from "../dialog/index.js";
 import { MODE_COPY, prerequisiteFailure, prerequisiteLines } from "../../environment/formatters.js";
 import type { Prerequisite } from "../../environment/validators.js";
 
@@ -161,6 +161,15 @@ export function Onboarding({ browser, width: columns, height: rows, load = loadC
   const lists = step === "choice" ? ["Link existing project", "Create new project"]
     : step === "project" ? choices.projects.map(p => `${p.organizationName} / ${p.name} (${p.alias})`)
     : step === "organization" ? choices.organizations.map(o => `${o.name} (${o.slug})`) : [];
+  // Enter on a form or confirmation button; a click on one lands here too.
+  const pressForm = (at: number) => {
+    if (at < fields.length) return;
+    if (at === fields.length) { close(); return; }
+    if (step === "auth") { void authenticate(); return; }
+    try { validateForm(directory, payload(), mode === 2); move("confirm"); }
+    catch (error) { setMessage(error instanceof Error ? error.message : "Check inputs."); }
+  };
+  const pressConfirm = (at: number) => { if (at === 0) move("details"); else void submit(); };
   useInput((input, key) => {
     if (discard || updating || compatible !== true) return;
     if (["result", "access", "mode", "prerequisites", "notice"].includes(step)) return;
@@ -188,7 +197,8 @@ export function Onboarding({ browser, width: columns, height: rows, load = loadC
     if (step === "confirm") {
       if (key.tab) setIndex(value => 1 - value);
       if (key.leftArrow || key.rightArrow) setIndex(key.leftArrow ? 0 : 1);
-      if (key.return) { if (index === 0) move("details"); else void submit(); } return;
+      if (key.return) pressConfirm(index);
+      return;
     }
     if (["choice", "project", "organization"].includes(step)) {
       if (key.upArrow) setIndex(value => Math.max(0, value - 1));
@@ -216,14 +226,7 @@ export function Onboarding({ browser, width: columns, height: rows, load = loadC
     if (index >= fields.length && (key.leftArrow || key.rightArrow)) {
       setIndex(key.leftArrow ? fields.length : fields.length + 1); return;
     }
-    if (key.return) {
-      if (index < fields.length) return;
-      if (index === fields.length) { close(); return; }
-      if (step === "auth") { void authenticate(); return; }
-      try { validateForm(directory, payload(), mode === 2); move("confirm"); }
-      catch (error) { setMessage(error instanceof Error ? error.message : "Check inputs."); }
-      return;
-    }
+    if (key.return) { pressForm(index); return; }
     const field = fields[index];
     if (!field || field.select) return;
     const chars = [...field.value];
@@ -264,7 +267,10 @@ export function Onboarding({ browser, width: columns, height: rows, load = loadC
   const first = Math.max(0, Math.min(index - count + 1, fields.length - count));
   const visible = fields.slice(first, first + count);
   const title = { auth: "Connect to Convoy", choice: "Add project", project: "Link existing project", organization: "Choose organization", details: "Project details", confirm: "Review registration" }[step];
-  const button = (label: string, selected: boolean) => <Box flexShrink={0} width={label.length + 6}><Text bold color={selected ? rich ? palette.selectedText : "black" : rich ? palette.accent : "white"} backgroundColor={selected ? rich ? palette.selected : "cyan" : rich ? undefined : "black"}>{`${selected ? ">" : " "} [ ${label} ]`}</Text></Box>;
+  const button = (label: string, at: number, press: (at: number) => void) => {
+    const selected = index === at;
+    return <Clickable flexShrink={0} width={label.length + 6} onClick={() => { if (busy || small) return; setIndex(at); press(at); }}><Text bold color={selected ? rich ? palette.selectedText : "black" : rich ? palette.accent : "white"} backgroundColor={selected ? rich ? palette.selected : "cyan" : rich ? undefined : "black"}>{`${selected ? ">" : " "} [ ${label} ]`}</Text></Clickable>;
+  };
   return <Box flexDirection="column" width={width} height={height} backgroundColor={palette.base ?? "black"} paddingX={2} paddingY={1}>
     {small ? <Text wrap="truncate">Resize to continue.</Text> : <>
       <Text bold color={palette.text ?? "white"}>{title} · {plain(target.name)}</Text>
@@ -296,8 +302,8 @@ export function Onboarding({ browser, width: columns, height: rows, load = loadC
           </> : (lists.length ? lists.slice(Math.max(0, index - height + 11), Math.max(0, index - height + 11) + height - 10).map((line, i) => <Text key={line} wrap="truncate">{i + Math.max(0, index - height + 11) === index ? ">" : " "} {plain(line)}</Text>) : <Text>No accessible entries. Esc to go back.</Text>)}
       </Box>
       {!busy && message && <Text color={palette.warning}>{message}</Text>}
-      {form && dropdown === undefined && !busy && target.addProject && <Box gap={width < 50 ? 0 : 2} flexDirection={width < 50 ? "column" : "row"}>{button("Cancel", index === fields.length)}{button(step === "auth" ? "Load choices" : "Review registration", index === fields.length + 1)}</Box>}
-      {step === "confirm" && !busy && <Box gap={2}>{button("Back", index === 0)}{button("Register", index === 1)}</Box>}
+      {form && dropdown === undefined && !busy && target.addProject && <Box gap={width < 50 ? 0 : 2} flexDirection={width < 50 ? "column" : "row"}>{button("Cancel", fields.length, pressForm)}{button(step === "auth" ? "Load choices" : "Review registration", fields.length + 1, pressForm)}</Box>}
+      {step === "confirm" && !busy && <Box gap={2}>{button("Back", 0, pressConfirm)}{button("Register", 1, pressConfirm)}</Box>}
       <Text color={palette.muted} wrap="truncate">{dropdown !== undefined ? "↑/↓ select · Enter choose · Esc cancel" : form || step === "confirm" ? "Tab focus · ←/→ buttons · Enter select · Esc back" : "Esc back / cancel"}</Text>
     </>}
   </Box>;

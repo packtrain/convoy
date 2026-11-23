@@ -1,12 +1,12 @@
-import { Dialog, Spinner } from "./dialog/index.js";
+import { Clickable, Dialog, Spinner } from "./dialog/index.js";
 import { Environments } from "./environments/index.js";
-import { useEffect, useRef, useState, useSyncExternalStore, type ComponentProps } from "react";
-import { Box, Text, useApp, useInput, useWindowSize, type DOMElement } from "ink";
-import { useClick, useMouseTracking, useWheel } from "./mouse.js";
+import { useEffect, useState, useSyncExternalStore, type ComponentProps } from "react";
+import { Box, Text, useApp, useInput, useWindowSize } from "ink";
+import { useMouseTracking, useWheel } from "./mouse.js";
 import { getCliVersion } from "../../lib/version.js";
 import { detailLines, environmentTone, healthTones, palette, plain, rowCells, rowId, warningLines, warningGroups, wrapLines } from "./formatters.js";
 import type { Browser } from "./workflow.js";
-import type { BrowseState, Scope } from "./validators.js";
+import type { BrowseState, Row, Scope } from "./validators.js";
 import type { WorkerStatus } from "../service/validators.js";
 
 import { Actions, ActionDialog } from "./actions/index.js";
@@ -22,13 +22,6 @@ function scopeId(scope: Scope) { return `${scope.connection}:${scope.addProject 
 const tab = (label: string, selected: boolean, activate: () => void) => [label, selected, activate] as const;
 const statusTones: Record<WorkerStatus, keyof typeof palette> = { connecting: "warning", online: "success", retrying: "warning", blocked: "danger", failed: "danger", stopped: "muted" };
 type SidebarRow = { scope: Scope; view?: "actions" | "credentials"; text: string; transport: string; health: BrowseState["observations"][number]["health"]; busy?: boolean; loading?: boolean; dot?: keyof typeof palette };
-
-/** A Box that runs `onClick` on a left click. */
-function Clickable({ onClick, ...props }: ComponentProps<typeof Box> & { onClick(): void }) {
-  const ref = useRef<DOMElement>(null);
-  useClick(ref, onClick);
-  return <Box ref={ref} {...props} />;
-}
 
 export function App({ browser, onboardingLoad }: { browser: Browser; onboardingLoad?: ComponentProps<typeof Onboarding>["load"] }) {
   const state = useSyncExternalStore(browser.subscribe, browser.getSnapshot);
@@ -95,12 +88,15 @@ export function App({ browser, onboardingLoad }: { browser: Browser; onboardingL
   const editing = state.credentials === "editing" || state.runtimes === "editing";
   const sidebarWidth = narrow && (workflow || pane === "content") ? 0 : narrow ? size.width : 30;
   const actionWidth = Math.max(1, size.width - sidebarWidth - 2);
-  const contextLines = warningsOpen ? [] : [
-    ...(state.error ? wrapLines(plain(state.error), actionWidth).slice(0, 2) : []),
-    ...(observation.environmentError ? wrapLines(`${plain(observation.environmentError)} · [s] Retry check`, actionWidth).slice(0, 2) : []),
-    ...(observation.checkingEnvironment ? ["Checking status…"] : []),
-    ...(state.stale && observation.snapshot ? ["Last observation is stale. [f] Retry connection"] : []),
-    ...(state.scope.details && !state.credentials && !target.maintenance ? ["Host lifecycle is not managed here. Service controls are in Actions."] : []),
+  // A line with a key hint runs that key on click, where the key works too.
+  const inspect = state.scope.details && !state.credentials && !state.runtimes ? () => void browser.inspectEnvironment() : undefined;
+  const retry = !state.credentials && !state.runtimes ? () => browser.retryNow() : undefined;
+  const contextLines: { text: string; run?: () => void }[] = warningsOpen ? [] : [
+    ...(state.error ? wrapLines(plain(state.error), actionWidth).slice(0, 2).map(text => ({ text })) : []),
+    ...(observation.environmentError ? wrapLines(`${plain(observation.environmentError)} · [s] Retry check`, actionWidth).slice(0, 2).map(text => ({ text, run: inspect })) : []),
+    ...(observation.checkingEnvironment ? [{ text: "Checking status…" }] : []),
+    ...(state.stale && observation.snapshot ? [{ text: "Last observation is stale. [f] Retry connection", run: retry }] : []),
+    ...(state.scope.details && !state.credentials && !target.maintenance ? [{ text: "Host lifecycle is not managed here. Service controls are in Actions." }] : []),
   ].slice(0, Math.max(1, size.height - 11));
   const warnings = state.scope.addProject || editing ? [] : warningGroups(observation.profiles, state.scope.profile);
   const visibleWarnings = warnings.slice(0, size.height >= 28 ? 2 : 1);
@@ -129,6 +125,16 @@ export function App({ browser, onboardingLoad }: { browser: Browser; onboardingL
   // The states where useInput below stops before navigation keys; clicks and the wheel stop there too.
   const locked = Boolean(warningsOpen || workflow || state.detail || state.action?.busy || editing || state.action?.pending || (state.action?.message && !state.action.entries));
   const unlocked = (action: () => void) => () => { if (!locked) action(); };
+  // Enter on a run row: a thread opens its history, a run its logs.
+  const openRow = (row: Row) => {
+    if (!state.history) { browser.history(row); setSelectedId(undefined); }
+    else if (row.run) browser.logs(row);
+  };
+  // The first click selects a run row and focuses the table; a click on the selected row opens it.
+  const clickRun = (row: Row, selected: boolean) => {
+    if (selected && pane === "content") { openRow(row); return; }
+    setSelectedId(rowId(row)); setPane("content");
+  };
   const clickRow = (row: SidebarRow) => {
     if (row.loading) return;
     chooseView(row.scope, row.view);
@@ -188,8 +194,7 @@ export function App({ browser, onboardingLoad }: { browser: Browser; onboardingL
       if (key.pageDown || input === "n") { browser.next(); setSelectedId(undefined); return; }
       if (key.pageUp || input === "p") { browser.back(); setSelectedId(undefined); return; }
       if (key.home) { browser.first(); setSelectedId(undefined); return; }
-      if (key.return && state.history && state.rows[selectedRow]?.run) { browser.logs(state.rows[selectedRow]); return; }
-      if (key.return && !state.history && state.rows[selectedRow]) { browser.history(state.rows[selectedRow]); setSelectedId(undefined); return; }
+      if (key.return && state.rows[selectedRow]) { openRow(state.rows[selectedRow]); return; }
     }
     const delta = key.upArrow || input === "k" ? -1 : key.downArrow || input === "j" ? 1 : 0;
     if (!delta) return;
@@ -245,19 +250,20 @@ export function App({ browser, onboardingLoad }: { browser: Browser; onboardingL
           <Box flexShrink={1}><Text wrap="truncate" color={palette.muted}>{plain(target.name)}{state.scope.profile ? ` / ${plain(state.scope.profile)}` : ""}{state.history ? " / execution history" : ""}</Text></Box>
         </Box>
         {!warningsOpen && warnings.length > 0 && <Box flexDirection="column" marginBottom={1}>
-          <Text bold color={palette.warning}>Project notices <Text bold={false} color={palette.accent}>[w] Details</Text></Text>
+          <Box gap={1}><Text bold color={palette.warning}>Project notices</Text><Clickable onClick={unlocked(() => setWarningsOpen(true))}><Text color={palette.accent}>[w] Details</Text></Clickable></Box>
           {visibleWarnings.map(warning => <Box key={warning.profile} flexDirection="column">
             <Text bold wrap="truncate">{warning.profile} <Text bold={false} color={palette.muted}>· {warning.status}</Text></Text>
             <Text color={palette.warning} wrap="truncate-end">  {warning.summary}</Text>
           </Box>)}
-          {warnings.length > visibleWarnings.length && <Text color={palette.muted}>+{warnings.length - visibleWarnings.length} more projects · w shows all</Text>}
+          {warnings.length > visibleWarnings.length && <Clickable onClick={unlocked(() => setWarningsOpen(true))}><Text color={palette.muted}>+{warnings.length - visibleWarnings.length} more projects · w shows all</Text></Clickable>}
         </Box>}
-        {contextLines.map((line, index) => <Text key={index} color={state.error || observation.environmentError ? palette.warning : palette.muted} wrap="truncate">{line}</Text>)}
-        {toolbar && <Box marginBottom={1}>{keys([["[s]", "Inspect status"], ["[f]", "Retry connection"], ["[+]", "Add project"]])}</Box>}
+        {contextLines.map(({ text, run }, index) => <Clickable key={index} onClick={unlocked(() => run?.())}><Text color={state.error || observation.environmentError ? palette.warning : palette.muted} wrap="truncate">{text}</Text></Clickable>)}
+        {toolbar && <Box marginBottom={1} gap={2}>{([["[s]", "Inspect status", () => void browser.inspectEnvironment()], ["[f]", "Retry connection", () => browser.retryNow()], ["[+]", "Add project", () => { browser.openOnboarding(); setPane("content"); }]] as const)
+          .map(([hint, label, run]) => <Clickable key={hint} flexShrink={0} onClick={unlocked(run)}>{keys([[hint, label]])}</Clickable>)}</Box>}
         {warningsOpen ? <Dialog inline scrollable width={actionWidth} height={contentHeight}
           lines={[`Warning details · ${plain(target.name)}`, "↑/↓ PgUp/PgDn scroll · Esc back", ...(warnings.length ? warnings.flatMap(warning => ["", `${warning.profile} · ${warning.status}`, ...warning.details]) : ["No current project notices."])]}
           buttons={[{ label: "Back", activate: () => setWarningsOpen(false) }]} onCancel={() => setWarningsOpen(false)} />
-          : state.action && !state.actions && !state.action.pending ? <ActionDialog inline state={state} browser={browser} width={actionWidth} height={contentHeight} /> : state.runtimes ? <Runtimes key={scopeId(state.scope)} browser={browser} state={state} active={pane === "content"} onSidebar={() => setPane("sidebar")} width={actionWidth} height={contentHeight} /> : state.credentials ? <Credentials key={scopeId(state.scope)} browser={browser} state={state} active={pane === "content"} width={actionWidth} height={contentHeight} /> : state.actions ? <Actions selectedKey={actionSelection?.scope === scopeId(state.scope) ? actionSelection.key : undefined} onSelect={key => setActionSelection({ scope: scopeId(state.scope), key })} browser={browser} state={state} row={state.rows[selectedRow]} active={pane === "content" && !state.environment} width={actionWidth} height={contentHeight} /> : state.scope.addProject ? <Text color={palette.text}>Press + to add or link a project. Enter or Space opens the selected sidebar row.</Text> : state.scope.details ? lines.slice(detailsStart, detailsStart + contentHeight).map((line, index) => {
+          : state.action && !state.actions && !state.action.pending ? <ActionDialog inline state={state} browser={browser} width={actionWidth} height={contentHeight} /> : state.runtimes ? <Runtimes key={scopeId(state.scope)} browser={browser} state={state} active={pane === "content"} onSidebar={() => setPane("sidebar")} onContent={() => setPane("content")} width={actionWidth} height={contentHeight} /> : state.credentials ? <Credentials key={scopeId(state.scope)} browser={browser} state={state} active={pane === "content"} onContent={() => setPane("content")} width={actionWidth} height={contentHeight} /> : state.actions ? <Actions onContent={() => setPane("content")} selectedKey={actionSelection?.scope === scopeId(state.scope) ? actionSelection.key : undefined} onSelect={key => setActionSelection({ scope: scopeId(state.scope), key })} browser={browser} state={state} row={state.rows[selectedRow]} active={pane === "content" && !state.environment} width={actionWidth} height={contentHeight} /> : state.scope.addProject ? <Text color={palette.text}>Press + to add or link a project. Enter or Space opens the selected sidebar row.</Text> : state.scope.details ? lines.slice(detailsStart, detailsStart + contentHeight).map((line, index) => {
           const [, label = "", value = line] = /^(\s*[^:]{1,40}:)( .*)$/.exec(line) ?? [];
           return <Text key={index} wrap="truncate" color={palette.text}><Text color={palette.muted}>{label}</Text>{value}</Text>;
         }) : <>
@@ -266,14 +272,14 @@ export function App({ browser, onboardingLoad }: { browser: Browser; onboardingL
             <Box flexGrow={1} flexShrink={1}><Text wrap="truncate" color={palette.muted}>{plain(state.history ? `${rowCells(state.history).task} ${state.history.thread.title}` : state.rows[0]?.profile ?? state.scope.profile ?? "Projects in registration order")} · page {state.pageNumber}{state.loading ? " · loading" : ""}{state.next ? " · n next" : ""}</Text></Box>
             <Box flexShrink={0}><Text color={palette.muted}>{state.rows.length} {state.history ? "runs" : "threads"} on page</Text></Box>
           </Box>
-          {state.rows[selectedRow]?.run && <Text wrap="truncate" color={palette.muted}>{state.rows[selectedRow].run?.status === "streaming" ? "[c] Cancel selected run · Enter logs" : "Cancel unavailable: run is not active · Enter logs"}</Text>}
+          {state.rows[selectedRow]?.run && <Clickable onClick={unlocked(() => browser.beginAction("cancel", state.rows[selectedRow]))}><Text wrap="truncate" color={palette.muted}>{state.rows[selectedRow].run?.status === "streaming" ? "[c] Cancel selected run · Enter logs" : "Cancel unavailable: run is not active · Enter logs"}</Text></Clickable>}
           {state.rows.length === 0 ? <Text color={palette.text}>{state.loading ? "Loading…" : state.error ? "Page unavailable" : "No runs on this page."}</Text> : <>
             {!compact && <Box paddingX={1} gap={2}><Box flexGrow={1}><Text color={palette.muted}>{state.history ? "RUN · NEWEST FIRST" : "THREAD / TASK"}</Text></Box>
               {wide && <Box width={14} flexShrink={0}><Text color={palette.muted}>PROJECT</Text></Box>}<Box width={15} flexShrink={0}><Text color={palette.muted}>STATE</Text></Box>
               {wide && <Box width={11} flexShrink={0}><Text color={palette.muted}>{state.history ? "ELAPSED" : "UPDATED"}</Text></Box>}</Box>}
             {runs.map(({ row, cells, selected }, index) => {
               const { color, ...rowFill } = fill(selected, pane === "content");
-              return <Box key={rowId(row)} flexShrink={0} marginBottom={compact || index === runs.length - 1 ? 0 : 1} paddingX={1} gap={2} {...rowFill}>
+              return <Clickable key={rowId(row)} onClick={unlocked(() => clickRun(row, selected))} flexShrink={0} marginBottom={compact || index === runs.length - 1 ? 0 : 1} paddingX={1} gap={2} {...rowFill}>
                 <Box flexDirection="column" flexGrow={1} flexShrink={1}>
                   <Text wrap="truncate" color={color ?? palette.muted}>{selected ? "›" : " "} <Text color={color ?? palette.text}>{cells.task}</Text>{cells.id && ` · ${cells.id}`}</Text>
                   <Text wrap="truncate" color={color ?? (row.run ? palette.muted : palette.text)}>{"  "}{cells.title}</Text>
@@ -281,7 +287,7 @@ export function App({ browser, onboardingLoad }: { browser: Browser; onboardingL
                 {wide && <Box flexDirection="column" width={14} flexShrink={0}><Text wrap="truncate" color={color ?? palette.text}>{cells.profile}</Text><Text wrap="truncate" color={color ?? palette.muted}>{cells.runtime}</Text></Box>}
                 <Box width={15} flexShrink={0}><Text wrap="truncate" color={cells.color}>{cells.symbol} {cells.status}</Text></Box>
                 {wide && <Box width={11} flexShrink={0}><Text wrap="truncate" color={color ?? palette.muted}>{cells.time}</Text></Box>}
-              </Box>;
+              </Clickable>;
             })}
           </>}
         </>}

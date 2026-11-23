@@ -1,1 +1,1 @@
-export { Dialog, Spinner } from "./app.js";
+export { Clickable, Dialog, Spinner } from "./app.js";

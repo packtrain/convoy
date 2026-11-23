@@ -3,7 +3,7 @@ import { Box, Text, useInput } from "ink";
 import type { Browser } from "../workflow.js";
 import type { BrowseState } from "../validators.js";
 import type { Connection } from "../resolution.js";
-import { Dialog } from "../dialog/index.js";
+import { Clickable, Dialog } from "../dialog/index.js";
 import { masked, palette, plain, printable, wrapLines } from "../formatters.js";
 import { codexAwsHost } from "../../../agent/runtimes/codex/auth.js";
 import { MANAGED_RUNTIME_LABELS, awsRegionSchema, entryProviderSchema, keyNameSchema, secretSchema, type CredentialMutation, type ManagedCredentialStatus, type ManagedRuntime } from "../../../lib/config/credentials/validators.js";
@@ -24,7 +24,7 @@ const TONE = { ok: "success", error: "danger", warn: "warning", busy: "accent" }
 type Popup = { kind: "rotate" | "rollback" | "disable" | "remove"; entry: Entry } | { kind: "leave" } | { kind: "reload"; profiles: string[]; saved?: number; then?: () => void };
 
 /** Environment Credentials tab, or one project's runtime assignments. Spec: docs/specs/cli-tui.md#runtime-credentials-cli-01070 */
-export function Credentials({ browser, state, active, width, height }: { browser: Browser; state: BrowseState; active: boolean; width: number; height: number }) {
+export function Credentials({ browser, state, active, onContent, width, height }: { browser: Browser; state: BrowseState; active: boolean; onContent(): void; width: number; height: number }) {
   const target = browser.targets[state.scope.connection];
   const shared = target.mode === "shared";
   const project = state.scope.details ? undefined : state.scope.profile;
@@ -94,6 +94,30 @@ export function Credentials({ browser, state, active, width, height }: { browser
     await load();
     if (alive.current) setBusy(false);
   };
+  // Enter on a list row: the first opens Add credential, an entry its assignment editor.
+  const openRow = (at: number) => {
+    const chosen = entries[at - 1];
+    setMessage(undefined);
+    if (!chosen) { setAdding(true); return; }
+    setEditing(chosen.name); setDraft({}); setFocus(0);
+  };
+  // Add credential is a button; an entry's first click selects it, a click on the selected entry opens it.
+  const clickRow = (at: number) => () => {
+    if (busy) return;
+    onContent();
+    if (at && (at !== selected || !active)) setSelected(at); else openRow(at);
+  };
+  // A selected key's o, b, x and Del, typed or clicked in the hint line.
+  const entryCommand = (command: "o" | "b" | "x" | "delete", chosen: Entry) => {
+    if (command === "o") setPopup({ kind: "rotate", entry: chosen });
+    if (command === "b") { if (rollbackRevision(chosen)) setPopup({ kind: "rollback", entry: chosen }); else setMessage(note("warn", `${chosen.name} has no older retained revision.`)); }
+    if (command === "x") { if (chosen.enabled) setPopup({ kind: "disable", entry: chosen }); else setMessage(note("warn", `${chosen.name} is already disabled. Rotate it to re-enable.`)); }
+    if (command === "delete") {
+      const used = assignedRows(rows, chosen.name);
+      if (used.length) setMessage(note("warn", `Unassign ${chosen.name} first: ${assignmentNames(used)}.`)); else setPopup({ kind: "remove", entry: chosen });
+    }
+  };
+  const discard = () => { setDraft({}); setMessage(note("ok", "Draft discarded. Saved assignments unchanged.")); };
   useInput((input, key) => {
     if (popup || adding || busy || (!locked && !active)) return;
     if (open !== undefined && editorRows?.[focus]) {
@@ -122,7 +146,7 @@ export function Credentials({ browser, state, active, width, height }: { browser
       if (focus >= editorRows.length) {
         if (key.leftArrow || key.rightArrow) setFocus(editorRows.length + (key.rightArrow ? 1 : 0));
         else if (key.return && focus === editorRows.length) void save();
-        else if (key.return) { setDraft({}); setMessage(note("ok", "Draft discarded. Saved assignments unchanged.")); }
+        else if (key.return) discard();
         return;
       }
       if (input !== " " && !key.return) return;
@@ -138,16 +162,10 @@ export function Credentials({ browser, state, active, width, height }: { browser
     if (key.upArrow || input === "k") { setSelected(old => Math.max(0, old - 1)); return; }
     if (key.downArrow || input === "j") { setSelected(old => Math.min(entries.length, old + 1)); return; }
     const chosen = entries[selected - 1];
-    if (input === "n" || (key.return && !chosen)) { setMessage(undefined); setAdding(true); return; }
-    if (!chosen) return;
-    if (key.return) { setEditing(chosen.name); setDraft({}); setFocus(0); setMessage(undefined); return; }
-    if (input === "o") setPopup({ kind: "rotate", entry: chosen });
-    if (input === "b") { if (rollbackRevision(chosen)) setPopup({ kind: "rollback", entry: chosen }); else setMessage(note("warn", `${chosen.name} has no older retained revision.`)); }
-    if (input === "x") { if (chosen.enabled) setPopup({ kind: "disable", entry: chosen }); else setMessage(note("warn", `${chosen.name} is already disabled. Rotate it to re-enable.`)); }
-    if (key.delete || key.backspace) {
-      const used = assignedRows(rows, chosen.name);
-      if (used.length) setMessage(note("warn", `Unassign ${chosen.name} first: ${assignmentNames(used)}.`)); else setPopup({ kind: "remove", entry: chosen });
-    }
+    if (input === "n") { openRow(0); return; }
+    if (key.return) { openRow(selected); return; }
+    if (chosen && (input === "o" || input === "b" || input === "x")) entryCommand(input, chosen);
+    if (chosen && (key.delete || key.backspace)) entryCommand("delete", chosen);
   });
   if (!target.credentials) return <>{[
     "Runtime credentials are unavailable for this environment.",
@@ -231,7 +249,9 @@ export function Credentials({ browser, state, active, width, height }: { browser
         const label = project ? `${MANAGED_RUNTIME_LABELS[row.runtime].padEnd(12)} [ ${bindingLabel(value, entries, shared)} ▾ ]` : `[${sameBinding(value, { mode: "managed", name: entry!.name }) ? "x" : " "}] ${plain(row.profile)} · ${MANAGED_RUNTIME_LABELS[row.runtime]}`;
         return <Box key={row.key} {...rowFill}><Text wrap="truncate" color={color ?? palette.text}>{start + i === focus ? ">" : " "} {label}  <Text color={color ?? palette.muted}>{plain(draftNote(row, value))}</Text></Text></Box>;
       })}
-      <Box gap={2} marginTop={1}>{(["Save changes", "Discard"] as const).map((label, i) => <Text key={label} bold {...(focus === editorRows.length + i ? fill(true) : { color: dirty ? palette.accent : palette.muted })}>[ {label} ]</Text>)}</Box>
+      <Box gap={2} marginTop={1}>{(["Save changes", "Discard"] as const).map((label, i) => <Clickable key={label} onClick={() => { if (busy) return; setFocus(editorRows.length + i); if (i) discard(); else void save(); }}>
+        <Text bold {...(focus === editorRows.length + i ? fill(true) : { color: dirty ? palette.accent : palette.muted })}>[ {label} ]</Text>
+      </Clickable>)}</Box>
       {noticeBlock}
     </>;
   }
@@ -249,7 +269,7 @@ export function Credentials({ browser, state, active, width, height }: { browser
     <Box flexDirection="column" marginTop={1}>
       {(status ? ["+ Add credential", ...entries.map(value => entryLine(value, assignedRows(rows, value.name).length))] : []).slice(start, start + capacity).map((line, i) => {
         const { color, ...rowFill } = fill(start + i === selected);
-        return <Box key={i} {...rowFill}><Text wrap="truncate" color={color ?? (start + i ? palette.text : palette.accent)}>{plain(line)}</Text></Box>;
+        return <Clickable key={i} onClick={clickRow(start + i)} {...rowFill}><Text wrap="truncate" color={color ?? (start + i ? palette.text : palette.accent)}>{plain(line)}</Text></Clickable>;
       })}
       {status && !entries.length && <Text color={palette.muted}>No managed credentials yet. {shared ? "Projects use this account's own runtime logins." : "Native login stays in each project's private shell."}</Text>}
     </Box>
@@ -257,7 +277,9 @@ export function Credentials({ browser, state, active, width, height }: { browser
       <Text bold wrap="truncate" color={palette.text}>Assignments · {plain(chosen.name)}</Text>
       {details.slice(0, 4).map((line, i) => <Text key={i} wrap="truncate" color={palette.text}>{plain(line)}</Text>)}
     </Box>}
-    {status && <Box marginTop={1}>{hints(chosen ? "[Enter] Assign projects  [o] Rotate  [b] Roll back  [x] Disable  [Del] Delete  [n] Add  [f] Refresh" : "[Enter/n] Add credential  [f] Refresh")}</Box>}
+    {status && <Box marginTop={1} gap={2}>{(chosen ? [["[Enter]", "Assign projects", () => openRow(selected)], ["[o]", "Rotate", () => entryCommand("o", chosen)], ["[b]", "Roll back", () => entryCommand("b", chosen)],
+      ["[x]", "Disable", () => entryCommand("x", chosen)], ["[Del]", "Delete", () => entryCommand("delete", chosen)], ["[n]", "Add", () => openRow(0)], ["[f]", "Refresh", () => void load()]] as const
+      : [["[Enter/n]", "Add credential", () => openRow(0)], ["[f]", "Refresh", () => void load()]] as const).map(([hint, label, run]) => <Clickable key={hint} flexShrink={0} onClick={() => { if (busy) return; onContent(); run(); }}>{hints(`${hint} ${label}`)}</Clickable>)}</Box>}
   </>;
 }
 
@@ -310,6 +332,11 @@ function AddCredential({ browser, target, entries, width, height, onClose }: {
     try { await browser.mutateCredentials(value); onClose(form.name, `Added ${form.name}. It has no assignments yet; select it and press Enter to assign projects.`); }
     catch (cause) { if (alive.current) { setError(`Not added: ${failure(cause)}`); setStep("review"); } }
   };
+  // Enter on Cancel or Review; a click on either lands here too.
+  const press = (at: number) => {
+    if (at === fields.length) close();
+    else if (at === fields.length + 1) { const value = request(); if (typeof value === "string") setError(value); else { setError(undefined); setStep("review"); } }
+  };
   const count = fields.length + 2;
   const minHeight = fields.length * 2 + 5;
   const small = width < 45 || height < minHeight;
@@ -321,11 +348,7 @@ function AddCredential({ browser, target, entries, width, height, onClose }: {
     if (field === "provider" && (key.leftArrow || key.rightArrow || input === " ")) { setProvider(old => (old + (key.leftArrow ? providers.length - 1 : 1)) % providers.length); return; }
     if (index >= fields.length && (key.leftArrow || key.rightArrow)) { setIndex(fields.length + (key.rightArrow ? 1 : 0)); return; }
     if (key.tab || key.upArrow || key.downArrow) { setIndex(old => (old + (key.upArrow || key.shift ? count - 1 : 1)) % count); return; }
-    if (key.return) {
-      if (index === fields.length) close();
-      else if (index === fields.length + 1) { const value = request(); if (typeof value === "string") setError(value); else { setError(undefined); setStep("review"); } }
-      return;
-    }
+    if (key.return) { press(index); return; }
     if (!field || field === "provider") return;
     if (key.backspace || key.delete) setForm(old => ({ ...old, [field]: old[field].slice(0, -1) }));
     else if (input && !key.leftArrow && !key.rightArrow) setForm(old => ({ ...old, [field]: (old[field] + printable(input)).slice(0, field === "secret" ? 4096 : 80) }));
@@ -352,7 +375,9 @@ function AddCredential({ browser, target, entries, width, height, onClose }: {
       <Text wrap="truncate" color={palette.text}>{index === i ? ">" : " "} {field === "provider" ? providerRow
         : <Text backgroundColor={index === i ? palette.idle : palette.surface}>[ {(field === "secret" ? masked(form.secret) : plain(form[field])) || " "}{index === i ? "▏" : ""} ]</Text>}</Text>
     </Box>)}
-    <Box gap={2} marginTop={1}>{(["Cancel", "Review"] as const).map((label, i) => <Text key={label} bold color={index === fields.length + i ? palette.selectedText : palette.accent} backgroundColor={index === fields.length + i ? palette.selected : undefined}>{index === fields.length + i ? ">" : " "} [ {label} ]</Text>)}</Box>
+    <Box gap={2} marginTop={1}>{(["Cancel", "Review"] as const).map((label, i) => <Clickable key={label} onClick={() => { setIndex(fields.length + i); press(fields.length + i); }}>
+      <Text bold color={index === fields.length + i ? palette.selectedText : palette.accent} backgroundColor={index === fields.length + i ? palette.selected : undefined}>{index === fields.length + i ? ">" : " "} [ {label} ]</Text>
+    </Clickable>)}</Box>
     {error && <Text color={palette.warning}>{error}</Text>}
     <Text color={palette.muted}>Tab/↑/↓ focus · ←/→ choose · Enter activate · Esc close</Text>
   </Box>;
