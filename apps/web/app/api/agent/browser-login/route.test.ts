@@ -2,7 +2,7 @@ import { beforeEach, describe, expect, test, vi } from "vitest";
 
 const signIn = vi.hoisted(() => vi.fn());
 
-vi.mock("@/lib/auth/auth-mode", () => ({ authMode: "convex", isLocalDemoAuthMode: false }));
+vi.mock("@/lib/auth/auth-mode", () => ({ authMode: "convex" }));
 vi.mock("@clerk/nextjs/server", () => ({ clerkClient: vi.fn() }));
 vi.mock("@/lib/auth/convex-auth-server", () => ({ signInWithPasswordCookies: signIn }));
 

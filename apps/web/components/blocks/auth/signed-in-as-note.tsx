@@ -1,6 +1,6 @@
 "use client";
 
-import { supportsSignOut, useAppSignOut, useAppUser } from "@/lib/auth/hooks";
+import { useAppSignOut, useAppUser } from "@/lib/auth/hooks";
 
 /**
  * "Approving as <name>" note with an inline sign-out link, shared by the
@@ -21,21 +21,15 @@ export function SignedInAsNote() {
       <span className="font-medium text-foreground" title={email}>
         {user.fullName ?? email}
       </span>
-      {supportsSignOut ? (
-        <>
-          . Wrong account?{" "}
-          <button
-            type="button"
-            className="cursor-pointer underline underline-offset-2 hover:text-foreground"
-            onClick={() => signOut({ redirectUrl: window.location.href })}
-          >
-            Sign out
-          </button>{" "}
-          to switch.
-        </>
-      ) : (
-        "."
-      )}
+      . Wrong account?{" "}
+      <button
+        type="button"
+        className="cursor-pointer underline underline-offset-2 hover:text-foreground"
+        onClick={() => signOut({ redirectUrl: window.location.href })}
+      >
+        Sign out
+      </button>{" "}
+      to switch.
     </p>
   );
 }

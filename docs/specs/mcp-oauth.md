@@ -51,9 +51,7 @@ CORS-permissive because browser-based MCP clients preflight):
 | `POST /oauth/register` | RFC 7591 dynamic client registration; public clients, no secret. 201 → `{client_id, …}`. Idempotent for identical registrations (same name + URI set reuses the client) |
 | `POST /oauth/token` | authorization_code + PKCE exchange (form-encoded or JSON) → `{access_token, token_type: "Bearer", expires_in}`; RFC 6749 error JSON otherwise. Responses are `Cache-Control: no-store`. If the client sends `resource` (RFC 8707) it must equal `<origin>/api/mcp`, else `invalid_target` |
 
-On the app origin (Clerk-authenticated Next.js; in local-demo auth mode —
-see `local-demo-auth.md` — the flow is identical, with the approving user
-resolved to the demo user via the backend's anonymous fallback):
+On the app origin (signed-in Next.js, Clerk or Convex Auth):
 
 - `GET /oauth/authorize?client_id&redirect_uri&state&code_challenge&code_challenge_method=S256`
   — consent page (`app/oauth/authorize/page.tsx`), rendering the shared

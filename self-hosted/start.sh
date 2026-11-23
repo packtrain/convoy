@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # One-command self-hosted Convoy: Convex backend + dashboard + web app.
-# Only prerequisite: Docker (with Compose). local-demo and convex modes need
-# no other accounts; clerk mode needs a free Clerk application.
+# Only prerequisite: Docker (with Compose). convex mode needs no other
+# accounts; clerk mode needs a free Clerk application.
 # Safe to re-run — every step is idempotent.
 set -euo pipefail
 cd "$(dirname "$0")"
@@ -30,25 +30,38 @@ fi
 
 # --- Auth mode --------------------------------------------------------------
 AUTH_MODE="$(env_get AUTH_MODE)"
+# The demo mode is gone (docs/specs/auth-adapters.md#former-demo-installs).
+CLAIM_EMAIL=""
+if [ "$AUTH_MODE" = "local-demo" ]; then
+  say "Local demo mode has been removed. Switching this install to convex mode."
+  echo "Give the demo user an email and password: that account keeps its"
+  echo "organizations, tasks, API keys and CLI logins. Leave the email empty to"
+  echo "skip; self-hosted/README.md shows how to do it later."
+  read -r -p "Email: " CLAIM_EMAIL
+  if [ -n "$CLAIM_EMAIL" ]; then
+    read -r -s -p "Password (at least 8 characters): " CLAIM_PASSWORD; echo
+  fi
+  AUTH_MODE=convex
+  env_set AUTH_MODE "$AUTH_MODE"
+fi
 if [ -z "$AUTH_MODE" ]; then
   say "Choose an authentication mode:"
-  echo "  local-demo — no accounts or sign-in; one demo user. Great for trying Convoy."
-  echo "  convex     — real accounts with email and password, no outside service."
-  echo "  clerk      — real accounts through https://clerk.com (free tier is fine)."
+  echo "  convex — accounts with email and password, no outside service."
+  echo "  clerk  — accounts through https://clerk.com (free tier is fine)."
   echo
   echo "Choose before the first user signs up: accounts do not move to another mode."
   while :; do
-    read -r -p "Auth mode [local-demo/convex/clerk] (local-demo): " AUTH_MODE
-    case "${AUTH_MODE:=local-demo}" in
-      local-demo | convex | clerk) break ;;
-      *) echo "Type local-demo, convex or clerk." ;;
+    read -r -p "Auth mode [convex/clerk] (convex): " AUTH_MODE
+    case "${AUTH_MODE:=convex}" in
+      convex | clerk) break ;;
+      *) echo "Type convex or clerk." ;;
     esac
   done
   env_set AUTH_MODE "$AUTH_MODE"
 fi
 case "$AUTH_MODE" in
-  local-demo | convex | clerk) ;;
-  *) echo "AUTH_MODE in .env must be local-demo, convex or clerk, not \"$AUTH_MODE\"."; exit 1 ;;
+  convex | clerk) ;;
+  *) echo "AUTH_MODE in .env must be convex or clerk, not \"$AUTH_MODE\"."; exit 1 ;;
 esac
 
 if [ "$AUTH_MODE" = "convex" ] && [ -z "$(env_get AUTH_EMAIL_VERIFICATION)" ]; then
@@ -104,6 +117,16 @@ if [ "$AUTH_MODE" = "clerk" ]; then
   fi
 fi
 
+# Runs auth:claimDemoUser in the web image; values travel as env vars to avoid quoting.
+claim_demo_user() {
+  docker compose run --rm --no-deps \
+    -e CONVEX_SELF_HOSTED_URL=http://backend:3210 \
+    -e CONVEX_SELF_HOSTED_ADMIN_KEY="$(env_get CONVEX_SELF_HOSTED_ADMIN_KEY)" \
+    -e CLAIM_EMAIL="$1" -e CLAIM_PASSWORD="$2" \
+    -w /app/apps/web web sh -c 'npx convex run auth:claimDemoUser \
+      "$(node -e "console.log(JSON.stringify({ email: process.env.CLAIM_EMAIL, password: process.env.CLAIM_PASSWORD }))")"'
+}
+
 # --- Convex backend + dashboard -------------------------------------------
 say "Starting Convex backend and dashboard..."
 docker compose up -d backend dashboard
@@ -119,11 +142,11 @@ say "Building the web app image (first run takes a few minutes)..."
 docker compose build web
 
 say "Deploying Convoy functions and schema to your backend..."
-# Non-clerk modes set a placeholder issuer: auth.config.ts always lists Clerk,
+# Convex mode sets a placeholder issuer: auth.config.ts always lists Clerk,
 # and no Clerk JWT ever arrives. NEXT_PUBLIC_APP_URL comes from the image.
 # Values travel as env vars to avoid quoting. Convex rejects empty values, so a
 # cleared optional one is removed from the deployment instead.
-[ "$AUTH_MODE" = "clerk" ] || ISSUER="https://$AUTH_MODE.invalid"
+[ "$AUTH_MODE" = "clerk" ] || ISSUER="https://convex.invalid"
 docker compose run --rm --no-deps \
   -e CONVEX_SELF_HOSTED_URL=http://backend:3210 \
   -e CONVEX_SELF_HOSTED_ADMIN_KEY="$ADMIN_KEY" \
@@ -140,6 +163,12 @@ docker compose run --rm --no-deps \
     if [ -n "$v" ]; then npx convex env set "$k" "$v"; else npx convex env remove "$k"; fi || exit 1
   done && npx convex deploy -y'
 
+if [ -n "$CLAIM_EMAIL" ]; then
+  say "Giving the demo user its account..."
+  claim_demo_user "$CLAIM_EMAIL" "$CLAIM_PASSWORD" ||
+    echo "The claim failed. Fix the cause above, then see \"Installs from the removed local demo mode\" in self-hosted/README.md."
+fi
+
 say "Starting the web app..."
 docker compose up -d web
 
@@ -149,12 +178,6 @@ echo "  App:              ${APP_URL:-http://127.0.0.1:3000}"
 echo "  Convex dashboard: http://127.0.0.1:6791 (log in with CONVEX_SELF_HOSTED_ADMIN_KEY from self-hosted/.env)"
 if [ "$(env_get AUTH_GOOGLE_CLIENT_ID | grep . || echo none)" != "none" ]; then
   echo "  Google redirect:  $(env_get CONVEX_SITE_ORIGIN)/auth/google/callback (register it on the OAuth client)"
-fi
-if [ "$AUTH_MODE" = "local-demo" ]; then
-  echo
-  echo "  NOTE: local demo mode has NO authentication — anyone who can reach"
-  echo "  these ports has full access. Ports are bound to 127.0.0.1 by default;"
-  echo "  do not expose them to a network or use this mode for sensitive data."
 fi
 if [ "$AUTH_MODE" = "convex" ] && [ "$(env_get AUTH_EMAIL_VERIFICATION)" = "off" ]; then
   echo

@@ -8,7 +8,6 @@ import { NoAccess } from "./no-access";
 const signOutMock = vi.fn();
 
 vi.mock("@/lib/auth/hooks", () => ({
-  supportsSignOut: true,
   useAppSignOut: () => signOutMock,
 }));
 

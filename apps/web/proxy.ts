@@ -69,15 +69,6 @@ export async function convexAuthGate(
   return NextResponse.redirect(new URL(signInPath, request.url));
 }
 
-// Local-demo (OS-1230): no Clerk keys exist, so clerkMiddleware cannot run.
-// Auth is ambient, so only the link-preview handling is kept.
-function passThroughMiddleware(request: NextRequest): Response {
-  if (isLinkPreviewCrawler(request.headers.get("user-agent"))) {
-    return createGenericLinkPreviewResponse();
-  }
-  return NextResponse.next();
-}
-
 // Builders (not module-scope constants) so the clerkMiddleware factory is
 // only invoked in Clerk builds — other builds have no Clerk keys.
 function buildClerkAuthMiddleware(): NextProxy {
@@ -100,7 +91,6 @@ function buildClerkAuthMiddleware(): NextProxy {
 
 const PROXY_BUILDERS: Record<AuthMode, () => NextProxy> = {
   clerk: buildClerkAuthMiddleware,
-  "local-demo": () => passThroughMiddleware,
   convex: () => buildConvexAuthProxy(convexAuthGate),
 };
 

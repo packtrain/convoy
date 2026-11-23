@@ -106,6 +106,5 @@ export const clerkAdapter: AuthAdapter = {
   useSignOut: useClerkSignOut,
   useUpdateProfileName: useClerkUpdateProfileName,
   useConvexAuth: useClerkConvexAuth,
-  supportsSignOut: true,
   emailChangeHint: "Email changes are managed through your account settings.",
 };

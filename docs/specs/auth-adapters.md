@@ -1,14 +1,13 @@
 # Auth adapters
 
-Status: S1 (OS-2492), S2 (OS-2493), S1b (OS-2495), S3 (OS-2496), S4 (OS-2497), S6 (OS-2500) and S7a (OS-2494) implemented. Parent plan: OS-2491.
+Status: S1 (OS-2492), S2 (OS-2493), S1b (OS-2495), S3 (OS-2496), S4 (OS-2497), S6 (OS-2500), S7a (OS-2494) and S8 (OS-2515) implemented. Parent plan: OS-2491.
 
-Convoy signs people in through one of three adapters, chosen at build time:
+Convoy signs people in through one of two adapters, chosen at build time:
 
 | Mode | Sign-in | Accounts | Used by |
 | --- | --- | --- | --- |
 | `clerk` | Clerk's hosted components | Clerk users, matched by `tokenIdentifier` | The hosted app. Default when the mode is unset. |
 | `convex` | Our own email and password forms on Convex Auth 2, plus Google when configured | Convex Auth users, matched by user id | Self-hosted multi-user installs |
-| `local-demo` | None. Every request is the demo user. | One synthetic user | The no-auth demo. See [local-demo-auth.md](local-demo-auth.md). |
 
 `NEXT_PUBLIC_AUTH_MODE` sets the mode for the web bundle. `apps/web/lib/auth/auth-mode.ts`
 parses it with one `z.enum`, and an unknown value fails the build.
@@ -22,8 +21,8 @@ and the CLI keeps authenticating with API keys.
 and exports the selected adapter's parts under fixed names. Product code imports
 only these: `AuthProvider`, `SignInScreen`, `SignUpScreen`, `VerifyEmailScreen`,
 `ForgotPasswordScreen`, `ResetPasswordScreen`, `useAppAuth`,
-`useAppUser`, `useAppSignOut`, `useAppUpdateProfileName`, `useAppConvexAuth`,
-`supportsSignOut` and `emailChangeHint`.
+`useAppUser`, `useAppSignOut`, `useAppUpdateProfileName`, `useAppConvexAuth`
+and `emailChangeHint`.
 
 `emailChangeHint` is the line under the read-only email in user settings.
 Convex mode has none: the address can't be changed yet, and the disabled field
@@ -34,26 +33,21 @@ Each adapter lives in `apps/web/lib/auth/adapters/`:
 - `clerk.tsx` wraps the app in `ClerkProvider` and `ConvexClerkProvider`
   (`convex-clerk-provider.tsx`, with its retry loop), and renders Clerk's
   `<SignIn/>` and `<SignUp/>`.
-- `local-demo.tsx` renders a plain `ConvexProvider` behind the demo bootstrap
-  gate. Its sign-in screens render nothing, because the auth pages redirect a
-  signed-in user away.
 - `VerifyEmailScreen`, `ForgotPasswordScreen` and `ResetPasswordScreen` render
-  nothing in Clerk and local-demo mode. Clerk verifies the address and resets
+  nothing in Clerk mode. Clerk verifies the address and resets
   passwords inside its own screens.
 - `convex.tsx` renders only the client route gate. The session provider sits
   in the root layout (see Session). Sign-out calls `useAuthActions().signOut`
   and then loads `redirectUrl`, or the sign-in page.
 - `convex-user.ts` holds the profile hooks backed by our `users` row
-  (`users.core.current`, `users.core.syncProfile`). The Convex and local-demo
-  adapters both use them, and no adapter imports another.
+  (`users.core.current`, `users.core.syncProfile`). No adapter imports another.
 
 Direct `@clerk/nextjs` imports are allowed only in `adapters/clerk.tsx`,
 `adapters/convex-clerk-provider.tsx`, `proxy.ts` and the agent browser-login
 route.
 
 `proxy.ts` picks its handler from a `Record<AuthMode, () => NextProxy>`.
-Clerk mode runs `clerkMiddleware`, Convex mode runs the route gate below, and
-local-demo passes every request through with only the link-preview response.
+Clerk mode runs `clerkMiddleware` and Convex mode runs the route gate below.
 
 `AuthPageWrapper` sends a signed-in visitor of `/auth/sign-in` or
 `/auth/sign-up` to `/auth/callback`, carrying `redirect_url`. The callback runs
@@ -143,15 +137,15 @@ left.
 
 The refresh token lives in an httpOnly cookie, never in browser storage.
 `lib/auth/convex-auth-server.ts` sets up the package's server side once
-(`setupConvexAuthServer`, `setupConvexAuthNextjs`), lazily, so Clerk and
-local-demo builds never create its Convex client.
+(`setupConvexAuthServer`, `setupConvexAuthNextjs`), lazily, so Clerk
+builds never create its Convex client.
 
 - The root layout wraps the app in `ConvexAuthNextjsServerProvider`, inside a
   `Suspense` boundary, in Convex mode only. It reads the access token from the
   cookie and renders the package's client provider, which creates its own
   Convex client. The client keeps only the access token in `localStorage`.
-  Reading cookies makes every page render dynamically in Convex mode. Clerk and
-  local-demo stay as they were.
+  Reading cookies makes every page render dynamically in Convex mode. Clerk
+  stays as it was.
 - The package's client posts to three fixed route handlers:
   `app/auth/signin/route.ts`, `app/auth/refresh/route.ts` and
   `app/auth/signout/route.ts`. Next routes are static, so they exist in every
@@ -228,8 +222,7 @@ when the module loads, so a `NEXT_PUBLIC_APP_URL` without a scheme, such as
 
 ### Opt-in
 
-New Convex Auth accounts need `AUTH_MODE=convex` on the Convex deployment, the
-same variable local-demo uses. `users.core.createAuthUser` checks it before the
+New Convex Auth accounts need `AUTH_MODE=convex` on the Convex deployment. `users.core.createAuthUser` checks it before the
 password is hashed and throws "Convex Auth sign-up is not enabled on this
 deployment" otherwise. The sign-up functions are public on every deployment, so
 without this check anyone could create a Convex Auth account on the hosted
@@ -241,8 +234,8 @@ The check runs before anything the package writes sticks. The package's
 starts the email challenge, and nothing catches the error, so the whole mutation
 rolls back.
 
-`AUTH_MODE` is declared in `convex/convex.config.ts` as `clerk`, `local-demo` or
-`convex`, and read from `env`. Convex refuses any other value when it is set,
+`AUTH_MODE` is declared in `convex/convex.config.ts` as `clerk` or `convex`,
+and read from `env`. Convex refuses any other value when it is set,
 so a typo fails at `convex env set` instead of quietly turning sign-up off.
 
 ### Users
@@ -260,8 +253,7 @@ so a typo fails at `convex env set` instead of quietly turning sign-up off.
   part. People rename themselves in user settings.
 - `users.core.onboard` and `users.core.store` resolve a Convex Auth caller to the
   existing row. Clerk callers still upsert from their token claims. Without a
-  JWT, `onboard` resolves the local-demo user, because `/auth/callback` runs in
-  every mode.
+  JWT, `onboard` throws "Not authenticated".
 
 ### Invitations
 
@@ -400,8 +392,7 @@ The component declares both credentials as required strings, and Convex
 checks that at push time. Bound to optional app variables, the push fails
 ("env var CLIENT_ID is required, but parent env var AUTH_GOOGLE_CLIENT_ID is
 optional"). Declared required, it fails while they are unset. So the app
-declares them required, and every deployment sets both, Clerk and
-local-demo included. A deployment without Google sets them to `none`.
+declares them required, and every deployment sets both, Clerk included. A deployment without Google sets them to `none`.
 `auth.getSettings` reports `googleEnabled` when both are set and neither is
 `none`, and the button shows only then.
 
@@ -488,7 +479,7 @@ A Convex mode deployment sets:
   to skip email, at the cost described under Invitations.
 - Optionally `SUPPORT_EMAIL` on the Convex deployment, the help address at the
   bottom of every email ([email-templates.md](email-templates.md#support-address)).
-- A placeholder `CLERK_JWT_ISSUER_DOMAIN`, as local-demo does, because
+- A placeholder `CLERK_JWT_ISSUER_DOMAIN`, because
   `auth.config.ts` always lists the Clerk provider.
 - `AUTH_GOOGLE_CLIENT_ID` and `AUTH_GOOGLE_CLIENT_SECRET` on the Convex
   deployment, from a Google OAuth client, or `none` for both to turn Google
@@ -505,10 +496,48 @@ The deployment signs its own tokens, so there are no auth secrets.
 asks for a Resend key and `EMAIL_FROM`; with a key it sets
 `AUTH_EMAIL_VERIFICATION=required`, without one `off`. It sets `AUTH_MODE`,
 `NEXT_PUBLIC_APP_URL` (from the image, built from `APP_URL`) and
-`CLERK_JWT_ISSUER_DOMAIN` (`https://convex.invalid` here,
-`https://local-demo.invalid` in local-demo) in every mode, so a mode switch
-never leaves the backend on the old one. The README tells the operator to pick
-the mode before the first sign-up.
+`CLERK_JWT_ISSUER_DOMAIN` (`https://convex.invalid` here) in every mode, so a
+mode switch never leaves the backend on the old one. The README tells the
+operator to pick the mode before the first sign-up.
+
+### Former demo installs
+
+Convoy had a third mode, `local-demo`, with no sign-in: every anonymous call
+acted as one synthetic user with `tokenIdentifier` `local-demo|user`. It was
+removed because a deployment with the wrong `AUTH_MODE` let anyone in, and
+Convex mode needs no outside service either.
+
+An old demo install keeps its data:
+
+- `start.sh` finds `AUTH_MODE=local-demo` in `.env`, says the mode is gone, and
+  switches it to `convex` without asking. It asks for an email and password
+  for the demo user, then answers the usual email question. Convex refuses
+  `AUTH_MODE=local-demo` now, so a deploy without the switch fails.
+- After the deploy, `start.sh` runs the internal mutation `auth.claimDemoUser`
+  with the admin key. The self-hosted README gives the same command for an
+  operator who skipped the question.
+- `claimDemoUser` clears the demo row's profile, marks it with the
+  `tokenIdentifier` `local-demo|claiming`, and runs a whole email and password
+  sign-up in the same transaction, the way `signUpWithoutEmailVerification`
+  does. While the marker is set, `createAuthUser` returns the marked row and
+  `deliverAuthEmail` keeps the link's code instead of emailing it, whatever
+  `AUTH_EMAIL_VERIFICATION` says. `onAuthSignIn` fills in the address and name.
+  The mutation then drops the `tokenIdentifier`. The account keeps the demo
+  user's organizations, tasks, API keys and CLI logins.
+- The address is not proven by email: the operator vouches for it. With
+  verification required, `onAuthSignIn` still records it as proven.
+- Any failure, such as a taken address or a weak password, rolls everything
+  back, and the demo row stays claimable. A claimed row has no
+  `local-demo|user` token, so a second claim fails with "This deployment has no
+  demo user to claim".
+- Public sign-ups never claim the row. The package fixes the user id when a
+  sign-up starts, before the address is proven, and keeps the password,
+  verified address and sessions under that id in its own tables. A claim at
+  sign-up would let an unfinished or anonymous sign-up take the data, and the
+  app can't move it to another id afterwards.
+
+`deliverAuthEmail` reads the marker with one `by_token` lookup per auth email.
+The claim adds nothing to sign-in or to queries.
 
 ## Not covered yet
 
@@ -539,8 +568,11 @@ made with verification off still signing in, sign-up refused without
 session and refuses the old password. It also covers `getSettings`, including `googleEnabled` with `none`. It records email through the package's Resend stub
 (`registerResendStub`, `sentEmails`). `convex/organizations/invitations.test.ts`
 covers accepting an invitation as a Convex Auth session, the wrong-account
-reply, and inviting an address two users share. `convex/users/localDemo.test.ts`
-covers anonymous `onboard` in local-demo. `lib/auth/adapters/convex.test.tsx`
+reply, and inviting an address two users share. It also covers `claimDemoUser`: the claimed row signs in
+with the password and keeps its workspace, no email goes out with verification
+required, public sign-ups (finished or abandoned) never take the row, a taken
+address rolls the claim back, and a second claim or a claim without a demo row
+fails. `lib/auth/adapters/convex.test.tsx`
 covers the client route gate and sign-out, `proxy.test.ts` the server route gate
 and the matcher, `lib/auth/convex-auth-server.test.ts` the server and browser
 Convex URLs,

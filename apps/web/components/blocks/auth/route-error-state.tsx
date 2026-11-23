@@ -1,7 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
-import { supportsSignOut, useAppSignOut } from "@/lib/auth/hooks";
+import { useAppSignOut } from "@/lib/auth/hooks";
 import { useAppAuthReadiness } from "@/lib/auth/use-app-auth-readiness";
 import { AlertCircle, LogIn, RefreshCw } from "lucide-react";
 import { Centered } from "@/components/custom/centered";
@@ -96,12 +96,10 @@ export function RouteErrorState({ error, variant, onRecover }: RouteErrorStatePr
             <RefreshCw data-icon="inline-start" className="size-4" />
             Try again
           </Button>
-          {supportsSignOut && (
-            <Button type="button" variant="outline" onClick={handleSignInAgain} className="sm:flex-1">
-              <LogIn data-icon="inline-start" className="size-4" />
-              Sign in again
-            </Button>
-          )}
+          <Button type="button" variant="outline" onClick={handleSignInAgain} className="sm:flex-1">
+            <LogIn data-icon="inline-start" className="size-4" />
+            Sign in again
+          </Button>
         </div>
 
         {error?.digest ? (

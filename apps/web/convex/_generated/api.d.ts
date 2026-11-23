@@ -188,7 +188,6 @@ import type * as integrations_github_states from "../integrations/github/states.
 import type * as integrations_github_sync from "../integrations/github/sync.js";
 import type * as lib_access_apiKeys from "../lib/access/apiKeys.js";
 import type * as lib_access_auth from "../lib/access/auth.js";
-import type * as lib_access_localDemo from "../lib/access/localDemo.js";
 import type * as lib_access_mintApiKey from "../lib/access/mintApiKey.js";
 import type * as lib_access_permissions from "../lib/access/permissions.js";
 import type * as lib_accessRepo from "../lib/accessRepo.js";
@@ -575,7 +574,6 @@ declare const fullApi: ApiFromModules<{
   "integrations/github/sync": typeof integrations_github_sync;
   "lib/access/apiKeys": typeof lib_access_apiKeys;
   "lib/access/auth": typeof lib_access_auth;
-  "lib/access/localDemo": typeof lib_access_localDemo;
   "lib/access/mintApiKey": typeof lib_access_mintApiKey;
   "lib/access/permissions": typeof lib_access_permissions;
   "lib/accessRepo": typeof lib_accessRepo;

@@ -14,7 +14,6 @@ import {
 } from "../lib/access/auth";
 import { normalizeEmail } from "../lib/shared/strings";
 import { authMethodValidator, emailPasswordMethodValidator } from "./lib/validators";
-import { getLocalDemoUser, isLocalDemoDeployment, LOCAL_DEMO_TOKEN_IDENTIFIER, LOCAL_DEMO_USER_EMAIL, LOCAL_DEMO_USER_NAME } from "../lib/access/localDemo";
 import { OrgRole, ProjectRole } from "../../lib/authz/roles";
 import { getOrganizationById, getOrganizationBySlug, insertOrganization } from "../organizations/lib/organizationsRepo";
 import {
@@ -26,6 +25,7 @@ import { insertMembership as insertProjectMembership } from "../projects/lib/mem
 import { createInboxList } from "../tasks/lib/taskListsRepo";
 import {
   getUserById,
+  CLAIMING_DEMO_USER_TOKEN_IDENTIFIER,
   getUserByTokenIdentifier,
   insertUser,
   listUsersByEmail,
@@ -91,8 +91,7 @@ const onboardResultValidator = v.object({
 
 /**
  * Land the user in their first organization, creating a default workspace
- * with a starter project on first onboarding. Shared by Clerk onboarding
- * and local-demo bootstrap.
+ * with a starter project on first onboarding.
  */
 async function onboardUser(
   ctx: MutationCtx,
@@ -147,12 +146,7 @@ export const onboard = mutation({
   handler: async (ctx) => {
     const identity = await ctx.auth.getUserIdentity();
     if (!identity) {
-      // Local-demo has no JWT, and /auth/callback runs onboard in every mode.
-      const demoUser = await getLocalDemoUser(ctx);
-      if (!demoUser) {
-        throw notAuthenticatedError();
-      }
-      return onboardUser(ctx, demoUser._id, demoUser.name, false);
+      throw notAuthenticatedError();
     }
 
     const { user, isNewUser } = await ensureIdentityUser(ctx, identity);
@@ -172,6 +166,9 @@ export const createAuthUser = internalMutation({
       throw new ConvexError("Convex Auth sign-up is not enabled on this deployment");
     }
     if (method.name === "emailPassword") {
+      // Only inside `auth.claimDemoUser`, which marks the demo row and signs up in one transaction.
+      const claiming = await getUserByTokenIdentifier(ctx, CLAIMING_DEMO_USER_TOKEN_IDENTIFIER);
+      if (claiming) return claiming._id;
       return (await insertUser(ctx, { email: "", name: "" }))._id;
     }
     const { profile } = method;
@@ -214,34 +211,6 @@ export const onAuthSignIn = internalMutation({
   },
 });
 
-/**
- * Local-demo bootstrap (OS-1230): idempotently create the synthetic demo
- * user and its starter workspace. Callable anonymously, but only on
- * deployments that explicitly set AUTH_MODE=local-demo.
- */
-export const onboardLocalDemo = mutation({
-  args: {},
-  returns: onboardResultValidator,
-  handler: async (ctx) => {
-    if (!isLocalDemoDeployment()) {
-      throw new ConvexError("Local demo mode is not enabled on this deployment");
-    }
-
-    let user = await getUserByTokenIdentifier(ctx, LOCAL_DEMO_TOKEN_IDENTIFIER);
-    let isNewUser = false;
-    if (!user) {
-      user = await insertUser(ctx, {
-        tokenIdentifier: LOCAL_DEMO_TOKEN_IDENTIFIER,
-        email: LOCAL_DEMO_USER_EMAIL,
-        name: LOCAL_DEMO_USER_NAME,
-      });
-      isNewUser = true;
-    }
-
-    return onboardUser(ctx, user._id, user.name, isNewUser);
-  },
-});
-
 export const current = query({
   args: {},
   returns: v.union(
@@ -274,7 +243,6 @@ export const syncProfile = mutation({
   },
   returns: v.null(),
   handler: async (ctx, args) => {
-    // Resolves the Clerk identity's user, or the demo user in local-demo mode.
     const user = await getAuthenticatedUser(ctx);
     const identity = await ctx.auth.getUserIdentity();
 

@@ -10,7 +10,6 @@ const signOutMock = vi.fn();
 const reloadMock = vi.fn();
 
 vi.mock("@/lib/auth/hooks", () => ({
-  supportsSignOut: true,
   useAppSignOut: () => signOutMock,
 }));
 

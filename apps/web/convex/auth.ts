@@ -9,7 +9,7 @@ import type { FunctionReference } from "convex/server";
 import { ConvexError, v, type Infer } from "convex/values";
 import { api, components, internal } from "./_generated/api";
 import type { Id } from "./_generated/dataModel";
-import { env, internalMutation, mutation, query } from "./_generated/server";
+import { env, internalMutation, mutation, query, type MutationCtx } from "./_generated/server";
 import { buildResendEmail, getEmailFrom } from "./lib/notifications/email";
 import {
   buildPasswordChangedEmail,
@@ -19,14 +19,21 @@ import {
 } from "../lib/emails/catalog";
 import { appRoute } from "../lib/navigation/routes";
 import { href } from "../lib/navigation/target";
-import { isEmailVerificationOff } from "./lib/access/auth";
+import { isConvexAuthDeployment, isEmailVerificationOff } from "./lib/access/auth";
 import { getAppUrlBase } from "./lib/shared/appUrl";
 import { normalizeEmail } from "./lib/shared/strings";
 import { takePendingSignUpCode, upsertPendingSignUpCode } from "./users/lib/pendingSignUpCodesRepo";
+import {
+  CLAIMING_DEMO_USER_TOKEN_IDENTIFIER,
+  DEMO_USER_TOKEN_IDENTIFIER,
+  getUserByTokenIdentifier,
+  setUserTokenIdentifier,
+  updateUserProfile,
+} from "./users/lib/usersRepo";
 import type { CreateAuthUserArgs, OnAuthSignInArgs } from "./users/lib/validators";
 
 // Convex Auth (docs/specs/auth-adapters.md). Loads on every deployment, so nothing
-// here may require an env var: Clerk and local-demo deployments leave these unused.
+// here may require an env var: Clerk deployments leave these unused.
 
 const auth = setupConvexAuth({ component: components.auth });
 export const { signOut, refreshSession, isAuthenticated } = auth;
@@ -113,7 +120,9 @@ export const deliverAuthEmail = internalMutation({
   },
   returns: v.string(),
   handler: async (ctx, args) => {
-    if (!isEmailVerificationOff()) {
+    // A demo claim completes its own sign-up, so its link is kept like with verification off.
+    const claiming = await getUserByTokenIdentifier(ctx, CLAIMING_DEMO_USER_TOKEN_IDENTIFIER);
+    if (!isEmailVerificationOff() && !claiming) {
       const apiKey = env.RESEND_API_KEY;
       if (!apiKey) throw new ConvexError(EMAIL_NOT_CONFIGURED);
       return await ctx.runMutation(components.resend.lib.sendEmail, {
@@ -232,18 +241,52 @@ export const signUpWithoutEmailVerification = mutation({
     if (!isEmailVerificationOff()) {
       return { status: "error", userError: { error: "EMAIL_VERIFICATION_REQUIRED" } };
     }
-    const started = await ctx.runMutation(signUpRef, args);
-    if (!started.success) {
-      return { status: "error", userError: { error: started.userError.error } };
+    return signUpAndComplete(ctx, args);
+  },
+});
+
+async function signUpAndComplete(
+  ctx: MutationCtx,
+  args: { email: string; password: string }
+): Promise<SignUpWithoutVerificationResult> {
+  const started = await ctx.runMutation(signUpRef, args);
+  if (!started.success) {
+    return { status: "error", userError: { error: started.userError.error } };
+  }
+  const emailCode = await takePendingSignUpCode(ctx, normalizeEmail(args.email));
+  if (emailCode === null) {
+    throw new Error("The stand-in email sender kept no sign-up code");
+  }
+  const completed = await ctx.runMutation(completeSignUpRef, { emailCode, browserSecret: started.browserSecret });
+  if (completed.status !== "complete") {
+    throw new Error(`Unexpected error when completing the sign-up: ${completed.userError.error}`);
+  }
+  return { status: "complete", tokens: completed.tokens };
+}
+
+/**
+ * Operator command: give the demo user of a former demo install a password account, in one
+ * transaction (docs/specs/auth-adapters.md#former-demo-installs). The address is not emailed.
+ */
+export const claimDemoUser = internalMutation({
+  args: { email: v.string(), password: v.string() },
+  returns: v.id("users"),
+  handler: async (ctx, args) => {
+    const demoUser = await getUserByTokenIdentifier(ctx, DEMO_USER_TOKEN_IDENTIFIER);
+    if (!isConvexAuthDeployment() || !demoUser) {
+      throw new ConvexError("This deployment has no demo user to claim");
     }
-    const emailCode = await takePendingSignUpCode(ctx, normalizeEmail(args.email));
-    if (emailCode === null) {
-      throw new Error("The stand-in email sender kept no sign-up code");
+    // `onAuthSignIn` fills in the new address and name, as for any sign-up.
+    await updateUserProfile(ctx, demoUser._id, { email: "", name: "", avatarUrl: undefined, emailVerifiedAt: undefined });
+    await setUserTokenIdentifier(ctx, demoUser._id, CLAIMING_DEMO_USER_TOKEN_IDENTIFIER);
+    const result = await signUpAndComplete(ctx, args);
+    if (result.status !== "complete") {
+      throw new ConvexError(result.userError.error);
     }
-    const completed = await ctx.runMutation(completeSignUpRef, { emailCode, browserSecret: started.browserSecret });
-    if (completed.status !== "complete") {
-      throw new Error(`Unexpected error when completing the sign-up: ${completed.userError.error}`);
+    if (result.tokens.userId !== demoUser._id) {
+      throw new Error("The sign-up did not claim the demo user");
     }
-    return { status: "complete", tokens: completed.tokens };
+    await setUserTokenIdentifier(ctx, demoUser._id, undefined);
+    return demoUser._id;
   },
 });

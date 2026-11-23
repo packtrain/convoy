@@ -27,9 +27,9 @@ cd convoy
 
 Open [localhost:3000](http://127.0.0.1:3000) when setup finishes.
 
-The script starts the web app and Convex backend. Choose **local demo** to try
-it without an account, or **Clerk** for multi-user authentication. Demo mode
-has no authentication. Keep it on localhost and don't use it for sensitive data.
+The script starts the web app and Convex backend. Choose **Convex Auth** for
+accounts with email and password and no outside service, or **Clerk** to sign
+in through Clerk.
 
 See the [self-hosting guide](self-hosted/README.md) for configuration and upgrades.
 

@@ -6,9 +6,8 @@ services:
     stop_grace_period: 10s
     stop_signal: SIGINT
     ports:
-      # Loopback-only by default: in local-demo auth mode anyone who can
-      # reach these ports has full access. Set BIND_HOST=0.0.0.0 in .env
-      # only for clerk or convex installs that must be reachable on a network.
+      # Loopback-only by default. Set BIND_HOST=0.0.0.0 in .env only for
+      # installs that must be reachable on a network.
       - "${BIND_HOST:-127.0.0.1}:${CONVEX_PORT:-3210}:3210" # client API (queries/mutations, deploys)
       - "${BIND_HOST:-127.0.0.1}:${CONVEX_SITE_PORT:-3211}:3211" # HTTP actions (/api/mcp, /api/agent/*)
     volumes:
@@ -56,7 +55,7 @@ services:
         NEXT_PUBLIC_CONVEX_URL: ${CONVEX_CLOUD_ORIGIN:-http://127.0.0.1:3210}
         NEXT_PUBLIC_APP_URL: ${APP_URL:-http://127.0.0.1:3000}
         NEXT_PUBLIC_APP_ENV: ${APP_ENV:-production}
-        # clerk | convex | local-demo — must match the AUTH_MODE set on the
+        # clerk | convex — must match the AUTH_MODE set on the
         # Convex deployment (start.sh keeps them in sync). Only clerk needs
         # the Clerk keys below.
         NEXT_PUBLIC_AUTH_MODE: ${AUTH_MODE:-clerk}

@@ -91,7 +91,7 @@ import {
 export default defineSchema({
   // Users (synced from Clerk)
   users: defineTable({
-    // Clerk and local-demo only. Convex Auth users are matched by id (docs/specs/auth-adapters.md).
+    // Clerk only. Convex Auth users are matched by id (docs/specs/auth-adapters.md).
     tokenIdentifier: v.optional(v.string()),
     email: v.string(),
     name: v.string(),

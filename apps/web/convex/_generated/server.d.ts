@@ -33,7 +33,7 @@ type Env = {
   readonly AUTH_EMAIL_VERIFICATION: "required" | "off" | undefined;
   readonly AUTH_GOOGLE_CLIENT_ID: string;
   readonly AUTH_GOOGLE_CLIENT_SECRET: string;
-  readonly AUTH_MODE: "clerk" | "local-demo" | "convex" | undefined;
+  readonly AUTH_MODE: "clerk" | "convex" | undefined;
   readonly EMAIL_FROM: string | undefined;
   readonly GITHUB_APP_CLIENT_ID: string | undefined;
   readonly GITHUB_APP_CLIENT_SECRET: string | undefined;

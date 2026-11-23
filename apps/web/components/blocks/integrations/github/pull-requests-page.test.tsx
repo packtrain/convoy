@@ -76,7 +76,6 @@ vi.mock("@/lib/preferences/use-user-preferences", () => ({ useUserPreferences: (
 vi.mock("@/lib/auth/hooks", () => ({
   useAppConvexAuth: () => ({ isAuthenticated: true }),
   useAppSignOut: () => vi.fn(),
-  supportsSignOut: false,
 }));
 vi.mock("@/lib/routing/current-org-project-context", () => ({ useCurrentOrgProject: () => ({ organizationId: "org_1" }) }));
 vi.mock("@/lib/navigation", async (importActual) => ({

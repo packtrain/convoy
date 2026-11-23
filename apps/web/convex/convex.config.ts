@@ -18,7 +18,7 @@ const app = defineApp({
     GITHUB_APP_CLIENT_SECRET: v.optional(v.string()),
     GITHUB_APP_WEBHOOK_SECRET: v.optional(v.string()),
     // Backend auth mode (docs/specs/auth-adapters.md#opt-in). Unset means Clerk.
-    AUTH_MODE: v.optional(v.union(v.literal("clerk"), v.literal("local-demo"), v.literal("convex"))),
+    AUTH_MODE: v.optional(v.union(v.literal("clerk"), v.literal("convex"))),
     // Convex Auth sign-up (docs/specs/auth-adapters.md#email-verification). Unset means "required".
     AUTH_EMAIL_VERIFICATION: v.optional(v.union(v.literal("required"), v.literal("off"))),
     // Resend, for invitation and auth emails. Without a key, verified sign-up is refused.

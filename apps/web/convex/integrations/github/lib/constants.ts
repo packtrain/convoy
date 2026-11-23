@@ -1,5 +1,4 @@
 import { env } from "../../../_generated/server";
-import { isLocalDemoDeployment } from "../../../lib/access/localDemo";
 import { getAppUrlBase } from "../../../lib/shared/appUrl";
 
 export const GITHUB_HOST = "github.com";
@@ -26,10 +25,7 @@ export type GithubAppConfig = {
   webhookSecret: string;
 };
 
-/**
- * The deployment's GitHub App, or null when any credential is missing.
- * Local-demo deployments have no real identity to bind setup to.
- */
+/** The deployment's GitHub App, or null when any credential is missing. */
 export function readGithubAppConfig(): GithubAppConfig | null {
   const appId = env.GITHUB_APP_ID?.trim();
   const slug = env.GITHUB_APP_SLUG?.trim();
@@ -37,7 +33,7 @@ export function readGithubAppConfig(): GithubAppConfig | null {
   const clientId = env.GITHUB_APP_CLIENT_ID?.trim();
   const clientSecret = env.GITHUB_APP_CLIENT_SECRET?.trim();
   const webhookSecret = env.GITHUB_APP_WEBHOOK_SECRET?.trim();
-  if (isLocalDemoDeployment() || !appId || !slug || !privateKey || !clientId || !clientSecret || !webhookSecret) {
+  if (!appId || !slug || !privateKey || !clientId || !clientSecret || !webhookSecret) {
     return null;
   }
   if (!privateKey.includes("BEGIN PRIVATE KEY")) {

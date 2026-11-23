@@ -5,7 +5,6 @@ import type { ConvexReactClient } from "convex/react";
 import { authMode, type AuthMode } from "./auth-mode";
 import { clerkAdapter } from "./adapters/clerk";
 import { convexAdapter } from "./adapters/convex";
-import { localDemoAdapter } from "./adapters/local-demo";
 
 /**
  * App auth hooks (docs/specs/auth-adapters.md). Product code uses these instead of
@@ -56,15 +55,12 @@ export type AuthAdapter = {
   useSignOut: () => AppSignOut;
   useUpdateProfileName: () => (input: UpdateProfileNameInput) => Promise<void>;
   useConvexAuth: () => { isLoading: boolean; isAuthenticated: boolean };
-  /** False when there is no account to sign out of. */
-  supportsSignOut: boolean;
   /** Shown under the read-only email in user settings, or nothing. */
   emailChangeHint: string | null;
 };
 
 const AUTH_ADAPTERS: Record<AuthMode, AuthAdapter> = {
   clerk: clerkAdapter,
-  "local-demo": localDemoAdapter,
   convex: convexAdapter,
 };
 
@@ -76,11 +72,10 @@ export const SignUpScreen = adapter.SignUpScreen;
 export const VerifyEmailScreen = adapter.VerifyEmailScreen;
 export const ForgotPasswordScreen = adapter.ForgotPasswordScreen;
 export const ResetPasswordScreen = adapter.ResetPasswordScreen;
-export const supportsSignOut = adapter.supportsSignOut;
 export const emailChangeHint = adapter.emailChangeHint;
 export const useAppAuth = adapter.useAuth;
 export const useAppUser = adapter.useUser;
 export const useAppSignOut = adapter.useSignOut;
 export const useAppUpdateProfileName = adapter.useUpdateProfileName;
-/** Drop-in for convex/react's useConvexAuth; always authenticated in local-demo. */
+/** Drop-in for convex/react's useConvexAuth. */
 export const useAppConvexAuth = adapter.useConvexAuth;

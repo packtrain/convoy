@@ -15,7 +15,7 @@ without them fails `convex deploy` with:
 Environment variables AUTH_GOOGLE_CLIENT_ID, AUTH_GOOGLE_CLIENT_SECRET are declared as required in convex.config.ts but their values were not set.
 ```
 
-This holds for Clerk and local-demo deployments too. A deployment that
+This holds for Clerk deployments too. A deployment that
 doesn't offer Google sets both to `none`, which hides the button:
 
 ```bash

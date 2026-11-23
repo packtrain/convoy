@@ -23,7 +23,6 @@ let convexAuthState = {
 let searchParams = new URLSearchParams();
 
 vi.mock("@/lib/auth/hooks", () => ({
-  supportsSignOut: true,
   useAppAuth: () => authState,
   useAppConvexAuth: () => convexAuthState,
   useAppSignOut: () => signOutMock,

@@ -1,10 +1,9 @@
 # Self-hosted Convoy (Docker Compose)
 
 Runs the whole stack locally: self-hosted Convex backend + Convex dashboard +
-the Convoy web app. By default it runs in **local demo mode** with no
-external dependencies at all — no accounts, no sign-in, one demo user. For
-real accounts choose **convex mode** (email and password, no outside service)
-or **clerk mode** (free Clerk account; Clerk cannot be self-hosted).
+the Convoy web app. Choose **convex mode** (email and password, no outside
+service, the default) or **clerk mode** (free Clerk account; Clerk cannot be
+self-hosted).
 
 ## Quick start
 
@@ -17,17 +16,12 @@ Prerequisite: Docker (with Compose).
 That's it. On the first run the script asks which auth mode to use. Choose
 before the first user signs up; see [Switching auth modes](#switching-auth-modes).
 
-- **local-demo** (default) — no accounts or sign-in. The app boots straight
-  into a demo workspace owned by one synthetic demo user. Ports are bound to
-  `127.0.0.1`. **There is no authentication: anyone who can reach the ports
-  has full access. Never expose this mode to a network or put sensitive data
-  in it.**
-- **convex** — real accounts with email and password, kept in your own Convex
+- **convex** (default) — accounts with email and password, kept in your own Convex
   backend. Each person signs up, gets a personal workspace, and sees another
   organization only after accepting an invitation. The script asks for an
   optional [Resend](https://resend.com) API key; see
   [Email verification](#email-verification).
-- **clerk** — real accounts through Clerk. The script asks for your two
+- **clerk** — accounts through Clerk. The script asks for your two
   Clerk API keys (Clerk dashboard → Configure → API keys) from an application
   with a JWT template named `convex` (Configure → JWT templates → New
   template → Convex).
@@ -77,6 +71,28 @@ Accounts do not move between modes. After a switch:
   logins stay in the database, and switching back restores access.
 - API keys and CLI logins keep working as the old user.
 
+### Installs from the removed local demo mode
+
+Local demo mode had no sign-in and has been removed. On an install still set
+to `AUTH_MODE=local-demo`, `./start.sh` switches it to `convex`, then asks for
+an email and password for the demo user. That account keeps the demo user's
+organizations, tasks, API keys and CLI logins; sign in with it once the app is
+up. Sign-ups from the browser always get a new, empty user.
+
+If you skipped the question or the claim failed, run it from `self-hosted/`
+(the address is not emailed):
+
+```bash
+docker compose run --rm --no-deps \
+  -e CONVEX_SELF_HOSTED_URL=http://backend:3210 \
+  -e CONVEX_SELF_HOSTED_ADMIN_KEY="$(sed -n 's/^CONVEX_SELF_HOSTED_ADMIN_KEY=//p' .env)" \
+  -w /app/apps/web web \
+  npx convex run auth:claimDemoUser '{"email":"you@example.com","password":"your password"}'
+```
+
+It fails with "This deployment has no demo user to claim" once the demo user
+has an account.
+
 ## Manual steps (what the script does)
 
 ```bash
@@ -94,8 +110,8 @@ set -a; source ../../self-hosted/.env; set +a
 export CONVEX_DEPLOYMENT=   # a dev .env.local's CONVEX_DEPLOYMENT conflicts otherwise
 npx convex env set AUTH_MODE "$AUTH_MODE"
 npx convex env set NEXT_PUBLIC_APP_URL "$APP_URL"   # for links the backend builds
-# local-demo and convex modes (a placeholder; no Clerk token ever arrives):
-npx convex env set CLERK_JWT_ISSUER_DOMAIN "https://$AUTH_MODE.invalid"
+# convex mode (a placeholder; no Clerk token ever arrives):
+npx convex env set CLERK_JWT_ISSUER_DOMAIN "https://convex.invalid"
 # clerk mode instead:
 # npx convex env set CLERK_JWT_ISSUER_DOMAIN "https://<your-clerk-domain>"
 # convex mode, either no email:
@@ -119,8 +135,7 @@ docker compose up -d --build web
 To let projects browse pull requests, register a GitHub App and set its six
 `GITHUB_APP_*` variables on the backend with `npx convex env set`, as in
 step 3 above. GitHub must reach the backend's HTTP actions URL for webhooks,
-so this needs a clerk or convex install on a reachable host; local-demo
-mode shows GitHub as unavailable. Steps:
+so this needs an install on a reachable host. Steps:
 [GitHub integration](https://docs.convoy.build/docs/deployment/github-integration).
 
 ## Google sign-in
@@ -148,9 +163,9 @@ recalculated.
   bundle at build time — rerun `docker compose up -d --build web` after
   changing `.env`.
 - Published ports bind to `127.0.0.1` by default (`BIND_HOST` in `.env`).
-  Only set `BIND_HOST=0.0.0.0` for clerk or convex installs that must be
-  reachable on a network — never for local-demo mode, and for convex mode
-  only with email verification on if the network is the internet.
+  Only set `BIND_HOST=0.0.0.0` for installs that must be reachable on a
+  network, and for convex mode only with email verification on if the
+  network is the internet.
 - Optional backend flags (`DATABASE_URL`, `DO_NOT_REQUIRE_SSL`,
   `REDACT_LOGS_TO_CLIENT`) are commented out in `docker-compose.yml`; the
   backend rejects empty values, so uncomment them only together with a value

@@ -851,8 +851,7 @@ guidance so deployments without GitHub configured still run normally.
 
 Require a reachable webhook endpoint. Self-hosted operators configure it
 and the callback URLs. Document a supported authenticated deployment and
-dedicated webhook routing; do not expose unauthenticated local-demo mode
-as a shortcut to webhook reachability.
+dedicated webhook routing.
 
 The App requests every permission the plan needs from the first slice:
 Pull requests write, Issues write (comments), and Contents write (merge,

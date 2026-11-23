@@ -51,10 +51,23 @@ export async function updateUserProfile(
   });
 }
 
-/** Insert a user row not created from a JWT identity (local-demo, Convex Auth). */
+/** Row of the removed demo mode, and its marker while `auth.claimDemoUser` runs (docs/specs/auth-adapters.md#former-demo-installs). */
+export const DEMO_USER_TOKEN_IDENTIFIER = "local-demo|user";
+export const CLAIMING_DEMO_USER_TOKEN_IDENTIFIER = "local-demo|claiming";
+
+/** Set or, with `undefined`, drop the row's `tokenIdentifier`. */
+export async function setUserTokenIdentifier(
+  ctx: MutationCtx,
+  userId: Id<"users">,
+  tokenIdentifier: string | undefined
+): Promise<void> {
+  await ctx.db.patch("users", userId, { tokenIdentifier, updatedAt: Date.now() });
+}
+
+/** Insert a Convex Auth user row, which has no JWT `tokenIdentifier`. */
 export async function insertUser(
   ctx: MutationCtx,
-  fields: { tokenIdentifier?: string; email: string; name: string; avatarUrl?: string; emailVerifiedAt?: number }
+  fields: { email: string; name: string; avatarUrl?: string; emailVerifiedAt?: number }
 ): Promise<Doc<"users">> {
   const now = Date.now();
   const userId = await ctx.db.insert("users", {

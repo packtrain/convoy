@@ -8,8 +8,7 @@ import {
   Plus,
   Settings,
 } from "lucide-react"
-import { isLocalDemoAuthMode } from "@/lib/auth/auth-mode"
-import { supportsSignOut, useAppSignOut, useAppUser } from "@/lib/auth/hooks"
+import { useAppSignOut, useAppUser } from "@/lib/auth/hooks"
 import { useQuery } from "convex/react"
 import Image from "next/image"
 
@@ -250,14 +249,7 @@ function UserMenuContent({
         <AvatarFallback className="rounded-lg">{initials}</AvatarFallback>
       </Avatar>
       <div className="grid flex-1 text-left text-sm leading-tight">
-        <span className="flex items-center gap-1.5 font-medium">
-          <span className="truncate">{name}</span>
-          {isLocalDemoAuthMode && (
-            <Badge variant="secondary" className="h-4 shrink-0 px-1.5 text-[10px]">
-              Local demo
-            </Badge>
-          )}
-        </span>
+        <span className="truncate font-medium">{name}</span>
         <span className="truncate text-xs">{email}</span>
       </div>
       <button
@@ -304,19 +296,15 @@ function UserMenuContent({
         >
           {createOrgContent}
         </button>
-        {supportsSignOut && (
-          <>
-            <div className="h-px bg-border" />
-            <button
-              type="button"
-              onClick={onSignOut}
-              className="flex w-full cursor-pointer items-center gap-2 rounded-lg px-3 py-2.5 text-sm hover:bg-muted active:bg-muted"
-            >
-              <LogOut className="size-4" />
-              Log out
-            </button>
-          </>
-        )}
+        <div className="h-px bg-border" />
+        <button
+          type="button"
+          onClick={onSignOut}
+          className="flex w-full cursor-pointer items-center gap-2 rounded-lg px-3 py-2.5 text-sm hover:bg-muted active:bg-muted"
+        >
+          <LogOut className="size-4" />
+          Log out
+        </button>
       </div>
     );
   }
@@ -347,15 +335,11 @@ function UserMenuContent({
           {createOrgContent}
         </DropdownMenuItem>
       </DropdownMenuGroup>
-      {supportsSignOut && (
-        <>
-          <DropdownMenuSeparator />
-          <DropdownMenuItem onClick={onSignOut}>
-            <LogOut />
-            Log out
-          </DropdownMenuItem>
-        </>
-      )}
+      <DropdownMenuSeparator />
+      <DropdownMenuItem onClick={onSignOut}>
+        <LogOut />
+        Log out
+      </DropdownMenuItem>
     </>
   );
 }

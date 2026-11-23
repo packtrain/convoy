@@ -2,7 +2,7 @@ import { clerkClient } from "@clerk/nextjs/server";
 
 import type { HttpCookies } from "@convex-dev/auth/ssr";
 
-import { authMode, isLocalDemoAuthMode } from "@/lib/auth/auth-mode";
+import { authMode } from "@/lib/auth/auth-mode";
 import { signInWithPasswordCookies } from "@/lib/auth/convex-auth-server";
 import {
   buildAgentBrowserAppSignInUrl,
@@ -73,13 +73,6 @@ async function createBrowserLogin(request: Request): Promise<BrowserLoginRespons
 
   const requestedRedirectUrl = request.method === "POST" ? await getPostRedirectUrl(request) : getRedirectUrlFromSearchParams(request.url);
   const redirectUrl = buildAgentBrowserRedirectUrl(requestedRedirectUrl, request, config.appOrigin);
-
-  // Local-demo mode (OS-1230): anonymous calls already resolve to the demo
-  // user, so no Clerk sign-in token (and no userEmail config) is needed —
-  // go straight to the requested page.
-  if (isLocalDemoAuthMode) {
-    return { url: redirectUrl, redirectUrl };
-  }
 
   const userEmail = config.userEmail;
   if (!userEmail) {

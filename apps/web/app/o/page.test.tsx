@@ -31,7 +31,6 @@ vi.mock("convex/react", () => ({
 }));
 
 vi.mock("@/lib/auth/hooks", () => ({
-  supportsSignOut: true,
   useAppAuth: () => authState,
   useAppConvexAuth: () => convexAuthState,
   useAppSignOut: () => signOutMock,

@@ -1,6 +1,6 @@
 "use client";
 
-import { supportsSignOut, useAppSignOut } from "@/lib/auth/hooks";
+import { useAppSignOut } from "@/lib/auth/hooks";
 import { Centered } from "@/components/custom/centered";
 import { Button } from "@/components/ui/button";
 import { AppLink, appRoute, href } from "@/lib/navigation";
@@ -42,15 +42,13 @@ export function NoAccess({
               Go to another organization
             </AppLink>
           </Button>
-          {supportsSignOut && (
-            <Button
-              type="button"
-              onClick={handleSignInDifferent}
-              variant="outline"
-            >
-              Sign in with different account
-            </Button>
-          )}
+          <Button
+            type="button"
+            onClick={handleSignInDifferent}
+            variant="outline"
+          >
+            Sign in with different account
+          </Button>
         </div>
       </div>
     </Centered>

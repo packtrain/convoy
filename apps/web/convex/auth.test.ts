@@ -307,6 +307,114 @@ test("getSettings reports Google as on only when neither credential is the place
   vi.unstubAllEnvs();
 });
 
+describe("Convex Auth on a former demo install", () => {
+  beforeEach(() => {
+    vi.stubEnv("AUTH_MODE", "convex");
+    vi.stubEnv("AUTH_EMAIL_VERIFICATION", "off");
+  });
+  afterEach(() => {
+    vi.unstubAllEnvs();
+  });
+
+  function client() {
+    return createTestContext().t.withRequestMetadata({ ip: "203.0.113.7" }) as TestConvex;
+  }
+
+  /** The row the removed demo mode created, with its workspace. */
+  async function insertDemoUser(t: TestConvex) {
+    return t.run(async (ctx) => {
+      const now = Date.now();
+      const userId = await ctx.db.insert("users", {
+        tokenIdentifier: "local-demo|user",
+        email: "demo@convoy.local",
+        name: "Demo User",
+        createdAt: now,
+        updatedAt: now,
+      });
+      const organizationId = await ctx.db.insert("organizations", {
+        name: "Demo User's Workspace",
+        slug: "demo-user-abcdefgh",
+        createdBy: userId,
+        createdAt: now,
+        updatedAt: now,
+        isDeleted: false,
+      });
+      await ctx.db.insert("organizationMembers", { organizationId, userId, role: "owner", joinedAt: now });
+      return { userId, organizationId };
+    });
+  }
+
+  const claim = (t: TestConvex, email: string) => t.mutation(internal.auth.claimDemoUser, { email, password: PASSWORD });
+
+  test("the operator's claim gives the demo user a password account and keeps its workspace", async () => {
+    const t = client();
+    const demo = await insertDemoUser(t);
+
+    expect(await claim(t, "Robin@Example.com")).toBe(demo.userId);
+
+    const user = await t.run((ctx) => ctx.db.get("users", demo.userId));
+    expect(user).toMatchObject({ email: "robin@example.com", name: "robin" });
+    expect(user?.tokenIdentifier).toBeUndefined();
+    const signedIn = await t.mutation(api.auth.signInWithEmailPassword, { email: "robin@example.com", password: PASSWORD });
+    if (signedIn.status !== "complete") throw new Error(JSON.stringify(signedIn));
+    expect(signedIn.tokens.userId).toBe(demo.userId);
+    const result = await asSession(t, signedIn.tokens.accessToken).mutation(api.users.core.onboard, {});
+    expect(result.organizationId).toBe(demo.organizationId);
+  });
+
+  test("with verification required, the claim emails nothing and the password signs in", async () => {
+    vi.stubEnv("AUTH_EMAIL_VERIFICATION", "required");
+    vi.stubEnv("RESEND_API_KEY", "re_test_key");
+    vi.stubEnv("EMAIL_FROM", "Convoy <auth@example.com>");
+    const t = client();
+    const demo = await insertDemoUser(t);
+
+    await claim(t, "robin@example.com");
+
+    expect(await sentEmails(t)).toEqual([]);
+    const signedIn = await t.mutation(api.auth.signInWithEmailPassword, { email: "robin@example.com", password: PASSWORD });
+    expect(signedIn.status === "complete" && signedIn.tokens.userId).toBe(demo.userId);
+  });
+
+  test("public sign-ups never take over the demo user, finished or not", async () => {
+    const t = client();
+    const demo = await insertDemoUser(t);
+
+    const abandoned = await t.mutation(api.auth.signUpWithEmailPassword, { email: "kim@example.com", password: PASSWORD });
+    expect(abandoned.success).toBe(true);
+    const finished = await signUp(t, "robin@example.com");
+
+    expect(finished.userId).not.toBe(demo.userId);
+    expect(await t.run((ctx) => ctx.db.get("users", demo.userId))).toMatchObject({ tokenIdentifier: "local-demo|user" });
+    expect(await claim(t, "lee@example.com")).toBe(demo.userId);
+  });
+
+  test("a claim on a taken address fails and leaves the demo user claimable", async () => {
+    const t = client();
+    const demo = await insertDemoUser(t);
+    await signUp(t, "robin@example.com");
+
+    await expect(claim(t, "robin@example.com")).rejects.toThrow("EMAIL_TAKEN");
+
+    expect(await t.run((ctx) => ctx.db.get("users", demo.userId))).toMatchObject({ tokenIdentifier: "local-demo|user" });
+  });
+
+  test("a claim without a demo user fails", async () => {
+    const t = client();
+
+    await expect(claim(t, "robin@example.com")).rejects.toThrow("This deployment has no demo user to claim");
+    expect(await t.run((ctx) => ctx.db.query("users").collect())).toEqual([]);
+  });
+
+  test("a claimed demo user cannot be claimed again", async () => {
+    const t = client();
+    await insertDemoUser(t);
+    await claim(t, "robin@example.com");
+
+    await expect(claim(t, "kim@example.com")).rejects.toThrow("This deployment has no demo user to claim");
+  });
+});
+
 describe("Convex Auth Google user callback", () => {
   beforeEach(() => {
     vi.stubEnv("AUTH_MODE", "convex");

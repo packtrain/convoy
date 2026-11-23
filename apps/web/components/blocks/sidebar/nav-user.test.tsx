@@ -36,7 +36,6 @@ const organizations = [
 ];
 
 vi.mock("@/lib/auth/hooks", () => ({
-  supportsSignOut: true,
   useAppSignOut: () => signOutMock,
   useAppUser: () => ({
     isLoaded: true,

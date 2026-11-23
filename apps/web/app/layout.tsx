@@ -39,7 +39,6 @@ function ConvexAuthSessionProvider({ children }: { children: ReactNode }) {
 // Convex Auth reads the session cookie here, so its pages render dynamically (docs/specs/auth-adapters.md#session).
 const SessionProviders: Record<AuthMode, ComponentType<{ children: ReactNode }>> = {
   clerk: ({ children }) => children,
-  "local-demo": ({ children }) => children,
   convex: ConvexAuthSessionProvider,
 };
 const SessionProvider = SessionProviders[authMode];

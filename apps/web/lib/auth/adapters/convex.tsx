@@ -105,6 +105,5 @@ export const convexAdapter: AuthAdapter = {
   useSignOut: useConvexSignOut,
   useUpdateProfileName: useConvexUpdateProfileName,
   useConvexAuth: useConvexAuthState,
-  supportsSignOut: true,
   emailChangeHint: null,
 };

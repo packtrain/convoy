@@ -6,7 +6,6 @@ import type { WorkerKeyStatus } from "../../apiKeys/lib/validators";
 import { env, type MutationCtx, type QueryCtx } from "../../_generated/server";
 import type { Doc } from "../../_generated/dataModel";
 import { hashApiKey, isApiKeyExpired } from "./apiKeys";
-import { getLocalDemoUser } from "./localDemo";
 import { getUserByTokenIdentifier } from "../../users/lib/usersRepo";
 import { normalizeEmail } from "../shared/strings";
 import type { ApiKeyScope, AuthenticatedAccess } from "./permissions";
@@ -113,18 +112,6 @@ export async function getOptionalAuthenticatedAccess(
         userId: user._id,
         apiKeyScope: normalizeApiKeyScope(apiKeyDoc),
       },
-    };
-  }
-
-  // Local-demo mode (OS-1230): anonymous callers act as the demo user.
-  // Lookup-only — the user is created by users.core.onboardLocalDemo. Until
-  // then this still returns null, so "optional auth" semantics only differ
-  // on onboarded local-demo deployments.
-  const demoUser = await getLocalDemoUser(ctx);
-  if (demoUser) {
-    return {
-      user: demoUser,
-      principal: { userId: demoUser._id, apiKeyScope: null },
     };
   }
 

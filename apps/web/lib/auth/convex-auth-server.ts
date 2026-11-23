@@ -55,7 +55,7 @@ function setup() {
   };
 }
 
-// Lazy, so Clerk and local-demo builds, which also load proxy.ts, never build a Convex client here.
+// Lazy, so Clerk builds, which also load proxy.ts, never build a Convex client here.
 let instance: ReturnType<typeof setup> | undefined;
 const convexAuth = () => (instance ??= setup());
 
