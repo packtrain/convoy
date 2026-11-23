@@ -30,8 +30,10 @@ export class GitCommandError extends Error {
   }
 }
 
-function firstLine(text: string): string {
-  return text.trim().split("\n")[0]?.trim() ?? "";
+/** Git's `fatal:`/`error:` line, else the first line; progress lines come first. */
+function errorLine(text: string): string {
+  const lines = text.trim().split("\n").map((line) => line.trim());
+  return lines.find((line) => /^(fatal|error):/.test(line)) ?? lines[0] ?? "";
 }
 
 /**
@@ -68,7 +70,7 @@ export async function runGit(cwd: string, args: string[], options: RunGitOptions
           return;
         }
 
-        const reason = error.killed ? `git ${args[0] ?? ""} timed out` : firstLine(stderr) || error.message;
+        const reason = error.killed ? `git ${args[0] ?? ""} timed out` : errorLine(stderr) || error.message;
         reject(new GitCommandError(reason, args, exitCode, stderr));
       }
     );

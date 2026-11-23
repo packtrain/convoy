@@ -246,7 +246,9 @@ worktrees removed through a shell command.
 - Registered parents may be repository subdirectories. Git membership is
   validated from that configured directory, which remains the fallback target.
 - A missing worktree is resolved through `git worktree list` on the recorded
-  parent. A matching administrative directory identifies a moved worktree even
+  parent. A folder at the path that Git no longer sees as a checkout counts as
+  missing: a dev server still running from a removed worktree can recreate its
+  cache folders there. A matching administrative directory identifies a moved worktree even
   if its branch changed. Otherwise the CLI uses the original parent checkout,
   on whatever branch is currently checked out. It never switches branches,
   copies changes, creates a replacement directory, or infers that work was merged.

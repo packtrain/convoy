@@ -49,7 +49,9 @@ export async function resolveExecutionWorkspace(path: string, worktree?: Executi
   if (!worktree.repositoryId && worktree.parentGitRemoteUrl && await getGitRemoteUrl(parent) !== worktree.parentGitRemoteUrl) {
     throw new Error("The parent checkout's Git remote no longer matches this thread's repository.");
   }
-  if (exists) {
+  // A removed worktree's folder can be recreated by a process still running in it; treat it as gone.
+  const isCheckout = exists && (await runGit(path, ["rev-parse", "--is-inside-work-tree"], { allowNonZeroExit: true })).exitCode === 0;
+  if (isCheckout) {
     if (await repositoryIdentity(path) !== repositoryId) throw new Error("The working directory belongs to a different repository.");
     const worktreeId = await getCheckoutIdentity(path);
     if (worktree.worktreeId && worktreeId !== worktree.worktreeId) throw new Error("The original worktree was replaced by another checkout.");

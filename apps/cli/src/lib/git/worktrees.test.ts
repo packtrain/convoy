@@ -1,9 +1,9 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { mkdtemp, rm, writeFile, readFile, realpath, mkdir, cp, rename } from "node:fs/promises";
 import { tmpdir } from "node:os";
-import { join } from "node:path";
+import { dirname, join } from "node:path";
 import { runGit } from "./exec.js";
-import { buildDefaultWorktreePath, listWorktrees, parseWorktreeList, removeWorktree, resolveExecutionWorkspace } from "./worktrees.js";
+import { buildDefaultWorktreePath, createWorktree, listWorktrees, parseWorktreeList, removeWorktree, resolveExecutionWorkspace } from "./worktrees.js";
 import { dedupeBranchRefs } from "../../agent/app/worktree-op-processor.js";
 
 vi.mock("./exec.js", async (importOriginal) => {
@@ -45,6 +45,22 @@ describe("execution workspace recovery (real git)", () => {
     await runGit(parent, ["worktree", "remove", checkout]);
     expect(await resolveExecutionWorkspace(checkout, { ...spec, ...resolved }))
       .toMatchObject({ path: subdir, branch: "main" });
+  });
+
+  it("falls back to the parent when a removed worktree's folder is recreated outside Git", async () => {
+    const outside = await mkdtemp(join(tmpdir(), "convoy-leftover-test-"));
+    const leftover = join(outside, "feature-2");
+    try {
+      await runGit(parent, ["worktree", "add", "-b", "feature-2", leftover]);
+      const saved = await resolveExecutionWorkspace(leftover, { parentPath: parent });
+      await runGit(parent, ["worktree", "remove", leftover]);
+      // A dev server still running from the worktree rewrites its cache.
+      await mkdir(join(leftover, "apps/docs/.vite/deps"), { recursive: true });
+      expect(await resolveExecutionWorkspace(leftover, { parentPath: parent, ...saved }))
+        .toMatchObject({ path: parent, branch: "main" });
+    } finally {
+      await rm(outside, { recursive: true, force: true });
+    }
   });
 
   it("keeps a healthy checkout usable when Git metadata is restored onto new inodes", async () => {
@@ -95,6 +111,17 @@ describe("execution workspace recovery (real git)", () => {
     await rm(checkout, { recursive: true });
     await rm(join(parent, "locked"), { recursive: true });
     expect((await listWorktrees(parent)).map((wt) => wt.branch)).toEqual(["main"]);
+  });
+
+  it("reports git's fatal line, not its progress line, when a leftover folder blocks a new worktree", async () => {
+    await runGit(parent, ["branch", "leftover"]);
+    const leftover = buildDefaultWorktreePath(parent, "leftover");
+    await mkdir(join(leftover, ".vite"), { recursive: true });
+    try {
+      await expect(createWorktree({ parentPath: parent, branch: "leftover" })).rejects.toThrow(/^fatal: .* already exists$/);
+    } finally {
+      await rm(dirname(leftover), { recursive: true, force: true });
+    }
   });
 
   it("names the missing directory instead of reporting git as missing", async () => {
