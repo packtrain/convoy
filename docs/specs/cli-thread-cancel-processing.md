@@ -34,10 +34,8 @@ This document defines how user-initiated stop/cancel works for CLI threads.
 - `Esc` anywhere in the composer stops the run while `Stop` is offered and
   enabled. A menu that handles `Esc` first, such as the suggestion list, keeps
   it (OS-2256).
-- The submit control's tooltip names its keys: `Send Enter` and
-  `New line Shift+Enter`, or `Stop Esc` while it is the Stop control. It
-  opens only after a 2-second hover, so moving to click Send doesn't flash it
-  (OS-2384).
+- The submit control has no tooltip. A hover tooltip flashed on every move
+  toward Send (OS-2384), so it was removed.
 
 ## Waiting and offline states (OS-2256)
 

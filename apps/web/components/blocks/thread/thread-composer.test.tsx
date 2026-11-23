@@ -244,8 +244,8 @@ describe("ThreadComposer", () => {
     attachmentFilesMock.files = [];
   });
 
-  // The tooltip flashed on every move toward Send (OS-2384).
-  test("delays the send-button tooltip until a 2-second hover", () => {
+  // The send button has no tooltip; it flashed on every move toward Send (OS-2384).
+  test("renders the send button without a tooltip", () => {
     uiTooltipDelays.length = 0;
     render(
       <ThreadComposer
@@ -254,7 +254,7 @@ describe("ThreadComposer", () => {
         selectorsProps={{ profiles: [], profileId: "", pathId: "", cliType: "claude-code", mode: "agent", cliModel: undefined, onModeChange: vi.fn(), hideWorkingDirectory: true }}
       />
     );
-    expect(uiTooltipDelays.at(-1)).toBe(2000);
+    expect(uiTooltipDelays).toEqual([]);
   });
 
   // A relative `?task=` on a thread page points at the thread (OS-2326).

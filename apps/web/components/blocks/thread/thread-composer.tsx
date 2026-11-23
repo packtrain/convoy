@@ -43,9 +43,7 @@ import { attachedPullRequestUrl, type AttachedPullRequest } from "@/convex/lib/c
 import { ThreadAgentChip, type ThreadAgentChipAgent } from "@/components/blocks/thread/thread-agent-chip";
 import { Spinner } from "@/components/custom/spinner";
 import { TooltipExt } from "@/components/custom/tooltip-ext";
-import { Kbd } from "@/components/ui/kbd";
 import { MiddleTruncate } from "@/components/ui/middle-truncate";
-import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 import { Pill, PillAction, PillContent, PillIcon, PillText } from "@/components/ui/pill";
 import type { Id } from "@/convex/_generated/dataModel";
@@ -913,28 +911,12 @@ function ThreadComposerSubmitControl({
   }, [canStop, stop]);
 
   return (
-    <Tooltip delayDuration={2000}>
-      <TooltipTrigger asChild>
-        <PromptInputSubmit
-          ref={buttonRef}
-          disabled={isSubmitting ? true : showStopAction ? stopDisabled : submitDisabled || hasBlockingAttachmentState || !hasQueuedContent}
-          status={isSubmitting ? "submitted" : showStopAction ? "streaming" : undefined}
-          onStop={showStopAction ? stop : undefined}
-        />
-      </TooltipTrigger>
-      <TooltipContent className="flex items-center gap-2">
-        {showStopAction ? (
-          <>
-            Stop <Kbd>Esc</Kbd>
-          </>
-        ) : (
-          <>
-            Send <Kbd>Enter</Kbd>
-            <span className="opacity-70">New line</span> <Kbd>Shift+Enter</Kbd>
-          </>
-        )}
-      </TooltipContent>
-    </Tooltip>
+    <PromptInputSubmit
+      ref={buttonRef}
+      disabled={isSubmitting ? true : showStopAction ? stopDisabled : submitDisabled || hasBlockingAttachmentState || !hasQueuedContent}
+      status={isSubmitting ? "submitted" : showStopAction ? "streaming" : undefined}
+      onStop={showStopAction ? stop : undefined}
+    />
   );
 }
 
