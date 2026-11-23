@@ -16,7 +16,7 @@ import { createMessageHandler, type MessageHandler } from "./thread-processor.js
 import { createInteractionRouter } from "./interaction-router.js";
 import { createWorktreeOpProcessor } from "./worktree-op-processor.js";
 import { getGitRemoteUrl } from "../../lib/git/index.js";
-import { toConvexSiteUrl } from "../../lib/url.js";
+import { resolveConvexSiteUrl, toConvexSiteUrl } from "../../lib/url.js";
 import { getCliVersion } from "../../lib/version.js";
 import { satisfiesVersionRange } from "../sdk/versioning/provider-version.js";
 import { EXIT_FATAL, EXIT_SESSION_REPLACED, emitConnectEvent, exitAfterFlush, type ConnectFailureReason } from "../../lib/connect-events.js";
@@ -166,13 +166,14 @@ export async function createAgentRunner(options: AgentRunnerOptions): Promise<Ag
   // transport, downgraded to exec when the installed codex is too old.
   let effectiveCodexAppServer = codexAppServer ?? false;
 
-  // Derive HTTP URL from Convex URL
-  const httpBaseUrl = toConvexSiteUrl(convexUrl);
+  // Asked from the backend on each registration; the guess only until then.
+  let httpBaseUrl = toConvexSiteUrl(convexUrl);
 
   /**
    * Register the agent with the backend
    */
   async function registerAgent(): Promise<void> {
+    httpBaseUrl = await resolveConvexSiteUrl(convexUrl);
     const availableClis: DetectedCli[] = await detectAvailableClis({ codexProvider: options.codexProvider, claudeAuth: options.claudeAuth,
       antigravityAuth: options.antigravityAuth, opencodeAuth: options.opencodeAuth });
 

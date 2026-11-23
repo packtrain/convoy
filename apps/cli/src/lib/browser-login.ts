@@ -3,7 +3,7 @@ import ora from "ora";
 import * as crypto from "node:crypto";
 import * as os from "node:os";
 import { spawn } from "node:child_process";
-import { toConvexSiteUrl } from "./url.js";
+import { resolveConvexSiteUrl } from "./url.js";
 
 /**
  * Browser-approve login flow (OS-1137): start a challenge, print the approve
@@ -164,7 +164,7 @@ function sleep(ms: number): Promise<void> {
  * Returns the freshly minted API key (never persisted by the server).
  */
 export async function runBrowserLogin(convexUrl: string): Promise<{ apiKey: string; email: string }> {
-  const httpBaseUrl = toConvexSiteUrl(convexUrl);
+  const httpBaseUrl = await resolveConvexSiteUrl(convexUrl);
 
   const verifier = crypto.randomBytes(32).toString("hex");
   const verifierHash = crypto.createHash("sha256").update(verifier).digest("hex");

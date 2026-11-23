@@ -1,6 +1,8 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useQuery } from "convex/react";
+import { api } from "@/convex/_generated/api";
 import { Check, Copy, ServerCog } from "lucide-react";
 import { toast } from "sonner";
 import {
@@ -117,9 +119,10 @@ export function ProjectMcpConfigurationDialog({
   organizationSlug,
   projectAlias,
 }: ProjectMcpConfigurationDialogProps) {
+  const siteUrl = useQuery(api.appVersion.core.siteUrl);
   const mcpUrl = useMemo(
-    () => buildProjectScopedMcpUrl({ organizationSlug, projectAlias }),
-    [organizationSlug, projectAlias]
+    () => buildProjectScopedMcpUrl({ organizationSlug, projectAlias, siteUrl }),
+    [organizationSlug, projectAlias, siteUrl]
   );
   const mcpJsonConfig = useMemo(() => buildMcpJsonConfig(mcpUrl), [mcpUrl]);
   const codexMinimalConfig = useMemo(

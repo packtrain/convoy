@@ -2,7 +2,7 @@ import * as os from "node:os";
 import { randomUUID } from "node:crypto";
 import * as TOML from "smol-toml";
 import { resolveProfile } from "../../lib/config/profile.js";
-import { normalizeConvexUrl, toConvexSiteUrl } from "../../lib/url.js";
+import { resolveConvexSiteUrl } from "../../lib/url.js";
 import { upsertCodexConvoyServer } from "../init/config/codex-mcp.js";
 import * as fs from "node:fs";
 import * as path from "node:path";
@@ -169,11 +169,11 @@ export function convexFirewallHint(url: string): ConvexFirewallHint | null {
 }
 
 /** Configure the container's Codex home without writing through the host config symlink. */
-export function configureDevcontainer(options: {
+export async function configureDevcontainer(options: {
   cwd?: string;
   codexHome?: string;
   profile?: string;
-} = {}): { profile?: string; configured: boolean } {
+} = {}): Promise<{ profile?: string; configured: boolean }> {
   const resolution = resolveProfile(options.cwd, { profile: options.profile });
   if (!resolution.profile) return { configured: false };
   const codexHome = options.codexHome ?? process.env.CODEX_HOME;
@@ -185,7 +185,7 @@ export function configureDevcontainer(options: {
   const source = fs.existsSync(file) ? file : hostConfig;
   const existing = fs.existsSync(source) ? TOML.parse(fs.readFileSync(source, "utf8")) : {};
   const profile = resolution.profile;
-  const url = `${toConvexSiteUrl(normalizeConvexUrl(profile.url))}/api/mcp?project=${encodeURIComponent(profile.project_id)}`;
+  const url = `${await resolveConvexSiteUrl(profile.url)}/api/mcp?project=${encodeURIComponent(profile.project_id)}`;
   const config = upsertCodexConvoyServer(existing, {
     url,
     http_headers: { Authorization: `Bearer ${profile.api_key}` },

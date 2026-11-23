@@ -53,6 +53,17 @@ describe("MCP config snippets", () => {
     );
   });
 
+  test("uses the HTTP actions origin the backend reports, on any port", () => {
+    expect(
+      buildProjectScopedMcpUrl({
+        organizationSlug: "acme",
+        projectAlias: "WEB",
+        convexUrl: "http://127.0.0.1:3212",
+        siteUrl: "http://127.0.0.1:3213",
+      })
+    ).toBe("http://127.0.0.1:3213/api/mcp?project=acme/WEB");
+  });
+
   test("falls back to an unscoped MCP URL without route params", () => {
     expect(
       buildProjectScopedMcpUrl({

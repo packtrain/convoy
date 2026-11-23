@@ -45,7 +45,7 @@ export const devcontainerCommand = addGlobalOptions(
     try {
       const projectDir = path.resolve(dir ?? process.cwd());
       if (options.configure) {
-        const result = configureDevcontainer({ cwd: projectDir, profile: cmd.optsWithGlobals().profile });
+        const result = await configureDevcontainer({ cwd: projectDir, profile: cmd.optsWithGlobals().profile });
         console.log(result.configured
           ? `Configured Codex Convoy MCP using profile "${result.profile}".`
           : "No Convoy profile matches this workspace. Convoy is optional; run convoy setup, then convoy devcontainer --configure to enable MCP.");

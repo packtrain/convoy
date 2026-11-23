@@ -8,6 +8,7 @@ const ENV_KEYS = [
   "CONVOY_BACKEND_BUILD_TIME",
   "CONVOY_BACKEND_GIT_REF",
   "CONVOY_BACKEND_VERCEL_ENV",
+  "CONVEX_SITE_URL",
 ] as const;
 
 const originalEnv = Object.fromEntries(
@@ -54,5 +55,21 @@ describe("appVersion.core", () => {
     ).resolves.toMatchObject({
       buildId: "development",
     });
+  });
+
+  test("returns the HTTP actions origin the backend serves", async () => {
+    process.env.CONVEX_SITE_URL = "http://127.0.0.1:3213";
+
+    const ctx = createTestContext();
+
+    await expect(ctx.t.query(api.appVersion.core.siteUrl, {})).resolves.toBe("http://127.0.0.1:3213");
+  });
+
+  test("returns null when the backend does not know its HTTP actions origin", async () => {
+    delete process.env.CONVEX_SITE_URL;
+
+    const ctx = createTestContext();
+
+    await expect(ctx.t.query(api.appVersion.core.siteUrl, {})).resolves.toBeNull();
   });
 });

@@ -15,7 +15,7 @@ import { api } from "../../convex/_generated/api.js";
 import { createConvexClient } from "../../lib/config/convex-client.js";
 import type { ConfigFile } from "../../lib/config/types.js";
 import { mutateConfig, readConfig } from "../../lib/config/toml.js";
-import { normalizeConvexUrl } from "../../lib/url.js";
+import { normalizeConvexUrl, resolveConvexSiteUrl } from "../../lib/url.js";
 import { resolveSetupProject, validateProjectSelection, type ProjectSelectionOptions } from "../setup/resolution.js";
 import { promptApiKey, promptProfileKey, promptUrl } from "../setup/prompts.js";
 import { checkLauncher, inspectProjectEnvironment, isProjectEnvironment, prepareProject, projectRequest, projectShell } from "./launcher.js";
@@ -23,7 +23,6 @@ import { ProjectAddError, assertChildPath, assertManagedPath, assertNoTraversal,
 import { projectChecks, sharedProjectChecks, type BackendProbe } from "./formatters.js";
 import { authDescriptor } from "../../lib/config/credentials/resolution.js";
 import { CredentialStore } from "../../lib/config/credentials/store.js";
-import { toConvexSiteUrl } from "../../lib/url.js";
 
 export interface ProjectAddOptions extends ProjectSelectionOptions {
   url?: string;
@@ -273,7 +272,7 @@ export async function checkProject(key: string): Promise<ProjectCheck> {
 /** A heartbeat without a session: 400 after the key is accepted, 401/403 when it is not. */
 async function probeBackend(url: string, apiKey: string): Promise<BackendProbe> {
   try {
-    const response = await fetch(`${toConvexSiteUrl(url)}/api/agent/heartbeat`, {
+    const response = await fetch(`${await resolveConvexSiteUrl(url)}/api/agent/heartbeat`, {
       method: "POST", headers: { Authorization: `Bearer ${apiKey}`, "Content-Type": "application/json" }, body: "{}", signal: AbortSignal.timeout(10_000),
     });
     return response.status === 400 ? "ok" : response.status === 401 || response.status === 403 ? "rejected" : { status: response.status };

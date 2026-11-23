@@ -4,7 +4,7 @@ import ora from "ora";
 import { confirm } from "@inquirer/prompts";
 import { api } from "../../convex/_generated/api.js";
 import { createConvexClient } from "../../lib/config/index.js";
-import { buildMcpUrl } from "../../lib/url.js";
+import { buildMcpUrl, resolveConvexSiteUrl } from "../../lib/url.js";
 import { InitError } from "./errors.js";
 import { getInitDrivers } from "./targets/registry.js";
 import { DEFAULT_MCP_TARGETS, INIT_TARGETS, type InitMcpConfig, type InitTarget } from "./types.js";
@@ -45,7 +45,7 @@ async function resolveProjectMcpUrl(config: {
     await client.close();
   }
 
-  return buildMcpUrl(config.convexUrl, orgSlug, projectAlias);
+  return buildMcpUrl(await resolveConvexSiteUrl(config.convexUrl), orgSlug, projectAlias);
 }
 
 export async function runInitMcp(config: InitMcpConfig): Promise<void> {

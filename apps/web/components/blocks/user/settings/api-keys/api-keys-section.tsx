@@ -1,6 +1,6 @@
 "use client";
 
-import { usePaginatedQuery } from "convex/react";
+import { usePaginatedQuery, useQuery } from "convex/react";
 import { api } from "@/convex/_generated/api";
 import { useState } from "react";
 import { Button } from "@/components/ui/button";
@@ -89,7 +89,8 @@ export function ApiKeysSection() {
 
   const organizationSlug = getRouteParam(params.organizationSlug);
   const projectAlias = getRouteParam(params.projectAlias);
-  const mcpUrl = buildProjectScopedMcpUrl({ organizationSlug, projectAlias });
+  const siteUrl = useQuery(api.appVersion.core.siteUrl);
+  const mcpUrl = buildProjectScopedMcpUrl({ organizationSlug, projectAlias, siteUrl });
   const convexUrl = process.env.NEXT_PUBLIC_CONVEX_URL;
 
   const hasNoKeys = status !== "LoadingFirstPage" && apiKeys.length === 0;

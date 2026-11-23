@@ -16,6 +16,8 @@ vi.mock("sonner", () => ({
   },
 }));
 
+vi.mock("convex/react", () => ({ useQuery: () => undefined }));
+
 vi.mock("@/components/custom/tooltip-ext", () => ({
   TooltipExt: ({ children }: { children: ReactNode }) => <>{children}</>,
 }));

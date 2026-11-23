@@ -30,6 +30,7 @@ vi.mock("../../lib/config/toml.js", () => ({
   },
 }));
 vi.mock("../../lib/config/convex-client.js", () => ({ createConvexClient: mocks.client }));
+vi.mock("convex/browser", () => ({ ConvexHttpClient: class { query = async () => null; } }));
 vi.mock("../../lib/config/credentials/store.js", () => ({ CredentialStore: class { read() { return { entries: {}, bindings: {} }; } } }));
 import { ServiceUnavailableError } from "../service/errors.js";
 import { acquireLock, leasePath } from "../service/paths.js";

@@ -131,11 +131,10 @@ Open `http://127.0.0.1:3000` and sign up (Convex Auth) or sign in through
 Clerk. Your first workspace is created for you. The Convex dashboard is at `http://127.0.0.1:6791` (log in
 with the admin key).
 
-**5. Connect the CLI.** Nothing changes for CLI users — `convoy setup`
-against `http://127.0.0.1:3000` works as usual. The CLI derives the HTTP
-actions endpoint from the Convex URL: `*.convex.cloud` → `*.convex.site`
-on managed Convex, port `:3210` → `:3211` on self-hosted. Keep that port
-convention if you put a reverse proxy in front.
+**5. Connect the CLI.** Run `convoy setup` and give it the Convex URL,
+`http://127.0.0.1:3210` (Settings → API keys shows it as "CLI / Convex URL").
+The CLI asks the backend for its HTTP actions URL (`CONVEX_SITE_ORIGIN`), so
+it also works on other ports and behind a reverse proxy.
 
 ## Serving beyond localhost
 
@@ -144,8 +143,8 @@ The defaults assume one machine. To serve a team:
 - Set `CONVEX_CLOUD_ORIGIN`, `CONVEX_SITE_ORIGIN`, and `APP_URL` in `.env`
   to URLs reachable from users' browsers and CLI machines (these origins
   are embedded in tokens and the web bundle — they must match exactly).
-- Put TLS in front (Caddy/nginx/Traefik). Preserve the `:3210`/`:3211`
-  pairing, e.g. `convex.example.com:3210` and `convex.example.com:3211`.
+- Put TLS in front (Caddy/nginx/Traefik), e.g. `convex.example.com` for the
+  client API and `convex-site.example.com` for HTTP actions.
 - Turn on email verification before opening sign-up to the internet. With it
   off, anyone who reaches the app can sign up under any address.
 - Rebuild the web image after changing `.env`

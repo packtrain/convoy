@@ -1,5 +1,10 @@
-import { describe, expect, it } from "vitest";
-import { normalizeConvexUrl, toConvexSiteUrl, buildMcpUrl } from "./url.js";
+import { describe, expect, it, vi } from "vitest";
+const convex = vi.hoisted(() => ({ query: vi.fn(), urls: [] as string[] }));
+vi.mock("convex/browser", () => ({ ConvexHttpClient: class {
+  constructor(url: string) { convex.urls.push(url); }
+  query = convex.query;
+} }));
+import { normalizeConvexUrl, toConvexSiteUrl, buildMcpUrl, resolveConvexSiteUrl } from "./url.js";
 
 describe("normalizeConvexUrl", () => {
   it("trims whitespace and trailing slashes", () => {
@@ -43,7 +48,7 @@ describe("toConvexSiteUrl", () => {
 describe("buildMcpUrl", () => {
   it("builds a correct project-scoped MCP URL", () => {
     const url = buildMcpUrl(
-      "https://happy-animal-123.convex.cloud",
+      "https://happy-animal-123.convex.site",
       "acme",
       "WEB"
     );
@@ -54,7 +59,7 @@ describe("buildMcpUrl", () => {
 
   it("handles different org slugs and aliases", () => {
     const url = buildMcpUrl(
-      "https://my-deployment.convex.cloud",
+      "https://my-deployment.convex.site",
       "my-org",
       "ABC"
     );
@@ -65,12 +70,29 @@ describe("buildMcpUrl", () => {
 
   it("encodes special characters in org slug and alias", () => {
     const url = buildMcpUrl(
-      "https://test.convex.cloud",
+      "https://test.convex.site",
       "org with spaces",
       "A&B"
     );
     expect(url).toBe(
       "https://test.convex.site/api/mcp?project=org%20with%20spaces/A%26B"
+    );
+  });
+});
+
+describe("resolveConvexSiteUrl", () => {
+  it("uses the HTTP actions origin the backend reports, on any port", async () => {
+    convex.query.mockResolvedValueOnce("http://127.0.0.1:3213");
+    await expect(resolveConvexSiteUrl("http://127.0.0.1:3212/")).resolves.toBe("http://127.0.0.1:3213");
+    expect(convex.urls.at(-1)).toBe("http://127.0.0.1:3212");
+  });
+
+  it("falls back to the guess when the backend cannot answer", async () => {
+    convex.query.mockRejectedValueOnce(new Error("Could not find public function for 'appVersion/core:siteUrl'"));
+    await expect(resolveConvexSiteUrl("http://127.0.0.1:3210")).resolves.toBe("http://127.0.0.1:3211");
+    convex.query.mockResolvedValueOnce(null);
+    await expect(resolveConvexSiteUrl("https://happy-animal-123.convex.cloud")).resolves.toBe(
+      "https://happy-animal-123.convex.site"
     );
   });
 });

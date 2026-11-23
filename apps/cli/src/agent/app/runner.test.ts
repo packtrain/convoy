@@ -96,6 +96,7 @@ vi.mock("./worktree-op-processor.js", () => ({
 
 vi.mock("../../lib/url.js", () => ({
   toConvexSiteUrl: toConvexSiteUrlMock,
+  resolveConvexSiteUrl: async () => toConvexSiteUrlMock(),
 }));
 
 vi.mock("child_process", () => ({

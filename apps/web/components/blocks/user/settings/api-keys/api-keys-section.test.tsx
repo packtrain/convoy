@@ -7,7 +7,8 @@ import { expectEmptyState } from "@/test-utils/empty-state";
 const paginated = vi.hoisted(() => ({
   current: { results: [] as unknown[], status: "Exhausted", loadMore: (() => {}) as (n: number) => void },
 }));
-vi.mock("convex/react", () => ({ usePaginatedQuery: () => paginated.current }));
+const siteUrl = vi.hoisted(() => ({ current: undefined as string | null | undefined }));
+vi.mock("convex/react", () => ({ usePaginatedQuery: () => paginated.current, useQuery: () => siteUrl.current }));
 vi.mock("@/lib/navigation", () => ({
   useRouteParams: () => ({ organizationSlug: "acme", projectAlias: "WEB" }),
   AppLink: ({ children }: { children: React.ReactNode }) => <span>{children}</span>,
@@ -18,14 +19,17 @@ vi.mock("./api-key-row", () => ({ ApiKeyRow: () => null }));
 afterEach(() => {
   cleanup();
   paginated.current = { results: [], status: "Exhausted", loadMore: () => {} };
+  siteUrl.current = undefined;
   vi.unstubAllEnvs();
 });
 
 test.each([
   ["https://example.convex.cloud", "https://example.convex.site/api/mcp?project=acme/WEB"],
   ["http://localhost:3210", "http://localhost:3211/api/mcp?project=acme/WEB"],
-])("shows and copies connection URLs for %s without opening setup", async (cliUrl, mcpUrl) => {
+  ["http://127.0.0.1:3212", "http://127.0.0.1:3213/api/mcp?project=acme/WEB", "http://127.0.0.1:3213"],
+])("shows and copies connection URLs for %s without opening setup", async (cliUrl, mcpUrl, reportedSiteUrl?: string) => {
   vi.stubEnv("NEXT_PUBLIC_CONVEX_URL", cliUrl);
+  siteUrl.current = reportedSiteUrl;
   const writeText = vi.fn().mockResolvedValue(undefined);
   Object.defineProperty(navigator, "clipboard", { configurable: true, value: { writeText } });
   render(<ApiKeysSection />);

@@ -55,11 +55,19 @@ Convex Queries/Mutations (api.tasks.*, api.projects.*)
 - **CORS**: Supported via `OPTIONS /api/mcp` preflight handler
 - **Protocol**: JSON-RPC 2.0
 
-URL derivation (`toConvexSiteUrl` in `apps/web/lib/mcp/config-snippets.ts`
-and `apps/cli/src/lib/url.ts`): managed Convex rewrites `*.convex.cloud` →
-`*.convex.site`; self-hosted Convex serves HTTP actions on port `3211` next
-to the client API on `3210`, so `:3210` is rewritten to `:3211`. Any other
-URL is used as-is.
+URL derivation: users give one URL, the Convex client URL. The HTTP actions
+origin comes from the backend: the public query `appVersion.core.siteUrl`
+returns the deployment's `CONVEX_SITE_URL`. Self-hosted Convex sets that from
+`CONVEX_SITE_ORIGIN`, so any port pair or reverse proxy works. The CLI asks
+over the client URL (`resolveConvexSiteUrl` in `apps/cli/src/lib/url.ts`) at
+login, on each agent registration, in `convoy init mcp`, in the project
+backend check and in `convoy devcontainer --configure`. The web popups read
+the same query.
+
+A backend too old to have the query, or one that cannot be reached, falls
+back to a guess (`toConvexSiteUrl`): `*.convex.cloud` → `*.convex.site`, and
+self-hosted `:3210` → `:3211`. Any other URL is used as-is. The web shows the
+guess while the query loads; on managed Convex it already equals the answer.
 
 The API Keys settings popup displays copyable CLI / Convex and MCP endpoint
 URLs below the key list and above the MCP setup instructions, without expanding them. The CLI URL

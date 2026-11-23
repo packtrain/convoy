@@ -30,3 +30,10 @@ export const get = query({
     };
   },
 });
+
+/** Origin of this deployment's HTTP actions (`/api/agent/*`, `/api/mcp`); see docs/specs/mcp-server.md#endpoint. */
+export const siteUrl = query({
+  args: {},
+  returns: v.union(v.string(), v.null()),
+  handler: async () => nonEmpty(process.env.CONVEX_SITE_URL),
+});

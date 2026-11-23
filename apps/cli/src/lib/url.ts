@@ -1,13 +1,14 @@
+import { ConvexHttpClient } from "convex/browser";
+import { api } from "../convex/_generated/api.js";
+
 /** Trim whitespace and trailing slashes so pasted URLs like "….convex.cloud/ " work. */
 export function normalizeConvexUrl(url: string): string {
   return url.trim().replace(/\/+$/, "");
 }
 
 /**
- * Convert a Convex Cloud URL to its HTTP site URL.
- * Convex queries use *.convex.cloud, but HTTP routes (including MCP)
- * are served from *.convex.site. Self-hosted Convex serves HTTP routes
- * on port 3211 next to the client API on port 3210.
+ * Guess the HTTP actions URL from the client URL: *.convex.cloud → *.convex.site,
+ * self-hosted :3210 → :3211. Prefer resolveConvexSiteUrl, which asks the backend.
  */
 export function toConvexSiteUrl(cloudUrl: string): string {
   if (cloudUrl.includes(".convex.cloud")) {
@@ -20,11 +21,24 @@ export function toConvexSiteUrl(cloudUrl: string): string {
  * Build the full MCP endpoint URL for a project-scoped connection.
  */
 export function buildMcpUrl(
-  convexCloudUrl: string,
+  siteUrl: string,
   orgSlug: string,
   projectAlias: string
 ): string {
-  const siteUrl = toConvexSiteUrl(convexCloudUrl);
   const project = `${encodeURIComponent(orgSlug)}/${encodeURIComponent(projectAlias)}`;
   return `${siteUrl}/api/mcp?project=${project}`;
+}
+
+/** The HTTP actions origin as the backend reports it; the guess above for a backend too old to say. */
+export async function resolveConvexSiteUrl(cloudUrl: string): Promise<string> {
+  const url = normalizeConvexUrl(cloudUrl);
+  const client = new ConvexHttpClient(url, {
+    logger: false,
+    fetch: (input, init) => fetch(input, { ...init, signal: AbortSignal.timeout(10_000) }),
+  });
+  try {
+    return (await client.query(api.appVersion.core.siteUrl, {})) ?? toConvexSiteUrl(url);
+  } catch {
+    return toConvexSiteUrl(url);
+  }
 }

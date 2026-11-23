@@ -73,6 +73,8 @@ interface BuildProjectScopedMcpUrlOptions {
   organizationSlug?: string;
   projectAlias?: string;
   convexUrl?: string;
+  /** From `api.appVersion.core.siteUrl`; the guess below while loading or on an old backend. */
+  siteUrl?: string | null;
 }
 
 function trimTrailingSlash(value: string) {
@@ -84,22 +86,22 @@ export function toConvexSiteUrl(convexUrl: string) {
   if (url.includes(".convex.cloud")) {
     return url.replace(".convex.cloud", ".convex.site");
   }
-  // Self-hosted Convex serves HTTP routes on port 3211 next to the
-  // client API on port 3210.
+  // Self-hosted default ports; other ports need the backend-reported siteUrl.
   return url.replace(/:3210$/, ":3211");
 }
 
-export function buildMcpUrl(convexUrl?: string) {
+export function buildMcpUrl(convexUrl?: string, siteUrl?: string | null) {
   const baseUrl = convexUrl ?? "{convex backend url}";
-  return `${toConvexSiteUrl(baseUrl)}/api/mcp`;
+  return `${siteUrl ?? toConvexSiteUrl(baseUrl)}/api/mcp`;
 }
 
 export function buildProjectScopedMcpUrl({
   organizationSlug,
   projectAlias,
   convexUrl = process.env.NEXT_PUBLIC_CONVEX_URL,
+  siteUrl,
 }: BuildProjectScopedMcpUrlOptions = {}) {
-  const mcpUrl = buildMcpUrl(convexUrl);
+  const mcpUrl = buildMcpUrl(convexUrl, siteUrl);
   if (!organizationSlug || !projectAlias) {
     return mcpUrl;
   }

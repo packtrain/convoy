@@ -54,7 +54,7 @@ https://<deployment>.convex.site/api/mcp?project=<org-slug>/<PROJECT_ALIAS>
 ```
 
 Where:
-- `<deployment>` is derived from the Convex cloud URL (`.convex.cloud` → `.convex.site`)
+- The origin is the backend's HTTP actions URL, asked from the backend (see [mcp-server.md](mcp-server.md#endpoint))
 - `<org-slug>` and `<PROJECT_ALIAS>` are resolved from the backend via `projects.listAccessible`
 
 ### Output Formats
