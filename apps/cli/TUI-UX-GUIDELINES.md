@@ -122,6 +122,8 @@ Lists stop at their first and last item; arrow keys never wrap around. This incl
 
 Show key hints beside visible controls and a short context-specific footer. Use d, a and c for environment views and r and a for project tabs. Add shortcuts accelerate controls users can already find; they are never the only entry point. Terminal shortcuts stay out of the independently released web shortcuts dialog.
 
+The mouse is a shortcut too. A click on a row, tab or button does what its key does, and the wheel scrolls what ↑/↓ scrolls. Never put an action behind a click alone. Make a new control clickable with `useClick` from `mouse.ts`, and give a scrollable view `useWheel`. While keys are locked, such as during a workflow, a pending action or an edit, clicks are locked too. `m` turns the mouse off so users can select text; keep its footer hint visible.
+
 ## Manual acceptance walkthrough
 
 1. Empty installation: find Add environment without reading the footer, configure it, review once, cancel without side effects, then complete creation and find Add project.

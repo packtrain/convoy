@@ -1422,3 +1422,72 @@ and confirmation skips the npm lookup. The package's version is not checked
 against the host, so start the TUI from the same build that was packed. Without
 the flag, an unpublished release fails with a hint naming `convoy tui --package`.
 The flag adds no backend requests.
+
+## Mouse, CLI 0.165.0, OS-2451
+
+Step 2 of the OS-2425 mouse plan. Every mouse action does the same as an existing
+key, so the mouse never becomes the only way to reach a control.
+
+Clicks on the main screen:
+
+- A sidebar row selects it, as ↑/↓ would. Actions and Credentials rows open their
+  panels, and project rows open Runs.
+- An environment row also expands or collapses, as Enter does.
+- "+ Add environment" and "+ Add project" open their workflows, as E and + do.
+- The [r] Runs and [a] Actions project tabs switch tabs.
+
+The wheel scrolls the run table (it moves the selection, like ↑/↓), the Details
+lines and the [w] warnings list. A scrollable dialog takes the wheel from the
+panel under it. Each tick moves one step, also when several reports arrive in one
+stdin chunk: scrolling uses state updaters, so ↑/↓ key bursts count every press too. Clicks and the wheel do nothing while keys would also stop short
+of navigation: during a workflow, an edit, the log view, the warnings list or a
+pending or busy action. The warnings list still scrolls with the wheel.
+
+`m` turns mouse tracking off so the terminal's drag-to-select works, and on again.
+It works on the main screen and in the warnings list, whose footers show
+`[m] select text` or `[m] mouse`. The log view turns tracking off while it is open:
+it promises native selection and copy, and its export path is typed text where `m`
+must stay a letter. Shift-drag (Ghostty) or
+Option-drag (iTerm2) also selects while tracking is on. A remount after a project
+shell starts with the mouse on.
+
+### Terminal modes
+
+`App` writes `?1002h ?1006h` (button-event tracking, SGR encoding) from an effect
+that runs after its `useInput`, so raw mode is on first. It writes nothing when
+stdout is not a TTY. `render.tsx` writes `?1002l ?1006l` in `leaveScreen`, which
+runs on the `exit` event, at shutdown and before a project-shell handoff, so the
+shell never receives mouse reports.
+
+### Input and hit-testing
+
+`mouse.ts` adds one `'data'` listener per stdin stream while any hook is mounted.
+Ink reads stdin with `read()`, which also emits `'data'`, so the listener never takes
+input from Ink. Ink 8 already drops SGR reports from `useInput`.
+
+- Only SGR reports (`ESC [ < b ; x ; y M|m`) are parsed. A report split across
+  chunks is held until the next chunk. Other bytes are ignored.
+- Codes 64 and 65 are wheel up and down. Drag motion (bit 32) and horizontal wheel
+  are dropped. A left press (code 0, `M`) is a click.
+- `useClick(ref, onClick)` hit-tests the press against `measureElement(ref)`,
+  converting the 1-based report to 0-based cells. The TUI always fills the
+  alternate screen from the top-left and has no `<Static>`, so layout and terminal
+  cells line up. The last-mounted matching box wins, so a dialog beats the panel under it.
+- `useWheel(onWheel)` sends each tick to the last-mounted handler. Passing
+  `undefined` leaves the wheel to the one below.
+
+Not supported: X10 and 1015 encodings, hover (mode 1003), drag and double-click.
+
+### Request cost
+
+None. Mouse input reuses existing actions, which make the same requests as their keys.
+
+### Verification
+
+`mouse.test.ts` covers split chunks, wheel versus left click, releases, drags and
+non-mouse bytes. `navigation.tsx mouse` checks that tracking turns on, then
+writes SGR clicks on a project row, the Actions tab, the Credentials row and the
+environment row and checks the selection. It also checks that wheel ticks scroll
+Details and the warnings list, also when two reports share a chunk. It checks that
+`m` turns tracking off and on and changes the hint, that `m` works in the warnings
+list, and that the log view turns tracking off until it closes.

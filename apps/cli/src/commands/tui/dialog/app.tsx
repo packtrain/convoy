@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import { Box, Text, useInput, type Key } from "ink";
 import { palette, plain, rich, wrapLines } from "../formatters.js";
+import { useWheel } from "../mouse.js";
 
 const SPINNER = "⠖⠲⢲⢰⣰⣠⣄⣆⡆⡖"; // The classic dots spinner one dot row lower, centered on lowercase text.
 /** Animates only while mounted, so idle views cause no redraws. */
@@ -29,6 +30,9 @@ export function Dialog({ lines, error, width: columns, height: rows, buttons, on
   const enabled = fits || scrollable;
   const shownButtons = enabled ? buttons : buttons.slice(0, 1);
   const height = visible.length + 6;
+  // An updater, so several wheel reports in one stdin chunk each move a line.
+  const scroll = (delta: number) => setOffset(old => Math.max(0, Math.min(wrapped.length - capacity, Math.min(old, Math.max(0, wrapped.length - capacity)) + delta)));
+  useWheel(scrollable ? scroll : undefined);
   useInput((input, key) => {
     if (key.escape) { onCancel(); return; }
     if (key.ctrl || key.meta) return;
@@ -41,7 +45,7 @@ export function Dialog({ lines, error, width: columns, height: rows, buttons, on
     if (key.tab) { setSelected(value => value + 1 >= shownButtons.length ? onText ? -1 : 0 : value + 1); return; }
     if (scrollable && (key.pageDown || key.pageUp || key.downArrow || key.upArrow || input === "j" || input === "k")) {
       const delta = key.pageDown ? capacity : key.pageUp ? -capacity : key.downArrow || input === "j" ? 1 : -1;
-      setOffset(Math.max(0, Math.min(wrapped.length - capacity, start + delta))); return;
+      scroll(delta); return;
     }
     if (key.leftArrow || key.upArrow) setSelected(0);
     if (key.rightArrow || key.downArrow) setSelected(shownButtons.length - 1);

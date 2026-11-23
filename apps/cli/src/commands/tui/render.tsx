@@ -2,15 +2,17 @@ import { render } from "ink";
 import { App } from "./app.js";
 import type { Connection } from "./resolution.js";
 import { Browser } from "./workflow.js";
+import { trackingOff } from "./mouse.js";
 
 export async function run(targets: Connection[], selected = 0, localPackage?: string) {
   let handoff: { operation: (signal: AbortSignal) => Promise<void>; resolve(): void; reject(error: unknown): void } | undefined;
   let stopped = false;
   const abort = new AbortController();
-  // Alternate screen: no scrollback while the TUI runs; leaving restores the shell screen.
+  // Alternate screen: no scrollback while the TUI runs; leaving restores the shell screen. App turns the mouse on;
+  // leaving turns it off on exit and before a handoff too, so the shell never receives mouse reports.
   let alternate = false;
   const enterScreen = () => { if (!alternate) process.stdout.write("\u001b[?1049h\u001b[H"); alternate = true; };
-  const leaveScreen = () => { if (alternate) process.stdout.write("\u001b[?1049l"); alternate = false; };
+  const leaveScreen = () => { if (alternate) process.stdout.write(`${process.stdout.isTTY ? trackingOff : ""}\u001b[?1049l`); alternate = false; };
   const browser = new Browser(targets, selected, operation => new Promise((resolve, reject) => {
     handoff = { operation, resolve, reject };
     instance.unmount();

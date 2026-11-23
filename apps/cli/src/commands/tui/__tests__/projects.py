@@ -36,6 +36,9 @@ def wait(text):
             pending.extend(chunk)
     pending.clear()
     time.sleep(.05)  # Ink binds a new view's key handler in an effect after writing its frame.
+def mouse_tracking():
+    # The last mode write wins; the shell must never inherit button-event tracking.
+    return recording.rfind(b"\x1b[?1002h") > recording.rfind(b"\x1b[?1002l")
 def send(keys):
     pending.clear()
     os.write(fd, keys.encode())
@@ -52,6 +55,7 @@ try:
     wait("page 1")
     send("a")
     wait("Pause project")
+    assert mouse_tracking(), "The TUI turns mouse tracking on"
     if scenario == "pause-shell":
         send("h")
         wait("Pause and enter shell")
@@ -82,6 +86,7 @@ try:
         wait("SHELL_LOCK_WAIT" if scenario.startswith("pending-") else "PROJECT_SHELL>")
         os.kill(pid, getattr(signal, scenario.split("-")[-1]))
         wait("TERMINAL_SIGNAL_OK")
+        assert not mouse_tracking(), "A signal leaves mouse tracking off"
         _, status = os.waitpid(pid, 0)
         assert os.waitstatus_to_exitcode(status) == 0
         print("PTY project checks passed: " + scenario)
@@ -90,6 +95,7 @@ try:
         wait("Terminal restored")
     else:
         wait("PROJECT_SHELL>")
+        assert not mouse_tracking(), "The project shell starts with mouse tracking off"
         send('echo HOME=$HOME; pwd; set -o | grep monitor; sleep 20 &\n')
         wait("PROJECT_SHELL>")
         send('jobs; kill %1; echo SHELL_DIAGNOSTICS_OK\n')
@@ -115,6 +121,7 @@ try:
     wait("Local registration removed")
     send("q")
     wait("TERMINAL_PROJECTS_OK")
+    assert not mouse_tracking(), "Quitting leaves mouse tracking off"
     _, status = os.waitpid(pid, 0)
     assert os.waitstatus_to_exitcode(status) == 0
     print("PTY project checks passed: " + scenario)

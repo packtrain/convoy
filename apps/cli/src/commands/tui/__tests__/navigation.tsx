@@ -11,8 +11,8 @@ import type { EnvironmentForm } from "../../environment/validators.js";
 const scenario = process.argv[2];
 const stdout = Object.assign(new PassThrough(), { columns: 110, rows: 38, isTTY: true });
 const stdin = Object.assign(new PassThrough(), { isTTY: true, setRawMode() {}, ref() {}, unref() {} });
-let frame = "", executed = 0;
-stdout.on("data", chunk => { if (plain(chunk.toString()).trim()) frame = chunk.toString(); });
+let frame = "", output = "", executed = 0;
+stdout.on("data", chunk => { output += chunk.toString(); if (plain(chunk.toString()).trim()) frame = chunk.toString(); });
 const browser = new Browser([...(scenario === "delete-success" ? [{ id: "local", name: "Local", transport: "unix", endpoint: "local", open: async () => { throw new Error("offline"); } }] : []), { id: "test", name: "Test target", transport: "docker", endpoint: "test-container", open: async () => { throw new Error("offline"); },
   ...(scenario === "local" ? {} : { maintenance: { status: async () => ({}), release: async () => ({ installed: "0.100.0", proposed: "0.103.1" }), execute: async () => { executed++; return scenario === "delete-success" ? { deleted: true } : {}; } } }),
 }], scenario === "delete-success" ? 1 : 0);
@@ -248,6 +248,57 @@ try {
     Object.assign(browser.getSnapshot().observations[0], { health: "connected", snapshot: { v: 1, id: "s", ok: true }, profiles: [{ profile: "a", status: "online", attempts: 1, activeRuns: 0 }] });
     browser.select({ connection: 0, details: true }); await settle(80);
     assert(!rows().some(line => loading.test(line)) && rows().includes("a"), sidebar().join("\n"));
+  } else if (scenario === "mouse") {
+    Object.assign(browser.getSnapshot().observations[0], { health: "connected", profiles: [
+      { profile: "a", status: "online", attempts: 1, activeRuns: 0 }, { profile: "b", status: "online", attempts: 1, activeRuns: 0 }] });
+    browser.select({ connection: 0, details: true }); await settle(80);
+    assert(output.includes("\u001b[?1002h\u001b[?1006h"), "Mouse tracking turns on with the TUI");
+    // SGR cells are 1-based; the sidebar starts on the frame's third line.
+    const at = (x: number, y: number, code = 0) => key(`\u001b[<${code};${x + 1};${y + 1}M\u001b[<${code};${x + 1};${y + 1}m`);
+    const row = (match: (line: string) => boolean) => { const y = sidebar().findIndex(line => match(label(line))); assert(y >= 0, sidebar().join("\n")); return y + 2; };
+    await at(5, row(line => line === "b"));
+    assert.equal(browser.getSnapshot().scope.profile, "b");
+    assert(!plain(frame).includes("[<"), "Mouse reports never reach key handlers");
+    const actionsTab = frame.split("\n").findIndex(line => plain(line).includes("[a] Actions"));
+    await at(plain(frame.split("\n")[actionsTab]).indexOf("[a] Actions") + 1, actionsTab);
+    assert.equal(browser.getSnapshot().actions, true, "Clicking the Actions tab opens it");
+    await at(5, row(line => line === "Credentials"));
+    assert.equal(browser.getSnapshot().credentials, "view");
+    await at(5, row(line => line.startsWith("▾ Test target")));
+    assert(browser.getSnapshot().scope.details && !browser.getSnapshot().credentials, "Clicking the environment row selects it");
+    assert(!sidebar().some(line => label(line) === "Credentials"), "Clicking the environment row collapses it: " + sidebar().join("\n"));
+    stdout.rows = 12; stdout.emit("resize"); await settle(80); // Fewer rows than detail lines.
+    const firstDetail = () => { const lines = panel().split("\n"); return lines[lines.findIndex(line => line.includes("[s] Inspect status")) + 2]; };
+    const wheel = (code: number, times = 1) => key(`\u001b[<${code};51;7M`.repeat(times));
+    const before = firstDetail();
+    await wheel(65);
+    assert.notEqual(firstDetail(), before, "The wheel scrolls the detail lines");
+    await wheel(64);
+    assert.equal(firstDetail(), before, "The wheel scrolls back up");
+    // Reports that share a chunk all count, so one tick up from two down is not the top.
+    await wheel(65, 2); await wheel(64);
+    assert.notEqual(firstDetail(), before, "A burst of wheel reports scrolls every tick");
+    await wheel(64, 3);
+    assert(plain(frame).includes("[m] select text"), plain(frame));
+    await key("m");
+    assert(output.endsWith("\u001b[?1002l\u001b[?1006l"), "m turns mouse tracking off");
+    assert(plain(frame).includes("[m] mouse"), plain(frame));
+    await key("m");
+    assert(output.includes("\u001b[?1002h\u001b[?1006h", output.lastIndexOf("\u001b[?1002l")), "m turns it back on");
+    browser.getSnapshot().observations[0].profiles = ["a", "b", "c"].map(profile => ({ profile, status: "failed" as const, attempts: 4, warning: `${profile} is broken.` }));
+    stdout.rows = 20; stdout.emit("resize"); browser.select({ connection: 0, details: true }); await settle(80); await key("w");
+    const warningList = panel();
+    await wheel(65, 2); await wheel(64);
+    assert(panel().includes(" · failed") && panel() !== warningList, "The wheel scrolls the warnings list by every tick: " + panel());
+    assert(plain(frame).includes("[m] select text"), "The warnings footer shows the mouse toggle: " + plain(frame));
+    output = ""; await key("m");
+    assert(output.includes("\u001b[?1002l\u001b[?1006l"), "m turns tracking off in the warnings list, to copy its text");
+    await key("m"); await key("\u001b");
+    output = "";
+    browser.logs({ profile: "a", thread: { id: "t", title: "Thread" }, run: { messageId: "m1", runId: "r1", status: "completed" } } as unknown as Parameters<typeof browser.logs>[0]); await settle(80);
+    assert(output.includes("\u001b[?1002l\u001b[?1006l"), "The log view turns tracking off for native selection");
+    output = ""; browser.logs(); await settle(80);
+    assert(output.includes("\u001b[?1002h\u001b[?1006h"), "Leaving the log view turns tracking back on");
   } else if (scenario === "project") {
     browser.select({ connection: 0, profile: "one", details: false }); await settle(80); await key("a");
     assert(plain(frame).includes("Pause project"), plain(frame));

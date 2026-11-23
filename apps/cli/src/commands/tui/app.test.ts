@@ -75,7 +75,7 @@ it.skipIf(process.platform !== "linux").each(["normal", "detach"])("records envi
   expect(result.stdout).toContain("PTY environments passed");
 });
 
-it.each(["sidebar", "scope", "local", "error", "project", "draft", "stopped", "progress", "network", "restricted-network", "separation", "buttons", "stop-result", "delete-confirm", "delete-success", "warnings", "warning-layout", "warning-layout-narrow", "sidebar-views", "sidebar-arrows", "sidebar-loading"])("TUI navigation guidelines: %s", async scenario => {
+it.each(["sidebar", "scope", "local", "error", "project", "draft", "stopped", "progress", "network", "restricted-network", "separation", "buttons", "stop-result", "delete-confirm", "delete-success", "warnings", "warning-layout", "warning-layout-narrow", "sidebar-views", "sidebar-arrows", "sidebar-loading", "mouse"])("TUI navigation guidelines: %s", async scenario => {
   const result = await tsx("navigation.tsx", [scenario]);
   expect(result.stdout).toContain("Navigation checks passed: " + scenario);
 });

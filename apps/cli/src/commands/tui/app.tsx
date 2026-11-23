@@ -1,7 +1,8 @@
 import { Dialog, Spinner } from "./dialog/index.js";
 import { Environments } from "./environments/index.js";
-import { useEffect, useState, useSyncExternalStore, type ComponentProps } from "react";
-import { Box, Text, useApp, useInput, useWindowSize } from "ink";
+import { useEffect, useRef, useState, useSyncExternalStore, type ComponentProps } from "react";
+import { Box, Text, useApp, useInput, useWindowSize, type DOMElement } from "ink";
+import { useClick, useMouseTracking, useWheel } from "./mouse.js";
 import { getCliVersion } from "../../lib/version.js";
 import { detailLines, environmentTone, healthTones, palette, plain, rowCells, rowId, warningLines, warningGroups, wrapLines } from "./formatters.js";
 import type { Browser } from "./workflow.js";
@@ -18,9 +19,16 @@ import { Runtimes } from "./runtimes/index.js";
 const clientVersion = getCliVersion();
 
 function scopeId(scope: Scope) { return `${scope.connection}:${scope.addProject ? "add" : scope.details ? "details" : scope.profile === undefined ? "all" : `profile:${scope.profile}`}`; }
-const tab = (label: string, selected: boolean) => [label, selected] as const;
+const tab = (label: string, selected: boolean, activate: () => void) => [label, selected, activate] as const;
 const statusTones: Record<WorkerStatus, keyof typeof palette> = { connecting: "warning", online: "success", retrying: "warning", blocked: "danger", failed: "danger", stopped: "muted" };
 type SidebarRow = { scope: Scope; view?: "actions" | "credentials"; text: string; transport: string; health: BrowseState["observations"][number]["health"]; busy?: boolean; loading?: boolean; dot?: keyof typeof palette };
+
+/** A Box that runs `onClick` on a left click. */
+function Clickable({ onClick, ...props }: ComponentProps<typeof Box> & { onClick(): void }) {
+  const ref = useRef<DOMElement>(null);
+  useClick(ref, onClick);
+  return <Box ref={ref} {...props} />;
+}
 
 export function App({ browser, onboardingLoad }: { browser: Browser; onboardingLoad?: ComponentProps<typeof Onboarding>["load"] }) {
   const state = useSyncExternalStore(browser.subscribe, browser.getSnapshot);
@@ -34,6 +42,7 @@ export function App({ browser, onboardingLoad }: { browser: Browser; onboardingL
   const [selectedId, setSelectedId] = useState<string>();
   const [detailOffset, setDetailOffset] = useState(0);
   const [warningsOpen, setWarningsOpen] = useState(false);
+  const [mouse, setMouse] = useState(true);
   useEffect(() => { setWarningsOpen(false); }, [state.scope.connection, state.scope.profile, state.scope.details, state.actions, state.credentials, state.runtimes]);
   useEffect(() => {
     setAddEnvironmentSelected(false);
@@ -103,8 +112,34 @@ export function App({ browser, onboardingLoad }: { browser: Browser; onboardingL
   const visibleRows = Math.max(1, Math.floor((tableLines + (compact ? 0 : 1)) / (compact ? 2 : 3)));
   const rowStart = Math.max(0, selectedRow - visibleRows + 1);
   const detailsStart = Math.min(detailOffset, Math.max(0, lines.length - contentHeight));
+  const toggleExpanded = (connection: number) => setExpanded(old => {
+    const next = new Set(old);
+    if (next.has(connection)) next.delete(connection); else next.add(connection);
+    return next;
+  });
+  // Moves the detail lines or the run selection, by ↑/↓ or the wheel.
+  // Updaters, so several wheel reports in one stdin chunk each move a step.
+  const scroll = (delta: number) => {
+    if (state.scope.details) setDetailOffset(old => Math.max(0, Math.min(lines.length - 1, Math.min(old, Math.max(0, lines.length - contentHeight)) + delta)));
+    else setSelectedId(old => {
+      const row = state.rows[Math.max(0, Math.min(state.rows.length - 1, Math.max(0, state.rows.findIndex(row => rowId(row) === old)) + delta))];
+      return row ? rowId(row) : old;
+    });
+  };
+  // The states where useInput below stops before navigation keys; clicks and the wheel stop there too.
+  const locked = Boolean(warningsOpen || workflow || state.detail || state.action?.busy || editing || state.action?.pending || (state.action?.message && !state.action.entries));
+  const unlocked = (action: () => void) => () => { if (!locked) action(); };
+  const clickRow = (row: SidebarRow) => {
+    if (row.loading) return;
+    chooseView(row.scope, row.view);
+    if (row.scope.addProject) { browser.openOnboarding(); setPane("content"); return; }
+    setPane("sidebar");
+    if (row.scope.details && !row.view) toggleExpanded(row.scope.connection);
+  };
   useInput((input, key) => {
     if ((input === "q" && !state.detail && !state.onboarding && !state.environment && !editing) || (key.ctrl && input === "c")) { browser.dispose(); exit(); return; }
+    // The read-only warnings list keeps the toggle so its text can be copied.
+    if (input === "m" && !key.ctrl && !key.meta && (!locked || warningsOpen)) { setMouse(on => !on); return; }
     if (warningsOpen || state.environment || state.onboarding || state.detail || state.action?.busy || editing) return;
     if (state.action?.pending) {
       if (small && (key.escape || input === "n" || key.return)) browser.dismissAction();
@@ -144,11 +179,7 @@ export function App({ browser, onboardingLoad }: { browser: Browser; onboardingL
     if (pane === "sidebar" && (input === " " || key.return) && view) { setPane("content"); return; }
     if (pane === "sidebar" && (input === " " || key.return) && state.scope.details) {
       if (state.scope.addProject) { browser.openOnboarding(); setPane("content"); return; }
-      setExpanded(old => {
-        const next = new Set(old);
-        if (next.has(state.scope.connection)) next.delete(state.scope.connection); else next.add(state.scope.connection);
-        return next;
-      }); return;
+      toggleExpanded(state.scope.connection); return;
     }
     if (pane === "sidebar" && key.return && !state.scope.details) { setPane("content"); return; }
     if (pane === "content" && (state.actions || state.credentials || state.runtimes)) return;
@@ -167,16 +198,15 @@ export function App({ browser, onboardingLoad }: { browser: Browser; onboardingL
       else if (addEnvironmentSelected) setAddEnvironmentSelected(false);
       else { const row = sidebar[Math.max(0, Math.min(sidebar.length - 1, selectedSidebar + delta))]; chooseView(row.scope, row.view); }
     }
-    else if (state.scope.details) setDetailOffset(Math.max(0, Math.min(lines.length - 1, detailsStart + delta)));
-    else {
-      const row = state.rows[Math.max(0, Math.min(state.rows.length - 1, selectedRow + delta))];
-      if (row) setSelectedId(rowId(row));
-    }
+    else scroll(delta);
   });
+  // The log view promises native selection, and its export path takes typed m.
+  useMouseTracking(mouse && !state.detail);
+  useWheel(locked || state.actions || state.credentials || state.runtimes || state.scope.addProject ? undefined : scroll);
   if (small && !state.detail && !state.onboarding && !state.environment && !editing) return <Box flexDirection="column"><Text>Resize to 45×10 to browse.</Text><Text>q / Ctrl+C detach</Text></Box>;
   const fill = (selected: boolean, active: boolean) => selected ? { backgroundColor: active ? palette.selected : palette.idle, color: active ? palette.selectedText : palette.idleText } : {};
   const keys = (hints: [string, string][]) => <Text wrap="truncate" color={palette.muted}>{hints.map(([key, label], i) => <Text key={i}>{i ? "  " : ""}<Text color={palette.accent}>{key}</Text> {label}</Text>)}</Text>;
-  const tabs = state.scope.details ? [] : [tab("[r] Runs", !state.actions), tab("[a] Actions", Boolean(state.actions))];
+  const tabs = state.scope.details ? [] : [tab("[r] Runs", !state.actions, () => browser.showActions(false)), tab("[a] Actions", Boolean(state.actions), () => { browser.showActions(true); setPane("content"); })];
   const title = state.runtimes ? "Agent runtimes" : view === "actions" ? "Actions" : view === "credentials" ? "Credentials" : state.scope.addProject ? "Add project" : "Details";
   const wide = actionWidth >= 76;
   const runs = state.rows.slice(rowStart, rowStart + visibleRows).map((row, index) => ({ row, cells: rowCells(row), selected: rowStart + index === selectedRow }));
@@ -189,7 +219,7 @@ export function App({ browser, onboardingLoad }: { browser: Browser; onboardingL
     <Box height={Math.max(1, size.height - (state.detail ? 1 : 4))}>
       <Box display={small || sidebarWidth === 0 ? "none" : "flex"} width={sidebarWidth} flexShrink={0} flexDirection="column" paddingX={1} paddingTop={1} backgroundColor={palette.surface}>
         <Text color={palette.muted}>ENVIRONMENTS</Text>
-        <Box backgroundColor={fill(addEnvironmentSelected, pane === "sidebar").backgroundColor}><Text wrap="truncate" color={fill(addEnvironmentSelected, pane === "sidebar").color ?? palette.muted}>+ Add environment</Text></Box>
+        <Clickable onClick={unlocked(() => browser.openEnvironment("create"))} backgroundColor={fill(addEnvironmentSelected, pane === "sidebar").backgroundColor}><Text wrap="truncate" color={fill(addEnvironmentSelected, pane === "sidebar").color ?? palette.muted}>+ Add environment</Text></Clickable>
         <Text> </Text>
         {sidebarLines.slice(sidebarStart, sidebarStart + capacity).map((row, index) => {
           if (!row) return <Text key={`gap:${sidebarStart + index}`}> </Text>;
@@ -197,11 +227,12 @@ export function App({ browser, onboardingLoad }: { browser: Browser; onboardingL
           const { color, ...rowFill } = fill(selected, pane === "sidebar");
           const environment = row.scope.details && !row.scope.addProject && !row.view && !row.loading;
           const key = `${scopeId(row.scope)}:${row.view ?? ""}${row.loading ? ":loading" : ""}`;
-          if (environment) return <Box key={key} {...rowFill}><Box flexGrow={1} flexShrink={1}><Text wrap="truncate" bold color={color ?? palette.text}>{plain(row.text)}</Text></Box>
-            <Box flexShrink={0}><Text color={color ?? palette.muted}> {plain(row.transport)}<Text color={palette[environmentTone(state.observations[row.scope.connection])]}> ● </Text></Text></Box></Box>;
-          return <Box key={key} {...rowFill}><Box flexGrow={1} flexShrink={1}><Text wrap="truncate" color={color ?? (row.scope.addProject || row.loading ? palette.muted : palette.text)}>
+          const onClick = unlocked(() => clickRow(row));
+          if (environment) return <Clickable key={key} onClick={onClick} {...rowFill}><Box flexGrow={1} flexShrink={1}><Text wrap="truncate" bold color={color ?? palette.text}>{plain(row.text)}</Text></Box>
+            <Box flexShrink={0}><Text color={color ?? palette.muted}> {plain(row.transport)}<Text color={palette[environmentTone(state.observations[row.scope.connection])]}> ● </Text></Text></Box></Clickable>;
+          return <Clickable key={key} onClick={onClick} {...rowFill}><Box flexGrow={1} flexShrink={1}><Text wrap="truncate" color={color ?? (row.scope.addProject || row.loading ? palette.muted : palette.text)}>
             {row.busy ? <><Spinner color={color ?? palette.accent} /> {plain(row.text.slice(2))}</> : plain(row.text)}
-          </Text></Box>{row.dot && <Box flexShrink={0}><Text color={palette[row.dot]}> ● </Text></Box>}</Box>;
+          </Text></Box>{row.dot && <Box flexShrink={0}><Text color={palette[row.dot]}> ● </Text></Box>}</Clickable>;
         })}
       </Box>
       <Box display={narrow && sidebarWidth > 0 && !workflow ? "none" : "flex"} flexGrow={1} flexDirection="column" paddingX={1} paddingTop={1}>
@@ -210,7 +241,7 @@ export function App({ browser, onboardingLoad }: { browser: Browser; onboardingL
         {state.environment && <Environments browser={browser} width={actionWidth} height={Math.max(1, size.height - 7)} />}
         {!workflow && (state.detail ? <LogDetail key={`${state.scope.connection}:${state.detail.run?.messageId}`} browser={browser} row={state.detail} width={Math.max(1, size.width - (small ? 0 : sidebarWidth) - 2)} height={Math.max(1, size.height - 3)} small={small} /> : <>
         <Box gap={2} marginBottom={1}>
-          {tabs.length ? tabs.map(([label, selected]) => <Text key={label} {...(selected ? fill(true, true) : { color: palette.accent })}>{` ${label} `}</Text>) : <Text bold color={palette.text}>{title}</Text>}
+          {tabs.length ? tabs.map(([label, selected, activate]) => <Clickable key={label} onClick={unlocked(activate)}><Text {...(selected ? fill(true, true) : { color: palette.accent })}>{` ${label} `}</Text></Clickable>) : <Text bold color={palette.text}>{title}</Text>}
           <Box flexShrink={1}><Text wrap="truncate" color={palette.muted}>{plain(target.name)}{state.scope.profile ? ` / ${plain(state.scope.profile)}` : ""}{state.history ? " / execution history" : ""}</Text></Box>
         </Box>
         {!warningsOpen && warnings.length > 0 && <Box flexDirection="column" marginBottom={1}>
@@ -256,8 +287,8 @@ export function App({ browser, onboardingLoad }: { browser: Browser; onboardingL
         </>}
         </>)}
         </Box>
-        {!state.detail && <Box flexShrink={0}>{warningsOpen ? keys([["[↑/↓ PgUp/PgDn]", "scroll"], ["[Esc]", "back"], ["[q]", "detach"]]) : workflow || editing ? keys([["[Tab]", "focus"], ["[Enter]", "activate"], ["[Esc]", "back"], ["[Ctrl+C]", "detach · inputs retained through repair"]])
-          : keys([["[←/→]", "panes"], ["[↑/↓]", "select"], ["[Enter]", "activate"], ["[Esc]", "back"], ["[n/p]", "page"], ["[f]", "retry"], ["[E]", "add environment"], ["[+]", "add project"], ["[q]", "detach"]])}</Box>}
+        {!state.detail && <Box flexShrink={0}>{warningsOpen ? keys([["[↑/↓ PgUp/PgDn]", "scroll"], ["[Esc]", "back"], ["[m]", mouse ? "select text" : "mouse"], ["[q]", "detach"]]) : workflow || editing ? keys([["[Tab]", "focus"], ["[Enter]", "activate"], ["[Esc]", "back"], ["[Ctrl+C]", "detach · inputs retained through repair"]])
+          : keys([["[←/→]", "panes"], ["[↑/↓]", "select"], ["[Enter]", "activate"], ["[Esc]", "back"], ["[m]", mouse ? "select text" : "mouse"], ["[n/p]", "page"], ["[f]", "retry"], ["[E]", "add environment"], ["[+]", "add project"], ["[q]", "detach"]])}</Box>}
       </Box>
     </Box>
     {!state.detail && <Box flexShrink={0} height={1} paddingX={1} gap={3} backgroundColor={palette.footer}>
