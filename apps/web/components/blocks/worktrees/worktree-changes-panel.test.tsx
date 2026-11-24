@@ -104,6 +104,20 @@ describe("WorktreeChangesPanel", () => {
     expect(screen.getByRole("option", { name: /first/ })).toBeTruthy();
   });
 
+  test("History's List | Graph toggle starts on List and keeps Graph across mounts (OS-2536)", () => {
+    const view = render(panel(undefined, undefined, "history"));
+    expect(screen.getByRole("button", { name: "List" }).getAttribute("aria-pressed")).toBe("true");
+    expect(view.container.querySelector("[role=option] svg:not(.lucide)")).toBeNull();
+
+    fireEvent.click(screen.getByRole("button", { name: "Graph" }));
+    view.unmount();
+    const again = render(panel(undefined, undefined, "history"));
+
+    expect(screen.getByRole("button", { name: "Graph" }).getAttribute("aria-pressed")).toBe("true");
+    expect(again.container.querySelector("[role=option] svg:not(.lucide) circle")).toBeTruthy();
+    window.localStorage.clear();
+  });
+
   test("History refreshes on demand and keeps the open commit (OS-2535)", () => {
     render(panel(undefined, undefined, "history"));
     fireEvent.click(screen.getByRole("option", { name: /first/ }));

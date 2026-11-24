@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useMemo, useState } from "react";
 import type { Id } from "@/convex/_generated/dataModel";
+import { type HistoryLayout, readHistoryLayout, writeHistoryLayout } from "@/lib/threads/changes-view-prefs";
 import { isRecord } from "@/lib/type-guards";
 import { useWorktreeOp } from "@/lib/worktrees/hooks/use-worktree-op";
 
@@ -144,4 +145,14 @@ export function useCommitPatch(profileId: Id<"cliProfiles">, pathId: string, has
     error: result ? null : (op.error ?? (op.resultJson ? MALFORMED : null)),
     retry: op.refresh,
   };
+}
+
+/** History's List | Graph layout, kept per browser (OS-2536). */
+export function useHistoryLayout() {
+  const [layout, setLayout] = useState<HistoryLayout>(readHistoryLayout);
+  const change = useCallback((next: HistoryLayout) => {
+    writeHistoryLayout(next);
+    setLayout(next);
+  }, []);
+  return [layout, change] as const;
 }

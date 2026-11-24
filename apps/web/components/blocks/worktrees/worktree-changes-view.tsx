@@ -24,11 +24,11 @@ import {
 } from "@/lib/threads/changes-view-prefs";
 import { supportsWorktreeHistory } from "@/lib/worktrees/cli-version";
 import { useWorktreeChanges } from "@/lib/worktrees/hooks/use-worktree-changes";
-import { useWorktreeHistory } from "@/lib/worktrees/hooks/use-worktree-history";
+import { useHistoryLayout, useWorktreeHistory } from "@/lib/worktrees/hooks/use-worktree-history";
 import { useWorktreeRemoval } from "@/lib/worktrees/hooks/use-worktree-removal";
 import { cn } from "@/lib/utils";
 import { ChangesSummary, RevertAllButton, WorktreeChangesBody, useSectionCollapse } from "./worktree-changes-body";
-import { WorktreeHistoryView } from "./worktree-history";
+import { HistoryLayoutToggle, WorktreeHistoryView } from "./worktree-history";
 import { RemoveWorktreeDialog } from "./worktree-remove-dialog";
 import { RevertAllDialog, RevertFileDialog } from "./worktree-revert-dialogs";
 
@@ -65,6 +65,7 @@ function ChangesViewForCheckout({ profileId, pathId }: WorktreeChangesViewProps)
     pathId,
     historyOpened && state.isOnline && state.entry !== undefined && supportsWorktreeHistory(state.profile?.appVersion)
   );
+  const [historyLayout, setHistoryLayout] = useHistoryLayout();
   const [diffStyle, setDiffStyle] = useState<ChangesDiffStyle>(readChangesDiffStyle);
   const [wordWrap, setWordWrap] = useState(readChangesWordWrap);
   const [allCollapsed, setAllCollapsed] = useState(false);
@@ -240,6 +241,7 @@ function ChangesViewForCheckout({ profileId, pathId }: WorktreeChangesViewProps)
             {!onHistory && <ChangesSummary files={files} />}
             {isOnline && !onHistory && <RevertAllButton state={state} />}
             <div className="ml-auto flex items-center gap-1">
+              {onHistory && <HistoryLayoutToggle value={historyLayout} onChange={setHistoryLayout} />}
               <ChangesViewToggles
                 allCollapsed={allCollapsed}
                 onToggleCollapseAll={() => setAllCollapsed((value) => !value)}
@@ -258,6 +260,7 @@ function ChangesViewForCheckout({ profileId, pathId }: WorktreeChangesViewProps)
             profileId={profileId}
             pathId={pathId}
             history={history}
+            layout={historyLayout}
             registered={entry !== undefined}
             isOnline={isOnline}
             appVersion={profile?.appVersion}

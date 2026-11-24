@@ -29,7 +29,8 @@ const WORKTREE_OP_TTL_MS = 60 * 60 * 1000;
 const FILE_OP_TTL_MS = 10 * 60 * 1000;
 // Full object hashes only: the CLI hands them to git as revisions (OS-2534).
 const COMMIT_HASH = /^[0-9a-f]{40}([0-9a-f]{24})?$/;
-const HISTORY_CURSOR = /^[0-9a-f]{40}([0-9a-f]{24})?:\d+$/;
+// `<tip>[,<tip>]:<skip>`: HEAD, plus the default branch when it differs (OS-2536).
+const HISTORY_CURSOR = /^[0-9a-f]{40}([0-9a-f]{24})?(,[0-9a-f]{40}([0-9a-f]{24})?)?:\d+$/;
 
 const worktreeOpItemValidator = v.object({
   _id: v.id("cliWorktreeOps"),

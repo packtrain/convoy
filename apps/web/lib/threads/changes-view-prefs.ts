@@ -91,3 +91,16 @@ function subscribeToFileTreeSide(onChange: () => void): () => void {
 export function useFileTreeSide(): FileTreeSide {
   return useSyncExternalStore(subscribeToFileTreeSide, readFileTreeSide, () => "right");
 }
+
+const HISTORY_LAYOUT_KEY = "convoy.history-layout";
+
+/** History's List | Graph toggle (OS-2536), shared by the worktree page and the thread Changes tab. */
+export type HistoryLayout = "list" | "graph";
+
+export function readHistoryLayout(): HistoryLayout {
+  return storedIs(HISTORY_LAYOUT_KEY, "graph") ? "graph" : "list";
+}
+
+export function writeHistoryLayout(layout: HistoryLayout): void {
+  writeLocalString(HISTORY_LAYOUT_KEY, layout);
+}

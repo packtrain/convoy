@@ -97,7 +97,9 @@ model: one run (one assistant message) = one run.
   back row. A panel widened past 600px (full view) gets the two panes. The
   open commit lives in component state, not the URL, so browser Back does not
   step through commits. The list is fetched when the view opens, on the
-  Refresh button in a row above it, and again from the first page whenever a
+  Refresh button in a row above it (which also holds the List | Graph toggle,
+  OS-2536: Graph adds a graph column to the two-line rows in the narrow
+  panel, and is the table in full view; `cli-worktrees.md` → Layout), and again from the first page whenever a
   new run with a change summary lands in this thread (the newest run's
   `postRef`, as Working tree uses), so a commit the agent made shows up after
   its run; the open commit stays open. Patches come from the same per-tab

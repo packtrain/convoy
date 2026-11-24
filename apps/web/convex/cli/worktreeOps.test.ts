@@ -638,6 +638,14 @@ describe("cli worktreeOps", () => {
     await expect(
       s.asUser.mutation(api.cli.worktreeOps.enqueue, { profileId: s.profile._id, kind: "gitLog", pathId: s.repoPath.id, cursor: "--all:0" })
     ).rejects.toThrow("History cursor is invalid");
+    // Two tips: HEAD and the default branch (OS-2536).
+    const twoTips = `${"a".repeat(40)},${"b".repeat(40)}:50`;
+    await s.asUser.mutation(api.cli.worktreeOps.enqueue, { profileId: s.profile._id, kind: "gitLog", pathId: s.repoPath.id, cursor: twoTips });
+    for (const cursor of [`${"a".repeat(40)},:0`, `${"a".repeat(40)},${"b".repeat(40)},${"c".repeat(40)}:0`]) {
+      await expect(
+        s.asUser.mutation(api.cli.worktreeOps.enqueue, { profileId: s.profile._id, kind: "gitLog", pathId: s.repoPath.id, cursor })
+      ).rejects.toThrow("History cursor is invalid");
+    }
 
     await vi.advanceTimersByTimeAsync(10 * 60 * 1000 + 1000);
     await s.t.finishInProgressScheduledFunctions();
