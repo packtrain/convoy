@@ -78,7 +78,7 @@ describe("projects", () => {
       await t.run(async (runCtx) => {
         const membership = await runCtx.db
           .query("projectMembers")
-          .withIndex("by_project", (q) => q.eq("projectId", projectId))
+          .withIndex("by_project_and_user", (q) => q.eq("projectId", projectId))
           .unique();
         expect(membership).toBeDefined();
         expect(membership?.userId).toBe(user._id);
@@ -1623,7 +1623,7 @@ describe("API-key project creation", () => {
       expect(
         await c.db
           .query("projectMembers")
-          .withIndex("by_project", (q) => q.eq("projectId", id))
+          .withIndex("by_project_and_user", (q) => q.eq("projectId", id))
           .unique()
       ).toMatchObject({ userId: user._id, role: "project-admin" });
     });

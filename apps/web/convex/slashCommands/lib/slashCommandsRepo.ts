@@ -9,7 +9,7 @@ export async function listActiveOrganizationSlashCommands(
 ): Promise<Doc<"slashCommands">[]> {
   return ctx.db
     .query("slashCommands")
-    .withIndex("by_scope_and_organizationId_and_isDeleted", (q) =>
+    .withIndex("by_scope_and_organizationId_and_isDeleted_and_key", (q) =>
       q.eq("scope", "organization").eq("organizationId", organizationId).eq("isDeleted", false)
     )
     .collect();
@@ -21,7 +21,7 @@ export async function listActiveProjectSlashCommands(
 ): Promise<Doc<"slashCommands">[]> {
   return ctx.db
     .query("slashCommands")
-    .withIndex("by_scope_and_projectId_and_isDeleted", (q) =>
+    .withIndex("by_scope_and_projectId_and_isDeleted_and_key", (q) =>
       q.eq("scope", "project").eq("projectId", projectId).eq("isDeleted", false)
     )
     .collect();

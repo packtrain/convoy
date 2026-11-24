@@ -45,7 +45,7 @@ export async function paginateRepositoriesByProviderIdentity(
 ): Promise<PaginationResult<Doc<"integrationRepositories">>> {
   return ctx.db
     .query("integrationRepositories")
-    .withIndex("by_provider_and_host_and_providerRepositoryId", (q) =>
+    .withIndex("by_provider_and_host_and_providerRepositoryId_and_organizationId", (q) =>
       q.eq("provider", identity.provider).eq("host", identity.host).eq("providerRepositoryId", identity.providerRepositoryId)
     )
     .paginate(paginationOpts);
@@ -67,12 +67,12 @@ export async function upsertRepository(
 ): Promise<Id<"integrationRepositories">> {
   const existing = await ctx.db
     .query("integrationRepositories")
-    .withIndex("by_organizationId_and_provider_and_host_and_providerRepositoryId", (q) =>
+    .withIndex("by_provider_and_host_and_providerRepositoryId_and_organizationId", (q) =>
       q
-        .eq("organizationId", identity.organizationId)
         .eq("provider", identity.provider)
         .eq("host", identity.host)
         .eq("providerRepositoryId", identity.providerRepositoryId)
+        .eq("organizationId", identity.organizationId)
     )
     .unique();
   if (existing) {

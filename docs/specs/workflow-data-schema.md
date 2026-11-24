@@ -517,7 +517,6 @@ Resume per Lane) clears the hold and reschedules the advance.
 
 ```text
 workflows
-    by_project_and_isDeleted
     by_project_and_isDeleted_and_updatedAt
 
 workflowVersions
@@ -525,26 +524,22 @@ workflowVersions
 
 workflowRuns
     by_project_and_status_and_lastActivityAt
-    by_workflow_and_startedAt
-    by_workflowVersion
+    by_workflow_and_startedBy_and_startedAt
 
 workflowRunLanes
     by_run_and_laneId
 
 workflowRunSteps
     by_run_and_stageOrder_and_laneOrder_and_stepOrder
-    by_run_and_laneId_and_stageOrder_and_stepOrder
-    by_run_and_status
 
 cliThreads
     by_workflowRunId
-    by_workflowRunId_and_workflowLaneId
     by_parentThreadId
-    by_user_project_deleted_parent_lastActivity
-
-cliMessages
-    by_workflowRunStepId
 ```
+
+The engine reads a run's Steps whole (bounded by the definition caps), so
+per-Lane and per-status Step indexes, a per-Lane thread index and a Step to
+message index were dropped as unread (2026-11-24). Add one with its first reader.
 
 Application mutations enforce uniqueness of `(workflowId, versionNumber)` and
 `(runId, laneId)`; Convex indexes are not database-level unique constraints.

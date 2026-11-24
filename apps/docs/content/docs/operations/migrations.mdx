@@ -12,7 +12,8 @@ in a later deploy.
 
 The normal production path is to deploy the migration-capable version,
 dry-run all pending migrations, run all pending migrations, then verify
-the migration-specific invariants.
+the migration-specific invariants. `migrations:runAll` exists only while a
+release has pending migrations. When it is missing, there is nothing to run.
 
 From `apps/web`:
 

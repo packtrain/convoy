@@ -23,7 +23,7 @@ describe("default Inbox List (OS-842)", () => {
         const project = await runCtx.db.get("projects", projectId);
         const lists = await runCtx.db
           .query("taskLists")
-          .withIndex("by_project_and_isArchived_and_normalizedName", (q) =>
+          .withIndex("by_project_and_isArchived_and_rank", (q) =>
             q.eq("projectId", projectId).eq("isArchived", false)
           )
           .collect();

@@ -283,9 +283,8 @@ Files with no check render below as reply attachments do today.
   thread's newest 500 `cliMessageAttachmentRefs` with `role: "assistant"`
   (`by_threadId_and_role`), so a user's composer uploads never show here and
   never push agent files out of the window. Every ref write stamps the
-  message's role; refs written before OS-2289 get it from the
-  `backfillCliMessageAttachmentRefRole` migration (in `migrations:runAll`),
-  and until it runs their files are missing from the tab.
+  message's role; refs written before OS-2289 got it from a one-time backfill (since
+  removed).
 
 ### The row and its card (OS-2385)
 

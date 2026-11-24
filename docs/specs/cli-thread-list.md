@@ -200,7 +200,7 @@ tab, the Checks card), so in the thread list they are noise. They are
 - `convoy threads list --background` lists them instead of the normal list.
   `list_threads` has no such argument: an agent asking what threads it has means
   its own work.
-- `migrations.backfillCliThreadIsBackground` marks earlier runs. A Guide's
+- A one-time backfill (since removed) marked earlier runs. A Guide's
   pre-Retry thread lost its marker before this existed and stays in the list.
 
 ### Shared row badge

@@ -768,7 +768,7 @@ describe("reportPullRequest (OS-1370)", () => {
         const task = await runCtx.db.get("tasks", taskId);
         const logs = await runCtx.db
           .query("taskActivityLogs")
-          .withIndex("by_task", (q) => q.eq("taskId", taskId))
+          .withIndex("by_task_and_createdAt", (q) => q.eq("taskId", taskId))
           .collect();
         return {
           links: task?.externalLinks ?? [],
@@ -1389,7 +1389,7 @@ describe("cancelProcessing", () => {
 
       const assistantMessages = await runCtx.db
         .query("cliMessages")
-        .withIndex("by_thread", (q) => q.eq("threadId", chat._id))
+        .withIndex("by_thread_and_createdAt", (q) => q.eq("threadId", chat._id))
         .collect()
         .then((messages) => messages.filter((message) => message.role === "assistant"));
       expect(assistantMessages).toHaveLength(1);
@@ -1423,7 +1423,7 @@ describe("cancelProcessing", () => {
     const failedAssistant = await t.run(async (runCtx) => {
       const messages = await runCtx.db
         .query("cliMessages")
-        .withIndex("by_thread", (q) => q.eq("threadId", chat._id))
+        .withIndex("by_thread_and_createdAt", (q) => q.eq("threadId", chat._id))
         .collect();
       return messages.find((message) => message.role === "assistant");
     });

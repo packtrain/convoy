@@ -743,7 +743,7 @@ describe("bulkUpdate", () => {
         return t.run(async (runCtx) => {
           const logs = await runCtx.db
             .query("taskActivityLogs")
-            .withIndex("by_task", (q) => q.eq("taskId", task1._id))
+            .withIndex("by_task_and_createdAt", (q) => q.eq("taskId", task1._id))
             .collect();
           return logs.filter((log) => log.eventType === "type_changed");
         });

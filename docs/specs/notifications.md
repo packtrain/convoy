@@ -24,9 +24,8 @@ Table `notifications` (`convex/schema.ts`):
 - `organizationId` — the project's org, denormalized at fan-out (OS-1398).
   Every read is org-scoped: the inbox, badge and toasts only ever show the
   organization the user is currently in. Optional in the schema for rows
-  predating the field; those are invisible until
-  `backfillNotificationOrganizationId` stamps them (`convex/migrations.ts`),
-  which also deletes rows whose project is gone.
+  predating the field. A one-time backfill (since removed) stamped them and
+  deleted rows whose project was gone.
 - `projectId`, `subject` (same subject union as bus events: task or thread).
 - `read` / `readAt` — unread flag.
 - `snapshot` — denormalized render data copied at fan-out time so the inbox

@@ -281,7 +281,7 @@ describe("tasks.timeline.listByTask", () => {
       const times = await t.run(async (runCtx) => {
         const logs = await runCtx.db
           .query("taskActivityLogs")
-          .withIndex("by_task", (q) => q.eq("taskId", task._id))
+          .withIndex("by_task_and_createdAt", (q) => q.eq("taskId", task._id))
           .collect();
         return logs.map((log) => log.createdAt);
       });
@@ -686,7 +686,7 @@ describe("tasks.timeline.listByTask", () => {
       await t.run(async (runCtx) => {
         const logs = await runCtx.db
           .query("taskActivityLogs")
-          .withIndex("by_task", (q) => q.eq("taskId", task._id))
+          .withIndex("by_task_and_createdAt", (q) => q.eq("taskId", task._id))
           .collect();
         expect(logs.some((log) => log.eventType === "comment_added")).toBe(false);
       });

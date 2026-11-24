@@ -76,14 +76,6 @@ export async function listThreadMessagesAsc(ctx: Ctx, threadId: Id<"cliThreads">
     .collect();
 }
 
-/** All messages for a thread (unordered) — used by retry's run lookup. */
-export async function listMessagesByThread(ctx: Ctx, threadId: Id<"cliThreads">): Promise<Doc<"cliMessages">[]> {
-  return ctx.db
-    .query("cliMessages")
-    .withIndex("by_thread", (q) => q.eq("threadId", threadId))
-    .collect();
-}
-
 /** Unprocessed user messages for a thread, oldest first; `queueFirst` ones lead (OS-2339). */
 export async function listUnprocessedUserMessages(ctx: Ctx, threadId: Id<"cliThreads">): Promise<Doc<"cliMessages">[]> {
   const queued = await ctx.db

@@ -6,7 +6,7 @@ type Ctx = QueryCtx | MutationCtx;
 export async function listSkillFiles(ctx: Ctx, skillId: Id<"skills">): Promise<Doc<"skillFiles">[]> {
   return ctx.db
     .query("skillFiles")
-    .withIndex("by_skillId", (q) => q.eq("skillId", skillId))
+    .withIndex("by_skillId_and_path", (q) => q.eq("skillId", skillId))
     .collect();
 }
 

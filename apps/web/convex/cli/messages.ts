@@ -111,7 +111,6 @@ import {
   insertCliMessage,
   listDeliverableUserMessages,
   listInterruptedUserMessages,
-  listMessagesByThread,
   listNewestThreadMessagesDesc,
   listRunMessages,
   listThreadMessagesAsc,
@@ -1578,7 +1577,7 @@ export const editLastResend = mutation({
       // the discarded turn.
       const runId = await ensure(message.runId).notNull(errors.EDIT_LAST_LEGACY_MESSAGE);
 
-      const threadMessages = await listMessagesByThread(ctx, message.threadId);
+      const threadMessages = await listThreadMessagesAsc(ctx, message.threadId);
       const runAssistants = threadMessages.filter(
         (candidate) => candidate.role === "assistant" && candidate.runId === runId
       );

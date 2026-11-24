@@ -20,7 +20,7 @@ export async function getMembership(
 export async function listMembershipsForProject(ctx: Ctx, projectId: Id<"projects">): Promise<Doc<"projectMembers">[]> {
   return ctx.db
     .query("projectMembers")
-    .withIndex("by_project", (q) => q.eq("projectId", projectId))
+    .withIndex("by_project_and_user", (q) => q.eq("projectId", projectId))
     .collect();
 }
 

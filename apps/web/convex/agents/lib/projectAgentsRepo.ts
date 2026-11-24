@@ -23,7 +23,7 @@ export type ProjectAgentUpdatePatch = Partial<
 export async function listActiveProjectAgentsByProject(ctx: QueryCtx, projectId: Id<"projects">): Promise<Doc<"projectAgents">[]> {
   return ctx.db
     .query("projectAgents")
-    .withIndex("by_project_and_isDeleted", (q) => q.eq("projectId", projectId).eq("isDeleted", false))
+    .withIndex("by_project_and_isDeleted_and_normalizedName", (q) => q.eq("projectId", projectId).eq("isDeleted", false))
     .collect();
 }
 

@@ -229,9 +229,8 @@ Read contract:
 - The sidebar/details view keeps using `listTaskAttachmentsByTask` /
   `listTaskArtifactsByTask` for full metadata and URLs.
 
-Backfill: the idempotent `backfillTaskResourceCounts` migration
-(`convex/migrations.ts`, included in `runAll`) recomputes both counts from the
-`by_task` / `by_task_and_updatedAt` indexes for legacy/drifted rows.
+Backfill: a one-time migration (since removed) recomputed both counts for
+legacy rows.
 
 ## Task Sidebar Attachment UX
 

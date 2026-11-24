@@ -79,7 +79,7 @@ describe("create", () => {
       // Check messages were created
       const messages = await runCtx.db
         .query("cliMessages")
-        .withIndex("by_thread", (q) => q.eq("threadId", threadId))
+        .withIndex("by_thread_and_createdAt", (q) => q.eq("threadId", threadId))
         .collect();
       expect(messages).toHaveLength(1);
 
@@ -142,7 +142,7 @@ describe("create", () => {
 
       const messages = await runCtx.db
         .query("cliMessages")
-        .withIndex("by_thread", (q) => q.eq("threadId", threadId))
+        .withIndex("by_thread_and_createdAt", (q) => q.eq("threadId", threadId))
         .collect();
       expect(messages[0]?.processedContent).toBe(
         "Please ignore /client-summary and use Summarize the client context."
@@ -197,7 +197,7 @@ describe("create", () => {
     await t.run(async (runCtx) => {
       const messages = await runCtx.db
         .query("cliMessages")
-        .withIndex("by_thread", (q) => q.eq("threadId", threadId))
+        .withIndex("by_thread_and_createdAt", (q) => q.eq("threadId", threadId))
         .collect();
       expect(messages[0]?.runtimeCommand).toBe(true);
       expect(messages[0]?.processedContent).toBeUndefined();
@@ -256,7 +256,7 @@ describe("create", () => {
     await t.run(async (runCtx) => {
       const messages = await runCtx.db
         .query("cliMessages")
-        .withIndex("by_thread", (q) => q.eq("threadId", threadId))
+        .withIndex("by_thread_and_createdAt", (q) => q.eq("threadId", threadId))
         .collect();
       expect(messages[0]?.runtimeCommand).toBeUndefined();
     });
@@ -280,7 +280,7 @@ describe("create", () => {
     await t.run(async (runCtx) => {
       const messages = await runCtx.db
         .query("cliMessages")
-        .withIndex("by_thread", (q) => q.eq("threadId", threadId))
+        .withIndex("by_thread_and_createdAt", (q) => q.eq("threadId", threadId))
         .collect();
 
       expect(messages).toHaveLength(1);
@@ -308,7 +308,7 @@ describe("create", () => {
     await t.run(async (runCtx) => {
       const messages = await runCtx.db
         .query("cliMessages")
-        .withIndex("by_thread", (q) => q.eq("threadId", threadId))
+        .withIndex("by_thread_and_createdAt", (q) => q.eq("threadId", threadId))
         .collect();
 
       expect(messages).toHaveLength(1);
@@ -336,7 +336,7 @@ describe("create", () => {
     await t.run(async (runCtx) => {
       const messages = await runCtx.db
         .query("cliMessages")
-        .withIndex("by_thread", (q) => q.eq("threadId", threadId))
+        .withIndex("by_thread_and_createdAt", (q) => q.eq("threadId", threadId))
         .collect();
 
       expect(messages).toHaveLength(1);
@@ -364,7 +364,7 @@ describe("create", () => {
     await t.run(async (runCtx) => {
       const messages = await runCtx.db
         .query("cliMessages")
-        .withIndex("by_thread", (q) => q.eq("threadId", threadId))
+        .withIndex("by_thread_and_createdAt", (q) => q.eq("threadId", threadId))
         .collect();
 
       const userMessage = messages.find((m) => m.role === "user");
@@ -389,7 +389,7 @@ describe("create", () => {
     await t.run(async (runCtx) => {
       const messages = await runCtx.db
         .query("cliMessages")
-        .withIndex("by_thread", (q) => q.eq("threadId", threadId))
+        .withIndex("by_thread_and_createdAt", (q) => q.eq("threadId", threadId))
         .collect();
 
       const userMessage = messages.find((m) => m.role === "user");
@@ -576,7 +576,7 @@ describe("create", () => {
 
       const message = await runCtx.db
         .query("cliMessages")
-        .withIndex("by_thread", (q) => q.eq("threadId", threadId))
+        .withIndex("by_thread_and_createdAt", (q) => q.eq("threadId", threadId))
         .first();
       expect(message?.attachments).toHaveLength(1);
       expect(message?.attachments?.[0]?.fileName).toBe("mock-screenshot.png");
@@ -617,7 +617,7 @@ describe("create", () => {
 
       const message = await runCtx.db
         .query("cliMessages")
-        .withIndex("by_thread", (q) => q.eq("threadId", threadId))
+        .withIndex("by_thread_and_createdAt", (q) => q.eq("threadId", threadId))
         .first();
       expect(message?.taskId).toBe(task._id);
       expect(message?.attachments).toEqual([]);
@@ -2755,7 +2755,7 @@ describe("fork", () => {
       // The parent is untouched.
       const parentMessages = await runCtx.db
         .query("cliMessages")
-        .withIndex("by_thread", (q) => q.eq("threadId", parent._id))
+        .withIndex("by_thread_and_createdAt", (q) => q.eq("threadId", parent._id))
         .collect();
       expect(parentMessages).toHaveLength(4);
     });
@@ -3148,7 +3148,7 @@ describe("fork", () => {
 
 async function readThreadAttachedLogs(t: ReturnType<typeof createTestContext>["t"], taskId: Id<"tasks">) {
   const logs = await t.run((dbCtx) =>
-    dbCtx.db.query("taskActivityLogs").withIndex("by_task", (q) => q.eq("taskId", taskId)).collect()
+    dbCtx.db.query("taskActivityLogs").withIndex("by_task_and_createdAt", (q) => q.eq("taskId", taskId)).collect()
   );
   return logs.filter((log) => log.eventType === "thread_attached");
 }

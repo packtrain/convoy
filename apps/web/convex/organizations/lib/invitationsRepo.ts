@@ -28,11 +28,11 @@ export async function findPendingInvitation(
 ): Promise<Doc<"organizationInvitations"> | null> {
   return ctx.db
     .query("organizationInvitations")
-    .withIndex("by_org_and_email_and_status", (q) =>
+    .withIndex("by_org_and_status_and_email", (q) =>
       q
         .eq("organizationId", organizationId)
-        .eq("email", email)
         .eq("status", InvitationStatus.PENDING)
+        .eq("email", email)
     )
     .first();
 }
@@ -43,7 +43,7 @@ export async function listPendingInvitations(
 ): Promise<Doc<"organizationInvitations">[]> {
   return ctx.db
     .query("organizationInvitations")
-    .withIndex("by_org_and_status", (q) =>
+    .withIndex("by_org_and_status_and_email", (q) =>
       q
         .eq("organizationId", organizationId)
         .eq("status", InvitationStatus.PENDING)

@@ -11,7 +11,7 @@ describe("ctx.project", () => {
     const members = await ctx.t.run((runCtx) =>
       runCtx.db
         .query("projectMembers")
-        .withIndex("by_project", (q) => q.eq("projectId", project._id))
+        .withIndex("by_project_and_user", (q) => q.eq("projectId", project._id))
         .collect()
     );
 
@@ -29,7 +29,7 @@ describe("ctx.project", () => {
     const members = await ctx.t.run((runCtx) =>
       runCtx.db
         .query("projectMembers")
-        .withIndex("by_project", (q) => q.eq("projectId", project._id))
+        .withIndex("by_project_and_user", (q) => q.eq("projectId", project._id))
         .collect()
     );
 

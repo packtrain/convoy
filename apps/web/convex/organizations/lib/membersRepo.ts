@@ -1,6 +1,5 @@
 import type { MutationCtx, QueryCtx } from "../../_generated/server";
 import type { Doc, Id } from "../../_generated/dataModel";
-import { OrgRole } from "../../../lib/authz/roles";
 import { getOrgMembership } from "../../lib/accessRepo";
 import { deleteLinkedAccount, findLinkedAccount } from "../../integrations/github/lib/integrationLinkedAccountsRepo";
 
@@ -34,26 +33,10 @@ export async function listMembershipsForOrganization(
 ): Promise<Doc<"organizationMembers">[]> {
   return ctx.db
     .query("organizationMembers")
-    .withIndex("by_organization", (q) =>
+    .withIndex("by_organization_and_role", (q) =>
       q.eq("organizationId", organizationId)
     )
     .collect();
-}
-
-/** Org owners and admins — the roles holding `projects:manage_all`. */
-export async function listLeaderMembershipsForOrganization(
-  ctx: Ctx,
-  organizationId: Id<"organizations">
-): Promise<Doc<"organizationMembers">[]> {
-  const byRole = await Promise.all(
-    ([OrgRole.OWNER, OrgRole.ADMIN] as const).map((role) =>
-      ctx.db
-        .query("organizationMembers")
-        .withIndex("by_organization_and_role", (q) => q.eq("organizationId", organizationId).eq("role", role))
-        .collect()
-    )
-  );
-  return byRole.flat();
 }
 
 /**

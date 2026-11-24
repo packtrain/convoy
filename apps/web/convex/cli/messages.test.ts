@@ -82,7 +82,7 @@ describe("cliMessages", () => {
 
         const messages = await runCtx.db
           .query("cliMessages")
-          .withIndex("by_thread", (q) => q.eq("threadId", chat._id))
+          .withIndex("by_thread_and_createdAt", (q) => q.eq("threadId", chat._id))
           .collect();
 
         expect(messages).toHaveLength(1);
@@ -150,7 +150,7 @@ describe("cliMessages", () => {
 
         const messages = await runCtx.db
           .query("cliMessages")
-          .withIndex("by_thread", (q) => q.eq("threadId", chat._id))
+          .withIndex("by_thread_and_createdAt", (q) => q.eq("threadId", chat._id))
           .collect();
 
         expect(messages).toHaveLength(1);

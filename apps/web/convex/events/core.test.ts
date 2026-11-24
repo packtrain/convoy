@@ -179,7 +179,7 @@ describe("events bus core", () => {
       // Separation intact: the activity log row exists independently of the bus event.
       const logs = await runCtx.db
         .query("taskActivityLogs")
-        .withIndex("by_task", (q) => q.eq("taskId", taskId))
+        .withIndex("by_task_and_createdAt", (q) => q.eq("taskId", taskId))
         .collect();
       expect(logs.some((log) => log.eventType === "created")).toBe(true);
     });

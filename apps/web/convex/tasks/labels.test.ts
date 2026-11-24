@@ -155,7 +155,7 @@ describe("taskLabels", () => {
 
         const logs = await runCtx.db
           .query("taskActivityLogs")
-          .withIndex("by_task", (q) => q.eq("taskId", active._id))
+          .withIndex("by_task_and_createdAt", (q) => q.eq("taskId", active._id))
           .collect();
         const labelLog = logs.find((log) => log.eventType === "label_changed");
         expect(labelLog?.changeDetails).toMatchObject({
@@ -167,7 +167,7 @@ describe("taskLabels", () => {
         // No activity is logged for soft-deleted tasks.
         const deletedLogs = await runCtx.db
           .query("taskActivityLogs")
-          .withIndex("by_task", (q) => q.eq("taskId", deleted._id))
+          .withIndex("by_task_and_createdAt", (q) => q.eq("taskId", deleted._id))
           .collect();
         expect(deletedLogs.some((log) => log.eventType === "label_changed")).toBe(false);
       });
@@ -291,7 +291,7 @@ describe("tasks.core with labels", () => {
       await t.run(async (runCtx) => {
         const logs = await runCtx.db
           .query("taskActivityLogs")
-          .withIndex("by_task", (q) => q.eq("taskId", task._id))
+          .withIndex("by_task_and_createdAt", (q) => q.eq("taskId", task._id))
           .collect();
         const labelLogs = logs.filter((log) => log.eventType === "label_changed");
         expect(labelLogs).toHaveLength(3); // set, change, clear — no log for the no-op

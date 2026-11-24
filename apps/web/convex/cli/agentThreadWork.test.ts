@@ -147,7 +147,7 @@ describe("agentThreadWork sync", () => {
       const userMessageIds = await t.run(async (runCtx) => {
         const messages = await runCtx.db
           .query("cliMessages")
-          .withIndex("by_thread", (q) => q.eq("threadId", threadId))
+          .withIndex("by_thread_and_createdAt", (q) => q.eq("threadId", threadId))
           .collect();
         return messages.filter((m) => m.role === "user" && !m.processedAt).map((m) => m._id);
       });
@@ -208,7 +208,7 @@ describe("agentThreadWork sync", () => {
     const userMessageIds = await t.run(async (runCtx) => {
       const messages = await runCtx.db
         .query("cliMessages")
-        .withIndex("by_thread", (q) => q.eq("threadId", threadId))
+        .withIndex("by_thread_and_createdAt", (q) => q.eq("threadId", threadId))
         .collect();
       return messages.filter((m) => m.role === "user" && !m.processedAt).map((m) => m._id);
     });
@@ -251,7 +251,7 @@ describe("agentThreadWork sync", () => {
     const userMessageIds = await t.run(async (runCtx) => {
       const messages = await runCtx.db
         .query("cliMessages")
-        .withIndex("by_thread", (q) => q.eq("threadId", threadId))
+        .withIndex("by_thread_and_createdAt", (q) => q.eq("threadId", threadId))
         .collect();
       return messages.filter((m) => m.role === "user" && !m.processedAt).map((m) => m._id);
     });

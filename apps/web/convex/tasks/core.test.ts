@@ -4093,7 +4093,7 @@ describe("tasks activity logging for tags, type and links (OS-1455)", () => {
       return setup.t.run(async (runCtx) => {
         const logs = await runCtx.db
           .query("taskActivityLogs")
-          .withIndex("by_task", (q) => q.eq("taskId", task._id))
+          .withIndex("by_task_and_createdAt", (q) => q.eq("taskId", task._id))
           .collect();
         return logs.filter((log) => log.eventType === eventType);
       });

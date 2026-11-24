@@ -124,9 +124,7 @@ export default defineSchema({
     deletedAt: v.optional(v.number()),
     deletedBy: v.optional(v.id("users")),
   })
-    .index("by_slug", ["slug"])
-    .index("by_createdBy", ["createdBy"])
-    .index("by_isDeleted", ["isDeleted"]),
+    .index("by_slug", ["slug"]),
 
   // Organization Agent templates
   agents: defineTable({
@@ -149,7 +147,6 @@ export default defineSchema({
     deletedAt: v.optional(v.number()),
     deletedBy: v.optional(v.id("users")),
   })
-    .index("by_organization_and_isDeleted", ["organizationId", "isDeleted"])
     .index("by_organization_and_isDeleted_and_normalizedName", ["organizationId", "isDeleted", "normalizedName"]),
 
   // Organization members
@@ -159,7 +156,6 @@ export default defineSchema({
     role: orgRoleValidator,
     joinedAt: v.number(),
   })
-    .index("by_organization", ["organizationId"])
     .index("by_user", ["userId"])
     .index("by_organization_and_user", ["organizationId", "userId"])
     .index("by_organization_and_role", ["organizationId", "role"]),
@@ -187,9 +183,7 @@ export default defineSchema({
     deletedAt: v.optional(v.number()),
     deletedBy: v.optional(v.id("users")),
   })
-    .index("by_scope_and_organizationId_and_isDeleted", ["scope", "organizationId", "isDeleted"])
     .index("by_scope_and_organizationId_and_isDeleted_and_key", ["scope", "organizationId", "isDeleted", "key"])
-    .index("by_scope_and_projectId_and_isDeleted", ["scope", "projectId", "isDeleted"])
     .index("by_scope_and_projectId_and_isDeleted_and_key", ["scope", "projectId", "isDeleted", "key"]),
 
   // Skills — multi-file instruction bundles, org- or project-scoped (docs/specs/skills.md)
@@ -217,7 +211,6 @@ export default defineSchema({
     deletedAt: v.optional(v.number()),
     deletedBy: v.optional(v.id("users")),
   })
-    .index("by_scope_and_organizationId_and_isDeleted", ["scope", "organizationId", "isDeleted"])
     .index("by_scope_and_organizationId_and_isDeleted_and_normalizedName", [
       "scope",
       "organizationId",
@@ -234,7 +227,6 @@ export default defineSchema({
       "category",
       "normalizedName",
     ])
-    .index("by_scope_and_projectId_and_isDeleted", ["scope", "projectId", "isDeleted"])
     .index("by_scope_and_projectId_and_isDeleted_and_normalizedName", ["scope", "projectId", "isDeleted", "normalizedName"])
     .index("by_scope_and_projectId_and_isDeleted_and_category", [
       "scope",
@@ -251,7 +243,6 @@ export default defineSchema({
     path: v.string(),
     content: v.string(),
   })
-    .index("by_skillId", ["skillId"])
     .index("by_skillId_and_path", ["skillId", "path"]),
 
   // Organization Invitations
@@ -266,8 +257,7 @@ export default defineSchema({
     status: invitationStatusValidator,
   })
     .index("by_token", ["token"])
-    .index("by_org_and_email_and_status", ["organizationId", "email", "status"])
-    .index("by_org_and_status", ["organizationId", "status"]),
+    .index("by_org_and_status_and_email", ["organizationId", "status", "email"]),
 
   // Projects
   projects: defineTable({
@@ -304,11 +294,7 @@ export default defineSchema({
     deletedAt: v.optional(v.number()),
     deletedBy: v.optional(v.id("users")),
   })
-    .index("by_organization", ["organizationId"])
     .index("by_organization_and_isDeleted_and_isArchived", ["organizationId", "isDeleted", "isArchived"])
-    .index("by_organization_and_alias", ["organizationId", "alias"])
-    .index("by_defaultListId", ["defaultListId"])
-    .index("by_isDeleted_and_defaultListId", ["isDeleted", "defaultListId"])
     .index("by_organization_and_alias_and_isDeleted", ["organizationId", "alias", "isDeleted"]),
 
   // Project members
@@ -318,7 +304,6 @@ export default defineSchema({
     role: projectRoleValidator,
     addedAt: v.number(),
   })
-    .index("by_project", ["projectId"])
     .index("by_user", ["userId"])
     .index("by_project_and_user", ["projectId", "userId"]),
 
@@ -349,7 +334,6 @@ export default defineSchema({
     deletedAt: v.optional(v.number()),
     deletedBy: v.optional(v.id("users")),
   })
-    .index("by_project_and_isDeleted", ["projectId", "isDeleted"])
     .index("by_project_and_isDeleted_and_normalizedName", ["projectId", "isDeleted", "normalizedName"]),
 
   // Workflow definitions (docs/specs/workflow-data-schema.md). Holds the one
@@ -373,7 +357,6 @@ export default defineSchema({
     deletedAt: v.optional(v.number()),
     deletedBy: v.optional(v.id("users")),
   })
-    .index("by_project_and_isDeleted", ["projectId", "isDeleted"])
     .index("by_project_and_isDeleted_and_updatedAt", ["projectId", "isDeleted", "updatedAt"]),
 
   // Immutable definition copies cut at run start (ADR 0006): never edited or
@@ -407,9 +390,7 @@ export default defineSchema({
   })
     .index("by_project_and_status_and_lastActivityAt", ["projectId", "status", "lastActivityAt"])
     // Run history is starter-scoped (threads are user-scoped), so the index is too.
-    .index("by_workflow_and_startedBy_and_startedAt", ["workflowId", "startedBy", "startedAt"])
-    // No reader yet — OS-1870 (retry/skip) resolves a version's live runs through it.
-    .index("by_workflowVersion", ["workflowVersionId"]),
+    .index("by_workflow_and_startedBy_and_startedAt", ["workflowId", "startedBy", "startedAt"]),
 
   workflowRunLanes: defineTable({
     runId: v.id("workflowRuns"),
@@ -452,11 +433,7 @@ export default defineSchema({
     startedAt: v.optional(v.number()),
     finishedAt: v.optional(v.number()),
   })
-    .index("by_run_and_stageOrder_and_laneOrder_and_stepOrder", ["runId", "stageOrder", "laneOrder", "stepOrder"])
-    // No reader yet — the engine reads whole runs (bounded by the definition caps);
-    // OS-1869's concurrent lane dispatch reads per lane on these two.
-    .index("by_run_and_laneId_and_stageOrder_and_stepOrder", ["runId", "laneId", "stageOrder", "stepOrder"])
-    .index("by_run_and_status", ["runId", "status"]),
+    .index("by_run_and_stageOrder_and_laneOrder_and_stepOrder", ["runId", "stageOrder", "laneOrder", "stepOrder"]),
 
   // Project task Lists
   taskLists: defineTable({
@@ -493,7 +470,6 @@ export default defineSchema({
   })
     .index("by_project_and_normalizedName", ["projectId", "normalizedName"])
     .index("by_project_and_ref", ["projectId", "ref"])
-    .index("by_project_and_isArchived_and_normalizedName", ["projectId", "isArchived", "normalizedName"])
     .index("by_project_and_isArchived_and_rank", ["projectId", "isArchived", "rank"])
     .index("by_project_and_isPinned_and_rank", ["projectId", "isPinned", "rank"])
     .searchIndex("search_text", {
@@ -646,9 +622,6 @@ export default defineSchema({
     // When the task entered its current closed status (docs/specs/task-closed-at.md).
     closedAt: v.optional(v.number()),
   })
-    .index("by_project_and_isDeleted", ["projectId", "isDeleted"])
-    .index("by_project_and_isDeleted_and_rank", ["projectId", "isDeleted", "rank"])
-    .index("by_project_and_isDeleted_and_isArchived_and_rank", ["projectId", "isDeleted", "isArchived", "rank"])
     .index("by_project_and_isDeleted_and_isArchived_and_createdAt", ["projectId", "isDeleted", "isArchived", "createdAt"])
     .index("by_project_and_isDeleted_and_isArchived_and_archivedAt", ["projectId", "isDeleted", "isArchived", "archivedAt"])
     .index("by_parent_and_isDeleted_and_rank", ["parentId", "isDeleted", "rank"])
@@ -656,7 +629,6 @@ export default defineSchema({
     .index("by_project_and_isDeleted_and_isArchived_and_listKey_and_rank", ["projectId", "isDeleted", "isArchived", "listKey", "rank"])
     .index("by_project_deleted_archived_listKey_status_rank", ["projectId", "isDeleted", "isArchived", "listKey", "status", "rank"])
     .index("by_project_deleted_archived_status_archivedAt", ["projectId", "isDeleted", "isArchived", "status", "archivedAt"])
-    .index("by_isDeleted_and_isArchived_and_listKey_and_status", ["isDeleted", "isArchived", "listKey", "status"])
     .index("by_project_and_isDeleted_and_isArchived_and_refNumber", ["projectId", "isDeleted", "isArchived", "refNumber"])
     // No isDeleted/isArchived here: label delete resolution must reach ALL
     // referencing tasks, including soft-deleted and archived ones.
@@ -718,8 +690,7 @@ export default defineSchema({
   //
   // ponytail: `organizationId` is optional for legacy rows only — every write path requires
   // it and the backfill has run everywhere. Narrowing it would validate every row in *every*
-  // deployment on deploy, breaking stale dev/preview ones until someone runs
-  // `migrations:runAll` there.
+  // deployment on deploy, breaking stale dev/preview ones that never ran the backfill.
   notifications: defineTable({
     userId: v.id("users"),
     type: notificationTypeValidator,
@@ -754,8 +725,7 @@ export default defineSchema({
     changeDetails: v.optional(changeDetailsValidator),
     createdAt: v.number(),
   })
-    .index("by_task_and_createdAt", ["taskId", "createdAt"])
-    .index("by_task", ["taskId"]),
+    .index("by_task_and_createdAt", ["taskId", "createdAt"]),
 
   // Task Comments
   taskComments: defineTable({
@@ -868,8 +838,7 @@ export default defineSchema({
   })
     .index("by_user_project_profileKey_and_isDeleted", ["userId", "projectId", "profileKey", "isDeleted"])
     .index("by_user_project_and_isDeleted_and_createdAt", ["userId", "projectId", "isDeleted", "createdAt"])
-    .index("by_user_and_isDeleted_and_createdAt", ["userId", "isDeleted", "createdAt"])
-    .index("by_project_and_isDeleted", ["projectId", "isDeleted"]),
+    .index("by_user_and_isDeleted_and_createdAt", ["userId", "isDeleted", "createdAt"]),
 
   // CLI Sessions (ephemeral - active when CLI is running)
   cliSessions: defineTable({
@@ -901,9 +870,7 @@ export default defineSchema({
     startedAt: v.number(),
     lastHeartbeatAt: v.number(),
   })
-    .index("by_profile", ["profileId"])
     .index("by_profile_lastHeartbeat", ["profileId", "lastHeartbeatAt"])
-    .index("by_project", ["projectId"])
     .index("by_project_and_lastHeartbeatAt", ["projectId", "lastHeartbeatAt"])
     .index("by_user_and_lastHeartbeatAt", ["userId", "lastHeartbeatAt"])
     .index("by_instanceId", ["instanceId"]),
@@ -1063,10 +1030,7 @@ export default defineSchema({
     // list can order by "most recently shared".
     sharedAt: v.optional(v.number()),
   })
-    .index("by_user_project", ["userId", "projectId"])
     .index("by_userId_projectId_isDeleted_kind_lastActivityAt", ["userId", "projectId", "isDeleted", "kind", "lastActivityAt"])
-    .index("by_project_and_isDeleted", ["projectId", "isDeleted"])
-    .index("by_project_and_isDeleted_and_lastActivityAt", ["projectId", "isDeleted", "lastActivityAt"])
     // Flat thread list (OS-1364): the sort × done index family all
     // discriminate on `parentThreadId` so container children (field set) drop
     // out; `eq(..., undefined)` matches legacy rows with the field unset.
@@ -1074,9 +1038,6 @@ export default defineSchema({
     .index("by_user_project_deleted_parent_background_lastActivity", ["userId", "projectId", "isDeleted", "parentThreadId", "isBackground", "lastActivityAt"])
     .index("by_parentThreadId", ["parentThreadId"])
     .index("by_workflowRunId", ["workflowRunId"])
-    // No reader yet — the engine resolves a lane's thread from the lane row's
-    // `threadId`; kept for run-scoped thread sweeps (full cancel, OS-1871).
-    .index("by_workflowRunId_and_workflowLaneId", ["workflowRunId", "workflowLaneId"])
     // Top-level Watch Tower sections. Spec: watch-tower.md.
     .index("by_user_project_deleted_parent_watchTowerStatus_lastActivity", [
       "userId", "projectId", "isDeleted", "parentThreadId", "statusProjection.watchTowerStatus", "lastActivityAt",
@@ -1104,7 +1065,6 @@ export default defineSchema({
     .index("by_user_pending_deleted_lastActivity", ["userId", "hasPendingUserMessages", "isDeleted", "lastActivityAt"])
     .index("by_user_project_task_deleted_lastActivity", ["userId", "projectId", "associatedTaskId", "isDeleted", "lastActivityAt"])
     .index("by_project_attachedPullRequestRef_deleted_lastActivity", ["projectId", "attachedPullRequest.ref", "isDeleted", "lastActivityAt"])
-    .index("by_profile", ["profileId"])
     .index("by_profile_pending_deleted_lastActivityAt", ["profileId", "hasPendingUserMessages", "isDeleted", "lastActivityAt"])
     .index("by_user_project_deleted_parent_background_createdAt", ["userId", "projectId", "isDeleted", "parentThreadId", "isBackground", "createdAt"])
     // Thread-list sections (OS-1451): the two above × the isDone filter.
@@ -1133,8 +1093,7 @@ export default defineSchema({
     // unset `sharedAt` sorts before every number, so the range excludes
     // unshared rows — then `.order("desc")` for most recently shared first.
     .index("by_user_project_deleted_sharedAt", ["userId", "projectId", "isDeleted", "sharedAt"])
-    .index("by_claimedBySessionId", ["claimedBySessionId"])
-    .index("by_claimLeaseExpiresAt", ["claimLeaseExpiresAt"]),
+    .index("by_claimedBySessionId", ["claimedBySessionId"]),
 
   // CLI Messages (individual messages in threads)
   cliMessages: defineTable({
@@ -1204,25 +1163,19 @@ export default defineSchema({
     createdAt: v.number(),
     updatedAt: v.number(),
   })
-    .index("by_thread", ["threadId"])
-    // No reader yet — OS-1870's retry maps a step back to its dispatched messages.
-    .index("by_workflowRunStepId", ["workflowRunStepId"])
     .index("by_thread_and_createdAt", ["threadId", "createdAt"]) // For paginated listByThread
     // Run membership: un-stamping and re-delivering a stranded run both need
     // its rows without scanning thread history (OS-1672).
     .index("by_thread_and_runId_and_createdAt", ["threadId", "runId", "createdAt"])
     .index("by_thread_and_role_and_createdAt", ["threadId", "role", "createdAt"])
-    .index("by_thread_and_role_and_status_and_createdAt", ["threadId", "role", "status", "createdAt"])
-    .index("by_thread_and_role_and_processedAt_and_createdAt", ["threadId", "role", "processedAt", "createdAt"])
-    .index("by_profile_and_status", ["profileId", "status"])
-    .index("by_profile_and_status_and_createdAt", ["profileId", "status", "createdAt"]), // For FIFO listPending
+    .index("by_thread_and_role_and_processedAt_and_createdAt", ["threadId", "role", "processedAt", "createdAt"]),
 
   // Attachment references for CLI message uploads (used for pending upload cleanup)
   cliMessageAttachmentRefs: defineTable({
     threadId: v.id("cliThreads"),
     messageId: v.id("cliMessages"),
     storageId: v.id("_storage"),
-    // The message's role; unset on rows older than `backfillCliMessageAttachmentRefRole` (OS-2289).
+    // The message's role; unset on rows written before OS-2289.
     role: v.optional(cliMessageRoleValidator),
     createdAt: v.number(),
   })
@@ -1239,7 +1192,6 @@ export default defineSchema({
     createdAt: v.number(),
   })
     .index("by_storageId", ["storageId"])
-    .index("by_user_and_project", ["userId", "projectId"])
     // Retention sweep: drafts keep unsent uploads (OS-2141).
     .index("by_createdAt", ["createdAt"]),
 
@@ -1372,8 +1324,8 @@ export default defineSchema({
     projectId: v.id("projects"),
     userId: v.id("users"),
     taskId: v.optional(v.id("tasks")),
-    // Deprecated migration-only field. Older rows briefly stored threadId on
-    // the coarse rollup; `migrations.clearLegacyCostRollupThreadIds` removes it.
+    // Deprecated field. Older rows briefly stored threadId on the coarse rollup;
+    // a one-time migration cleared it.
     threadId: v.optional(v.id("cliThreads")),
     cliType: cliTypeValidator,
     dayStartMs: v.number(), // UTC midnight
@@ -1540,13 +1492,12 @@ export default defineSchema({
     // The page a history job is importing; identifies its chain like importPage.
     historyRequest: v.optional(v.object({ page: v.number(), requestedAt: v.number() })),
   })
-    .index("by_organizationId_and_provider_and_host_and_providerRepositoryId", [
-      "organizationId",
+    .index("by_provider_and_host_and_providerRepositoryId_and_organizationId", [
       "provider",
       "host",
       "providerRepositoryId",
-    ])
-    .index("by_provider_and_host_and_providerRepositoryId", ["provider", "host", "providerRepositoryId"]),
+      "organizationId",
+    ]),
 
   integrationPullRequests: defineTable({
     repositoryId: v.id("integrationRepositories"),

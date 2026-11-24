@@ -12,10 +12,9 @@ Two tables (`convex/schema.ts`), written from the same event:
   dayStartMs)`. Deliberately has **no thread dimension** so project/task
   range reads stay bounded by (users × tasks × cliTypes × days) regardless
   of how many threads ran.
-- The schema may temporarily tolerate a deprecated optional `threadId` on
-  `costRollups` during migration windows only; production code must not write
-  or read that field. Run `migrations.clearLegacyCostRollupThreadIds` before
-  narrowing the schema back to the canonical shape.
+- The schema still tolerates a deprecated optional `threadId` on
+  `costRollups`; production code must not write or read that field. A
+  one-time migration (since removed) cleared it, so the schema can be narrowed.
 - `threadCostRollups` — one row per `(threadId, dayStartMs)`; read only by
   the thread cost summary, so that scan is bounded by the thread's active
   days.

@@ -17,7 +17,7 @@ export type SkillUpdatePatch = Partial<
 export async function listActiveOrganizationSkills(ctx: QueryCtx, organizationId: Id<"organizations">): Promise<Doc<"skills">[]> {
   return ctx.db
     .query("skills")
-    .withIndex("by_scope_and_organizationId_and_isDeleted", (q) =>
+    .withIndex("by_scope_and_organizationId_and_isDeleted_and_normalizedName", (q) =>
       q.eq("scope", "organization").eq("organizationId", organizationId).eq("isDeleted", false)
     )
     .collect();
@@ -27,7 +27,7 @@ export async function listActiveOrganizationSkills(ctx: QueryCtx, organizationId
 export async function listActiveProjectSkills(ctx: QueryCtx, projectId: Id<"projects">): Promise<Doc<"skills">[]> {
   return ctx.db
     .query("skills")
-    .withIndex("by_scope_and_projectId_and_isDeleted", (q) => q.eq("scope", "project").eq("projectId", projectId).eq("isDeleted", false))
+    .withIndex("by_scope_and_projectId_and_isDeleted_and_normalizedName", (q) => q.eq("scope", "project").eq("projectId", projectId).eq("isDeleted", false))
     .collect();
 }
 

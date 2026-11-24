@@ -5,7 +5,7 @@ import { ONLINE_THRESHOLD_MS } from "./constants";
 
 type Ctx = QueryCtx | MutationCtx;
 
-/** A page of sessions for a profile, oldest-index order, for batched cleanup. */
+/** A page of sessions for a profile, oldest heartbeat first, for batched cleanup. */
 export async function paginateSessionsByProfile(
   ctx: Ctx,
   profileId: Id<"cliProfiles">,
@@ -13,7 +13,7 @@ export async function paginateSessionsByProfile(
 ): Promise<PaginationResult<Doc<"cliSessions">>> {
   return ctx.db
     .query("cliSessions")
-    .withIndex("by_profile", (q) => q.eq("profileId", profileId))
+    .withIndex("by_profile_lastHeartbeat", (q) => q.eq("profileId", profileId))
     .paginate(opts);
 }
 

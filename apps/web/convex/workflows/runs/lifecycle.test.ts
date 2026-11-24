@@ -109,7 +109,7 @@ async function messagesOf(h: Harness, threadId: Id<"cliThreads">): Promise<Doc<"
   return h.t.run(async (runCtx) =>
     runCtx.db
       .query("cliMessages")
-      .withIndex("by_thread", (q) => q.eq("threadId", threadId))
+      .withIndex("by_thread_and_createdAt", (q) => q.eq("threadId", threadId))
       .collect()
   );
 }

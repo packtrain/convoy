@@ -55,8 +55,8 @@ When adding task fields, update `taskReturnValidator` in
 ```typescript
 const tasks = await ctx.db
   .query("tasks")
-  .withIndex("by_project_and_isDeleted_and_rank", (q) =>
-    q.eq("projectId", args.projectId).eq("isDeleted", false)
+  .withIndex("by_project_and_isDeleted_and_isArchived_and_listKey_and_rank", (q) =>
+    q.eq("projectId", args.projectId).eq("isDeleted", false).eq("isArchived", false).eq("listKey", args.listKey)
   )
   .collect();
 ```

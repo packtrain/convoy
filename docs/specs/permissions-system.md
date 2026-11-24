@@ -199,11 +199,9 @@ filter so the UI never offers a target the caller cannot act on.
 
 #### Backfilled explicit grants
 
-`backfillOrgLeaderProjectMemberships` (`convex/migrations.ts`) inserted a
-`project-admin` `projectMembers` row for every org owner/admin × active project,
-so removing the implicit bypass revoked nobody (OS-1535). It ran on both
-deployments before OS-1536 landed; a deployment that skips it revokes every
-leader who has no explicit row.
+A one-time backfill (OS-1535, since removed) inserted a `project-admin`
+`projectMembers` row for every org owner/admin × active project, so removing the
+implicit bypass revoked nobody. It ran on both deployments before OS-1536 landed.
 
 Three rules the migration encodes:
 

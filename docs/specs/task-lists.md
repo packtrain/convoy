@@ -650,37 +650,10 @@ Migration tests should cover:
 - backfill mapping to `system:archived` when OS-908 lands
 - verification before narrowing List key to required
 
-## OS-842 Default Inbox Backfill Runbook
+## OS-842 and OS-907 backfills
 
-After deploying the Phase 2 migration code, run the default Inbox backfill
-manually. Do not switch no-list reads or creates to `projects.defaultListId`
-until verification passes.
-
-1. Dry run:
-   `cd apps/web && npx convex run migrations:runAll '{"dryRun": true}'`
-2. Execute:
-   `cd apps/web && npx convex run migrations:runAll`
-3. Watch status:
-   `cd apps/web && npx convex run --component migrations lib:getStatus --watch`
-4. Verify:
-   `cd apps/web && npx convex run migrations:verifyDefaultListBackfill`
-5. After deploying Phase 3 activation, run steps 2 and 4 once more to catch
-   tasks created between the Phase 2 backfill and Phase 3 deploy.
-
-## OS-907 Backlog System List Backfill Runbook
-
-The OS-907 Backlog status migration and final legacy task-state cleanup have
-completed in production. The narrowed schema no longer includes
-`statusBeforeBacklog` and no current task can store `status = "Backlog"`.
-
-The active read-only follow-up check is Backlog subtask parent/List
-consistency:
-
-1. Verify Backlog subtask parent/List consistency:
-   `cd apps/web && npx convex run migrations:verifyBacklogSystemListParentConsistency`
-
-`verifyBacklogSystemListParentConsistency` is read-only. If it returns
-`splitBacklogSubtaskIds`, inspect those tasks: they are active Backlog subtasks
-whose parent is missing, archived/deleted, or not also in Backlog. If
-`truncated` is `true`, rerun with a higher `scanLimit` or investigate before
-treating the result as complete.
+The default Inbox backfill (OS-842) and the Backlog system List backfill
+(OS-907) ran in production. Their migrations, verify queries and the
+`projects.by_defaultListId`, `projects.by_isDeleted_and_defaultListId` and
+`tasks.by_isDeleted_and_isArchived_and_listKey_and_status` indexes were removed
+on 2026-11-24.

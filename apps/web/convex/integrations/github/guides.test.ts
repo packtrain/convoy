@@ -60,7 +60,7 @@ async function setupGuideRun() {
   const runOnce = async (end: { parked?: boolean; error?: string } = {}, thread = threadId) => {
     await t.mutation(api.cli.threads.runControl.claimThread, { threadId: thread, sessionId: session._id, leaseMs: 60_000, apiKey });
     const userMessageIds = await t.run(async (run) =>
-      (await run.db.query("cliMessages").withIndex("by_thread", (q) => q.eq("threadId", thread)).collect())
+      (await run.db.query("cliMessages").withIndex("by_thread_and_createdAt", (q) => q.eq("threadId", thread)).collect())
         .filter((message) => message.role === "user" && !message.processedAt)
         .map((message) => message._id)
     );

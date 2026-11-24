@@ -12,7 +12,7 @@ export type AgentUpdatePatch = Partial<
 export async function listActiveAgentsByOrganization(ctx: QueryCtx, organizationId: Id<"organizations">): Promise<Doc<"agents">[]> {
   return ctx.db
     .query("agents")
-    .withIndex("by_organization_and_isDeleted", (q) => q.eq("organizationId", organizationId).eq("isDeleted", false))
+    .withIndex("by_organization_and_isDeleted_and_normalizedName", (q) => q.eq("organizationId", organizationId).eq("isDeleted", false))
     .collect();
 }
 
