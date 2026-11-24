@@ -276,9 +276,9 @@ Files with no check render below as reply attachments do today.
 - Shipped in OS-2291: the Checks section and "Other files", which drops files
   that answer a Check.
 - Shipped in OS-2289: the tab with files only, headed "Files". A group is one
-  agent reply, rendered by the transcript's `ResponseAttachments`. In the
-  full-width layout the content is centered and stops growing at the
-  transcript's width (`max-w-3xl`). The list
+  agent reply, rendered by the transcript's `ResponseAttachments`. The content
+  spans the panel's full width, and the Checks heading is a toolbar row
+  styled like the Changes tab's (41px, card background). The list
   comes from `cli.messages.listAgentAttachmentsByThread`, which reads the
   thread's newest 500 `cliMessageAttachmentRefs` with `role: "assistant"`
   (`by_threadId_and_role`), so a user's composer uploads never show here and

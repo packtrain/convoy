@@ -95,14 +95,15 @@ export function TaskChecksSection({
 
   if (surface === "tab") {
     return (
-      <section className="border-b border-border px-2 pt-3 pb-2">
-        <div className="mb-1 flex items-center gap-2 px-2">
+      <section className="border-b border-border">
+        {/* Same toolbar row as the Changes tab's (ThreadChangesToolbar). */}
+        <div className="flex h-[41px] shrink-0 items-center gap-2 border-b border-border bg-card px-4">
           <h3 className="text-sm font-medium">Checks</h3>
           <ChecksDocsLink />
           <span className="ml-auto text-xs tabular-nums text-muted-foreground">{data.checks.length > 0 ? passCount(data.checks) : "No checks"}</span>
           {runThreadId ? <RunChecksMenu taskId={taskId} threadId={runThreadId} data={data} readOnlyReason={readOnlyReason} /> : null}
         </div>
-        {rows}
+        {rows.length > 0 ? <div className="px-2 py-2">{rows}</div> : null}
       </section>
     );
   }

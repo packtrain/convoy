@@ -52,7 +52,7 @@ export function EvidencePanel({
   const permissions = useProjectPermissions(projectId ?? null);
   if (!evidence) {
     return (
-      <div className="mx-auto flex w-full max-w-3xl flex-col gap-3 px-4 py-3">
+      <div className="flex w-full flex-col gap-3 px-4 py-3">
         <Skeleton className="h-5 w-24" />
         <Skeleton className="h-8 w-full" />
         <Skeleton className="h-8 w-full" />
@@ -64,8 +64,7 @@ export function EvidencePanel({
   const readOnlyReason = thread?.taskArchived ? "Archived tasks are read-only" : permissions.readOnlyReason;
   return (
     <section className="h-full min-h-0 overflow-y-auto">
-      {/* Full-width layout: centered at the transcript's width. */}
-      <div className="mx-auto w-full max-w-3xl">
+      <div className="w-full">
         {evidence.hasChecks || evidence.hasChecklists ? (
           <TaskChecksSection
             taskId={taskId}
