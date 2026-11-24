@@ -12,7 +12,7 @@ it("does not present defaults as observed configuration on an older service", ()
     scope: { connection: 0, details: true }, rows: [], loading: false, stale: false, pageNumber: 1,
     observations: [{ health: "connected", profiles: [{ profile: "a", status: "online", attempts: 1 }] }],
   };
-  expect(text(detailLines(state, "/socket", "1"))).toContain("Concurrency: unknown   OS sandbox: unknown   Streaming: unknown");
+  expect(text(detailLines(state, "/socket", "1"))).toContain("  a  online · unknown active\n    Project   unknown\n    Endpoint  unknown\n    Settings  unknown");
 });
 
 it("shows the service's environment mode under Connection, else the target's, else nothing (OS-2249)", () => {
@@ -20,34 +20,41 @@ it("shows the service's environment mode under Connection, else the target's, el
     scope: { connection: 0, details: true }, rows: [], loading: false, stale: false, pageNumber: 1,
     observations: [{ health: "connected", profiles: [], snapshot }] });
   const lines = (value: BrowseState, mode?: "shared" | "isolated") => detailLines(value, "/socket", "1", mode).map(line => line.text);
-  expect(lines(state({ v: 1, id: "s", ok: true, pid: 1, mode: "shared" }), "isolated")[1]).toBe("Mode: shared (one account for all projects)");
-  expect(lines(state(), "isolated")[1]).toBe("Mode: isolated (a Linux account per project)");
+  expect(lines(state({ v: 1, id: "s", ok: true, pid: 1, mode: "shared" }), "isolated")[2]).toBe("  Mode           shared · one account for all projects");
+  expect(lines(state(), "isolated")[2]).toBe("  Mode        isolated · a Linux account per project");
   expect(lines(state()).join("\n")).not.toContain("Mode:");
 });
 
-it("lists the environment's runtimes, then each project's with its login and credential (OS-2502)", () => {
+it("lists runtimes in one table, with environment-wide columns left of PROJECT (OS-2502)", () => {
   const profiles: WorkerState[] = [
-    { profile: "a", status: "online", attempts: 1, versions: { codex: "0.142.3" }, logins: { codex: "signed-in", "claude-code": "signed-out" }, desiredAuth: { mode: "native", claude: { mode: "disabled" } } },
-    { profile: "b", status: "stopped", attempts: 0 },
+    { profile: "a", status: "online", attempts: 1, versions: { codex: "0.142.3", cursor: "2026.10.22-27dcf5f" }, logins: { codex: "signed-in", "claude-code": "signed-out" }, desiredAuth: { mode: "native", claude: { mode: "disabled" } } },
+    { profile: "b", status: "online", attempts: 1, versions: { codex: "0.142.3" }, logins: { codex: "signed-out" } },
+    { profile: "c", status: "stopped", attempts: 0 },
   ];
-  const state = (mode: "shared" | "isolated"): BrowseState => ({ scope: { connection: 0, details: true }, rows: [], loading: false, stale: false, pageNumber: 1,
-    observations: [{ health: "connected", profiles, snapshot: { v: 1, id: "s", ok: true, pid: 1, mode } }] });
+  const state = (mode: "shared" | "isolated", list = profiles): BrowseState => ({ scope: { connection: 0, details: true }, rows: [], loading: false, stale: false, pageNumber: 1,
+    observations: [{ health: "connected", profiles: list, snapshot: { v: 1, id: "s", ok: true, pid: 1, mode } }] });
   const shared = detailLines(state("shared"), "/socket", "1");
-  expect(text(shared)).toContain(["Runtimes", "  Codex        0.142.3   signed in", "  Claude Code  unknown   signed out"].join("\n"));
-  expect(text(shared)).toContain(["  Runtimes", "    Codex        0.142.3   signed in               credential: native",
-    "    Claude Code  unknown   signed out              credential: none"].join("\n"));
-  expect(text(shared)).toContain("b: stopped, active unknown\n  Project: unknown   Endpoint: unknown\n  Concurrency: unknown   OS sandbox: unknown   Streaming: unknown\n  Runtimes: not reported yet");
-  expect(shared.flatMap(line => line.row ? [line.row.id] : [])).toEqual([":codex", ":claude-code", "a:codex", "a:claude-code"]);
-  // Isolated projects each have their own login, so the environment rows show none.
-  expect(text(detailLines(state("isolated"), "/socket", "1"))).toContain("Runtimes\n  Codex        0.142.3\n  Claude Code  unknown\n");
+  expect(text(shared)).toContain(["Runtimes",
+    "  RUNTIME      VERSION             LOGIN       PROJECT  CREDENTIAL",
+    "  Codex        0.142.3             signed in   a        native",
+    "                                               b        native",
+    "  Claude Code  unknown             signed out  a        none",
+    "  Cursor       2026.10.22-27dcf5f  unknown     a        native"].join("\n"));
+  expect(shared.flatMap(line => line.row ? [line.row.id] : [])).toEqual(["a:codex", "b:codex", "a:claude-code", "a:cursor"]);
+  expect(text(shared)).toContain("  c  stopped · unknown active\n    Project   unknown\n    Endpoint  unknown\n    Settings  unknown\n    Runtimes  not reported yet");
+  // Each isolated project has its own login, so LOGIN moves right of PROJECT.
+  expect(text(detailLines(state("isolated"), "/socket", "1"))).toContain(["  RUNTIME      VERSION             PROJECT  LOGIN       CREDENTIAL",
+    "  Codex        0.142.3             a        signed in   native", "                                   b        signed out  native"].join("\n"));
+  // One project needs no PROJECT column.
+  expect(text(detailLines(state("shared", profiles.slice(0, 1)), "/socket", "1"))).toContain("  RUNTIME      VERSION             LOGIN       CREDENTIAL\n  Codex        0.142.3             signed in   native");
 });
 
 it("names a service that reports no runtime details (OS-2502)", () => {
   const state: BrowseState = { scope: { connection: 0, details: true }, rows: [], loading: false, stale: false, pageNumber: 1,
     observations: [{ health: "connected", profiles: [{ profile: "a", status: "online", attempts: 1 }] }] };
   const lines = text(detailLines(state, "/socket", "1"));
-  expect(lines).toContain("Runtime details not reported by this service");
-  expect(lines).not.toContain("  Runtimes");
+  expect(lines).toContain("Runtimes\n  Not reported by this service");
+  expect(lines).not.toContain("not reported yet");
 });
 
 it("removes terminal controls while preserving Unicode", () => {
@@ -114,20 +121,20 @@ it("shows a useful unobserved service summary instead of unknown diagnostic fiel
   const state: BrowseState = { scope: { connection: 0, details: true }, rows: [], loading: false, stale: true, pageNumber: 1, observations: [{ health: "reconnecting", profiles: [] }] };
   const summary = text(detailLines(state, "/socket", "1"));
   expect(summary).toContain("Service state has not been observed");
-  expect(summary).not.toContain("PID: unknown");
-  expect(summary).not.toContain("Epoch: unknown");
+  expect(summary).not.toContain("PID");
+  expect(summary).not.toContain("Epoch");
 });
 
 it("uses an inspected service state without a browsing snapshot", () => {
   const state: BrowseState = { scope: { connection: 0, details: true }, rows: [], loading: false, stale: true, pageNumber: 1, observations: [{ health: "reconnecting", profiles: [], environmentStatus: { state: "running", serviceRunning: false } }] };
   const summary = text(detailLines(state, "/socket", "1"));
-  expect(summary).toContain("Service: stopped");
+  expect(summary).toMatch(/Service +stopped/);
   expect(summary).not.toContain("Service state has not been observed");
 });
 
 it("shows a confirmed stop instead of a stale running snapshot", () => {
   const state: BrowseState = { scope: { connection: 0, details: true }, rows: [], loading: false, stale: true, pageNumber: 1, observations: [{ health: "reconnecting", profiles: [], snapshot: { v: 1, id: "status", ok: true, pid: 123 }, environmentStatus: { state: "stopped", serviceRunning: false } }] };
-  expect(text(detailLines(state, "/socket", "1"))).toContain("Service: stopped");
+  expect(text(detailLines(state, "/socket", "1"))).toMatch(/Service +stopped/);
 });
 
 it("lists unhealthy projects with their service warning, scoped to the selected project", () => {

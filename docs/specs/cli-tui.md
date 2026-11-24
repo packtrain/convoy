@@ -1184,7 +1184,7 @@ or the status and warning it stopped on. A failed login or launch keeps the
 shell's failure guidance.
 
 Since CLI 0.169.0 a shared environment's project Actions no longer offer the logins;
-Sign in sits on the environment's runtime rows in Details
+Sign in sits on each runtime row in Details
 ([Runtimes in Details](#runtimes-in-details-cli-01690-os-2502)).
 
 Saving "Native login" for a runtime in a project's credential editor closes the
@@ -1373,9 +1373,9 @@ maintenance has no Agent runtimes action and no sidebar row. Real installs need 
 
 ## Environment mode, CLI 0.127.0, OS-2242
 
-See [shared environments](cli-shared-environments.md). Details shows `Mode:
-shared (one account for all projects)` or `Mode: isolated (a Linux account per
-project)` under Connection (CLI 0.134.0, OS-2249). The mode comes from the
+See [shared environments](cli-shared-environments.md). Details shows `Mode
+shared · one account for all projects` or `Mode  isolated · a Linux account per
+project` under Connection (CLI 0.134.0, OS-2249). The mode comes from the
 service's status, else the target's record: Local's `environment.json`, or a
 managed Docker record, where a missing mode reads as isolated. An SSH target
 whose service has not reported a mode shows no line. The per-profile
@@ -1638,27 +1638,32 @@ Details lists each agent runtime with its version and login, and each row carrie
 its own actions, so Sign in, Update and credential changes no longer have to be
 found in project Actions or the Agent runtimes panel.
 
-Under Service Node, a Runtimes section lists every runtime a project of the
-environment reports, with the version from the first project that reports it. In
-shared mode the row also shows the login, since one account serves every project.
-Each project block then lists its own runtimes with version, login and assigned
-credential:
+Since CLI 0.169.1 Details has three sections with bold headings and a blank line
+between them. Environment lists connection, mode, versions, service, container
+state, configuration, endpoint and epoch as label and value columns; the managed
+environment check fills in Container and Recovery instead of printing its raw
+fields. Runtimes is one table with a row per runtime and project. Projects lists
+each project's status line, its Project, Endpoint and Settings, and a note that the
+settings were captured when the project attached.
+
+The columns left of PROJECT hold for the whole environment and show only on a
+runtime's first row: name, version (the first project that reports one) and, in
+shared mode, the login. The columns right of it belong to the project: in isolated
+mode the login, then the credential. One project drops the PROJECT column. A shared
+environment with two projects:
 
 ```
 Runtimes
-  Codex        0.142.3   signed in
-  Claude Code  2.1.4     signed out
-    [l] Sign in   No Update: the TUI updates managed Docker runtimes only
-
-os: online, active 0
-  …
-  Runtimes
-    Codex        0.142.3   signed in               credential: native
-    Claude Code  2.1.4     signed out              credential: none
-      [c] Assign credential
+  RUNTIME      VERSION             LOGIN       PROJECT  CREDENTIAL
+  Codex        0.142.3             signed in   os       native
+    [l] Sign in   [u] Update   [c] Assign credential   [x] Unassign
+                                               web      key work-openai
+  Claude Code  2.1.4               signed out  os       none
+  Cursor       2026.10.22-27dcf5f  unknown     os       native
 ```
 
-Login reads `signed in`, `signed out` or `login status not known`. The credential
+Column widths come from the cells, so a long version does not push the next
+column out of line. Login reads `signed in`, `signed out` or `unknown`. The credential
 is the project's saved binding: `native` without one, `none` when unassigned
 (runtime disabled), else `key <name>`, so a key named `none` reads apart; OpenCode
 lists its slot keys. Actions follow the binding, not the label.
@@ -1670,9 +1675,9 @@ unknown runtime names. A shared worker reads logins with the runtime's status
 command ([shared environments](cli-shared-environments.md#runtimes-and-logins)),
 so Cursor, OpenCode and Antigravity read unknown. An isolated worker takes the
 launcher's login-file check: a detected runtime without its login file is signed
-out, otherwise signed in. A service that reports neither field shows the one line
-"Runtime details not reported by this service". A project without a report yet
-shows `Runtimes: not reported yet`.
+out, otherwise signed in. A service that reports neither field shows "Not reported by this
+service" under Runtimes. A project without a report yet has no table rows and shows
+`Runtimes  not reported yet` in its Projects block.
 
 Runtime rows are selectable when the panel has focus. ↑/↓ move between them; past
 the first or last row they scroll the other lines. PgUp/PgDn and the wheel scroll.
@@ -1680,13 +1685,12 @@ A click selects a row. The selected row's actions sit on the line below it, as k
 hints that also run on a click, followed by a note for each action this row cannot
 offer. Hints and notes wrap onto more lines when the panel is too narrow for one:
 
-| Row | Action | When |
-| --- | --- | --- |
-| Environment | [l] Sign in | Shared mode, Codex, Claude Code or Antigravity. Cursor and OpenCode name their login command instead |
-| Environment | [u] Update | The target has Agent runtimes (managed Docker). It opens that panel. Local and SSH say the TUI does not update them |
-| Project | [l] Sign in | Isolated mode, the same runtimes. It opens the project's Actions and starts its login, with the existing pause and reload flow |
-| Project | [c] Assign credential | The target has a credential store, every runtime but OpenCode, which points to `convoy keys` |
-| Project | [x] Unassign | As Assign, when the credential is not already `none` |
+| Action | When |
+| --- | --- |
+| [l] Sign in | Codex, Claude Code or Antigravity. Shared mode signs in once for the environment; isolated mode opens the row's project Actions and starts its login, with the existing pause and reload flow. Cursor and OpenCode name their login command instead |
+| [u] Update | The target has Agent runtimes (managed Docker). It opens that panel. Local and SSH rows leave it out |
+| [c] Assign credential | The target has a credential store, every runtime but OpenCode, which points to `convoy keys` |
+| [x] Unassign | As Assign, when the credential is not already `none` |
 
 Assign and Unassign open the project's existing credential editor with that runtime
 focused; Unassign also drafts it as unassigned, so Save changes finishes it. Esc
@@ -1706,8 +1710,8 @@ login." A shared project's Actions no longer list the logins, and asking for one
 there says to sign in from Details. Isolated environments keep logging in per
 project.
 
-`convoy service status` prints the same rows per project under the status table,
-and `--json` carries `versions` and `logins` in each profile, so no separate
+`convoy service status` prints the same rows as a tab-separated table under the
+profile table, one row per project and runtime, and `--json` carries `versions` and `logins` in each profile, so no separate
 command is needed.
 
 The module is `tui/details`; its index exports `Details`. Wiring: the App mounts
@@ -1729,11 +1733,11 @@ any reload does. No Convex query, subscription or polling is added.
 
 `service/workflow.test.ts` covers the stored fields and dropped names,
 `service/formatters.test.ts` the `service status` rows, `tui/formatters.test.ts`
-the environment and project sections and the not-reported line, and
+the table's columns in shared, isolated and single-project mode and the not-reported lines, and
 `details/workflow.test.ts` each row's actions and notes.
 `actions/workflow.test.ts` covers the shared Sign in and its refusal in project
-Actions. `credentials.tsx details` selects a project row, unassigns and saves;
-`details-shared` clicks the environment row's Sign in, confirms, and checks the
-login and both reloads; `details-narrow` checks that a project row's three actions
+Actions. `credentials.tsx details` checks the isolated columns, unassigns the first row and saves;
+`details-shared` checks the shared columns, clicks the first row's Sign in, confirms, and checks the
+login and both reloads; `details-narrow` checks that a row's three actions
 wrap at 43 columns. `actions/workflow.test.ts` also replaces a project during the
 login and checks that it is not reloaded.

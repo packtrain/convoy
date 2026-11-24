@@ -4,8 +4,8 @@ import { stripVTControlCharacters } from "node:util";
 import type { BrowseState, Health, Observation, Row } from "./validators.js";
 import type { WorkerState } from "../service/validators.js";
 import { guidance } from "../project/formatters.js";
-import { runtimeRows, runtimeText, type RuntimeRow } from "../service/formatters.js";
-import { loginRuntimeLabels, type LoginRuntime } from "../project/validators.js";
+import { LOGIN_LABELS, runtimeRows, type RuntimeRow } from "../service/formatters.js";
+import { loginRuntimeLabels, loginRuntimeSchema, type LoginRuntime } from "../project/validators.js";
 import type { EnvironmentMode } from "../environment/validators.js";
 
 export const plain = (value: unknown) => stripVTControlCharacters(String(value ?? "unknown")).replace(/[\p{Cc}\p{Bidi_Control}]/gu, " ");
@@ -79,57 +79,80 @@ export function warningGroups(profiles: WorkerState[], profile?: string) {
   });
 }
 
-const MODE_LABELS: Record<EnvironmentMode, string> = { shared: "shared (one account for all projects)", isolated: "isolated (a Linux account per project)" };
+const MODE_LABELS: Record<EnvironmentMode, string> = { shared: "shared · one account for all projects", isolated: "isolated · a Linux account per project" };
 
-/** A selectable runtime row in Details: the environment's (no profile) or one project's. */
-export type DetailRow = RuntimeRow & { id: string; profile?: string };
-export type DetailLine = { text: string; row?: DetailRow };
+/** A selectable runtime row in Details: one project's runtime. */
+export type DetailRow = RuntimeRow & { id: string; profile: string };
+/** `label`: how many leading columns draw muted; `kind`: a section heading, a table header or a muted note. */
+export type DetailLine = { text: string; row?: DetailRow; label?: number; kind?: "heading" | "header" | "note" };
 
-/** Environment rows: each runtime any project reports, with the first report's version and, when shared, login. Spec: docs/specs/cli-tui.md#runtimes-in-details-cli-01690-os-2502 */
+/** Pads cells into columns two spaces apart. */
+export function alignColumns(rows: string[][]): string[] {
+  const widths = rows[0].map((_, column) => Math.max(...rows.map(row => stringWidth(row[column]))));
+  return rows.map(row => row.map((cell, column) => cell + " ".repeat(widths[column] - stringWidth(cell))).join("  ").trimEnd());
+}
+
+const heading = (text: string): DetailLine => ({ text, kind: "heading" });
+const note = (text: string): DetailLine => ({ text: plain(text), kind: "note" });
+/** Label and value pairs with the labels in one muted column. */
+function fields(pairs: [string, string][], indent: string): DetailLine[] {
+  const width = Math.max(...pairs.map(([label]) => label.length));
+  return pairs.map(([label, value]) => ({ text: plain(`${indent}${label.padEnd(width)}  ${value}`), label: indent.length + width }));
+}
+
+/** One table: a row per runtime and project. Columns left of PROJECT hold for the whole environment and repeat only on a runtime's first row. Spec: docs/specs/cli-tui.md#runtimes-in-details-cli-01690-os-2502 */
 function runtimeSection(profiles: WorkerState[], shared: boolean): DetailLine[] {
   if (!profiles.length) return [];
-  const reported = profiles.flatMap(runtimeRows);
-  if (!reported.length) return [{ text: "Runtime details not reported by this service" }];
-  const rows = [...new Set(reported.map(row => row.runtime))].map(runtime => {
-    const of = reported.filter(row => row.runtime === runtime);
-    return { runtime, version: of.find(row => row.version)?.version, login: of.find(row => row.login)?.login, credential: "", unassigned: false };
+  const entries = loginRuntimeSchema.options.flatMap(runtime => profiles.flatMap(profile => runtimeRows(profile).filter(row => row.runtime === runtime).map(row => ({ profile: profile.profile, row }))));
+  if (!entries.length) return [heading("Runtimes"), note("  Not reported by this service")];
+  const many = profiles.length > 1;
+  const cells = entries.map(({ profile, row }, index) => {
+    const first = entries[index - 1]?.row.runtime !== row.runtime, same = entries.filter(entry => entry.row.runtime === row.runtime);
+    const project = many ? [plain(profile)] : [], login = LOGIN_LABELS[(shared ? same.find(entry => entry.row.login)?.row.login : row.login) ?? "unknown"];
+    const common = first ? [loginRuntimeLabels[row.runtime], same.find(entry => entry.row.version)?.row.version ?? "unknown", ...shared ? [login] : []] : ["", "", ...shared ? [""] : []];
+    return [...common, ...project, ...shared ? [] : [login], plain(row.credential)];
   });
-  return [{ text: "Runtimes" }, ...rows.map(row => ({ text: plain(`  ${runtimeText(row, { login: shared, credential: false })}`), row: { ...row, id: `:${row.runtime}` } }))];
+  const header = ["RUNTIME", "VERSION", ...shared ? ["LOGIN"] : [], ...many ? ["PROJECT"] : [], ...shared ? [] : ["LOGIN"], "CREDENTIAL"];
+  const [top, ...rows] = alignColumns([header, ...cells]);
+  return [heading("Runtimes"), { text: `  ${top}`, kind: "header" },
+    ...rows.map((text, index) => ({ text: `  ${text}`, row: { ...entries[index].row, id: `${entries[index].profile}:${entries[index].row.runtime}`, profile: entries[index].profile } }))];
 }
 
 /** `mode`: the target's own record, used until the service reports one. */
 export function detailLines(state: BrowseState, endpoint: string, clientVersion: string, mode?: EnvironmentMode): DetailLine[] {
   const observation = state.observations[state.scope.connection];
   const snapshot = state.stale && observation.environmentStatus ? undefined : observation.snapshot;
-  const inspection = observation.inspection;
+  const { inspection, environmentStatus: status } = observation;
   const shown = snapshot?.mode ?? mode;
-  const lines = [
-    ...(observation.guidance ?? []),
-    `Connection: ${observation.health}${state.stale ? " (stale)" : ""}`,
-    ...(shown ? [`Mode: ${MODE_LABELS[shown]}`] : []),
-    `Client: ${clientVersion}${observation.version ? `   Service: ${observation.version}` : ""}`,
-    ...(snapshot ? [
-      `Service: ${snapshot.stopping ? "stopping" : "running"}   PID: ${snapshot.pid}`,
-      `Configuration: ${snapshot.configurationError ? "invalid; last valid workers retained" : "valid"}`,
-      `Epoch: ${snapshot.epoch}`,
-    ] : typeof observation.environmentStatus?.serviceRunning === "boolean" ? [`Service: ${observation.environmentStatus.serviceRunning ? "running" : "stopped"} at last environment check`] : ["Service state has not been observed. Retry connection or inspect Actions."]),
-    ...(observation.environmentStatus ? Object.entries(observation.environmentStatus).map(([key, value]) => `${key}: ${JSON.stringify(value)}`) : []),
-    `Service endpoint: ${endpoint}`,
-    ...(inspection ? [`Service Node: ${inspection.nodeVersion}`] : []),
-  ].map(text => ({ text: plain(text) }));
-  const reports = observation.profiles.some(profile => runtimeRows(profile).length);
-  return [...lines, ...runtimeSection(observation.profiles, shown === "shared"),
-    ...(observation.profiles.length ? [{ text: "Project configuration was captured when attached." }] : []),
-    ...observation.profiles.flatMap(profile => {
-      const config = inspection?.profiles.find(item => item.profile === profile.profile);
-      const rows = runtimeRows(profile);
-      return [
-        `${profile.profile}: ${profile.status}, active ${profile.activeRuns ?? "unknown"}${profile.paused ? ", paused" : ""}${profile.pending ? ", pending config" : ""}`,
-        `  Project: ${config?.projectId ?? "unknown"}   Endpoint: ${config?.endpoint ?? "unknown"}`,
-        `  Concurrency: ${config ? config.concurrency ?? "default" : "unknown"}   OS sandbox: ${config ? config.isolated ?? "default" : "unknown"}   Streaming: ${config ? config.streaming ?? "default" : "unknown"}`,
-        ...reports ? [rows.length ? "  Runtimes" : "  Runtimes: not reported yet"] : [],
-      ].map((text): DetailLine => ({ text: plain(text) })).concat(rows.map(row => ({ text: plain(`    ${runtimeText(row)}`), row: { ...row, id: `${profile.profile}:${row.runtime}`, profile: profile.profile } })));
-    })];
+  const node = inspection ? [`Node ${inspection.nodeVersion}`] : [];
+  const service = snapshot ? [snapshot.stopping ? "stopping" : "running", `PID ${snapshot.pid}`, ...node].join(" · ")
+    : typeof status?.serviceRunning === "boolean" ? [`${status.serviceRunning ? "running" : "stopped"} at last environment check`, ...node].join(" · ")
+      : "Service state has not been observed. Retry connection or inspect Actions.";
+  const version = observation.version ? ` · service ${observation.version}` : typeof status?.selectedVersion === "string" ? ` · selected ${status.selectedVersion}` : "";
+  const environment = fields([
+    ["Connection", `${observation.health}${state.stale ? " (stale)" : ""}`],
+    ...shown ? [["Mode", MODE_LABELS[shown]] as [string, string]] : [],
+    ["Version", `client ${clientVersion}${version}`],
+    ["Service", service],
+    ...typeof status?.state === "string" ? [["Container", status.state] as [string, string]] : [],
+    ...status?.recoveryPending === true ? [["Recovery", "pending"] as [string, string]] : [],
+    ...snapshot ? [["Configuration", snapshot.configurationError ? "invalid; last valid workers retained" : "valid"] as [string, string]] : [],
+    ["Endpoint", endpoint],
+    ...snapshot?.epoch ? [["Epoch", snapshot.epoch] as [string, string]] : [],
+  ], "  ");
+  const runtimes = runtimeSection(observation.profiles, shown === "shared");
+  const reports = runtimes.some(line => line.row);
+  const projects = observation.profiles.flatMap(profile => {
+    const config = inspection?.profiles.find(item => item.profile === profile.profile);
+    const settings = config ? `concurrency ${config.concurrency ?? "default"} · OS sandbox ${config.isolated ?? "default"} · streaming ${config.streaming ?? "default"}` : "unknown";
+    return [{ text: plain(`  ${profile.profile}  ${[profile.status, `${profile.activeRuns ?? "unknown"} active`, ...profile.paused ? ["paused"] : [], ...profile.pending ? ["pending config"] : []].join(" · ")}`) },
+      ...fields([["Project", config?.projectId ?? "unknown"], ["Endpoint", config?.endpoint ?? "unknown"], ["Settings", settings],
+        ...reports && !runtimeRows(profile).length ? [["Runtimes", "not reported yet"] as [string, string]] : []], "    ")];
+  });
+  const gap = { text: "" };
+  return [...(observation.guidance ?? []).map(text => ({ text: plain(text) })), heading("Environment"), ...environment,
+    ...runtimes.length ? [gap, ...runtimes] : [],
+    ...projects.length ? [gap, heading("Projects"), ...projects, note("  Settings were captured when each project attached.")] : []];
 }
 
 

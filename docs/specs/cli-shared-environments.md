@@ -228,7 +228,7 @@ status commands as `project check`.
 
 On a shared Local target the TUI runs Shell without a pause or a confirmation,
 since nothing is interrupted. Since CLI 0.169.0 (OS-2502) the TUI's Sign in sits
-on the environment's runtime rows in Details: it confirms, runs the login once,
+on each runtime row in Details: it confirms, runs the login once,
 then reloads every project so each worker reports the new login
 ([Runtimes in Details](cli-tui.md#runtimes-in-details-cli-01690-os-2502)). The
 worker's `connecting` event also carries the full login map (`logins`), not only

@@ -110,23 +110,22 @@ try {
     await key("c"); await until("Runtime credentials need a shared environment, a managed Docker target");
     assert.equal(browser.getSnapshot().credentials, undefined);
   } else if (scenario === "details") {
-    // Isolated: the environment rows show versions only; each project row has its login, credential and actions.
-    await until("Codex        0.142.3   signed in               credential: key work-openai");
-    assert(screen.split("\n").some(line => / {2}Codex {8}0\.142\.3$/.test(line.trimEnd())), screen);
-    assert(frame.includes("No Update: the TUI updates managed Docker runtimes only"), frame);
-    await key(TAB, DOWN, DOWN); await until("[l] Sign in   [c] Assign credential   [x] Unassign");
+    // Isolated: one row per runtime and project, LOGIN right of PROJECT; the first row is selected with its actions below it.
+    await until("RUNTIME      VERSION  PROJECT  LOGIN       CREDENTIAL");
+    assert(/Codex {8}0\.142\.3 {2}a {8}signed in {3}key work-openai/.test(screen), screen);
+    await key(TAB); await until("[l] Sign in   [c] Assign credential   [x] Unassign");
     await key("x"); await until("[ Unassigned · runtime disabled ▾ ]");
     assert.equal(browser.getSnapshot().scope.profile, "a"); assert.equal(browser.getSnapshot().credentials, "editing");
     await key(TAB, TAB, TAB, TAB, ENTER); await until("Saved 1 change for a.");
     assert.deepEqual(requests, [{ action: "bind", profile: "a", binding: { mode: "disabled" } }]);
   } else if (scenario === "details-narrow") {
     // 43 content columns: the project row's three actions wrap instead of clipping.
-    await settle(200); await key(TAB, DOWN, DOWN); await until("[l] Sign in");
+    await settle(200); await key(TAB); await until("[l] Sign in");
     assert(frame.includes("[c] Assign credential") && frame.includes("[x] Unassign"), screen);
   } else if (scenario === "details-shared") {
-    // Shared: Sign in sits on the environment's row; a click runs it, it confirms, then reloads every project.
+    // Shared: LOGIN is environment-wide, left of PROJECT; Sign in on a row runs once for the environment, confirms, then reloads every project.
     await until("[l] Sign in");
-    assert(screen.split("\n").some(line => / {2}Codex {8}0\.142\.3 {3}signed in$/.test(line.trimEnd())), screen);
+    assert(frame.includes("RUNTIME      VERSION  LOGIN       PROJECT  CREDENTIAL"), screen);
     const y = screen.split("\n").findIndex(line => line.includes("[l] Sign in")), x = screen.split("\n")[y].indexOf("[l] Sign in") + 1;
     await key(`\u001b[<0;${x + 1};${y + 1}M\u001b[<0;${x + 1};${y + 1}m`); await until("Sign in to Codex once for every project in Fixture?");
     assert(frame.includes("2 projects reload") && frame.includes("[ Sign in ]"), frame);

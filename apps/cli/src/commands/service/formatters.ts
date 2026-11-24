@@ -26,7 +26,7 @@ export function printServiceEvent(event: ServiceResponse, json = false, print: P
   }
 }
 
-const LOGIN_LABELS: Record<RuntimeLogin, string> = { "signed-in": "signed in", "signed-out": "signed out", unknown: "login status not known" };
+export const LOGIN_LABELS: Record<RuntimeLogin, string> = { "signed-in": "signed in", "signed-out": "signed out", unknown: "unknown" };
 /** `unassigned`: the binding disables the runtime; `credential` is only its label. */
 export interface RuntimeRow { runtime: LoginRuntime; version?: string; login?: RuntimeLogin; credential: string; unassigned: boolean }
 
@@ -48,19 +48,14 @@ function credential(runtime: LoginRuntime, auth?: AuthDescriptor) {
   return binding.mode === "disabled" ? { credential: "none", unassigned: true } : { credential: `key ${binding.name ?? "managed"}`, unassigned: false };
 }
 
-/** One aligned runtime row; Details leaves out the columns that belong elsewhere. */
-export function runtimeText(row: RuntimeRow, columns = { login: true, credential: true }) {
-  return [loginRuntimeLabels[row.runtime].padEnd(12), (row.version ?? "unknown").padEnd(9),
-    ...columns.login ? [LOGIN_LABELS[row.login ?? "unknown"].padEnd(23)] : [], ...columns.credential ? [`credential: ${row.credential}`] : []].join(" ").trimEnd();
-}
-
+/** One tab-separated row per project and runtime, like the profile table above it. */
 function runtimeLines(profiles: WorkerState[]) {
   if (!profiles.length) return [];
   if (!profiles.some(profile => runtimeRows(profile).length)) return ["Runtimes: not reported by this service"];
-  return ["Runtimes:", ...profiles.flatMap(profile => {
-    const rows = runtimeRows(profile);
-    return rows.length ? [`  ${plain(profile.profile)}`, ...rows.map(row => `    ${plain(runtimeText(row))}`)] : [`  ${plain(profile.profile)}: not reported yet`];
-  })];
+  const missing = profiles.filter(profile => !runtimeRows(profile).length).map(profile => plain(profile.profile));
+  return ["PROFILE\tRUNTIME\tVERSION\tLOGIN\tCREDENTIAL", ...profiles.flatMap(profile => runtimeRows(profile).map(row =>
+    [profile.profile, loginRuntimeLabels[row.runtime], row.version ?? "unknown", LOGIN_LABELS[row.login ?? "unknown"], row.credential].map(plain).join("\t"))),
+  ...missing.length ? [`Runtimes not reported yet: ${missing.join(", ")}`] : []];
 }
 
 export function printRunResult(value: unknown, json = false, print: Print = console.log): void {

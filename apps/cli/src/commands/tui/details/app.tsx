@@ -8,6 +8,8 @@ import { palette, wrapLines, type DetailLine, type DetailRow } from "../formatte
 import { loginAction } from "../actions/validators.js";
 import { ACTION_KEYS, ACTION_LABELS, hintLines, rowActions, type RuntimeAction } from "./workflow.js";
 
+const INDENT = 4;
+
 /** Environment Details: its lines, with runtime rows to select and the selected row's actions below it. Spec: docs/specs/cli-tui.md#runtimes-in-details-cli-01690-os-2502 */
 export function Details({ browser, state, lines, focused, locked, width, height, onContent, onCredentials }: {
   browser: Browser; state: BrowseState; lines: DetailLine[]; focused: boolean; locked: boolean; width: number; height: number; onContent(): void; onCredentials(): void;
@@ -17,9 +19,8 @@ export function Details({ browser, state, lines, focused, locked, width, height,
   const rows = lines.flatMap(line => line.row ? [line.row] : []);
   const selected = rows.find(row => row.id === selectedId) ?? rows[0];
   const { actions, notes } = selected ? rowActions(selected, browser.targets[state.scope.connection]) : { actions: [], notes: [] };
-  const indent = selected?.profile === undefined ? 4 : 6;
-  const hints = hintLines<{ text: string; action?: RuntimeAction }>([...actions.map(action => ({ text: `[${ACTION_KEYS[action]}] ${ACTION_LABELS[action]}`, action })),
-    ...notes.flatMap(note => wrapLines(note, width - indent).map(text => ({ text })))], width - indent);
+    const hints = hintLines<{ text: string; action?: RuntimeAction }>([...actions.map(action => ({ text: `[${ACTION_KEYS[action]}] ${ACTION_LABELS[action]}`, action })),
+    ...notes.flatMap(note => wrapLines(note, width - INDENT).map(text => ({ text })))], width - INDENT);
   const items: (DetailLine | number)[] = lines.flatMap(line => line.row && line.row === selected ? [line, ...hints.map((_, index) => index)] : [line]);
   const max = Math.max(0, items.length - height);
   const start = Math.min(offset, max);
@@ -37,8 +38,8 @@ export function Details({ browser, state, lines, focused, locked, width, height,
     onContent();
     const { connection } = state.scope, { profile, runtime } = selected;
     if (action === "update") { browser.showRuntimes(true); return; }
-    // A project's actions run in its own view, as from its Actions.
-    if (profile !== undefined) { browser.select({ connection, profile, details: false }); browser.showActions(true); }
+    // A shared account signs in once for the environment; other actions run in the project's view, as from its Actions.
+    if (action !== "signin" || browser.targets[connection].mode !== "shared") { browser.select({ connection, profile, details: false }); browser.showActions(true); }
     if (action === "signin") browser.beginAction(loginAction(runtime)!);
     else browser.showCredentials(true, { runtime, unassign: action === "unassign" });
   };
@@ -56,7 +57,7 @@ export function Details({ browser, state, lines, focused, locked, width, height,
     else if (input === "c") onCredentials();
   });
   return <>{items.slice(start, start + height).map((line, index) => {
-    if (typeof line === "number") return <Box key={`hint:${line}`} height={1} gap={3} paddingLeft={indent}>
+    if (typeof line === "number") return <Box key={`hint:${line}`} height={1} gap={3} paddingLeft={INDENT}>
       {hints[line].map(({ text, action }) => action
         ? <Clickable key={text} flexShrink={0} onClick={() => run(action)}><Text color={palette.muted}><Text color={palette.accent}>[{ACTION_KEYS[action]}]</Text> {ACTION_LABELS[action]}</Text></Clickable>
         : <Text key={text} wrap="truncate" color={palette.muted}>{text}</Text>)}
@@ -67,7 +68,8 @@ export function Details({ browser, state, lines, focused, locked, width, height,
       return <Clickable key={row.id} onClick={() => { if (locked) return; onContent(); select(row); }} backgroundColor={chosen ? focused ? palette.selected : palette.idle : undefined}>
         <Text wrap="truncate" color={chosen ? focused ? palette.selectedText : palette.idleText : palette.text}>{line.text}</Text></Clickable>;
     }
-    const [, label = "", value = line.text] = /^(\s*[^:]{1,40}:)( .*)$/.exec(line.text) ?? [];
-    return <Text key={start + index} wrap="truncate" color={palette.text}><Text color={palette.muted}>{label}</Text>{value}</Text>;
+    if (line.kind) return <Text key={start + index} wrap="truncate" bold={line.kind === "heading"} color={line.kind === "heading" ? palette.text : palette.muted}>{line.text}</Text>;
+    if (!line.text) return <Box key={start + index} height={1} />;
+    return <Text key={start + index} wrap="truncate" color={palette.text}><Text color={palette.muted}>{line.text.slice(0, line.label ?? 0)}</Text>{line.text.slice(line.label ?? 0)}</Text>;
   })}</>;
 }

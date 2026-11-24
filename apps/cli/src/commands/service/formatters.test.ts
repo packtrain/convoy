@@ -49,11 +49,11 @@ it("prints each project's runtimes with version, login and credential (OS-2502)"
   ] });
   const text = out.mock.calls.flat().join("\n");
   expect(text).toContain([
-    "Runtimes:", "  a",
-    "    Codex        0.142.3   signed in               credential: key none",
-    "    Claude Code  unknown   signed out              credential: none",
-    "    Cursor       1.2.0     login status not known  credential: key team",
-    "  b: not reported yet",
+    "PROFILE\tRUNTIME\tVERSION\tLOGIN\tCREDENTIAL",
+    "a\tCodex\t0.142.3\tsigned in\tkey none",
+    "a\tClaude Code\tunknown\tsigned out\tnone",
+    "a\tCursor\t1.2.0\tunknown\tkey team",
+    "Runtimes not reported yet: b",
   ].join("\n"));
 });
 it("renders a login job that runs once at load with escaped paths", () => {
