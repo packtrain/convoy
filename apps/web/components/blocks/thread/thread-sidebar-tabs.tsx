@@ -41,8 +41,8 @@ export type ThreadChangesView =
   | { kind: "all" }
   /** Uncommitted changes of the thread's checkout against HEAD (OS-2234). */
   | { kind: "worktree" }
-  /** Commit history of the thread's checkout (OS-2535). */
-  | { kind: "history" }
+  /** Commit history of the thread's checkout (OS-2535), with the open commit. */
+  | { kind: "history"; commit?: string }
   /** A committed run range from the selector's timeline. */
   | { kind: "range"; diffSummary: CliRunDiffSummary; label: string }
   /** A single run scrolled to `file` (opened from a Changes-card row). */
@@ -323,6 +323,8 @@ interface ThreadChangesToolbarProps {
   onToggleDiffStyle: () => void;
   wordWrap: boolean;
   onToggleWordWrap: () => void;
+  /** Off while no diff is on screen (History's list); the toggles would act on nothing. */
+  diffToggles?: boolean;
   fileTreeOpen?: boolean;
   onToggleFileTree?: () => void;
   /** Stored PR snapshot of the thread (OS-1370); renders the PR badge when set. */
@@ -356,6 +358,7 @@ export function ThreadChangesToolbar({
   onToggleDiffStyle,
   wordWrap,
   onToggleWordWrap,
+  diffToggles = true,
   fileTreeOpen = false,
   onToggleFileTree,
   pullRequest,
@@ -419,16 +422,18 @@ export function ThreadChangesToolbar({
         {pullRequest ? (
           <ThreadPrBadge pullRequest={pullRequest} className="mr-1" />
         ) : null}
-        <ChangesViewToggles
-          allCollapsed={allCollapsed}
-          onToggleCollapseAll={onToggleCollapseAll}
-          diffStyle={diffStyle}
-          onToggleDiffStyle={onToggleDiffStyle}
-          wordWrap={wordWrap}
-          onToggleWordWrap={onToggleWordWrap}
-          fileTreeOpen={fileTreeOpen}
-          onToggleFileTree={onToggleFileTree}
-        />
+        {diffToggles && (
+          <ChangesViewToggles
+            allCollapsed={allCollapsed}
+            onToggleCollapseAll={onToggleCollapseAll}
+            diffStyle={diffStyle}
+            onToggleDiffStyle={onToggleDiffStyle}
+            wordWrap={wordWrap}
+            onToggleWordWrap={onToggleWordWrap}
+            fileTreeOpen={fileTreeOpen}
+            onToggleFileTree={onToggleFileTree}
+          />
+        )}
       </div>
     </div>
   );

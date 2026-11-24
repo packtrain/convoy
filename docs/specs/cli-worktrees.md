@@ -209,7 +209,8 @@ side lives in `apps/cli/src/lib/git/history.ts`.
   ref badges on commits in the walk. Both layouts get the same pages. Git's
   topo order puts the tip with the newer commit first, so commits on the
   default branch newer than `HEAD` come above it, and a branch far behind a
-  busy default branch can have its own commits on page 2.
+  busy default branch can have its own commits on page 2; History then
+  pages on to `HEAD` (Layout, below).
   Each commit has `hash`, `parents` (full hashes, first parent first),
   `authorName`, `authorEmail`, `committedAt` (committer time, ms), `refs`
   (`%D` entries such as `HEAD -> main`, `origin/main`, `tag: v1`; Convoy's
@@ -626,8 +627,12 @@ every row, header included, past a phone viewport. The right pane is the file tr
   and ref badges (the `HEAD ->` branch highlighted, a tag as a tag icon and
   its name; badges shrink before the author does); a merge row has a merge
   icon and a muted subject. The open row has `bg-muted` and a 2px primary
-  bar on its left edge. A row's accessible name is its subject (cut at 120
-  characters), author and date. The newest commit opens first. The detail shows subject, body
+  bar on its left edge. `origin/HEAD` (that exact ref) gets no badge, since
+  it repeats the default branch's. A row's accessible name is its subject (cut at 120
+  characters), its refs in words (`HEAD, branch main`, `remote branch origin/main`,
+  `tag v1`), "merge"
+  for a merge, author, date and short hash, since the graph and badges are
+  visual only. The newest commit opens first. The detail shows subject, body
   (git's hard-wrapped lines joined into paragraphs; a paragraph with list or
   indented lines keeps its breaks), author (email on hover), date, a copy
   button for the full hash, and the parents as dotted-underlined links with
@@ -670,8 +675,10 @@ every row, header included, past a phone viewport. The right pane is the file tr
     is fetched once per browser tab and served from an in-memory cache after
     that (100 commits, oldest dropped), since a commit never changes.
   - Keyboard: the list is a `listbox` with one Tab stop (the last focused
-    row, else the open one, else the first). ↑/↓, j/k, Home and End move
-    through it; in the two-pane layout the move also opens the commit. A
+    row, else the open one, else `HEAD`'s, else the first). ↑/↓, j/k, Home and End move
+    through it; in the two-pane layout the move also opens the commit.
+    Escape closes the commit under the Graph table, and in one pane goes
+    back to the list, like "All commits"; focus returns to the row. A
     parent click focuses that commit's row (its heading, in one-pane mode),
     once the row has loaded.
   - States: skeleton rows of the loaded row's height while the first page
@@ -687,25 +694,43 @@ every row, header included, past a phone viewport. The right pane is the file tr
     so it keeps its scroll position; focus moves to the commit's heading on
     open and back to its row on return, by the back row or browser Back, and
     that row stays marked as selected. Browser Forward to a commit focuses
-    its heading too. On a phone both scrollers end with
+    its heading too, unless focus sits on a control outside the view (the
+    thread's layout toggle, whose switch remounts the view). On a phone both scrollers end with
     `--mobile-nav-clearance` padding, so the floating nav covers nothing.
+    On a phone the 41px toolbar shows the layout toggle icon-only over the
+    list and the diff toggles only over a commit, so it fits 390px. On a
+    desktop the diff toggles follow the view's report of a diff on screen
+    (`onDiffShownChange`): hidden but keeping their place over the Graph
+    table or a one-pane list with no commit open, so List | Graph does not
+    move when one opens.
+    A Refresh that drops later pages scrolls the list back to the top when
+    no commit is picked.
   - Layout (OS-2536, `commit-graph.tsx`, `lib/worktrees/commit-graph.ts`): a
     List | Graph toggle, List by default, kept per browser in localStorage
     (`convoy.history-layout`) and shared by the worktree page (in the 41px
     toolbar, before the diff toggles) and the thread Changes tab (in its
     Refresh row). List is the view above, over the same commits (default
     branch included); with no commit picked it opens `HEAD`'s commit (the
-    row with `HEAD` or `HEAD -> `), else the first row. Graph in two panes is a table
-    with the columns Graph, Description (ref badges, then the subject), Date,
+    row with `HEAD` or `HEAD -> `). When the default branch fills the first
+    page, both layouts load more pages (up to 1,000 rows) until `HEAD`'s row
+    arrives, List's detail says "Finding HEAD… N commits searched", and the
+    row scrolls to the middle of the list. With no `HEAD` in reach the first
+    row opens. Graph in two panes is a table
+    with the columns Graph, Description (ref badges, then the subject), Date
+    (the year only outside the current one),
     Author and Commit, 28px rows under a sticky header. No commit is open
     until a row is picked; the open commit shows below the table (the table
     keeps 40% of the height) with a "Close commit" button, so the graph keeps
-    the full width. While no commit is open, ↑/↓ only move focus; Enter or a
+    the full width; the first commit opened scrolls its row to the middle of
+    the shrunk table. Ref badges in the Description cell sit in a group capped at
+    60% of the cell: the subject truncates first, then the badges. While no commit is open, ↑/↓ only move focus; Enter or a
     click opens one, and after that the keys open as in List. The table
     scroller has a 32px `scroll-padding-top`, so a row reached by keyboard
     stops below the sticky header. Graph in one pane (the thread panel, a phone, a pane
     under 600px) keeps the two-line rows and puts the graph column where the
-    commit icon was, with no row borders so the lines run on.
+    commit icon was, with no row borders so the lines run on; lane 0 sits
+    12px in, where List's icon is, and the first-page skeleton draws those
+    rows (a lane stub, no borders).
   - Lane layout: a pure function over the loaded, newest-first commits. It
     keeps a list of open lanes, each waiting for a parent hash. A commit
     takes the leftmost lane waiting for it, or the first free one; other
@@ -713,6 +738,8 @@ every row, header included, past a phone viewport. The right pane is the file tr
     lane, and each extra parent opens a lane unless one already waits for
     it. The layout runs over every loaded page, so lines open at the end of
     a page run off the bottom edge and continue when Load more adds rows.
+    The column only widens while the view is mounted, so a Refresh back to
+    page 1 does not shift the rows.
     Each row draws one SVG at the row height: 14px per lane, colors cycling
     through `--info`, `--warning`, `--success`, `--chart-4`, `--chart-5` by
     lane, a filled node for `HEAD`, a smaller node for a merge.

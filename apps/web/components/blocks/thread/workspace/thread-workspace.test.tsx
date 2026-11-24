@@ -1922,6 +1922,16 @@ describe("ThreadWorkspace", () => {
       ).not.toBeNull();
     });
 
+    test("the layout toggle keeps keyboard focus across the switch (UX OS-2535 round 2 #2)", () => {
+      renderWorkspace();
+      const toggle = screen.getByRole("button", { name: "Switch to split view" });
+      toggle.focus();
+
+      fireEvent.click(toggle);
+
+      expect(document.activeElement).toBe(screen.getByRole("button", { name: "Switch to full-width tabs" }));
+    });
+
     test("switching to split from a panel keeps that panel on screen", () => {
       renderWorkspace();
 

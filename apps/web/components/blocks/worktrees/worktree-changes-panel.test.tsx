@@ -1,6 +1,7 @@
 /**
  * @vitest-environment jsdom
  */
+import { useState } from "react";
 import { afterEach, describe, expect, test, vi } from "vitest";
 import { cleanup, fireEvent, render, screen } from "@testing-library/react";
 import type { Id } from "@/convex/_generated/dataModel";
@@ -9,6 +10,7 @@ import { WorktreeChangesPanel } from "./worktree-changes-panel";
 const state = vi.hoisted(() => ({
   refresh: vi.fn(),
   kinds: [] as string[],
+  opened: [] as (string | null)[],
   paths: [{ id: "path_1", path: "/tmp/x" }],
 }));
 
@@ -36,7 +38,19 @@ vi.mock("@/hooks/browser/use-element-width", () => ({ useElementWidth: () => 560
 vi.mock("@/lib/threads/hooks/use-diff-theme", () => ({ useDiffTheme: () => ({}) }));
 vi.mock("@pierre/diffs/react", () => ({ PatchDiff: () => null, File: () => null }));
 
-function panel(refreshKey: string | undefined, onMentionFile?: (path: string) => void, view: "worktree" | "history" = "worktree") {
+function Panel({
+  refreshKey,
+  onMentionFile,
+  view,
+  initialCommit = null,
+}: {
+  refreshKey: string | undefined;
+  onMentionFile?: (path: string) => void;
+  view: "worktree" | "history";
+  initialCommit?: string | null;
+}) {
+  // The thread host owns the open commit, so it outlives a remount (UX OS-2535 round 1 #2).
+  const [openCommit, setOpenCommit] = useState(initialCommit);
   return (
     <WorktreeChangesPanel
       view={view}
@@ -48,8 +62,18 @@ function panel(refreshKey: string | undefined, onMentionFile?: (path: string) =>
       fileTreeOpen={false}
       refreshKey={refreshKey}
       onMentionFile={onMentionFile}
+      openCommit={openCommit}
+      onHistoryDiffShownChange={() => {}}
+      onOpenCommit={(hash) => {
+        state.opened.push(hash);
+        setOpenCommit(hash);
+      }}
     />
   );
+}
+
+function panel(refreshKey: string | undefined, onMentionFile?: (path: string) => void, view: "worktree" | "history" = "worktree") {
+  return <Panel refreshKey={refreshKey} onMentionFile={onMentionFile} view={view} />;
 }
 
 describe("WorktreeChangesPanel", () => {
@@ -57,6 +81,7 @@ describe("WorktreeChangesPanel", () => {
     cleanup();
     state.refresh.mockReset();
     state.kinds = [];
+    state.opened = [];
     state.paths = [{ id: "path_1", path: "/tmp/x" }];
   });
 
@@ -132,5 +157,23 @@ describe("WorktreeChangesPanel", () => {
     expect(screen.getByText("This checkout is no longer registered on the CLI.")).toBeTruthy();
     expect(state.kinds).not.toContain("gitLog");
     expect(screen.queryByRole("button", { name: "Refresh history" })).toBeNull();
+  });
+
+  test("History opens the host's open commit, so a full-view switch keeps it (UX OS-2535 round 1 #2)", () => {
+    render(<Panel refreshKey={undefined} view="history" initialCommit={"a".repeat(40)} />);
+    expect(screen.getByRole("heading", { name: "first" })).toBeTruthy();
+
+    fireEvent.click(screen.getByRole("button", { name: "All commits" }));
+
+    expect(state.opened.at(-1)).toBeNull();
+  });
+
+  test("History's open commit shares one row with Refresh: All commits replaces the layout toggle (UX OS-2535 round 1 #4)", () => {
+    render(panel(undefined, undefined, "history"));
+    fireEvent.click(screen.getByRole("option", { name: /first/ }));
+
+    const back = screen.getByRole("button", { name: "All commits" });
+    expect(back.parentElement?.contains(screen.getByRole("button", { name: "Refresh history" }))).toBe(true);
+    expect(screen.queryByRole("group", { name: "History layout" })).toBeNull();
   });
 });
