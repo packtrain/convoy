@@ -108,4 +108,43 @@ describe("worktree op processor", () => {
       expect(mutation.mock.calls[0][1]).toMatchObject({ opId: "op_1", error: "Missing file paths" });
     });
   });
+  describe("gitLog and commitPatch (OS-2534)", () => {
+    let repo: string;
+    let hash: string;
+    beforeEach(async () => {
+      repo = await mkdtemp(join(tmpdir(), "convoy-op-history-"));
+      await runGit(repo, ["init", "--initial-branch=main"]);
+      await writeFile(join(repo, "a.txt"), "a\n");
+      await runGit(repo, ["add", "."]);
+      await runGit(repo, ["-c", "user.name=t", "-c", "user.email=t@t", "commit", "-m", "init"]);
+      hash = (await runGit(repo, ["rev-parse", "HEAD"])).stdout.trim();
+    });
+    afterEach(async () => {
+      await rm(repo, { recursive: true, force: true });
+    });
+
+    const op = (kind: string, extra: Record<string, unknown>) =>
+      ({ _id: "op_1", profileId: "profile_1", kind, pathId: "path_1", path: repo, status: "pending", createdAt: 0, ...extra }) as unknown as PendingWorktreeOp;
+
+    async function result(pending: PendingWorktreeOp): Promise<Record<string, unknown>> {
+      const mutation = vi.fn().mockResolvedValue(null);
+      createWorktreeOpProcessor({ mutation } as never, "session_1", "profile_1").enqueue([pending]);
+      await vi.waitFor(() => expect(mutation).toHaveBeenCalled());
+      return mutation.mock.calls[0][1];
+    }
+
+    it("answers gitLog with the first page", async () => {
+      const completion = await result(op("gitLog", {}));
+      expect(JSON.parse(completion.resultJson as string)).toMatchObject({ commits: [{ hash, subject: "init" }] });
+    });
+
+    it("answers commitPatch with the commit named in postRef", async () => {
+      const completion = await result(op("commitPatch", { postRef: hash }));
+      expect(JSON.parse(completion.resultJson as string)).toMatchObject({ patch: expect.stringContaining("+++ b/a.txt"), truncated: false });
+    });
+
+    it("fails commitPatch without a commit", async () => {
+      expect(await result(op("commitPatch", {}))).toMatchObject({ error: "Missing commit hash" });
+    });
+  });
 });

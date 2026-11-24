@@ -42,10 +42,14 @@ export function useWorktreeOp(args: {
   kind: CliWorktreeOpKind;
   /** For file ops; part of the key, so a different file is a different request. */
   filePath?: string;
+  /** commitPatch: the commit. Part of the key, like `filePath`. */
+  postRef?: string;
+  /** gitLog: the page to fetch. Part of the key, like `filePath`. */
+  cursor?: string;
   enabled: boolean;
 }): WorktreeOpState {
-  const { profileId, pathId, kind, filePath, enabled } = args;
-  const key = `${profileId}:${pathId}:${kind}:${filePath ?? ""}`;
+  const { profileId, pathId, kind, filePath, postRef, cursor, enabled } = args;
+  const key = `${profileId}:${pathId}:${kind}:${filePath ?? ""}:${postRef ?? ""}:${cursor ?? ""}`;
   const [generation, setGeneration] = useState(0);
   const [pending, setPending] = useState<Pending | null>(null);
   const [settled, setSettled] = useState<Settled | null>(null);
@@ -60,7 +64,14 @@ export function useWorktreeOp(args: {
       return;
     }
     requestedRef.current = request;
-    enqueueOp({ profileId, kind, pathId, ...(filePath ? { filePath } : {}) })
+    enqueueOp({
+      profileId,
+      kind,
+      pathId,
+      ...(filePath ? { filePath } : {}),
+      ...(postRef ? { postRef } : {}),
+      ...(cursor ? { cursor } : {}),
+    })
       .then((opId) => setPending({ key, generation, opId }))
       .catch((requestError) => {
         setPending(null);
@@ -71,7 +82,7 @@ export function useWorktreeOp(args: {
           error: getErrorMessage(requestError, "Failed to reach the CLI"),
         }));
       });
-  }, [enabled, generation, key, profileId, pathId, kind, filePath, enqueueOp]);
+  }, [enabled, generation, key, profileId, pathId, kind, filePath, postRef, cursor, enqueueOp]);
 
   // Settle during render (state adjusted from a changed input). A null row
   // means the op was pruned before the CLI answered.

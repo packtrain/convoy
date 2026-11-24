@@ -2,6 +2,7 @@ import { describe, expect, test } from "vitest";
 import {
   supportsWorktreeChanges,
   supportsWorktreeDownload,
+  supportsWorktreeHistory,
   supportsWorktreeOpenFile,
   supportsWorktreeRevertAll,
 } from "./cli-version";
@@ -40,5 +41,13 @@ describe("supportsWorktreeRevertAll", () => {
   test("needs the CLI that answers revertWorkingTree", () => {
     expect(supportsWorktreeRevertAll("0.125.0")).toBe(true);
     expect(supportsWorktreeRevertAll("0.124.2")).toBe(false);
+  });
+});
+
+describe("supportsWorktreeHistory", () => {
+  test("needs the CLI that answers gitLog and commitPatch", () => {
+    expect(supportsWorktreeHistory("0.171.0")).toBe(true);
+    expect(supportsWorktreeHistory("0.170.9")).toBe(false);
+    expect(supportsWorktreeHistory(undefined)).toBe(false);
   });
 });

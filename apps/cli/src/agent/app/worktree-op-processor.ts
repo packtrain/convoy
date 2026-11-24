@@ -9,7 +9,9 @@ import {
   diffBetweenRefs,
   diffWorkingTree,
   listBranchRefs,
+  listCommits,
   listWorktrees,
+  readCommitPatch,
   readFileAtRef,
   readWorkingFile,
   readWorkingFileBytes,
@@ -186,6 +188,21 @@ export function createWorktreeOpProcessor(client: ConvoyClient, sessionId: strin
     await completeOp(op._id, { resultJson: JSON.stringify(result) });
   }
 
+  // Commit history (OS-2534): one page of `git log`, and one commit's patch in postRef.
+  async function handleGitLog(op: PendingWorktreeOp): Promise<void> {
+    const page = await listCommits(op.path, op.cursor);
+    await completeOp(op._id, { resultJson: JSON.stringify(page) });
+  }
+
+  async function handleCommitPatch(op: PendingWorktreeOp): Promise<void> {
+    if (!op.postRef) {
+      await completeOp(op._id, { error: "Missing commit hash" });
+      return;
+    }
+    const result = await readCommitPatch(op.path, op.postRef);
+    await completeOp(op._id, { resultJson: JSON.stringify(result) });
+  }
+
   // Worktree changes view (OS-2043): discard one file's uncommitted changes.
   async function handleRevertWorkingFile(op: PendingWorktreeOp): Promise<void> {
     if (!op.filePath) {
@@ -242,6 +259,10 @@ export function createWorktreeOpProcessor(client: ConvoyClient, sessionId: strin
         await handleRevertWorkingTree(op);
       } else if (op.kind === "downloadFile") {
         await handleDownloadFile(op);
+      } else if (op.kind === "gitLog") {
+        await handleGitLog(op);
+      } else if (op.kind === "commitPatch") {
+        await handleCommitPatch(op);
       } else if (op.kind === "remove") {
         await handleRemove(op);
       } else {

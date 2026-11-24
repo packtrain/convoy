@@ -22,10 +22,13 @@ import {
   writeChangesDiffStyle,
   writeChangesWordWrap,
 } from "@/lib/threads/changes-view-prefs";
+import { supportsWorktreeHistory } from "@/lib/worktrees/cli-version";
 import { useWorktreeChanges } from "@/lib/worktrees/hooks/use-worktree-changes";
+import { useWorktreeHistory } from "@/lib/worktrees/hooks/use-worktree-history";
 import { useWorktreeRemoval } from "@/lib/worktrees/hooks/use-worktree-removal";
 import { cn } from "@/lib/utils";
 import { ChangesSummary, RevertAllButton, WorktreeChangesBody, useSectionCollapse } from "./worktree-changes-body";
+import { WorktreeHistoryView } from "./worktree-history";
 import { RemoveWorktreeDialog } from "./worktree-remove-dialog";
 import { RevertAllDialog, RevertFileDialog } from "./worktree-revert-dialogs";
 
@@ -40,8 +43,21 @@ interface WorktreeChangesViewProps {
  * `useWorktreeChanges`, shared with the thread sidebar panel.
  */
 export function WorktreeChangesView({ profileId, pathId }: WorktreeChangesViewProps) {
+  // The host reuses this instance across checkouts; a new one must not inherit tabs or a history cursor.
+  return <ChangesViewForCheckout key={`${profileId}:${pathId}`} profileId={profileId} pathId={pathId} />;
+}
+
+function ChangesViewForCheckout({ profileId, pathId }: WorktreeChangesViewProps) {
   const params = useRouteParams<{ organizationSlug: string; projectAlias: string }>();
   const state = useWorktreeChanges(profileId, pathId);
+  const [tab, setTab] = useState<"changes" | "history">("changes");
+  // The list is fetched on first open and kept across tab switches.
+  const [historyOpened, setHistoryOpened] = useState(false);
+  const history = useWorktreeHistory(
+    profileId,
+    pathId,
+    historyOpened && state.isOnline && state.entry !== undefined && supportsWorktreeHistory(state.profile?.appVersion)
+  );
   const [diffStyle, setDiffStyle] = useState<ChangesDiffStyle>(readChangesDiffStyle);
   const [wordWrap, setWordWrap] = useState(readChangesWordWrap);
   const [allCollapsed, setAllCollapsed] = useState(false);
@@ -95,9 +111,21 @@ export function WorktreeChangesView({ profileId, pathId }: WorktreeChangesViewPr
 
   const title = entry ? (entry.kind === "worktree" ? (entry.branch ?? entry.label) : entry.label) : "Changes";
   const hasFiles = sections !== null && files.length > 0;
+  const onHistory = tab === "history";
+  const openTab = (next: "changes" | "history") => {
+    setTab(next);
+    if (next === "history") {
+      setHistoryOpened(true);
+    }
+  };
+  const tabClass = (active: boolean) =>
+    cn(
+      "flex h-7 cursor-pointer items-center gap-1.5 rounded-md px-2.5 text-xs",
+      active ? "bg-muted font-medium text-foreground" : "text-muted-foreground hover:text-foreground"
+    );
   return (
     <ThreadWorkspaceSplitPane
-      isSidebarOpen={sidebarOpen && hasFiles && !isMobile}
+      isSidebarOpen={sidebarOpen && hasFiles && !isMobile && !onHistory}
       onCloseSidebar={() => setSidebarOpen(false)}
       sidebarTitle="Files"
       sidebarSide={treeSide}
@@ -126,11 +154,11 @@ export function WorktreeChangesView({ profileId, pathId }: WorktreeChangesViewPr
                   variant="ghost"
                   size="sm"
                   className="cursor-pointer gap-1.5 text-xs"
-                  onClick={state.refresh}
-                  disabled={changes.loading}
-                  aria-label="Refresh changes"
+                  onClick={onHistory ? history.refresh : state.refresh}
+                  disabled={onHistory ? history.initialLoading || history.refreshing : changes.loading}
+                  aria-label={onHistory ? "Refresh history" : "Refresh changes"}
                 >
-                  <RefreshCw className={cn("size-3.5", changes.loading && "animate-spin")} />
+                  <RefreshCw className={cn("size-3.5", (onHistory ? history.initialLoading || history.refreshing : changes.loading) && "animate-spin")} />
                   Refresh
                 </Button>
                 {entry.kind === "worktree" && (
@@ -163,11 +191,25 @@ export function WorktreeChangesView({ profileId, pathId }: WorktreeChangesViewPr
         {/* ponytail: 41px like ThreadChangesToolbar — lines up with the sidebar's "New thread" row. */}
         {entry && (
           <div className="flex h-[41px] shrink-0 items-center gap-3 border-b border-border bg-card px-4 text-xs text-muted-foreground">
+            <div className="flex shrink-0 items-center gap-1" role="group" aria-label="Worktree view">
+              <button
+                type="button"
+                aria-pressed={!onHistory}
+                className={tabClass(!onHistory)}
+                onClick={() => openTab("changes")}
+              >
+                Changes
+                {hasFiles && <span className="rounded-sm bg-background px-1 tabular-nums">{files.length}</span>}
+              </button>
+              <button type="button" aria-pressed={onHistory} className={tabClass(onHistory)} onClick={() => openTab("history")}>
+                History
+              </button>
+            </div>
             <span className="truncate font-mono" title={entry.path}>
               {entry.path}
             </span>
-            <ChangesSummary files={files} />
-            {isOnline && <RevertAllButton state={state} />}
+            {!onHistory && <ChangesSummary files={files} />}
+            {isOnline && !onHistory && <RevertAllButton state={state} />}
             <div className="ml-auto flex items-center gap-1">
               <ChangesViewToggles
                 allCollapsed={allCollapsed}
@@ -177,29 +219,37 @@ export function WorktreeChangesView({ profileId, pathId }: WorktreeChangesViewPr
                 wordWrap={wordWrap}
                 onToggleWordWrap={toggleWordWrap}
                 fileTreeOpen={sidebarOpen}
-                onToggleFileTree={hasFiles && !isMobile ? () => setSidebarOpen((open) => !open) : undefined}
+                onToggleFileTree={hasFiles && !isMobile && !onHistory ? () => setSidebarOpen((open) => !open) : undefined}
               />
             </div>
           </div>
         )}
-        <div className="flex min-h-0 flex-col">
-          <FileTabStrip
-            activeTab={state.activeTab}
-            openPaths={state.openPaths}
-            onSelect={state.selectTab}
-            onClose={state.closeFileTab}
+        {onHistory ? (
+          <WorktreeHistoryView
+            profileId={profileId}
+            pathId={pathId}
+            history={history}
+            isOnline={isOnline}
+            appVersion={profile?.appVersion}
+            diffOptions={diffOptions}
+            allCollapsed={allCollapsed}
+            wordWrap={wordWrap}
           />
-          <div className="min-h-0 flex-1 overflow-y-auto">
-            <WorktreeChangesBody
-              state={state}
-              diffOptions={diffOptions}
-              wordWrap={wordWrap}
-              isCollapsed={collapse.isCollapsed}
-              onToggle={collapse.toggle}
-              registerSection={registerSection}
-            />
+        ) : (
+          <div className="flex min-h-0 flex-col">
+            <FileTabStrip activeTab={state.activeTab} openPaths={state.openPaths} onSelect={state.selectTab} onClose={state.closeFileTab} />
+            <div className="min-h-0 flex-1 overflow-y-auto">
+              <WorktreeChangesBody
+                state={state}
+                diffOptions={diffOptions}
+                wordWrap={wordWrap}
+                isCollapsed={collapse.isCollapsed}
+                onToggle={collapse.toggle}
+                registerSection={registerSection}
+              />
+            </div>
           </div>
-        </div>
+        )}
         <RevertFileDialog state={state} />
         <RevertAllDialog state={state} />
         <RemoveWorktreeDialog

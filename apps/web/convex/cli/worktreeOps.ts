@@ -27,6 +27,9 @@ const WORKTREE_OP_TTL_MS = 60 * 60 * 1000;
 // File ops carry file contents/patches in resultJson — prune them fast so
 // nothing durably lives in Convex (OS-1143).
 const FILE_OP_TTL_MS = 10 * 60 * 1000;
+// Full object hashes only: the CLI hands them to git as revisions (OS-2534).
+const COMMIT_HASH = /^[0-9a-f]{40}([0-9a-f]{24})?$/;
+const HISTORY_CURSOR = /^[0-9a-f]{40}([0-9a-f]{24})?:\d+$/;
 
 const worktreeOpItemValidator = v.object({
   _id: v.id("cliWorktreeOps"),
@@ -41,6 +44,7 @@ const worktreeOpItemValidator = v.object({
   preRef: v.optional(v.string()),
   postRef: v.optional(v.string()),
   query: v.optional(v.string()),
+  cursor: v.optional(v.string()),
   status: cliWorktreeOpStatusValidator,
   error: v.optional(v.string()),
   resultJson: v.optional(v.string()),
@@ -63,6 +67,7 @@ function toWorktreeOpItem(doc: Doc<"cliWorktreeOps">) {
     allowLegacyCheckpoint: doc.allowLegacyCheckpoint,
     postRef: doc.postRef,
     query: doc.query,
+    cursor: doc.cursor,
     status: doc.status,
     error: doc.error,
     resultJson: doc.resultJson,
@@ -97,6 +102,7 @@ export const enqueue = mutation({
     preRef: v.optional(v.string()),
     postRef: v.optional(v.string()),
     query: v.optional(v.string()),
+    cursor: v.optional(v.string()),
   },
   returns: v.id("cliWorktreeOps"),
   handler: async (ctx, args) => {
@@ -130,6 +136,8 @@ export const enqueue = mutation({
       args.kind === "revertWorkingFile" ||
       args.kind === "revertWorkingTree" ||
       args.kind === "downloadFile";
+    // Read-only history (OS-2534): short TTL like file ops, but only its own field.
+    const isHistoryOp = args.kind === "gitLog" || args.kind === "commitPatch";
     if (args.kind === "revertWorkingFile" || args.kind === "downloadFile") {
       ensure(args.filePath).notNull(errors.FILE_OP_ARGS_MISSING);
     }
@@ -144,6 +152,12 @@ export const enqueue = mutation({
     if (args.kind === "searchFiles") {
       // Empty string is a valid query (a bare `@` lists the top files).
       ensure(args.query).notNull(errors.SEARCH_FILES_QUERY_MISSING);
+    }
+    if (args.kind === "commitPatch") {
+      ensure(COMMIT_HASH.test(args.postRef ?? "")).isTrue(errors.COMMIT_HASH_INVALID);
+    }
+    if (args.kind === "gitLog" && args.cursor !== undefined) {
+      ensure(HISTORY_CURSOR.test(args.cursor)).isTrue(errors.HISTORY_CURSOR_INVALID);
     }
     // readFile without postRef reads the working tree (OS-2041).
     if (args.kind === "readFile") {
@@ -190,12 +204,14 @@ export const enqueue = mutation({
       ...(isFileOp ? { filePath: args.filePath, preRef: args.preRef, postRef: args.postRef } : {}),
       ...(args.kind === "revertWorkingTree" ? { filePaths: args.filePaths } : {}),
       ...(args.kind === "searchFiles" ? { query: args.query } : {}),
+      ...(args.kind === "gitLog" ? { cursor: args.cursor } : {}),
+      ...(args.kind === "commitPatch" ? { postRef: args.postRef } : {}),
       status: "pending",
       createdAt: now,
       updatedAt: now,
     });
 
-    await ctx.scheduler.runAfter(isFileOp || args.kind === "searchFiles" ? FILE_OP_TTL_MS : WORKTREE_OP_TTL_MS, internal.cli.worktreeOps.prune, {
+    await ctx.scheduler.runAfter(isFileOp || isHistoryOp || args.kind === "searchFiles" ? FILE_OP_TTL_MS : WORKTREE_OP_TTL_MS, internal.cli.worktreeOps.prune, {
       opId,
     });
 

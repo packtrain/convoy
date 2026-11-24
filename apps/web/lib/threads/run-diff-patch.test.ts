@@ -32,6 +32,34 @@ const PATCH = [
 ].join("\n");
 
 describe("splitRunPatch + parseRunPatchFiles", () => {
+  it("counts combined hunk lines that look like file headers (OS-2534 round 2 #2)", () => {
+    const octopus = "diff --cc a.txt\nindex 1,2,3..4\n--- a/a.txt\n+++ b/a.txt\n@@@@ -1,1 -1,1 -1,1 +1,1 @@@@\n-  one\n - two\n  -three\n+++resolved\n";
+    const plus = "diff --cc b.txt\nindex 1,2..3\n--- a/b.txt\n+++ b/b.txt\n@@@ -1,1 -1,1 +1,1 @@@\n++++x\n---y\n";
+
+    expect(parseRunPatchFiles(splitRunPatch(octopus + plus))).toEqual([
+      { path: "a.txt", kind: "modified", additions: 1, deletions: 3 },
+      { path: "b.txt", kind: "modified", additions: 1, deletions: 1 },
+    ]);
+  });
+
+  it("keeps a binary conflict resolution and counts combined lines over every parent column (OS-2534 review #6)", () => {
+    const binary = "diff --cc b.bin\nindex 1,2..3\nBinary files differ\n";
+    const text = "diff --cc a.txt\nindex 1,2..3\n--- a/a.txt\n+++ b/a.txt\n@@@ -1,1 -1,1 +1,1 @@@\n- one\n -two\n++both\n";
+    const sections = splitRunPatch(binary + text);
+
+    expect(parseRunPatchFiles(sections)).toEqual([
+      { path: "b.bin", kind: "modified", additions: 0, deletions: 0, binary: true },
+      { path: "a.txt", kind: "modified", additions: 1, deletions: 2 },
+    ]);
+  });
+
+  it("keeps a merge commit's combined (--cc) sections, keyed by path (OS-2534)", () => {
+    const combined = "diff --cc a.txt\nindex 1,2..3\n--- a/a.txt\n+++ b/a.txt\n@@@ -1,1 -1,1 +1,1 @@@\n- one\n -two\n++both\n";
+    const sections = splitRunPatch(combined);
+    expect([...sections.keys()]).toEqual(["a.txt"]);
+    expect(sections.get("a.txt")).toBe(combined);
+  });
+
   it("splits sections and derives kinds, counts, and binary flags", () => {
     const sections = splitRunPatch(PATCH);
     expect([...sections.keys()]).toEqual(["src/new.ts", "src/mod.ts", "gone.txt", "pic.png"]);

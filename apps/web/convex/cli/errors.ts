@@ -120,6 +120,8 @@ export const errors = {
   DOWNLOAD_FILE_TOO_LARGE: `File is too large to download (limit ${MAX_DOWNLOAD_FILE_MB} MB)`,
   DOWNLOAD_UPLOAD_NOT_FOUND: "Uploaded file not found",
   DOWNLOAD_UPLOAD_NOT_OWN: "Uploaded file is not this operation's upload",
+  COMMIT_HASH_INVALID: "Commit patch requires a commit hash",
+  HISTORY_CURSOR_INVALID: "History cursor is invalid",
   FILE_OP_ARGS_MISSING: "File operation requires a file path and checkpoint refs",
   REVERT_ALL_FILE_PATHS_INVALID: `Revert all requires between 1 and ${MAX_REVERT_ALL_FILES} file paths`,
   REVERT_RUN_IN_USE: "A thread is currently running in this working directory",
