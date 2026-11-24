@@ -5,6 +5,7 @@ import type { Action } from "./actions/validators.js";
 import { ServiceCompatibilityError, ServiceRejectedError, ServiceUnavailableError } from "../service/errors.js";
 import { codexAwsHost } from "../../agent/runtimes/codex/auth.js";
 import type { CredentialMutation } from "../../lib/config/credentials/validators.js";
+import type { LoginRuntime } from "../project/validators.js";
 import { getCliVersion } from "../../lib/version.js";
 import { prepareEnvironment, createConnection, connections, type Connection } from "./resolution.js";
 import { serviceInspectionSchema } from "../service/validators.js";
@@ -215,11 +216,14 @@ export class Browser {
     this.set({ actions: value, credentials: undefined, runtimes: undefined, action: undefined, loading: false });
     if (value) clearTimeout(this.refresh); else this.schedule(0);
   }
-  /** Environment tab, or a project's assignment editor opened from its Actions. */
-  showCredentials(value: boolean) {
+  /** The runtime row a project's editor opens on; Unassign also drafts it unassigned. The editor takes it once. */
+  credentialFocus?: { runtime: LoginRuntime; unassign?: boolean };
+  /** Environment tab, or a project's assignment editor opened from its Actions or a Details runtime row. */
+  showCredentials(value: boolean, focus?: Browser["credentialFocus"]) {
     const { scope } = this.state;
     if (value && (this.locked || scope.addProject || (!scope.details && !scope.profile))) return;
     this.revision++;
+    this.credentialFocus = value ? focus : undefined;
     this.set({ credentials: value ? scope.details ? "view" : "editing" : undefined, runtimes: undefined, actions: scope.details ? false : this.state.actions, action: undefined });
     if (!value) this.schedule(0);
   }

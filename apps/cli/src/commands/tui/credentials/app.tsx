@@ -43,6 +43,7 @@ export function Credentials({ browser, state, leave, active, onContent, width, h
   const [adding, setAdding] = useState(false);
   const alive = useRef(true);
   useEffect(() => () => { alive.current = false; }, []);
+  const [focusRequest] = useState(() => { const request = project ? browser.credentialFocus : undefined; browser.credentialFocus = undefined; return request; });
   const entries = status?.entries ?? [];
   const rows = status ? bindingRows(status, state.observations[state.scope.connection].profiles) : [];
   const entry = entries.find(value => value.name === editing);
@@ -51,6 +52,13 @@ export function Credentials({ browser, state, leave, active, onContent, width, h
   const locked = Boolean(editorRows || popup || adding || busy);
   const small = width < 45 || height < 12;
   useEffect(() => { browser.editCredentials(locked); }, [locked]);
+  // Opened from a Details runtime row: focus that runtime once its row loads.
+  useEffect(() => {
+    const at = focusRequest && editorRows ? editorRows.findIndex(row => row.runtime === focusRequest.runtime) : -1;
+    if (at < 0) return;
+    setFocus(at);
+    if (focusRequest?.unassign) setDraft({ [editorRows![at].key]: { mode: "disabled" } });
+  }, [Boolean(status)]);
   const load = async () => {
     if (!target.credentials) return;
     setLoading(true);

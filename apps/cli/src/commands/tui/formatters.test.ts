@@ -3,23 +3,51 @@ import { detailLines, environmentTone, plain, rowCells, warningLines, warningGro
 import { toServiceInspection } from "../service/validators.js";
 import { threadPageSchema } from "./validators.js";
 import type { BrowseState } from "./validators.js";
+import type { WorkerState } from "../service/validators.js";
+
+const text = (lines: { text: string }[]) => lines.map(line => line.text).join("\n");
 
 it("does not present defaults as observed configuration on an older service", () => {
   const state: BrowseState = {
     scope: { connection: 0, details: true }, rows: [], loading: false, stale: false, pageNumber: 1,
     observations: [{ health: "connected", profiles: [{ profile: "a", status: "online", attempts: 1 }] }],
   };
-  expect(detailLines(state, "/socket", "1").join("\n")).toContain("Concurrency: unknown   OS sandbox: unknown   Streaming: unknown");
+  expect(text(detailLines(state, "/socket", "1"))).toContain("Concurrency: unknown   OS sandbox: unknown   Streaming: unknown");
 });
 
 it("shows the service's environment mode under Connection, else the target's, else nothing (OS-2249)", () => {
   const state = (snapshot?: BrowseState["observations"][number]["snapshot"]): BrowseState => ({
     scope: { connection: 0, details: true }, rows: [], loading: false, stale: false, pageNumber: 1,
     observations: [{ health: "connected", profiles: [], snapshot }] });
-  const lines = (value: BrowseState, mode?: "shared" | "isolated") => detailLines(value, "/socket", "1", mode);
+  const lines = (value: BrowseState, mode?: "shared" | "isolated") => detailLines(value, "/socket", "1", mode).map(line => line.text);
   expect(lines(state({ v: 1, id: "s", ok: true, pid: 1, mode: "shared" }), "isolated")[1]).toBe("Mode: shared (one account for all projects)");
   expect(lines(state(), "isolated")[1]).toBe("Mode: isolated (a Linux account per project)");
   expect(lines(state()).join("\n")).not.toContain("Mode:");
+});
+
+it("lists the environment's runtimes, then each project's with its login and credential (OS-2502)", () => {
+  const profiles: WorkerState[] = [
+    { profile: "a", status: "online", attempts: 1, versions: { codex: "0.142.3" }, logins: { codex: "signed-in", "claude-code": "signed-out" }, desiredAuth: { mode: "native", claude: { mode: "disabled" } } },
+    { profile: "b", status: "stopped", attempts: 0 },
+  ];
+  const state = (mode: "shared" | "isolated"): BrowseState => ({ scope: { connection: 0, details: true }, rows: [], loading: false, stale: false, pageNumber: 1,
+    observations: [{ health: "connected", profiles, snapshot: { v: 1, id: "s", ok: true, pid: 1, mode } }] });
+  const shared = detailLines(state("shared"), "/socket", "1");
+  expect(text(shared)).toContain(["Runtimes", "  Codex        0.142.3   signed in", "  Claude Code  unknown   signed out"].join("\n"));
+  expect(text(shared)).toContain(["  Runtimes", "    Codex        0.142.3   signed in               credential: native",
+    "    Claude Code  unknown   signed out              credential: none"].join("\n"));
+  expect(text(shared)).toContain("b: stopped, active unknown\n  Project: unknown   Endpoint: unknown\n  Concurrency: unknown   OS sandbox: unknown   Streaming: unknown\n  Runtimes: not reported yet");
+  expect(shared.flatMap(line => line.row ? [line.row.id] : [])).toEqual([":codex", ":claude-code", "a:codex", "a:claude-code"]);
+  // Isolated projects each have their own login, so the environment rows show none.
+  expect(text(detailLines(state("isolated"), "/socket", "1"))).toContain("Runtimes\n  Codex        0.142.3\n  Claude Code  unknown\n");
+});
+
+it("names a service that reports no runtime details (OS-2502)", () => {
+  const state: BrowseState = { scope: { connection: 0, details: true }, rows: [], loading: false, stale: false, pageNumber: 1,
+    observations: [{ health: "connected", profiles: [{ profile: "a", status: "online", attempts: 1 }] }] };
+  const lines = text(detailLines(state, "/socket", "1"));
+  expect(lines).toContain("Runtime details not reported by this service");
+  expect(lines).not.toContain("  Runtimes");
 });
 
 it("removes terminal controls while preserving Unicode", () => {
@@ -84,7 +112,7 @@ it.each(["status", "logs"] as const)("does not label %s as a service start even 
 
 it("shows a useful unobserved service summary instead of unknown diagnostic fields", () => {
   const state: BrowseState = { scope: { connection: 0, details: true }, rows: [], loading: false, stale: true, pageNumber: 1, observations: [{ health: "reconnecting", profiles: [] }] };
-  const summary = detailLines(state, "/socket", "1").join("\n");
+  const summary = text(detailLines(state, "/socket", "1"));
   expect(summary).toContain("Service state has not been observed");
   expect(summary).not.toContain("PID: unknown");
   expect(summary).not.toContain("Epoch: unknown");
@@ -92,14 +120,14 @@ it("shows a useful unobserved service summary instead of unknown diagnostic fiel
 
 it("uses an inspected service state without a browsing snapshot", () => {
   const state: BrowseState = { scope: { connection: 0, details: true }, rows: [], loading: false, stale: true, pageNumber: 1, observations: [{ health: "reconnecting", profiles: [], environmentStatus: { state: "running", serviceRunning: false } }] };
-  const summary = detailLines(state, "/socket", "1").join("\n");
+  const summary = text(detailLines(state, "/socket", "1"));
   expect(summary).toContain("Service: stopped");
   expect(summary).not.toContain("Service state has not been observed");
 });
 
 it("shows a confirmed stop instead of a stale running snapshot", () => {
   const state: BrowseState = { scope: { connection: 0, details: true }, rows: [], loading: false, stale: true, pageNumber: 1, observations: [{ health: "reconnecting", profiles: [], snapshot: { v: 1, id: "status", ok: true, pid: 123 }, environmentStatus: { state: "stopped", serviceRunning: false } }] };
-  expect(detailLines(state, "/socket", "1").join("\n")).toContain("Service: stopped");
+  expect(text(detailLines(state, "/socket", "1"))).toContain("Service: stopped");
 });
 
 it("lists unhealthy projects with their service warning, scoped to the selected project", () => {

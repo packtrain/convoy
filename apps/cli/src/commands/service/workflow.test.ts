@@ -252,6 +252,20 @@ it("keeps Antigravity in a worker's detected runtimes (OS-2474)", async () => {
   await serviceRequest(p.socket, { op: "stop" });
 });
 
+it("keeps each runtime's version and login, dropping unknown runtimes and values (OS-2502)", async () => {
+  const p = paths(); const { config, environment } = snapshot();
+  const service = await runService(p, serviceSnapshot(config, environment), () => spawn(process.execPath, ["-e", `
+    console.log(JSON.stringify({v:1,event:'status',status:'connecting',runtimes:['codex','claude-code'],logins:{codex:'signed-in','claude-code':'maybe','secret-token':'signed-in'}}));
+    console.log(JSON.stringify({v:1,event:'status',status:'online',versions:{codex:'0.142.3','secret-token':'1.0.0'}}));
+    process.stdin.resume(); process.stdin.on('end',()=>process.exit(0));
+  `])); services.push(service);
+  await until(async () => (await serviceRequest(p.socket, { op: "status" })).profiles?.[0].status === "online");
+  const state = (await serviceRequest(p.socket, { op: "status" })).profiles?.[0];
+  expect(state?.versions).toEqual({ codex: "0.142.3" });
+  expect(state?.logins).toEqual({ codex: "signed-in", "claude-code": "unknown" });
+  await serviceRequest(p.socket, { op: "stop" });
+});
+
 it("names the runtime's own login for a shared project's notice (OS-2247)", async () => {
   const p = paths();
   const service = await runService(p, sharedServiceSnapshot({ profiles: { a: sharedProfile() } }), () => spawn(process.execPath, ["-e", `

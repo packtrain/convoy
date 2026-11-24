@@ -40,6 +40,22 @@ it("prints project warnings under the status table", () => {
   expect(text).toContain("Warnings:\n  a: failed · codex is not installed for this project.");
   expect(text).not.toContain("b: online");
 });
+it("prints each project's runtimes with version, login and credential (OS-2502)", () => {
+  const out = vi.spyOn(console, "log").mockImplementation(() => {});
+  printServiceEvent({ v: 1, id: "s", ok: true, pid: 1, cursor: 0, profiles: [
+    { profile: "a", status: "online", attempts: 1, versions: { codex: "0.142.3", cursor: "1.2.0" }, logins: { codex: "signed-in", "claude-code": "signed-out" },
+      desiredAuth: { mode: "managed", name: "none", claude: { mode: "disabled" }, cursor: { mode: "managed", name: "team" } } },
+    { profile: "b", status: "stopped", attempts: 0 },
+  ] });
+  const text = out.mock.calls.flat().join("\n");
+  expect(text).toContain([
+    "Runtimes:", "  a",
+    "    Codex        0.142.3   signed in               credential: key none",
+    "    Claude Code  unknown   signed out              credential: none",
+    "    Cursor       1.2.0     login status not known  credential: key team",
+    "  b: not reported yet",
+  ].join("\n"));
+});
 it("renders a login job that runs once at load with escaped paths", () => {
   const plist = launchAgentPlist("build.convoy.service", ["/n<o>de", "/a&b/convoy", "service", "start"], { PATH: "/opt/homebrew/bin:/usr/bin" });
   expect(plist).toContain("<string>/n&lt;o&gt;de</string>\n    <string>/a&amp;b/convoy</string>");

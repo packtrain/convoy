@@ -91,6 +91,14 @@ but not root-owned, or group/world-writable) and `loggedOut` (detected, using
 native login, with no login file in the project HOME). Clients use them to offer
 logins and warn about a runtime that will not work.
 
+Since CLI 0.169.0 (OS-2502) a service-started worker's `connecting` event also
+carries `logins`, each detected runtime's native login (`signed-in`, `signed-out`
+or `unknown`), and its `online` event carries `versions`, each detected runtime's
+version, for example `{ "codex": "0.142.3" }`. A shared worker reads logins with
+the runtimes' status commands; an isolated one maps the launcher's lists, so a
+detected runtime outside `loggedOut` is `signed-in`. The service keeps both
+fields on the project's status ([cli-tui.md](cli-tui.md#runtimes-in-details-cli-01690-os-2502)).
+
 Consecutive duplicate `status` values are deduplicated (a healthy heartbeat
 every 30s does not re-emit `online`; transitions like `retrying → online` do
 emit).

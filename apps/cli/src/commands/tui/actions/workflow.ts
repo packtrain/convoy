@@ -42,13 +42,22 @@ export class ActionWorkflow {
       return target.check ? undefined : "Project check needs a shared environment, a configured Linux project environment, a managed Docker target or an SSH remote.";
     }
     if (!live) return "Service disconnected. Reconnect before using this control.";
+    const login = loginRuntime(kind), observed = state.observations[state.scope.connection].profiles;
+    // A shared environment's login is its own: Details runs it once, then reloads every project. Spec: docs/specs/cli-tui.md#runtimes-in-details-cli-01690-os-2502
+    if (login && target.mode === "shared") {
+      if (!state.scope.details) return "Sign in from environment Details. A login on a shared environment applies to every project.";
+      if (!observed.length) return "Add a project first. Sign in runs through this environment's service.";
+      if (!client?.hello?.capabilities?.includes("host-cli-v1")) return "Update the service for project maintenance.";
+      if (!target.shell) return "Sign in needs a shared environment this TUI can open a terminal in.";
+      if (observed.some(p => p.runtimes) && !observed.some(p => p.runtimes?.includes(login))) return `${loginRuntimeLabels[login]} was not detected in this environment. Install it for this account, then reload the projects.`;
+      return;
+    }
     if (PROJECT.includes(kind)) {
       if (state.scope.details || !state.scope.profile) return "Select one registered project first.";
       const project = state.observations[state.scope.connection].profiles.find(p => p.profile === state.scope.profile);
       if (!project) return "Project is no longer registered. Select another project.";
       if (!client?.hello?.capabilities?.includes("host-cli-v1")) return "Update the service for project maintenance.";
       if ((kind === "shell" || loginRuntime(kind)) && !target.shell) return "Private shell requires a configured Linux project environment or managed Docker target.";
-      const login = loginRuntime(kind);
       if (login && project.runtimes && !project.runtimes.includes(login)) {
         return `${loginRuntimeLabels[login]} was not detected on this target when ${project.profile} last started. Install it ${target.mode === "shared" ? "for this account" : "root-owned, for example under /usr/local/bin"}, then [u] Reload project.`;
       }
@@ -65,12 +74,13 @@ export class ActionWorkflow {
     if (reason) { this.host.set({ action: { kind, message: reason } }); return; }
     this.actionClient = this.host.client();
     const state = this.host.state();
-    const profile = state.scope.profile;
-    const project = state.observations[state.scope.connection].profiles.find(p => p.profile === profile);
-    // A shared shell or login interrupts nothing, so it needs no pause or confirmation. Spec: docs/specs/cli-shared-environments.md#runtimes-and-logins
+    // A shared shell interrupts nothing, so it needs no pause or confirmation. Spec: docs/specs/cli-shared-environments.md#runtimes-and-logins
     const terminal = kind === "shell" || Boolean(loginRuntime(kind)), shared = terminal && this.host.targets[state.scope.connection].mode === "shared";
-    this.host.set({ action: { kind, row, profile, identity: project?.identity,
-      pauseBeforeShell: terminal && !shared && !project?.paused, pending: !shared && !["status", "logs", "check"].includes(kind) } });
+    // A shared Sign in runs its terminal through any registered project, then reloads them all, so it confirms.
+    const environment = shared && Boolean(loginRuntime(kind)), profiles = state.observations[state.scope.connection].profiles;
+    const project = environment ? profiles[0] : profiles.find(p => p.profile === state.scope.profile);
+    this.host.set({ action: { kind, row, profile: environment ? project?.profile : state.scope.profile, identity: project?.identity, environment: environment || undefined,
+      pauseBeforeShell: terminal && !shared && !project?.paused, pending: environment || (!shared && !["status", "logs", "check"].includes(kind)) } });
     if (!this.host.state().action?.pending) void this.executeAction();
   }
   dismissAction() {
@@ -128,9 +138,18 @@ export class ActionWorkflow {
           sent = false;
           shellStarted = true;
           await this.host.shell(signal => target.shell!(action.profile!, action.identity, signal, login));
-          if (shared) message = login
-            ? `Logged in to ${loginRuntimeLabels[login]}. The login applies to every project in this environment. Running agents were not restarted; if this project does not pick it up, use [u] Reload project.`
-            : "Shell exited. Logins made there apply to every project in this environment.";
+          if (shared && login) {
+            sent = true;
+            // The login can take minutes; reload only the registrations that were confirmed and still stand.
+            const after = await client!.request({ op: "status" });
+            this.host.event(after);
+            const confirmed = status.profiles ?? [];
+            const projects = confirmed.filter(p => after.profiles?.some(now => now.profile === p.profile && now.identity === p.identity));
+            for (const { profile } of projects) await client!.request({ op: "reconcile", profile, interrupt: true });
+            const changed = confirmed.filter(p => !projects.includes(p)).map(p => p.profile);
+            message = `Signed in to ${loginRuntimeLabels[login]}. Reloaded ${projects.length} project${projects.length === 1 ? "" : "s"} in ${target.name}; each reconnects with the new login.`
+              + (changed.length ? ` Not reloaded, registration changed during sign in: ${changed.join(", ")}. Reload it from its Actions.` : "");
+          } else if (shared) message = "Shell exited. Logins made there apply to every project in this environment.";
           else if (login) {
             sent = true;
             await client!.request({ op: "reconcile", profile: action.profile, interrupt: true });

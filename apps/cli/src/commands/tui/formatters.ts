@@ -4,6 +4,7 @@ import { stripVTControlCharacters } from "node:util";
 import type { BrowseState, Health, Observation, Row } from "./validators.js";
 import type { WorkerState } from "../service/validators.js";
 import { guidance } from "../project/formatters.js";
+import { runtimeRows, runtimeText, type RuntimeRow } from "../service/formatters.js";
 import { loginRuntimeLabels, type LoginRuntime } from "../project/validators.js";
 import type { EnvironmentMode } from "../environment/validators.js";
 
@@ -80,13 +81,29 @@ export function warningGroups(profiles: WorkerState[], profile?: string) {
 
 const MODE_LABELS: Record<EnvironmentMode, string> = { shared: "shared (one account for all projects)", isolated: "isolated (a Linux account per project)" };
 
+/** A selectable runtime row in Details: the environment's (no profile) or one project's. */
+export type DetailRow = RuntimeRow & { id: string; profile?: string };
+export type DetailLine = { text: string; row?: DetailRow };
+
+/** Environment rows: each runtime any project reports, with the first report's version and, when shared, login. Spec: docs/specs/cli-tui.md#runtimes-in-details-cli-01690-os-2502 */
+function runtimeSection(profiles: WorkerState[], shared: boolean): DetailLine[] {
+  if (!profiles.length) return [];
+  const reported = profiles.flatMap(runtimeRows);
+  if (!reported.length) return [{ text: "Runtime details not reported by this service" }];
+  const rows = [...new Set(reported.map(row => row.runtime))].map(runtime => {
+    const of = reported.filter(row => row.runtime === runtime);
+    return { runtime, version: of.find(row => row.version)?.version, login: of.find(row => row.login)?.login, credential: "", unassigned: false };
+  });
+  return [{ text: "Runtimes" }, ...rows.map(row => ({ text: plain(`  ${runtimeText(row, { login: shared, credential: false })}`), row: { ...row, id: `:${row.runtime}` } }))];
+}
+
 /** `mode`: the target's own record, used until the service reports one. */
-export function detailLines(state: BrowseState, endpoint: string, clientVersion: string, mode?: EnvironmentMode): string[] {
+export function detailLines(state: BrowseState, endpoint: string, clientVersion: string, mode?: EnvironmentMode): DetailLine[] {
   const observation = state.observations[state.scope.connection];
   const snapshot = state.stale && observation.environmentStatus ? undefined : observation.snapshot;
   const inspection = observation.inspection;
   const shown = snapshot?.mode ?? mode;
-  return [
+  const lines = [
     ...(observation.guidance ?? []),
     `Connection: ${observation.health}${state.stale ? " (stale)" : ""}`,
     ...(shown ? [`Mode: ${MODE_LABELS[shown]}`] : []),
@@ -99,16 +116,20 @@ export function detailLines(state: BrowseState, endpoint: string, clientVersion:
     ...(observation.environmentStatus ? Object.entries(observation.environmentStatus).map(([key, value]) => `${key}: ${JSON.stringify(value)}`) : []),
     `Service endpoint: ${endpoint}`,
     ...(inspection ? [`Service Node: ${inspection.nodeVersion}`] : []),
-    ...(observation.profiles.length ? ["Project configuration was captured when attached."] : []),
+  ].map(text => ({ text: plain(text) }));
+  const reports = observation.profiles.some(profile => runtimeRows(profile).length);
+  return [...lines, ...runtimeSection(observation.profiles, shown === "shared"),
+    ...(observation.profiles.length ? [{ text: "Project configuration was captured when attached." }] : []),
     ...observation.profiles.flatMap(profile => {
       const config = inspection?.profiles.find(item => item.profile === profile.profile);
+      const rows = runtimeRows(profile);
       return [
         `${profile.profile}: ${profile.status}, active ${profile.activeRuns ?? "unknown"}${profile.paused ? ", paused" : ""}${profile.pending ? ", pending config" : ""}`,
         `  Project: ${config?.projectId ?? "unknown"}   Endpoint: ${config?.endpoint ?? "unknown"}`,
         `  Concurrency: ${config ? config.concurrency ?? "default" : "unknown"}   OS sandbox: ${config ? config.isolated ?? "default" : "unknown"}   Streaming: ${config ? config.streaming ?? "default" : "unknown"}`,
-      ];
-    }),
-  ].map(plain);
+        ...reports ? [rows.length ? "  Runtimes" : "  Runtimes: not reported yet"] : [],
+      ].map((text): DetailLine => ({ text: plain(text) })).concat(rows.map(row => ({ text: plain(`    ${runtimeText(row)}`), row: { ...row, id: `${profile.profile}:${row.runtime}`, profile: profile.profile } })));
+    })];
 }
 
 

@@ -15,6 +15,7 @@ import { LogDetail } from "./logs/index.js";
 import { Onboarding } from "./onboarding/index.js";
 import { Credentials } from "./credentials/index.js";
 import { Runtimes } from "./runtimes/index.js";
+import { Details } from "./details/index.js";
 
 const clientVersion = getCliVersion();
 
@@ -33,7 +34,6 @@ export function App({ browser, onboardingLoad }: { browser: Browser; onboardingL
   const [addEnvironmentSelected, setAddEnvironmentSelected] = useState(false);
   const [actionSelection, setActionSelection] = useState<{ scope: string; key: string }>();
   const [selectedId, setSelectedId] = useState<string>();
-  const [detailOffset, setDetailOffset] = useState(0);
   const [warningsOpen, setWarningsOpen] = useState(false);
   const [mouse, setMouse] = useState(true);
   // Set by an open form or editor: a sidebar click leaves it, asking first on a draft. Spec: docs/specs/cli-tui.md#leaving-editors-and-panel-spacing-cli-01681
@@ -76,7 +76,7 @@ export function App({ browser, onboardingLoad }: { browser: Browser; onboardingL
   const lines = detailLines(state, target.endpoint, clientVersion, target.mode);
   const capacity = Math.max(1, size.height - 8);
   const sidebarStart = Math.max(0, selectedSidebarLine - capacity + 1);
-  const choose = (scope: Scope) => { setAddEnvironmentSelected(false); browser.select(scope); setSelectedId(undefined); setDetailOffset(0); };
+  const choose = (scope: Scope) => { setAddEnvironmentSelected(false); browser.select(scope); setSelectedId(undefined); };
   // Sidebar rows pick the view too: Actions and Credentials rows open those panels, every other row its default.
   const chooseView = (scope: Scope, view?: SidebarRow["view"]) => {
     choose(scope);
@@ -110,24 +110,22 @@ export function App({ browser, onboardingLoad }: { browser: Browser; onboardingL
   const tableLines = contentHeight - 1 - (compact ? 0 : 2) - (state.rows[selectedRow]?.run ? 1 : 0);
   const visibleRows = Math.max(1, Math.floor((tableLines + (compact ? 0 : 1)) / (compact ? 2 : 3)));
   const rowStart = Math.max(0, selectedRow - visibleRows + 1);
-  const detailsStart = Math.min(detailOffset, Math.max(0, lines.length - contentHeight));
   const toggleExpanded = (connection: number) => setExpanded(old => {
     const next = new Set(old);
     if (next.has(connection)) next.delete(connection); else next.add(connection);
     return next;
   });
-  // Moves the detail lines or the run selection, by ↑/↓ or the wheel.
-  // Updaters, so several wheel reports in one stdin chunk each move a step.
-  const scroll = (delta: number) => {
-    if (state.scope.details) setDetailOffset(old => Math.max(0, Math.min(lines.length - 1, Math.min(old, Math.max(0, lines.length - contentHeight)) + delta)));
-    else setSelectedId(old => {
-      const row = state.rows[Math.max(0, Math.min(state.rows.length - 1, Math.max(0, state.rows.findIndex(row => rowId(row) === old)) + delta))];
-      return row ? rowId(row) : old;
-    });
-  };
+  // Moves the run selection, by ↑/↓ or the wheel; Details scrolls itself.
+  // An updater, so several wheel reports in one stdin chunk each move a step.
+  const scroll = (delta: number) => setSelectedId(old => {
+    const row = state.rows[Math.max(0, Math.min(state.rows.length - 1, Math.max(0, state.rows.findIndex(row => rowId(row) === old)) + delta))];
+    return row ? rowId(row) : old;
+  });
   // The states where useInput below stops before navigation keys; clicks and the wheel stop there too.
   const locked = Boolean(warningsOpen || workflow || state.detail || state.action?.busy || editing || state.action?.pending || (state.action?.message && !state.action.entries));
   const unlocked = (action: () => void) => () => { if (!locked) action(); };
+  // Details owns ↑/↓, its row keys and c while its panel has focus.
+  const detailsShown = state.scope.details && !warningsOpen && !state.scope.addProject && !state.runtimes && !state.credentials && !state.actions && !(state.action && !state.action.pending);
   const sidebarClick = (action: () => void) => () => { if (leave.current) leave.current(action); else if (!locked) action(); };
   // Enter on a run row: a thread opens its history, a run its logs.
   const openRow = (row: Row) => {
@@ -180,7 +178,7 @@ export function App({ browser, onboardingLoad }: { browser: Browser; onboardingL
     if (input === "E") { browser.openEnvironment("create"); return; }
     if (input === "+") { browser.openOnboarding(); setPane("content"); return; }
     if (input === "a" && state.scope.profile) { browser.showActions(true); setPane("content"); return; }
-    if ((input === "a" || input === "c") && state.scope.details) { chooseView({ connection: state.scope.connection, details: true }, input === "a" ? "actions" : "credentials"); setPane("content"); return; }
+    if ((input === "a" || (input === "c" && !(detailsShown && pane === "content"))) && state.scope.details) { chooseView({ connection: state.scope.connection, details: true }, input === "a" ? "actions" : "credentials"); setPane("content"); return; }
     if (input === "d") { browser.showActions(false); choose({ connection: state.scope.connection, details: true }); return; }
     if (input === "r" && state.scope.profile) { browser.showActions(false); return; }
     if (input === "s" && state.scope.details && !state.credentials && !state.runtimes) { void browser.inspectEnvironment(); return; }
@@ -207,10 +205,10 @@ export function App({ browser, onboardingLoad }: { browser: Browser; onboardingL
       else if (addEnvironmentSelected) setAddEnvironmentSelected(false);
       else { const row = sidebar[Math.max(0, Math.min(sidebar.length - 1, selectedSidebar + delta))]; chooseView(row.scope, row.view); }
     }
-    else scroll(delta);
+    else if (!state.scope.details) scroll(delta);
   });
   useMouseTracking(mouse);
-  useWheel(locked || state.actions || state.credentials || state.runtimes || state.scope.addProject ? undefined : scroll);
+  useWheel(locked || state.scope.details || state.actions || state.credentials || state.runtimes ? undefined : scroll);
   if (small && !state.detail && !state.onboarding && !state.environment && !editing) return <Box flexDirection="column"><Text>Resize to 45×10 to browse.</Text><Text>q / Ctrl+C detach</Text></Box>;
   const fill = (selected: boolean, active: boolean) => selected ? { backgroundColor: active ? palette.selected : palette.idle, color: active ? palette.selectedText : palette.idleText } : {};
   const keys = (hints: [string, string][]) => <Text wrap="truncate" color={palette.muted}>{hints.map(([key, label], i) => <Text key={i}>{i ? "  " : ""}<Text color={palette.accent}>{key}</Text> {label}</Text>)}</Text>;
@@ -266,10 +264,8 @@ export function App({ browser, onboardingLoad }: { browser: Browser; onboardingL
         {warningsOpen ? <Dialog inline scrollable width={actionWidth} height={contentHeight}
           lines={[`Warning details · ${plain(target.name)}`, "↑/↓ PgUp/PgDn scroll · Esc back", ...(warnings.length ? warnings.flatMap(warning => ["", `${warning.profile} · ${warning.status}`, ...warning.details]) : ["No current project notices."])]}
           buttons={[{ label: "Back", activate: () => setWarningsOpen(false) }]} onCancel={() => setWarningsOpen(false)} />
-          : state.action && !state.actions && !state.action.pending ? <ActionDialog inline state={state} browser={browser} width={actionWidth} height={contentHeight} /> : state.runtimes ? <Runtimes key={scopeId(state.scope)} browser={browser} state={state} active={pane === "content"} onSidebar={() => setPane("sidebar")} onContent={() => setPane("content")} width={actionWidth} height={contentHeight} /> : state.credentials ? <Credentials key={scopeId(state.scope)} browser={browser} state={state} leave={leave} active={pane === "content"} onContent={() => setPane("content")} width={actionWidth} height={contentHeight} /> : state.actions ? <Actions onContent={() => setPane("content")} selectedKey={actionSelection?.scope === scopeId(state.scope) ? actionSelection.key : undefined} onSelect={key => setActionSelection({ scope: scopeId(state.scope), key })} browser={browser} state={state} row={state.rows[selectedRow]} active={pane === "content" && !state.environment} width={actionWidth} height={contentHeight} /> : state.scope.addProject ? <Text color={palette.text}>Press + to add or link a project. Enter or Space opens the selected sidebar row.</Text> : state.scope.details ? lines.slice(detailsStart, detailsStart + contentHeight).map((line, index) => {
-          const [, label = "", value = line] = /^(\s*[^:]{1,40}:)( .*)$/.exec(line) ?? [];
-          return <Text key={index} wrap="truncate" color={palette.text}><Text color={palette.muted}>{label}</Text>{value}</Text>;
-        }) : <>
+          : state.action && !state.actions && !state.action.pending ? <ActionDialog inline state={state} browser={browser} width={actionWidth} height={contentHeight} /> : state.runtimes ? <Runtimes key={scopeId(state.scope)} browser={browser} state={state} active={pane === "content"} onSidebar={() => setPane("sidebar")} onContent={() => setPane("content")} width={actionWidth} height={contentHeight} /> : state.credentials ? <Credentials key={scopeId(state.scope)} browser={browser} state={state} leave={leave} active={pane === "content"} onContent={() => setPane("content")} width={actionWidth} height={contentHeight} /> : state.actions ? <Actions onContent={() => setPane("content")} selectedKey={actionSelection?.scope === scopeId(state.scope) ? actionSelection.key : undefined} onSelect={key => setActionSelection({ scope: scopeId(state.scope), key })} browser={browser} state={state} row={state.rows[selectedRow]} active={pane === "content" && !state.environment} width={actionWidth} height={contentHeight} /> : state.scope.addProject ? <Text color={palette.text}>Press + to add or link a project. Enter or Space opens the selected sidebar row.</Text> : state.scope.details ? <Details key={scopeId(state.scope)} browser={browser} state={state} lines={lines} focused={pane === "content"} locked={locked} width={actionWidth} height={contentHeight}
+          onContent={() => setPane("content")} onCredentials={() => { chooseView({ connection: state.scope.connection, details: true }, "credentials"); setPane("content"); }} /> : <>
           <Box gap={2} marginBottom={compact ? 0 : 1}>
             <Text bold color={palette.text}>{state.history ? "Execution history" : "Runs"}</Text>
             <Box flexGrow={1} flexShrink={1}><Text wrap="truncate" color={palette.muted}>{plain(state.history ? `${rowCells(state.history).task} ${state.history.thread.title}` : state.rows[0]?.profile ?? state.scope.profile ?? "Projects in registration order")} · page {state.pageNumber}{state.loading ? " · loading" : ""}{state.next ? " · n next" : ""}</Text></Box>

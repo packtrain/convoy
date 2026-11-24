@@ -46,7 +46,9 @@ const status = async (): Promise<ManagedCredentialStatus> => {
     projects: ["a", "b"].map(profile => ({ identity: profile.repeat(64), profiles: [profile], state: "online", verified: false,
       desired: auth(bindings, profile), applied: auth(applied, profile), pending: JSON.stringify(auth(bindings, profile)) !== JSON.stringify(auth(applied, profile)) })) };
 };
-const snapshot = () => ({ pid: process.pid, stopping: false, profiles: ["a", "b"].map(profile => ({ profile, identity: profile.repeat(64), status: "online" as const, attempts: 1, activeRuns: 0 })) });
+const snapshot = () => ({ pid: process.pid, stopping: false, profiles: ["a", "b"].map(profile => ({ profile, identity: profile.repeat(64), status: "online" as const, attempts: 1, activeRuns: 0,
+  // Runtime rows in Details (OS-2502).
+  ...(scenario.startsWith("details") ? { versions: { codex: "0.142.3", "claude-code": "2.1.4" }, logins: { codex: "signed-in" as const, "claude-code": "signed-out" as const }, desiredAuth: auth(bindings, profile) } : {}) })) });
 const control = serviceServer(snapshot, async request => {
   if (request.op === "status") return snapshot();
   if (request.op === "inspect") return { result: { nodeVersion: process.version, profiles: [] } };
@@ -65,7 +67,7 @@ const control = serviceServer(snapshot, async request => {
   return { registered: true, applied: false };
 }, () => {});
 await new Promise<void>(resolve => control.server.listen(socket, resolve));
-const connection = { id: "fixture", name: "Fixture", transport: "docker", endpoint: socket, ...(scenario.startsWith("shared") ? { mode: "shared" as const } : {}), open: (signal: AbortSignal) => ServiceClient.open(socket, signal), shell: async () => {},
+const connection = { id: "fixture", name: "Fixture", transport: "docker", endpoint: socket, ...(scenario.startsWith("shared") || scenario === "details-shared" ? { mode: "shared" as const } : {}), open: (signal: AbortSignal) => ServiceClient.open(socket, signal), shell: async () => {},
   ...(scenario === "unsupported" ? {} : { credentials: { status, allowDomain: async (host: string) => { allowed.push(host); } } }) };
 if (scenario === "pty") {
   // credentials-terminal.py drives the production render loop in a real PTY.
@@ -78,11 +80,15 @@ if (scenario === "pty") {
   console.log("PTY_CREDENTIALS_OK");
   process.exit(0);
 }
-const browser = new Browser([connection]);
+const shells: unknown[][] = [];
+// details-shared signs in through a terminal handoff; the others never hand it off.
+const browser = scenario === "details-shared"
+  ? new Browser([{ ...connection, shell: async (...args: unknown[]) => { shells.push(args.filter(arg => !(arg instanceof AbortSignal))); } }], 0, async operation => operation(new AbortController().signal))
+  : new Browser([connection]);
 let retries = 0;
 const retry = browser.retryNow.bind(browser);
 browser.retryNow = () => { retries++; retry(); };
-const stdout = Object.assign(new PassThrough(), { columns: 110, rows: 34, isTTY: true });
+const stdout = Object.assign(new PassThrough(), { columns: scenario === "details-narrow" ? 45 : 110, rows: 34, isTTY: true });
 const stdin = Object.assign(new PassThrough(), { isTTY: true, setRawMode() {}, ref() {}, unref() {} });
 let frame = "", screen = "", leaked = false;
 stdout.on("data", chunk => { const text = plain(chunk.toString()); if (text.includes(SECRET.slice(3, 12))) leaked = true; if (text.trim()) { frame = text; screen = stripVTControlCharacters(chunk.toString()); } });
@@ -103,6 +109,32 @@ try {
     await key(ESC, DOWN, DOWN, "a"); await until("Assign or unassign credentials");
     await key("c"); await until("Runtime credentials need a shared environment, a managed Docker target");
     assert.equal(browser.getSnapshot().credentials, undefined);
+  } else if (scenario === "details") {
+    // Isolated: the environment rows show versions only; each project row has its login, credential and actions.
+    await until("Codex        0.142.3   signed in               credential: key work-openai");
+    assert(screen.split("\n").some(line => / {2}Codex {8}0\.142\.3$/.test(line.trimEnd())), screen);
+    assert(frame.includes("No Update: the TUI updates managed Docker runtimes only"), frame);
+    await key(TAB, DOWN, DOWN); await until("[l] Sign in   [c] Assign credential   [x] Unassign");
+    await key("x"); await until("[ Unassigned · runtime disabled ▾ ]");
+    assert.equal(browser.getSnapshot().scope.profile, "a"); assert.equal(browser.getSnapshot().credentials, "editing");
+    await key(TAB, TAB, TAB, TAB, ENTER); await until("Saved 1 change for a.");
+    assert.deepEqual(requests, [{ action: "bind", profile: "a", binding: { mode: "disabled" } }]);
+  } else if (scenario === "details-narrow") {
+    // 43 content columns: the project row's three actions wrap instead of clipping.
+    await settle(200); await key(TAB, DOWN, DOWN); await until("[l] Sign in");
+    assert(frame.includes("[c] Assign credential") && frame.includes("[x] Unassign"), screen);
+  } else if (scenario === "details-shared") {
+    // Shared: Sign in sits on the environment's row; a click runs it, it confirms, then reloads every project.
+    await until("[l] Sign in");
+    assert(screen.split("\n").some(line => / {2}Codex {8}0\.142\.3 {3}signed in$/.test(line.trimEnd())), screen);
+    const y = screen.split("\n").findIndex(line => line.includes("[l] Sign in")), x = screen.split("\n")[y].indexOf("[l] Sign in") + 1;
+    await key(`\u001b[<0;${x + 1};${y + 1}M\u001b[<0;${x + 1};${y + 1}m`); await until("Sign in to Codex once for every project in Fixture?");
+    assert(frame.includes("2 projects reload") && frame.includes("[ Sign in ]"), frame);
+    await key(TAB, ENTER); await until("Signed in to Codex. Reloaded 2 projects in Fixture;");
+    assert.deepEqual(shells, [["a", "a".repeat(64), "codex"]]);
+    assert.deepEqual(reconciles, [{ profile: "a", interrupt: true }, { profile: "b", interrupt: true }]);
+    browser.select({ connection: 0, profile: "a", details: false }); browser.showActions(true); await settle(100);
+    assert(!frame.includes("Log in to Codex"), "A shared project's Actions leave Sign in to Details");
   } else {
     await key("c");
     if (scenario === "status-error") { await until("✗ Cannot read credential status: Permission denied reading credentials-v1.json"); await key("f"); }

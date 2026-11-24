@@ -400,9 +400,11 @@ export async function runConnect(config: RunConnectConfig): Promise<void> {
   try {
     // The service warns about logged-out runtimes from this event. Spec: docs/specs/cli-shared-environments.md#runtimes-and-logins
     const runtimes = release && config.jsonEvents ? await sharedRuntimeStates() : undefined;
-    await connectAgents(config, runtimes && {
-      runtimes: loginRuntimeSchema.options.filter(key => runtimes[key].installed && !runtimes[key].unusable),
+    const usable = runtimes && loginRuntimeSchema.options.filter(key => runtimes[key].installed && !runtimes[key].unusable);
+    await connectAgents(config, runtimes && usable && {
+      runtimes: usable,
       loggedOut: loginRuntimeSchema.options.filter(key => runtimes[key].login === "signed-out"),
+      logins: Object.fromEntries(usable.map(key => [key, runtimes[key].login])),
     });
   } finally { release?.(); }
 }
@@ -423,7 +425,7 @@ function exportSelfOnPath(): void {
   if (!(process.env.PATH ?? "").split(path.delimiter).includes(selfBinDir)) process.env.PATH = `${selfBinDir}${path.delimiter}${process.env.PATH ?? ""}`;
 }
 
-async function connectAgents(config: RunConnectConfig, shared?: { runtimes: string[]; loggedOut: string[] }): Promise<void> {
+async function connectAgents(config: RunConnectConfig, shared?: { runtimes: string[]; loggedOut: string[]; logins: Record<string, "signed-in" | "signed-out" | "unknown"> }): Promise<void> {
   const paths = config.paths ?? [process.cwd()];
   const concurrency = config.concurrency ?? DEFAULT_CONNECT_CONCURRENCY;
   // Defaults land here so every caller (connect, the bare `convoy` entry,
@@ -444,7 +446,9 @@ async function connectAgents(config: RunConnectConfig, shared?: { runtimes: stri
   };
   emitConnectEvent({ event: "status", status: "connecting", ...shared && { ...shared, loggedOut: shared.loggedOut.filter((runtime) => native[runtime as LoginRuntime]) },
     ...(process.env.CONVOY_PROJECT_RUNTIMES !== undefined ? { runtimes: launcherList("CONVOY_PROJECT_RUNTIMES"),
-      untrusted: launcherList("CONVOY_PROJECT_UNTRUSTED"), loggedOut: launcherList("CONVOY_PROJECT_LOGGED_OUT").filter((runtime) => native[runtime as LoginRuntime] === true) } : {}) });
+      untrusted: launcherList("CONVOY_PROJECT_UNTRUSTED"), loggedOut: launcherList("CONVOY_PROJECT_LOGGED_OUT").filter((runtime) => native[runtime as LoginRuntime] === true),
+      // The launcher reads the login file: a detected runtime without one is signed out. Spec: docs/specs/cli-sidecar-contract.md
+      logins: Object.fromEntries(launcherList("CONVOY_PROJECT_RUNTIMES").map(runtime => [runtime, launcherList("CONVOY_PROJECT_LOGGED_OUT").includes(runtime) ? "signed-out" : "signed-in"])) } : {}) });
 
   console.log(chalk.bold(`\nConvoy Agent v${getCliVersion()}\n`));
   if (!config.streamFile) {

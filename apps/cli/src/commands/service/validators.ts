@@ -30,6 +30,14 @@ export const logSchema = z.object({
   seq: z.number().int().positive(), ts: z.number(), profile: z.string().max(80), message: z.string().max(256),
 });
 export type LogEntry = z.infer<typeof logSchema>;
+/** A per-runtime record without unknown runtime names, so a newer worker's runtime cannot fail the parse. */
+const runtimeRecord = <T extends z.ZodTypeAny>(value: T) => z.record(z.string().max(80), value)
+  .refine(record => Object.keys(record).length <= 16)
+  .transform(record => Object.fromEntries(Object.entries(record).filter(([name]) => loginRuntimeSchema.safeParse(name).success)) as Partial<Record<LoginRuntime, z.infer<T>>>);
+export const runtimeLoginSchema = z.enum(["signed-in", "signed-out", "unknown"]).catch("unknown");
+export type RuntimeLogin = z.infer<typeof runtimeLoginSchema>;
+export const runtimeVersionsSchema = runtimeRecord(z.string().max(40));
+export const runtimeLoginsSchema = runtimeRecord(runtimeLoginSchema);
 export const workerStateSchema = z.object({
   authResult: authResultSchema.optional(),
   auth: authDescriptorSchema.optional(), desiredAuth: authDescriptorSchema.optional(),
@@ -41,6 +49,8 @@ export const workerStateSchema = z.object({
   /** Runtimes the launcher detected at the last worker start; kept while paused. Unknown names are dropped; a TUI before CLI 0.158.0 rejects them. */
   runtimes: z.array(z.string().max(80)).max(16)
     .transform(names => names.filter((name): name is LoginRuntime => loginRuntimeSchema.safeParse(name).success)).optional(),
+  /** Versions from the worker's last registration and native logins from its last start (OS-2502). Spec: docs/specs/cli-tui.md#runtimes-in-details-cli-01690-os-2502 */
+  versions: runtimeVersionsSchema.optional(), logins: runtimeLoginsSchema.optional(),
   /** Service-owned guidance for the latest failed attempt; never worker text. */
   warning: z.string().max(256).optional(),
 });

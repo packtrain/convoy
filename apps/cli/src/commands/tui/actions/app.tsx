@@ -13,10 +13,10 @@ export function ActionDialog({ state, browser, width, height, inline = false }: 
   if (!action || action.entries || Boolean(action.pending) === inline) return null;
   const close = () => browser.dismissAction();
   const lines = action.pending ? confirmationLines(state, browser.targets[state.scope.connection].name)
-    : [`${plain(browser.targets[state.scope.connection].name)}${action.profile ? ` / ${plain(action.profile)}` : ""}`, ...(action.busy ? `Working: ${labels[action.kind]}` : action.message ?? "").split("\n"), "↑/↓ PgUp/PgDn scroll · Esc back"];
+    : [`${plain(browser.targets[state.scope.connection].name)}${action.profile && !action.environment ? ` / ${plain(action.profile)}` : ""}`, ...(action.busy ? `Working: ${labels[action.kind]}` : action.message ?? "").split("\n"), "↑/↓ PgUp/PgDn scroll · Esc back"];
   return <Dialog inline={inline} key={`${action.kind}:${Boolean(action.pending)}`} lines={lines} width={width} height={height} scrollable={!action.pending}
     onCancel={close} buttons={action.pending ? [{ label: "Cancel", activate: close },
-      { label: action.pauseBeforeShell ? loginRuntime(action.kind) ? "Pause and log in" : "Pause and enter shell" : labels[action.kind], activate: () => browser.confirmAction() }]
+      { label: action.environment ? "Sign in" : action.pauseBeforeShell ? loginRuntime(action.kind) ? "Pause and log in" : "Pause and enter shell" : labels[action.kind], activate: () => browser.confirmAction() }]
       : action.busy ? [] : [{ label: "Back", activate: close }]} />;
 }
 
@@ -57,7 +57,8 @@ export function Actions({ browser, state, row, active, width, height, selectedKe
   const controls = state.scope.details ? [
     ...service,
     ...(target.maintenance ? maintenance.filter(control => control.type !== "runtimes" || target.maintenance?.runtimes) : []),
-  ] : state.scope.profile ? project : [];
+    // A shared environment signs in from its Details. Spec: docs/specs/cli-tui.md#runtimes-in-details-cli-01690-os-2502
+  ] : state.scope.profile ? project.filter(control => !(target.mode === "shared" && control.type === "action" && loginRuntime(control.kind))) : [];
   const observation = state.observations[state.scope.connection];
   const unavailable = (control: Control) => {
     if (observation.environmentError && (control.type === "environment" || control.type === "runtimes")) return `${observation.environmentError} · Inspect status [s] before retrying.`;

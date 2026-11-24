@@ -258,7 +258,7 @@ export async function createAgentRunner(options: AgentRunnerOptions): Promise<Ag
     const data = (await response.json()) as { sessionId: string; profileId: string };
     sessionId = data.sessionId;
     profileId = data.profileId;
-    emitConnectEvent({ event: "status", status: "online", sessionId });
+    emitConnectEvent({ event: "status", status: "online", sessionId, versions: Object.fromEntries(availableClis.map(cli => [cli.type, cli.version])) });
     console.log(chalk.green("✓") + " Agent registered");
     console.log(chalk.dim(`[Registered] Instance: ${instanceId.slice(0, 8)}..., Profile: ${profileId.slice(0, 8)}...`));
 

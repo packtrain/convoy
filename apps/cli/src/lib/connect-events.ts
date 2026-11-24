@@ -16,7 +16,9 @@ export type ThreadPhase = "claimed" | "streaming" | "completed" | "failed" | "re
 
 export type ConnectEvent =
   | { event: "auth"; runtime: "codex"; result: import("./config/credentials/validators.js").AuthResult["result"] }
-  | { event: "status"; status: ConnectStatus; message?: string; sessionId?: string; reason?: ConnectFailureReason; holder?: string; runtimes?: string[]; untrusted?: string[]; loggedOut?: string[] }
+  | { event: "status"; status: ConnectStatus; message?: string; sessionId?: string; reason?: ConnectFailureReason; holder?: string; runtimes?: string[]; untrusted?: string[]; loggedOut?: string[];
+      /** `online`: each detected runtime's version. */ versions?: Record<string, string>;
+      /** `connecting`: each detected runtime's native login. */ logins?: Record<string, "signed-in" | "signed-out" | "unknown"> }
   | { event: "thread"; phase: ThreadPhase; threadId: string; runId?: string; error?: string };
 
 /** Exit codes a supervisor can classify (see spec). */

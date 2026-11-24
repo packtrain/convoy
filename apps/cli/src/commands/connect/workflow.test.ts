@@ -147,6 +147,8 @@ describe("connect command concurrency", () => {
         claudeAuth: { mode: "bedrock", secret: "s", region: "us-east-1" } }).catch(() => {});
       const events = write.mock.calls.map(([line]) => JSON.parse(String(line)) as Record<string, unknown>);
       expect(events).toContainEqual(expect.objectContaining({ status: "connecting", untrusted: [], loggedOut: ["codex"] }));
+      // The login map keeps a managed runtime's native state; the credential is shown beside it.
+      expect(events).toContainEqual(expect.objectContaining({ status: "connecting", logins: { codex: "signed-out", "claude-code": "signed-out" } }));
     } finally { write.mockRestore(); disableConnectEvents(); vi.unstubAllEnvs(); }
   });
   it("does not claim registration before the runner registers", async () => {

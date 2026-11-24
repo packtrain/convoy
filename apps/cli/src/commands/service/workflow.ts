@@ -8,7 +8,7 @@ import { spawnProjectLauncher, spawnSharedWorker } from "../project/launcher.js"
 import { ServiceLogs } from "./logs.js";
 import { failureWarning, runtimeNotice } from "../project/formatters.js";
 import { loginRuntimeSchema } from "../project/validators.js";
-import { FRAME_LIMIT, statusSchema, toServiceInspection, type WorkerState, type ServiceProfile, type ServiceManagement, type ServiceRequest } from "./validators.js";
+import { FRAME_LIMIT, runtimeLoginsSchema, runtimeVersionsSchema, statusSchema, toServiceInspection, type WorkerState, type ServiceProfile, type ServiceManagement, type ServiceRequest } from "./validators.js";
 
 type Snapshot = ServiceProfile[];
 const RUNTIMES: readonly string[] = loginRuntimeSchema.options;
@@ -74,6 +74,9 @@ export async function runService(
               }
               const known = (value: unknown): string[] => Array.isArray(value) ? value.filter((name: unknown) => RUNTIMES.includes(name as string)) : [];
               if (Array.isArray(event.runtimes)) state.runtimes = known(event.runtimes) as WorkerState["runtimes"];
+              const versions = runtimeVersionsSchema.safeParse(event.versions), logins = runtimeLoginsSchema.safeParse(event.logins);
+              if (versions.success) state.versions = versions.data;
+              if (logins.success) state.logins = logins.data;
               // Worker text is never retained; known reasons get service-owned guidance.
               if (event.status === "connecting" && Array.isArray(event.runtimes)) {
                 worker.notice = runtimeNotice(known(event.untrusted), known(event.loggedOut), state.profile, worker.entry.config.mode === "shared")?.slice(0, 256);

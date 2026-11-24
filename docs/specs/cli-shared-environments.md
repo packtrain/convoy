@@ -226,8 +226,13 @@ reload, and Codex is unverified, so `project login` and the TUI say the login
 applies to every project and point to Reload. `project account` reads the same
 status commands as `project check`.
 
-On a shared Local target the TUI runs Shell and the login actions without a
-pause or a confirmation, since nothing is interrupted. Other targets learn their mode in a later
+On a shared Local target the TUI runs Shell without a pause or a confirmation,
+since nothing is interrupted. Since CLI 0.169.0 (OS-2502) the TUI's Sign in sits
+on the environment's runtime rows in Details: it confirms, runs the login once,
+then reloads every project so each worker reports the new login
+([Runtimes in Details](cli-tui.md#runtimes-in-details-cli-01690-os-2502)). The
+worker's `connecting` event also carries the full login map (`logins`), not only
+the logged-out list. Other targets learn their mode in a later
 slice and keep the isolated flow until then.
 
 `service start` runs in any shared environment as a non-root user. It owns the

@@ -101,23 +101,45 @@ it("keeps polling a login reload through a runtime notice", async () => {
   expect(f.browser.getSnapshot().action?.message).toBe("Logged in to Codex. a is online.");
 });
 
-it("logs in on a shared target without pausing or reloading, then offers Reload (OS-2248)", async () => {
+it("signs in once for a shared environment from Details, then reloads every project (OS-2502)", async () => {
   const f = await fixture();
   Object.assign(f.connection, { mode: "shared" });
+  f.browser.select({ connection: 0, details: true });
   f.requests.length = 0;
-  f.browser.beginAction("login-codex"); await settle(f.browser);
+  f.browser.beginAction("login-codex");
+  expect(f.browser.getSnapshot().action).toMatchObject({ pending: true, environment: true });
+  expect(f.shell).not.toHaveBeenCalled();
+  f.browser.confirmAction(); await settle(f.browser);
   expect(f.shell).toHaveBeenCalledWith("a", "a", expect.any(AbortSignal), "codex");
-  expect(f.requests.some(r => r.op === "reconcile")).toBe(false);
-  expect(f.projects[0]).toMatchObject({ status: "online", activeRuns: 1 });
-  expect(f.browser.getSnapshot().action?.message).toBe("Logged in to Codex. The login applies to every project in this environment. Running agents were not restarted; if this project does not pick it up, use [u] Reload project.");
+  expect(f.requests.filter(r => r.op === "reconcile")).toEqual([
+    expect.objectContaining({ profile: "a", interrupt: true }), expect.objectContaining({ profile: "b", interrupt: true })]);
+  expect(f.requests.some(r => r.pause)).toBe(false);
+  expect(f.browser.getSnapshot().action?.message).toBe("Signed in to Codex. Reloaded 2 projects in Fixture; each reconnects with the new login.");
+});
+
+it("reloads after a shared Sign in only the projects still registered as confirmed (OS-2502)", async () => {
+  const f = await fixture(vi.fn(async () => { f.projects[1].identity = "replacement"; }));
+  Object.assign(f.connection, { mode: "shared" });
+  f.browser.select({ connection: 0, details: true });
+  f.requests.length = 0;
+  f.browser.beginAction("login-codex"); f.browser.confirmAction(); await settle(f.browser);
+  expect(f.requests.filter(r => r.op === "reconcile").map(r => r.profile)).toEqual(["a"]);
+  expect(f.browser.getSnapshot().action?.message).toBe("Signed in to Codex. Reloaded 1 project in Fixture; each reconnects with the new login. Not reloaded, registration changed during sign in: b. Reload it from its Actions.");
+});
+
+it("leaves a shared environment's Sign in out of project Actions (OS-2502)", async () => {
+  const f = await fixture();
+  Object.assign(f.connection, { mode: "shared" });
+  expect(f.browser.unavailable("login-codex")).toBe("Sign in from environment Details. A login on a shared environment applies to every project.");
 });
 
 it("logs in to Antigravity on a shared target with agy's own sign-in (OS-2474)", async () => {
   const f = await fixture();
   Object.assign(f.connection, { mode: "shared" });
-  f.browser.beginAction("login-antigravity"); await settle(f.browser);
+  f.browser.select({ connection: 0, details: true });
+  f.browser.beginAction("login-antigravity"); f.browser.confirmAction(); await settle(f.browser);
   expect(f.shell).toHaveBeenCalledWith("a", "a", expect.any(AbortSignal), "antigravity");
-  expect(f.browser.getSnapshot().action?.message).toMatch(/^Logged in to Antigravity\. The login applies to every project/);
+  expect(f.browser.getSnapshot().action?.message).toMatch(/^Signed in to Antigravity\. Reloaded 2 projects/);
 });
 
 it("offers the Antigravity login on isolated targets that detected agy (OS-2475)", async () => {

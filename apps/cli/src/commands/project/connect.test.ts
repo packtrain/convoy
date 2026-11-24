@@ -96,7 +96,7 @@ describe("shared direct connect", () => {
     try { await runConnect({ ...config, jsonEvents: true }); }
     finally { write.mockRestore(); disableConnectEvents(); }
     expect(events.map(line => JSON.parse(line)).find(event => event.status === "connecting"))
-      .toMatchObject({ runtimes: ["codex", "claude-code"], loggedOut: ["codex"] });
+      .toMatchObject({ runtimes: ["codex", "claude-code"], loggedOut: ["codex"], logins: { codex: "signed-out", "claude-code": "unknown" } });
   });
   it("skips the status commands for a foreground connection", async () => {
     await runConnect(config);

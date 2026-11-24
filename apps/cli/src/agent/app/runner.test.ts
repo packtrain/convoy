@@ -522,7 +522,7 @@ describe("agent-runner shutdown lifecycle", () => {
       await vi.waitFor(() => {
         const events = lines.map((line) => JSON.parse(line) as Record<string, unknown>);
         expect(events).toContainEqual(
-          expect.objectContaining({ event: "status", status: "online", sessionId: "session_123" })
+          expect.objectContaining({ event: "status", status: "online", sessionId: "session_123", versions: { "claude-code": "2.1.52" } })
         );
       });
 

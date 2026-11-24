@@ -1,5 +1,7 @@
 import { stripVTControlCharacters } from "node:util";
-import type { ServiceResponse } from "./validators.js";
+import type { RuntimeLogin, ServiceResponse, WorkerState } from "./validators.js";
+import { loginRuntimeLabels, loginRuntimeSchema, type LoginRuntime } from "../project/validators.js";
+import { runtimeDescriptor, type AuthDescriptor } from "../../lib/config/credentials/validators.js";
 
 type Print = (text: string) => void;
 const plain = (value: unknown) => stripVTControlCharacters(String(value ?? "-"));
@@ -13,6 +15,8 @@ export function printServiceEvent(event: ServiceResponse, json = false, print: P
     print(`Service ${event.pid}${event.stopping ? " stopping" : " running"} | cursor ${event.cursor}`);
     print("PROFILE\tSTATUS\tACTIVE\tPENDING\tPAUSED");
     for (const p of event.profiles) print([p.profile, p.status, p.activeRuns ?? 0, Boolean(p.pending), Boolean(p.paused)].map(plain).join("\t"));
+    const runtimes = runtimeLines(event.profiles);
+    if (runtimes.length) print(runtimes.join("\n"));
     const warnings = event.profiles.filter(p => p.warning);
     if (warnings.length) print(["Warnings:", ...warnings.map(p => `  ${plain(p.profile)}: ${plain(p.status)} · ${plain(p.warning)}`)].join("\n"));
   }
@@ -20,6 +24,43 @@ export function printServiceEvent(event: ServiceResponse, json = false, print: P
     const result = record(event.result), execution = record(result.event);
     print(`[${plain(result.profile)}] ${plain(execution.threadId)} ${plain(execution.phase)}${execution.runId ? ` (run ${plain(execution.runId)})` : ""}`);
   }
+}
+
+const LOGIN_LABELS: Record<RuntimeLogin, string> = { "signed-in": "signed in", "signed-out": "signed out", unknown: "login status not known" };
+/** `unassigned`: the binding disables the runtime; `credential` is only its label. */
+export interface RuntimeRow { runtime: LoginRuntime; version?: string; login?: RuntimeLogin; credential: string; unassigned: boolean }
+
+/** A project's runtimes with their version, native login and saved credential. Spec: docs/specs/cli-tui.md#runtimes-in-details-cli-01690-os-2502 */
+export function runtimeRows(profile: WorkerState): RuntimeRow[] {
+  const auth = profile.desiredAuth ?? profile.auth;
+  return loginRuntimeSchema.options.filter(runtime => profile.versions?.[runtime] !== undefined || profile.logins?.[runtime] !== undefined)
+    .map(runtime => ({ runtime, version: profile.versions?.[runtime], login: profile.logins?.[runtime], ...credential(runtime, auth) }));
+}
+
+/** `native` without a binding, `none` when unassigned (runtime disabled), else `key <name>`, so a key named none reads apart. */
+function credential(runtime: LoginRuntime, auth?: AuthDescriptor) {
+  if (runtime === "opencode") {
+    const names = Object.values(auth?.opencode ?? {}).flatMap(slot => slot?.name ? [slot.name] : []);
+    return !auth?.opencode ? { credential: "native", unassigned: false } : names.length ? { credential: `key ${names.join(", ")}`, unassigned: false } : { credential: "none", unassigned: true };
+  }
+  const binding = runtimeDescriptor(runtime, auth);
+  if (!binding || binding.mode === "native") return { credential: "native", unassigned: false };
+  return binding.mode === "disabled" ? { credential: "none", unassigned: true } : { credential: `key ${binding.name ?? "managed"}`, unassigned: false };
+}
+
+/** One aligned runtime row; Details leaves out the columns that belong elsewhere. */
+export function runtimeText(row: RuntimeRow, columns = { login: true, credential: true }) {
+  return [loginRuntimeLabels[row.runtime].padEnd(12), (row.version ?? "unknown").padEnd(9),
+    ...columns.login ? [LOGIN_LABELS[row.login ?? "unknown"].padEnd(23)] : [], ...columns.credential ? [`credential: ${row.credential}`] : []].join(" ").trimEnd();
+}
+
+function runtimeLines(profiles: WorkerState[]) {
+  if (!profiles.length) return [];
+  if (!profiles.some(profile => runtimeRows(profile).length)) return ["Runtimes: not reported by this service"];
+  return ["Runtimes:", ...profiles.flatMap(profile => {
+    const rows = runtimeRows(profile);
+    return rows.length ? [`  ${plain(profile.profile)}`, ...rows.map(row => `    ${plain(runtimeText(row))}`)] : [`  ${plain(profile.profile)}: not reported yet`];
+  })];
 }
 
 export function printRunResult(value: unknown, json = false, print: Print = console.log): void {

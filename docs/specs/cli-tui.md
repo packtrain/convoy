@@ -47,7 +47,7 @@ service capability. Its `inspect` operation projects only profile key, project I
 endpoint origin, configured concurrency/isolation/streaming, the environment
 mode and the service Node version. URL userinfo, paths, query and fragments are omitted. API keys and auth
 objects are never projected. Project configuration is labeled as captured when
-attached; reconnect to refresh it after changing configuration. Unreported workspace paths, agent runtime versions,
+attached; reconnect to refresh it after changing configuration. Since CLI 0.169.0 Details lists agent runtimes, see [Runtimes in Details](#runtimes-in-details-cli-01690-os-2502). Unreported workspace paths,
 skill installation and global queued counts are explicitly unknown.
 
 Each client has independent navigation and one service subscription. A fresh
@@ -1183,6 +1183,10 @@ once a second for up to 60 seconds. It shows `Logged in to Codex. a is online.`
 or the status and warning it stopped on. A failed login or launch keeps the
 shell's failure guidance.
 
+Since CLI 0.169.0 a shared environment's project Actions no longer offer the logins;
+Sign in sits on the environment's runtime rows in Details
+([Runtimes in Details](#runtimes-in-details-cli-01690-os-2502)).
+
 Saving "Native login" for a runtime in a project's credential editor closes the
 editor and opens that runtime's login confirmation, if the action is available.
 Cancel returns to the project's Actions. Otherwise, and in the key-wide editor,
@@ -1627,3 +1631,109 @@ environment row and checks the selection. It also checks that wheel ticks scroll
 Details and the warnings list, also when two reports share a chunk. It checks that
 `m` turns tracking off and on and changes the hint, and that `m` works in the warnings
 list.
+
+## Runtimes in Details, CLI 0.169.0, OS-2502
+
+Details lists each agent runtime with its version and login, and each row carries
+its own actions, so Sign in, Update and credential changes no longer have to be
+found in project Actions or the Agent runtimes panel.
+
+Under Service Node, a Runtimes section lists every runtime a project of the
+environment reports, with the version from the first project that reports it. In
+shared mode the row also shows the login, since one account serves every project.
+Each project block then lists its own runtimes with version, login and assigned
+credential:
+
+```
+Runtimes
+  Codex        0.142.3   signed in
+  Claude Code  2.1.4     signed out
+    [l] Sign in   No Update: the TUI updates managed Docker runtimes only
+
+os: online, active 0
+  …
+  Runtimes
+    Codex        0.142.3   signed in               credential: native
+    Claude Code  2.1.4     signed out              credential: none
+      [c] Assign credential
+```
+
+Login reads `signed in`, `signed out` or `login status not known`. The credential
+is the project's saved binding: `native` without one, `none` when unassigned
+(runtime disabled), else `key <name>`, so a key named `none` reads apart; OpenCode
+lists its slot keys. Actions follow the binding, not the label.
+
+The data comes from the worker. Its `connecting` event carries `logins`, its
+`online` event `versions` ([sidecar contract](cli-sidecar-contract.md#status-events)),
+and the service keeps both on the project's status as optional fields, dropping
+unknown runtime names. A shared worker reads logins with the runtime's status
+command ([shared environments](cli-shared-environments.md#runtimes-and-logins)),
+so Cursor, OpenCode and Antigravity read unknown. An isolated worker takes the
+launcher's login-file check: a detected runtime without its login file is signed
+out, otherwise signed in. A service that reports neither field shows the one line
+"Runtime details not reported by this service". A project without a report yet
+shows `Runtimes: not reported yet`.
+
+Runtime rows are selectable when the panel has focus. ↑/↓ move between them; past
+the first or last row they scroll the other lines. PgUp/PgDn and the wheel scroll.
+A click selects a row. The selected row's actions sit on the line below it, as key
+hints that also run on a click, followed by a note for each action this row cannot
+offer. Hints and notes wrap onto more lines when the panel is too narrow for one:
+
+| Row | Action | When |
+| --- | --- | --- |
+| Environment | [l] Sign in | Shared mode, Codex, Claude Code or Antigravity. Cursor and OpenCode name their login command instead |
+| Environment | [u] Update | The target has Agent runtimes (managed Docker). It opens that panel. Local and SSH say the TUI does not update them |
+| Project | [l] Sign in | Isolated mode, the same runtimes. It opens the project's Actions and starts its login, with the existing pause and reload flow |
+| Project | [c] Assign credential | The target has a credential store, every runtime but OpenCode, which points to `convoy keys` |
+| Project | [x] Unassign | As Assign, when the credential is not already `none` |
+
+Assign and Unassign open the project's existing credential editor with that runtime
+focused; Unassign also drafts it as unassigned, so Save changes finishes it. Esc
+returns to the project's Actions. While the panel has focus, c on a row without
+Assign still opens Credentials.
+
+A shared Sign in runs the runtime's own login once in the terminal, through any
+registered project's shell handoff (`sharedShell(…, login)` runs in HOME), then
+reads status again and sends an interrupting reconcile for every confirmed project
+still registered with the same identity, so each worker restarts with the new
+login and reports it. A project removed or replaced during the login is not
+reloaded; the result names it and points to its Actions. Since that stops active work, it asks first: "Sign in to
+Codex once for every project in <environment>? Afterwards all N projects reload,
+stopping their active work (M observed active runs)." The result reads "Signed in
+to Codex. Reloaded N projects in <environment>; each reconnects with the new
+login." A shared project's Actions no longer list the logins, and asking for one
+there says to sign in from Details. Isolated environments keep logging in per
+project.
+
+`convoy service status` prints the same rows per project under the status table,
+and `--json` carries `versions` and `logins` in each profile, so no separate
+command is needed.
+
+The module is `tui/details`; its index exports `Details`. Wiring: the App mounts
+it in place of the plain Details lines, `detailLines` returns line items with the
+row data, `Browser.showCredentials` takes the runtime to focus, and the action
+workflow handles a shared login as the environment's.
+
+### Request cost
+
+Rendering and selection make no requests. Versions and logins ride on events the
+worker already sends, at most a few hundred bytes per project per start, and the
+service pushes them in its existing snapshots; heartbeats stay unchanged. Update
+costs what Agent runtimes costs. A shared Sign in sends the preflight status, a status read after the
+login, one interrupting reconcile per project and one status refresh. Each reloaded worker
+then registers again, which costs the backend one registration per project, as
+any reload does. No Convex query, subscription or polling is added.
+
+### Verification
+
+`service/workflow.test.ts` covers the stored fields and dropped names,
+`service/formatters.test.ts` the `service status` rows, `tui/formatters.test.ts`
+the environment and project sections and the not-reported line, and
+`details/workflow.test.ts` each row's actions and notes.
+`actions/workflow.test.ts` covers the shared Sign in and its refusal in project
+Actions. `credentials.tsx details` selects a project row, unassigns and saves;
+`details-shared` clicks the environment row's Sign in, confirms, and checks the
+login and both reloads; `details-narrow` checks that a project row's three actions
+wrap at 43 columns. `actions/workflow.test.ts` also replaces a project during the
+login and checks that it is not reloaded.
