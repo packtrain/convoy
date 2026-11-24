@@ -99,12 +99,13 @@ model: one run (one assistant message) = one run.
   does not step through commits, and a switch to or from full view (which
   remounts the panel) reopens it. One row above the list holds the List |
   Graph toggle (OS-2536: Graph adds a graph column to the two-line rows in
-  the narrow panel, and is the table in full view; `cli-worktrees.md` →
-  Layout) and Refresh; over a commit in one pane "← All commits" takes the
+  the narrow panel, and is the table with the commit sidebar in a full view
+  of 900px or more;
+  `cli-worktrees.md` → Layout) and Refresh; over a commit in one pane "← All commits" takes the
   toggle's place, at Refresh's weight, so the panel spends one row on
   controls, not two. The diff toggles show only while History has a
   commit's diff on screen, which the view reports (`onDiffShownChange`): not
-  over the one-pane list or a Graph table with no commit open, but yes over
+  over the one-pane list or a Graph table until a sidebar file opens a diff, but yes over
   a split panel widened past 600px that shows `HEAD`'s diff. The full-view toggle keeps keyboard focus
   across the switch. The list
   is fetched when the view opens, on Refresh, and again from the first page whenever a

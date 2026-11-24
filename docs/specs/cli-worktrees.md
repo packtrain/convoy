@@ -634,7 +634,8 @@ every row, header included, past a phone viewport. The right pane is the file tr
   for a merge, author, date and short hash, since the graph and badges are
   visual only. The newest commit opens first. The detail shows subject, body
   (git's hard-wrapped lines joined into paragraphs; a paragraph with list or
-  indented lines keeps its breaks), author (email on hover), date, a copy
+  indented lines keeps its breaks, except a list item's wrapped lines indented
+  to the item's text, which join it), author (email on hover), date, a copy
   button for the full hash, and the parents as dotted-underlined links with
   a 24px hit area. A parent in the loaded list opens that commit; one past
   the loaded pages is found by paging (below), and is disabled only when no
@@ -677,8 +678,9 @@ every row, header included, past a phone viewport. The right pane is the file tr
   - Keyboard: the list is a `listbox` with one Tab stop (the last focused
     row, else the open one, else `HEAD`'s, else the first). ↑/↓, j/k, Home and End move
     through it; in the two-pane layout the move also opens the commit.
-    Escape closes the commit under the Graph table, and in one pane goes
-    back to the list, like "All commits"; focus returns to the row. A
+    Escape in the Graph table leaves a file's diff for the graph first,
+    then closes the commit sidebar, and in one pane goes back to the list,
+    like "All commits"; focus returns to the row. A
     parent click focuses that commit's row (its heading, in one-pane mode),
     once the row has loaded.
   - States: skeleton rows of the loaded row's height while the first page
@@ -697,16 +699,19 @@ every row, header included, past a phone viewport. The right pane is the file tr
     its heading too, unless focus sits on a control outside the view (the
     thread's layout toggle, whose switch remounts the view). On a phone both scrollers end with
     `--mobile-nav-clearance` padding, so the floating nav covers nothing.
-    On a phone the 41px toolbar shows the layout toggle icon-only over the
-    list and the diff toggles only over a commit, so it fits 390px. On a
-    desktop the diff toggles follow the view's report of a diff on screen
+    On a phone the 41px toolbar shows the layout toggle over the list and
+    the diff toggles only over a commit, so it fits 390px. On a desktop the
+    diff toggles follow the view's report of a diff on screen
     (`onDiffShownChange`): hidden but keeping their place over the Graph
-    table or a one-pane list with no commit open, so List | Graph does not
-    move when one opens.
+    table (a commit's sidebar included, until a file opens its diff) or a
+    one-pane list with no commit open, so List | Graph does not move when
+    one opens.
     A Refresh that drops later pages scrolls the list back to the top when
     no commit is picked.
   - Layout (OS-2536, `commit-graph.tsx`, `lib/worktrees/commit-graph.ts`): a
-    List | Graph toggle, List by default, kept per browser in localStorage
+    List | Graph toggle of two icon buttons with tooltips and aria-labels,
+    styled like the project header's List | Board switch, List by default,
+    kept per browser in localStorage
     (`convoy.history-layout`) and shared by the worktree page (in the 41px
     toolbar, before the diff toggles) and the thread Changes tab (in its
     Refresh row). List is the view above, over the same commits (default
@@ -715,22 +720,44 @@ every row, header included, past a phone viewport. The right pane is the file tr
     page, both layouts load more pages (up to 1,000 rows) until `HEAD`'s row
     arrives, List's detail says "Finding HEAD… N commits searched", and the
     row scrolls to the middle of the list. With no `HEAD` in reach the first
-    row opens. Graph in two panes is a table
-    with the columns Graph, Description (ref badges, then the subject), Date
-    (the year only outside the current one),
-    Author and Commit, 28px rows under a sticky header. No commit is open
-    until a row is picked; the open commit shows below the table (the table
-    keeps 40% of the height) with a "Close commit" button, so the graph keeps
-    the full width; the first commit opened scrolls its row to the middle of
-    the shrunk table. Ref badges in the Description cell sit in a group capped at
-    60% of the cell: the subject truncates first, then the badges. While no commit is open, ↑/↓ only move focus; Enter or a
-    click opens one, and after that the keys open as in List. The table
+    row opens. Graph in a History pane of 900px or more is a table that
+    fills the pane, with the columns Refs (up to 180px: the first ref badge,
+    then "+N" whose title names the rest), Graph, Description (at least
+    160px), Date (up to 150px, the year only outside the current one),
+    Author (up to 120px) and Commit, 28px rows under a sticky header; Refs,
+    Date and Author give way before Description does. No commit is open
+    until a row is picked. A picked row opens a right sidebar
+    (`commit-sidebar.tsx` in `ThreadWorkspaceSplitPane`, resizable from 320
+    to 480px, 360px by default, its width kept per browser as
+    `worktree-commit-sidebar-width`): a "Commit" header level with the
+    table's, with "Close commit"; the author, date, email (no row without
+    one), the full hash (a copy button) and every ref badge; the message under a
+    "Message" toggle that collapses it; then "N Changed Files" with ±counts
+    and the files in `WorktreeFileTree` (no context menu: a commit has
+    nothing to open, download or revert). The patch is `useCommitPatch`'s,
+    fetched once. A file click puts the commit's whole diff in the table's
+    place, every file in patch order, scrolled to that file (expanded first if
+    collapsed), under a "← Back to graph" row with the subject; the sidebar
+    stays and marks the file. Back or Escape shows the table again with the
+    row still selected and focused; the table stays mounted but hidden
+    meanwhile, so it keeps its scroll position. The diff scroller takes
+    focus on a click, so Escape works after a click into the diff's text.
+    The diff is local state, not in the URL, and closes when the commit
+    changes or the table gives way (List, a narrower pane). A linked commit
+    (`commit=`) opens the sidebar and scrolls its row to the middle of the
+    table, once; later picks scroll only as far as needed. While no commit is open, ↑/↓ only move
+    focus; Enter or a click opens one, and after that the keys open the next
+    commit in the sidebar. The table
     scroller has a 32px `scroll-padding-top`, so a row reached by keyboard
     stops below the sticky header. Graph in one pane (the thread panel, a phone, a pane
-    under 600px) keeps the two-line rows and puts the graph column where the
+    under 900px) keeps the two-line rows and puts the graph column where the
     commit icon was, with no row borders so the lines run on; lane 0 sits
     12px in, where List's icon is, and the first-page skeleton draws those
-    rows (a lane stub, no borders).
+    rows (a lane stub, no borders). There a tapped commit opens the one-pane
+    commit view above (meta, message, every file's diff): on a phone that
+    view stands in for the sidebar. The two-pane Graph skeleton is the table
+    rows, plus the sidebar's meta, message and tree rows when `commit=` is
+    set.
   - Lane layout: a pure function over the loaded, newest-first commits. It
     keeps a list of open lanes, each waiting for a parent hash. A commit
     takes the leftmost lane waiting for it, or the first free one; other

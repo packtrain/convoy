@@ -2,7 +2,7 @@
 
 import type { ReactNode } from "react";
 import { useRef } from "react";
-import { getLeftAnchoredWidth, useResizePanel } from "@/hooks/ui/use-resize-panel";
+import { getLeftAnchoredWidth, type ResizeBounds, useResizePanel } from "@/hooks/ui/use-resize-panel";
 import { THREAD_DETAIL_SIDEBAR_RESIZE_BOUNDS } from "@/lib/threads/constants";
 import { ThreadDetailSidebarShell } from "./thread-detail-sidebar-shell";
 
@@ -14,6 +14,8 @@ interface ThreadWorkspaceSplitPaneProps {
   showSidebarHeader?: boolean;
   sidebarContent?: ReactNode;
   sidebarSide?: "left" | "right";
+  /** Width range and storage key; the thread sidebar's by default. */
+  bounds?: ResizeBounds;
   children: ReactNode;
 }
 
@@ -25,6 +27,7 @@ export function ThreadWorkspaceSplitPane({
   showSidebarHeader = true,
   sidebarContent,
   sidebarSide = "right",
+  bounds = THREAD_DETAIL_SIDEBAR_RESIZE_BOUNDS,
   children,
 }: ThreadWorkspaceSplitPaneProps) {
   const containerRef = useRef<HTMLDivElement>(null);
@@ -33,7 +36,7 @@ export function ThreadWorkspaceSplitPane({
     handleMouseDown,
     adjustWidthBy,
   } = useResizePanel(containerRef, {
-    bounds: THREAD_DETAIL_SIDEBAR_RESIZE_BOUNDS,
+    bounds,
     getWidthFromPointer: sidebarSide === "left" ? getLeftAnchoredWidth : undefined,
   });
 
@@ -41,7 +44,7 @@ export function ThreadWorkspaceSplitPane({
     <ThreadDetailSidebarShell
       isOpen={isSidebarOpen}
       width={sidebarWidth}
-      bounds={THREAD_DETAIL_SIDEBAR_RESIZE_BOUNDS}
+      bounds={bounds}
       onClose={onCloseSidebar}
       onResizeMouseDown={handleMouseDown}
       onResizeByStep={adjustWidthBy}

@@ -125,6 +125,10 @@ function TreeRow({
     );
     // The menu is on every row; the item is disabled where there is nothing
     // on disk to open (deleted, binary) or the CLI cannot read from disk.
+    // A tree with no actions at all (a commit's files) has no menu.
+    if (!onOpenFile && !onRevertFile && !onDownloadFile) {
+      return <li>{row}</li>;
+    }
     const canOpen = onOpenFile !== undefined && file.kind !== "deleted" && !file.binary;
     return (
       <li>

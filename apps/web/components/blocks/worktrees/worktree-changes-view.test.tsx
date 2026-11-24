@@ -183,14 +183,14 @@ describe("WorktreeChangesView", () => {
     back.mockRestore();
   });
 
-  test("on a phone the History toolbar fits: an icon-only layout toggle, diff toggles only over a commit (UX OS-2536 round 1 #4)", () => {
+  test("on a phone the History toolbar fits: icon-only layout buttons, diff toggles only over a commit (UX OS-2536 round 1 #4)", () => {
     state.profile = { paths: WORKTREE_PATHS, isOnline: true, appVersion: "0.171.0" };
     const commit = { hash: "a".repeat(40), parents: [], authorName: "Ada", authorEmail: "a@x", committedAt: 1, refs: [], subject: "first" };
     state.changes = { resultJson: JSON.stringify({ commits: [commit] }), loading: false, error: null, refresh: vi.fn() };
     url.search = "?profileId=profile_1&pathId=path_1&view=history";
     const { rerender } = render(<WorktreeChangesView profileId={"profile_1" as Id<"cliProfiles">} pathId="path_1" />);
 
-    expect(screen.getByText("Graph").className).toContain("sr-only");
+    expect(screen.getByRole("button", { name: "Graph" }).textContent).toBe("");
     expect(screen.queryByRole("button", { name: "Enable word wrap" })).toBeNull();
 
     fireEvent.click(screen.getByRole("option", { name: /^first/ }));
@@ -200,7 +200,7 @@ describe("WorktreeChangesView", () => {
     expect(screen.queryByRole("group", { name: "History layout" })).toBeNull();
   });
 
-  test("on desktop the Graph table with no commit open leaves out the diff toggles (UX OS-2536 round 2 #1)", () => {
+  test("on desktop the Graph table leaves out the diff toggles while no diff is open, a picked row included (UX OS-2536 round 2 #1)", () => {
     mobile.value = false;
     window.localStorage.setItem("convoy.history-layout", "graph");
     state.profile = { paths: WORKTREE_PATHS, isOnline: true, appVersion: "0.171.0" };
@@ -212,10 +212,11 @@ describe("WorktreeChangesView", () => {
     // Hidden but holding their place, so List | Graph does not move when a commit opens (round 3 Opus #1).
     expect(screen.getByRole("button", { name: "Enable word wrap" }).closest(".invisible")).toBeTruthy();
 
+    // A picked row opens the sidebar, not a diff; a file in it opens one (worktree-history.test.tsx).
     fireEvent.click(screen.getByRole("option", { name: /^first/ }));
     rerender(<WorktreeChangesView profileId={"profile_1" as Id<"cliProfiles">} pathId="path_1" />);
 
-    expect(screen.getByRole("button", { name: "Enable word wrap" }).closest(".invisible")).toBeNull();
+    expect(screen.getByRole("button", { name: "Enable word wrap" }).closest(".invisible")).toBeTruthy();
     mobile.value = true;
     window.localStorage.clear();
   });
