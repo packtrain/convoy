@@ -13,7 +13,7 @@ import { FileTabStrip } from "@/components/custom/diff/file-tab-strip";
 import { usePatchDiffOptions } from "@/components/custom/diff/patch-file-sections";
 import { WorktreeFileTree } from "@/components/custom/diff/worktree-file-tree";
 import { useIsMobile } from "@/hooks/browser/use-mobile";
-import { appRoute, useNavigation, useRouteParams } from "@/lib/navigation";
+import { appRoute, parseWorktreeChangesTarget, useNavigation, useRouteParams, type WorktreeView } from "@/lib/navigation";
 import {
   type ChangesDiffStyle,
   readChangesDiffStyle,
@@ -50,9 +50,16 @@ export function WorktreeChangesView({ profileId, pathId }: WorktreeChangesViewPr
 function ChangesViewForCheckout({ profileId, pathId }: WorktreeChangesViewProps) {
   const params = useRouteParams<{ organizationSlug: string; projectAlias: string }>();
   const state = useWorktreeChanges(profileId, pathId);
-  const [tab, setTab] = useState<"changes" | "history">("changes");
+  const { location, push, replace } = useNavigation();
+  // The tab and the open commit live in the URL, so a reload or Back keeps them (OS-2534).
+  const parsed = parseWorktreeChangesTarget(location.search);
+  const target = parsed?.profileId === profileId && parsed.pathId === pathId ? parsed : null;
+  const tab = target?.view ?? "changes";
+  // Changes drops `commit` from the URL; this brings it back on the way to History.
+  const [lastCommit, setLastCommit] = useState(target?.commit ?? null);
   // The list is fetched on first open and kept across tab switches.
-  const [historyOpened, setHistoryOpened] = useState(false);
+  const [historyOpenedOnce, setHistoryOpened] = useState(false);
+  const historyOpened = historyOpenedOnce || tab === "history";
   const history = useWorktreeHistory(
     profileId,
     pathId,
@@ -68,7 +75,6 @@ function ChangesViewForCheckout({ profileId, pathId }: WorktreeChangesViewProps)
   const treeSide = useFileTreeSide();
   const sectionRefs = useRef(new Map<string, HTMLElement>());
   const diffOptions = usePatchDiffOptions(diffStyle, wordWrap);
-  const { push } = useNavigation();
   const [confirmRemove, setConfirmRemove] = useState(false);
   const removal = useWorktreeRemoval(profileId, {
     onRemoved: () => push(appRoute.projectThreads(params.organizationSlug, params.projectAlias)),
@@ -112,12 +118,27 @@ function ChangesViewForCheckout({ profileId, pathId }: WorktreeChangesViewProps)
   const title = entry ? (entry.kind === "worktree" ? (entry.branch ?? entry.label) : entry.label) : "Changes";
   const hasFiles = sections !== null && files.length > 0;
   const onHistory = tab === "history";
-  const openTab = (next: "changes" | "history") => {
-    setTab(next);
+  const route = (view: WorktreeView, commit: string | null) =>
+    appRoute.projectThreadsWithPreselection(params.organizationSlug, params.projectAlias, { profileId, pathId, view, commit });
+  const openTab = (next: WorktreeView) => {
+    if (next === tab) {
+      return;
+    }
     if (next === "history") {
       setHistoryOpened(true);
+    } else {
+      setLastCommit(target?.commit ?? null);
+    }
+    replace(route(next, next === "history" ? lastCommit : null));
+  };
+  const selectCommit = (commit: string | null, mode: "push" | "replace" | "back") => {
+    if (mode === "back") {
+      window.history.back();
+    } else {
+      (mode === "push" ? push : replace)(route("history", commit));
     }
   };
+  const refreshing = onHistory ? history.initialLoading || history.refreshing : changes.loading;
   const tabClass = (active: boolean) =>
     cn(
       "flex h-7 cursor-pointer items-center gap-1.5 rounded-md px-2.5 text-xs",
@@ -149,16 +170,21 @@ function ChangesViewForCheckout({ profileId, pathId }: WorktreeChangesViewProps)
           actions={
             entry && isOnline ? (
               <>
+                {/* aria-disabled, not disabled: a disabled button drops keyboard focus mid-refresh. */}
                 <Button
                   type="button"
                   variant="ghost"
                   size="sm"
-                  className="cursor-pointer gap-1.5 text-xs"
-                  onClick={onHistory ? history.refresh : state.refresh}
-                  disabled={onHistory ? history.initialLoading || history.refreshing : changes.loading}
+                  className="cursor-pointer gap-1.5 text-xs aria-disabled:opacity-50"
+                  onClick={() => {
+                    if (!refreshing) {
+                      (onHistory ? history.refresh : state.refresh)();
+                    }
+                  }}
+                  aria-disabled={refreshing}
                   aria-label={onHistory ? "Refresh history" : "Refresh changes"}
                 >
-                  <RefreshCw className={cn("size-3.5", (onHistory ? history.initialLoading || history.refreshing : changes.loading) && "animate-spin")} />
+                  <RefreshCw className={cn("size-3.5", refreshing && "animate-spin")} />
                   Refresh
                 </Button>
                 {entry.kind === "worktree" && (
@@ -205,9 +231,12 @@ function ChangesViewForCheckout({ profileId, pathId }: WorktreeChangesViewProps)
                 History
               </button>
             </div>
-            <span className="truncate font-mono" title={entry.path}>
-              {entry.path}
-            </span>
+            {/* A phone has room for a few characters only; the header names the checkout. */}
+            {!isMobile && (
+              <span className="truncate font-mono" title={entry.path}>
+                {entry.path}
+              </span>
+            )}
             {!onHistory && <ChangesSummary files={files} />}
             {isOnline && !onHistory && <RevertAllButton state={state} />}
             <div className="ml-auto flex items-center gap-1">
@@ -234,6 +263,8 @@ function ChangesViewForCheckout({ profileId, pathId }: WorktreeChangesViewProps)
             diffOptions={diffOptions}
             allCollapsed={allCollapsed}
             wordWrap={wordWrap}
+            selectedHash={target?.commit ?? null}
+            onSelect={selectCommit}
           />
         ) : (
           <div className="flex min-h-0 flex-col">

@@ -19,21 +19,31 @@ export interface ProjectThreadPreselectionParams
   attachedTask?: string | null;
   /** `owner/name#number`: the new-thread composer starts with this PR attached (OS-2193). */
   attachedPr?: string | null;
-  /** `changes` opens the worktree changes view for the path instead of the composer (OS-2036). */
-  view?: "changes" | null;
+  /** Opens the worktree page for the path instead of the composer: its Changes (OS-2036) or History (OS-2534) tab. */
+  view?: WorktreeView | null;
+  /** History tab: the open commit's full hash. */
+  commit?: string | null;
 }
+
+export type WorktreeView = "changes" | "history";
 
 export interface WorktreeChangesTarget {
   profileId: string;
   pathId: string;
+  view: WorktreeView;
+  commit: string | null;
 }
 
-/** `?view=changes&profileId&pathId` on the threads page (OS-2036); null for every other search. */
+/** `?view=changes|history&profileId&pathId[&commit]` on the threads page (OS-2036); null for every other search. */
 export function parseWorktreeChangesTarget(search: string): WorktreeChangesTarget | null {
   const query = new URLSearchParams(search);
   const profileId = query.get("profileId");
   const pathId = query.get("pathId");
-  return query.get("view") === "changes" && profileId && pathId ? { profileId, pathId } : null;
+  const view = query.get("view");
+  if ((view !== "changes" && view !== "history") || !profileId || !pathId) {
+    return null;
+  }
+  return { profileId, pathId, view, commit: view === "history" ? query.get("commit") : null };
 }
 
 /** `?new=1`, or an agent preselection that is not the changes view: on mobile both open the composer full-screen. */
@@ -241,6 +251,7 @@ export const appRoute = {
       attachedTask: params.attachedTask,
       attachedPr: params.attachedPr,
       view: params.view,
+      commit: params.commit,
     }),
   projectThreadDetail: (
     organizationSlug: string,

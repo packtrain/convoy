@@ -90,10 +90,31 @@ describe("appRoute", () => {
     expect(parseWorktreeChangesTarget("?view=changes&profileId=profile_1&pathId=path_1")).toEqual({
       profileId: "profile_1",
       pathId: "path_1",
+      view: "changes",
+      commit: null,
     });
     expect(parseWorktreeChangesTarget("?profileId=profile_1&pathId=path_1")).toBeNull();
     expect(parseWorktreeChangesTarget("?view=changes&profileId=profile_1")).toBeNull();
     expect(parseWorktreeChangesTarget("")).toBeNull();
+  });
+
+  test("the History tab and its open commit live in the URL (OS-2534 UX review)", () => {
+    const search = href(
+      appRoute.projectThreadsWithPreselection("acme", "app", {
+        profileId: "profile_1",
+        pathId: "path_1",
+        view: "history",
+        commit: "a".repeat(40),
+      })
+    ).split("?")[1];
+    expect(search).toBe(`profileId=profile_1&pathId=path_1&view=history&commit=${"a".repeat(40)}`);
+    expect(parseWorktreeChangesTarget(`?${search}`)).toEqual({
+      profileId: "profile_1",
+      pathId: "path_1",
+      view: "history",
+      commit: "a".repeat(40),
+    });
+    expect(isNewThreadComposerTarget(`?${search}`)).toBe(false);
   });
 
   test("treats ?new=1 and an agent preselection as the new-thread composer, not the changes view", () => {

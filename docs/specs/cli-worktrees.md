@@ -219,7 +219,12 @@ side lives in `apps/cli/src/lib/git/history.ts`.
   40- or 64-character lowercase hex hash only, and the CLI checks it again
   before git sees it. The patch is `git show --cc` with the pinned diff format
   (`SHOW_ARGS`, the `git show` form of `DIFF_ARGS`) on `<hash>^{commit}`, so
-  an annotated tag's hash shows its commit, capped by `capFileOpText`.
+  an annotated tag's hash shows its commit, capped by `capFileOpText`. A
+  patch past `runGit`'s 10 MiB output cap (a huge root commit) is not an
+  error: `allowTruncatedOutput` keeps the first part, and the result is
+  `truncated` like any patch past the display cap. The body and the patch
+  come from two `git show` calls (`-s --format=%b` and `--format=`), so a
+  huge commit message can't use up the patch's output budget.
   A merge commit gets git's dense combined diff (`diff --cc`), which holds only
   conflict resolutions, so a clean merge has an empty patch. A root commit
   shows its files as added. `body` is the message after the subject, cut at
@@ -516,7 +521,8 @@ another database join.
 
 Opened from an expanded Connected CLIs row (see
 [cli-thread-list.md](cli-thread-list.md#connected-clis-os-1993)) at
-`/threads?profileId&pathId&view=changes`, recognised by
+`/threads?profileId&pathId&view=changes` (`view=history` for the History
+tab), recognised by
 `parseWorktreeChangesTarget` in `lib/navigation`. `ThreadWorkspaceHost`
 renders it in place of the new-thread composer; a thread URL still wins. The
 threads layout uses the same helper, so on mobile the view is a full-screen
@@ -527,10 +533,12 @@ every row, header included, past a phone viewport. The right pane is the file tr
 `view=changes` is present.
 
 - Header: the worktree's branch (or the checkout's label) and a Refresh
-  button. Below it a 41px toolbar row (same height as the thread Changes
+  button. While a refresh runs the button is `aria-disabled` (not
+  `disabled`, which would drop keyboard focus) and its icon spins. Below it a 41px toolbar row (same height as the thread Changes
   toolbar, so it lines up with the sidebar's "New thread" row) with a
   Changes | History switch (Changes carries the file count once the patch
-  has files), the full path, `N files +A -D` once the patch is in (Changes
+  has files), the full path (not on a phone, where only a few characters
+  fit), `N files +A -D` once the patch is in (Changes
   only), and the Changes tab's three
   toggles on the right: collapse/expand all, split/unified, word wrap
   (`components/custom/diff/changes-view-toggles.tsx`, shared with
@@ -597,34 +605,78 @@ every row, header included, past a phone viewport. The right pane is the file tr
   download; a toast reports the outcome and the view refreshes. A truncated
   patch disables Revert all, since the file list on screen is incomplete.
 - History (OS-2534, `worktree-history.tsx`, mockup `/playground/git-history`):
-  the commit list on the left (340px) and the selected commit on the right,
-  for a worktree and the main checkout alike. Rows are two lines: subject,
-  then author, relative time, short hash and ref badges (the `HEAD ->` branch
-  highlighted); a merge row has a merge icon and a muted subject. The newest
-  commit opens first. The detail shows subject, body, author (email on
-  hover), date, a copy button for the full hash, and the parents; a parent in
-  the loaded list opens that commit, one not loaded yet is disabled. Below,
-  `N files +A -D` and one `PatchFileSection` per file with `PatchDiff`, using
-  the toolbar's toggles. A combined (`diff --cc`) section shows as plain text,
-  since the diff viewer reads two-sided patches only, and wraps with the
-  toolbar's word wrap; its ±counts read every parent column, and a binary
-  resolution keeps its row with the binary note. "Load more" under the
-  list fetches the next page and keeps the rows above. `gitLog` is first sent
-  when History opens, and the list and the open commit stay across tab
-  switches; opening another checkout starts from a fresh view. Refresh on
-  the History tab starts over from the first page; with one page loaded the
-  rows stay while it runs and the button spins. A commit's patch is fetched
-  once per browser tab and served from an in-memory cache after that (100
-  commits, oldest dropped), since a commit never changes. States: skeleton
-  rows of the loaded row's height while the first page loads, "No commits on
-  this branch yet.", the offline and update-prompt copy, and the CLI's error
-  with Retry, which re-sends the failed page. A malformed CLI answer is that
-  error too. The first-page skeleton covers both panes: list rows, and the
-  detail's header and file bars. The file tree and its "Show files" button
-  are hidden on History. On a phone one pane shows at a time: the list,
-  then the tapped commit full width under a "← History" back row. Copying
-  the hash toasts "Failed to copy the hash" where the clipboard is missing
-  or denied.
+  the commit list on the left (`clamp(240px, 40%, 420px)`) and the selected
+  commit on the right, for a worktree and the main checkout alike. Rows are
+  two lines: subject, then author (cut at 8rem), relative time, short hash
+  and ref badges (the `HEAD ->` branch highlighted, a tag as a tag icon and
+  its name; badges shrink before the author does); a merge row has a merge
+  icon and a muted subject. The open row has `bg-muted` and a 2px primary
+  bar on its left edge. A row's accessible name is its subject (cut at 120
+  characters), author and date. The newest commit opens first. The detail shows subject, body
+  (git's hard-wrapped lines joined into paragraphs; a paragraph with list or
+  indented lines keeps its breaks), author (email on hover), date, a copy
+  button for the full hash, and the parents as dotted-underlined links with
+  a 24px hit area. A parent in the loaded list opens that commit; one past
+  the loaded pages is found by paging (below), and is disabled only when no
+  page is left. Below,
+  `N files +A -D` (no counts when every file is binary) and one
+  `PatchFileSection` per file with `PatchDiff`, using the toolbar's toggles.
+  A combined (`diff --cc`) section shows as text under "Combined diff of the
+  merge resolution, shown unified.", since the diff viewer reads two-sided
+  patches only: git's `diff --cc`/`index`/`---`/`+++` lines are dropped, a
+  line with a `+` in its parent columns gets a green row tint, one with a
+  `-` a red tint, with the foreground text color for contrast, and it
+  wraps with the toolbar's word wrap; its ±counts read every parent column,
+  and a binary resolution keeps its row with the binary note. "Load more"
+  under the list fetches the next page, keeps the rows above, and moves focus
+  to the first new row.
+  - URL: the tab and the open commit are `view=history&commit=<hash>` on the
+    worktree page URL (`appRoute.projectThreadsWithPreselection`,
+    `parseWorktreeChangesTarget`), so a reload or a shared link reopens them.
+    Switching tabs replaces the URL; Changes drops `commit` and History
+    brings it back. Selecting a commit replaces the URL in the two-pane
+    layout and pushes it in the one-pane layout, so Back returns to the
+    list, and "All commits" pops that entry instead of adding one. A full or
+    short (7+ characters) `commit` that is not in the loaded pages is paged
+    to: Load more runs until its row arrives, and meanwhile the detail shows
+    a spinner status "Finding commit <short>… N commits searched" (or keeps
+    the commit that was open). After 1,000 rows, or when no page is left,
+    the param is dropped, the newest commit opens (or the one that was open,
+    if it is still in the loaded history; a rebase or reset can drop it),
+    and a note above the list says "Commit <short> isn't in this
+    branch's history." until the next commit is opened. In one-pane mode a
+    failed page during that search shows its error and Retry in the commit
+    pane too, since the list (where Load more's error sits) is hidden.
+  - `gitLog` is first sent when History opens, and the list stays across tab
+    switches; opening another checkout starts from a fresh view. Refresh on
+    the History tab starts over from the first page; with one page loaded the
+    rows stay while it runs and the button spins. The open commit stays open
+    through a Refresh, and the list pages back to its row. A commit's patch
+    is fetched once per browser tab and served from an in-memory cache after
+    that (100 commits, oldest dropped), since a commit never changes.
+  - Keyboard: the list is a `listbox` with one Tab stop (the last focused
+    row, else the open one, else the first). ↑/↓, j/k, Home and End move
+    through it; in the two-pane layout the move also opens the commit. A
+    parent click focuses that commit's row (its heading, in one-pane mode),
+    once the row has loaded.
+  - States: skeleton rows of the loaded row's height while the first page
+    loads, "No commits on this branch yet.", the offline and update-prompt
+    copy, and the CLI's error with Retry, which re-sends the failed page. A
+    malformed CLI answer is that error too. The first-page skeleton covers
+    both panes: list rows, and the detail's header and file bars. The file
+    tree and its "Show files" button are hidden on History.
+  - One-pane layout, on a phone or when the History pane is narrower than
+    600px (the list's 240px plus a 360px detail): the list, then the tapped commit full width under an "← All
+    commits" back row. The list stays mounted but hidden behind the commit,
+    so it keeps its scroll position; focus moves to the commit's heading on
+    open and back to its row on return, by the back row or browser Back, and
+    that row stays marked as selected. Browser Forward to a commit focuses
+    its heading too. On a phone both scrollers end with
+    `--mobile-nav-clearance` padding, so the floating nav covers nothing.
+  - Copying the hash toasts "Commit hash copied"; where the clipboard is
+    missing or denied it toasts "Failed to copy the hash" ("The full hash is
+    selected beside it. Press Ctrl+C."), and a read-only field with the full
+    hash takes the button's place, selected for Ctrl+C.
 - File tree (OS-2037, `components/custom/diff/worktree-file-tree.tsx`): the changed files nested by
   folder in `ThreadWorkspaceSplitPane`'s sidebar, titled "Files". Folders come
   first, in patch order, each with the ±sum of its files and a chevron that
