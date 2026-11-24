@@ -601,6 +601,8 @@ status changes rather than being true last-activity.
 
 - Calls `api.cli.threads.summaries.getSummary`; a null is a non-zero exit with
   "Thread not found or not accessible."
+- An ordinary thread prints `Model: <model> (effort: <effort>)`, with "machine
+  default" for a `null` field (OS-2556).
 - A container prints group metadata — kind, children, group status, origin thread —
   and no runtime target, matching the summary tier's disjoint field sets. Group
   membership is `threads list <containerId>`'s answer, not this command's.

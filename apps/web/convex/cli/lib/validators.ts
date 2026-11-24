@@ -109,6 +109,9 @@ export const cliThreadSummaryValidator = v.object({
   pathId: v.optional(v.string()),
   path: v.optional(v.string()),
   cliType: v.optional(cliTypeValidator),
+  // From `metadata.cli`; `null` means the machine's default (OS-2556).
+  cliModel: v.optional(v.union(v.string(), v.null())),
+  cliEffort: v.optional(v.union(v.string(), v.null())),
   processingState: v.optional(cliThreadProcessingStateValidator),
   hasPendingUserMessages: v.optional(v.boolean()),
   hasPendingInteraction: v.optional(v.boolean()),
@@ -176,6 +179,8 @@ export function toThreadSummary(
     pathId: thread.pathId,
     path: pathString,
     cliType: thread.cliType,
+    cliModel: thread.metadata?.cli?.lastUsedModel ?? null,
+    cliEffort: thread.metadata?.cli?.lastUsedEffort ?? null,
     processingState: thread.processingState,
     hasPendingUserMessages: thread.hasPendingUserMessages,
     hasPendingInteraction: thread.hasPendingInteraction ?? false,

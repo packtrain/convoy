@@ -1362,6 +1362,12 @@ no use for. It is named for the shape it returns, not for its caller: the
 `targetOnline: false` is informational for the same reason as in
 `list_cli_profiles`.
 
+It also returns `cliModel` and `cliEffort`, read from `metadata.cli` (the
+selection the composer restores), so no extra read. `null` means the thread
+carries no selection and runs on the machine's default model or effort. A
+container omits both. Without them, a spawner could not tell that a thread it
+created without `cliModel` fell back to the machine's default (OS-2556).
+
 `projectId` is the thread's **own** project, carried by both branches (OS-1634).
 It is what a caller holding only a thread id must authorize a second call on — the
 attachment-upload mutations behind `threads send --attach` take a `projectId`, and
@@ -1731,6 +1737,12 @@ agent's next question after spawning is always "did it land, and is the machine 
 up?" — allowing an offline target is only useful because the thread queues, and
 `targetOnline` is the field that says so. One extra read, no shaping: the same
 summary every other thread tool returns for the same ID.
+
+**`sourceThreadId` inherits the target, not the model or effort.** It carries
+`profileId`, `pathId`, and `cliType`. `cliModel` and `cliEffort` stay
+per-call: a reviewer usually needs a different model from its spawner, so
+inheriting would hide the same mistake. The tool description says so, and the
+returned `cliModel` / `cliEffort` show what was stored (OS-2556).
 
 **`worktree` and `projectAgentId` are pass-through (OS-1222).** Both were already
 arguments of `createThreadArgs`, so the handler parses the *shape* — `worktree` must

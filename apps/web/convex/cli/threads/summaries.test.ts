@@ -64,6 +64,58 @@ describe("getSummary (OS-1162)", () => {
     expect(result?.aggregateStatus).toBeUndefined();
   });
 
+  test("reports the model and effort the thread was created with (OS-2556)", async () => {
+    const ctx = createTestContext();
+    const { user, project, asUser } = await ctx.setupProject();
+    const profile = await ctx.cliProfile(user._id, project._id, PATHS);
+    const threadId = await asUser.mutation(api.cli.threads.core.create, {
+      profileId: profile._id,
+      pathId: "path-1",
+      cliType: "codex",
+      content: "Review the diff",
+      cliModel: "gpt-6-astra",
+      cliEffort: "high",
+    });
+
+    const result = await asUser.query(api.cli.threads.summaries.getSummary, { threadId });
+
+    expect(result).toMatchObject({ cliModel: "gpt-6-astra", cliEffort: "high" });
+  });
+
+  test("reports an effort sent without a model (OS-2556)", async () => {
+    const ctx = createTestContext();
+    const { user, project, asUser } = await ctx.setupProject();
+    const profile = await ctx.cliProfile(user._id, project._id, PATHS);
+    const threadId = await asUser.mutation(api.cli.threads.core.create, {
+      profileId: profile._id,
+      pathId: "path-1",
+      cliType: "codex",
+      content: "Review the diff",
+      cliEffort: "high",
+    });
+
+    const result = await asUser.query(api.cli.threads.summaries.getSummary, { threadId });
+
+    expect(result).toMatchObject({ cliModel: null, cliEffort: "high" });
+  });
+
+  test("reports null model and effort when the thread runs on the machine default (OS-2556)", async () => {
+    const ctx = createTestContext();
+    const { user, project, asUser } = await ctx.setupProject();
+    const profile = await ctx.cliProfile(user._id, project._id, PATHS);
+    const threadId = await asUser.mutation(api.cli.threads.core.create, {
+      profileId: profile._id,
+      pathId: "path-1",
+      cliType: "claude-code",
+      content: "Review the diff",
+    });
+
+    const result = await asUser.query(api.cli.threads.summaries.getSummary, { threadId });
+
+    expect(result?.cliModel).toBeNull();
+    expect(result?.cliEffort).toBeNull();
+  });
+
   test("reports the target online while the profile has a live session", async () => {
     const ctx = createTestContext();
     const { user, project, asUser } = await ctx.setupProject();
@@ -322,6 +374,8 @@ describe("getSummary (OS-1162)", () => {
     expect(result?.profileId).toBeUndefined();
     expect(result?.pathId).toBeUndefined();
     expect(result?.cliType).toBeUndefined();
+    expect(result).not.toHaveProperty("cliModel");
+    expect(result).not.toHaveProperty("cliEffort");
     expect(result?.processingState).toBeUndefined();
     expect(result?.targetOnline).toBeUndefined();
     // `status` is thread-only for the same reason as `processingState`.

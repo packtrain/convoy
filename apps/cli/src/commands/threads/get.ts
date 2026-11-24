@@ -49,6 +49,8 @@ export const getThreadCommand = addGlobalOptions(
 
       console.log(`  Status: ${value.status ?? "-"}`);
       console.log(`  Runtime: ${value.cliType ?? "-"}`);
+      // `null` means no stored selection: the machine's default applies (OS-2556).
+      console.log(`  Model: ${value.cliModel ?? "machine default"} (effort: ${value.cliEffort ?? "machine default"})`);
       console.log(`  Profile: ${value.profileName ?? "Unknown"} (${value.targetOnline ? "online" : "offline"})`);
       console.log(`  Path: ${value.path ?? "-"}`);
       console.log(`  Queue: ${value.hasPendingUserMessages ? "pending messages" : "empty"}${value.queueHeldAt ? " (held)" : ""}`);

@@ -212,6 +212,17 @@ describe("threads commands", () => {
       expect(output).toContain("online");
     });
 
+    it("prints the stored model and effort, or the machine default (OS-2556)", async () => {
+      query.mockResolvedValueOnce({ ...threadRow, cliModel: "opus-5-5", cliEffort: "high" });
+      await invoke(getThreadCommand, ["thr_1"]);
+      query.mockResolvedValueOnce({ ...threadRow, cliModel: null, cliEffort: null });
+      await invoke(getThreadCommand, ["thr_1"]);
+
+      const output = vi.mocked(console.log).mock.calls.flat().join("\n");
+      expect(output).toContain("Model: opus-5-5 (effort: high)");
+      expect(output).toContain("Model: machine default (effort: machine default)");
+    });
+
     it("prints container metadata instead of a target for a group", async () => {
       query.mockResolvedValueOnce(containerRow);
 

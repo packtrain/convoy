@@ -60,8 +60,11 @@ Effort slots are registry-owned (`apps/web/convex/cli/lib/runtimes/`), provider-
 - The stored last-used effort is denormalized onto the thread at
   user-message-write time (OS-1454). It moves **atomically with the model**: a
   user message that names a `cliModel` replaces both the stored model and the
-  stored effort, clearing the effort when that message carries none. Merging
-  them independently could leave the thread describing a model+effort pair no
+  stored effort, clearing the effort when that message carries none. A message
+  that names only a `cliEffort` replaces just the effort and keeps the stored
+  model, the pair `messages.send` writes onto that message anyway. So an
+  effort-only MCP `create_thread` reads back its effort (OS-2556). Merging them
+  any other way could leave the thread describing a model+effort pair no
   message ever had, which matters for runtimes with per-model effort variants.
 - Composer validation of a stored effort passes the resolved model (and the
   profile's advertised inventory) as context, so a per-model variant is judged

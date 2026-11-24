@@ -1725,7 +1725,8 @@ export function getToolDefinitions(
       name: "get_thread",
       description:
         "Get one CLI thread by ID: title, status, queue state, and the target it runs on " +
-        "(profileId, pathId, path, cliType, targetOnline). Call it on your own thread ID to find " +
+        "(profileId, pathId, path, cliType, targetOnline), plus cliModel and cliEffort (null means " +
+        "the machine's default). Call it on your own thread ID to find " +
         "your spawn target; a thread in a group also returns parentThreadId. " +
         "A thread group or workflow run returns container metadata instead (kind, childCount, " +
         "aggregateStatus, originThreadId), has no target, and cannot be messaged — pass its ID to " +
@@ -1814,6 +1815,9 @@ export function getToolDefinitions(
         "CONVOY_THREAD_ID on most runtimes) — to delegate to a second agent on your machine: " +
         "profileId, pathId, and cliType are inherited from it. " +
         "Without it all three are required, from list_cli_profiles. " +
+        "sourceThreadId does not carry the model or effort over: without cliModel and cliEffort " +
+        "the thread runs on the machine's default. The result's cliModel and cliEffort show what " +
+        "was stored; null means the machine default. " +
         "Spawning groups the two threads, turning the source's sidebar row into a thread group. " +
         "sourceThreadId also takes a thread group ID or workflow container ID. Threads added " +
         "to a workflow container run independently of its steps. " +
@@ -1838,7 +1842,8 @@ export function getToolDefinitions(
           sourceThreadId: {
             type: "string",
             description:
-              "Spawn beside this thread, inheriting its profileId / pathId / cliType. Accepts a " +
+              "Spawn beside this thread, inheriting its profileId / pathId / cliType, but not its " +
+              "model or effort. Accepts a " +
               "thread group container ID (a member is chosen for you). Omit to create a standalone " +
               "thread, which requires profileId, pathId, and cliType.",
           },
@@ -1878,11 +1883,13 @@ export function getToolDefinitions(
           },
           cliModel: {
             type: "string",
-            description: "Model for the runtime to use. Defaults to the runtime's own default.",
+            description: "Model for the runtime to use. Never inherited from sourceThreadId; omitted, the " +
+              "thread runs on the machine's default.",
           },
           cliEffort: {
             type: "string",
-            description: "Reasoning-effort level, for runtimes that support one.",
+            description: "Reasoning-effort level, for runtimes that support one. Never inherited from " +
+              "sourceThreadId; omitted, the runtime's default applies.",
           },
           cliMode: {
             type: "string",

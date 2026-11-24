@@ -145,6 +145,19 @@ describe("thread last-used CLI selection", () => {
     });
   });
 
+  test("a send that names only an effort keeps the stored model and replaces the effort", async () => {
+    const { asUser, createThread, readSelection } = await setup();
+
+    const threadId = await createThread({ cliModel: "opus", cliEffort: "high" });
+    await asUser.mutation(api.cli.messages.send, { threadId, content: "second", cliEffort: "low" });
+
+    expect(await readSelection(threadId)).toEqual({
+      lastUsedModel: "opus",
+      lastUsedEffort: "low",
+      lastUsedMode: null,
+    });
+  });
+
   test("a send that omits the mode keeps the stored mode", async () => {
     const { asUser, createThread, readSelection } = await setup();
 

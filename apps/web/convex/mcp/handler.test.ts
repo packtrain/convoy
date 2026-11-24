@@ -7438,6 +7438,8 @@ describe("handleMcpRequest create_thread", () => {
     expect(getToolSchemaProperty(tools, "create_thread", "runtimeCommand")).toMatchObject({
       type: "boolean",
     });
+    // Agents assumed sourceThreadId carries the model too (OS-2556).
+    expect(createThread?.description).toContain("sourceThreadId does not carry the model or effort over");
   });
 
   test("forwards runtimeCommand so the thread opens on the target's own command", async () => {
