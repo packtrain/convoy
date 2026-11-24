@@ -270,16 +270,20 @@ describe("ThreadChangesToolbar", () => {
     expect(onSelectView).toHaveBeenCalledWith("all");
   });
 
-  test("the selector menu offers Working tree only when the caller allows it (OS-2234)", () => {
+  test("the selector menu offers Working tree and History only when the caller allows it (OS-2234, OS-2535)", () => {
     renderToolbar();
     expect(screen.queryByRole("button", { name: "Working tree" })).toBeNull();
+    expect(screen.queryByRole("button", { name: "History" })).toBeNull();
     cleanup();
 
-    const { onSelectView } = renderToolbar({ showWorktreeView: true });
+    const { onSelectView } = renderToolbar({ showCheckoutViews: true });
     const items = screen.getAllByRole("button").map((button) => button.textContent);
     expect(items.indexOf("All changes")).toBeLessThan(items.indexOf("Working tree"));
+    expect(items.indexOf("Working tree")).toBeLessThan(items.indexOf("History"));
     fireEvent.click(screen.getByRole("button", { name: "Working tree" }));
     expect(onSelectView).toHaveBeenCalledWith("worktree");
+    fireEvent.click(screen.getByRole("button", { name: "History" }));
+    expect(onSelectView).toHaveBeenCalledWith("history");
   });
 
   test("the selector menu commits a run range like the timeline", () => {

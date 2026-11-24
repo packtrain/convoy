@@ -606,7 +606,9 @@ every row, header included, past a phone viewport. The right pane is the file tr
   patch disables Revert all, since the file list on screen is incomplete.
 - History (OS-2534, `worktree-history.tsx`, mockup `/playground/git-history`):
   the commit list on the left (`clamp(240px, 40%, 420px)`) and the selected
-  commit on the right, for a worktree and the main checkout alike. Rows are
+  commit on the right, for a worktree and the main checkout alike. The
+  thread Changes tab shows the same view (OS-2535, `cli-thread-run-diffs.md`
+  → History). Rows are
   two lines: subject, then author (cut at 8rem), relative time, short hash
   and ref badges (the `HEAD ->` branch highlighted, a tag as a tag icon and
   its name; badges shrink before the author does); a merge row has a merge
@@ -660,7 +662,8 @@ every row, header included, past a phone viewport. The right pane is the file tr
     parent click focuses that commit's row (its heading, in one-pane mode),
     once the row has loaded.
   - States: skeleton rows of the loaded row's height while the first page
-    loads, "No commits on this branch yet.", the offline and update-prompt
+    loads, "No commits on this branch yet.", "This checkout is no longer
+    registered on the CLI." (nothing is fetched), the offline and update-prompt
     copy, and the CLI's error with Retry, which re-sends the failed page. A
     malformed CLI answer is that error too. The first-page skeleton covers
     both panes: list rows, and the detail's header and file bars. The file

@@ -1,6 +1,8 @@
 "use client";
 
 import { useCallback, useEffect, useRef, useState } from "react";
+import { useQuery } from "convex/react";
+import { api } from "@/convex/_generated/api";
 import { RefreshCw } from "lucide-react";
 import type { Id } from "@/convex/_generated/dataModel";
 import { Button } from "@/components/ui/button";
@@ -8,12 +10,17 @@ import { FileTabStrip } from "@/components/custom/diff/file-tab-strip";
 import { usePatchDiffOptions } from "@/components/custom/diff/patch-file-sections";
 import { FileTreePane } from "@/components/custom/diff/file-tree-pane";
 import { WorktreeFileTree } from "@/components/custom/diff/worktree-file-tree";
+import { supportsWorktreeHistory } from "@/lib/worktrees/cli-version";
 import { useWorktreeChanges } from "@/lib/worktrees/hooks/use-worktree-changes";
+import { useWorktreeHistory } from "@/lib/worktrees/hooks/use-worktree-history";
 import { cn } from "@/lib/utils";
 import { ChangesSummary, RevertAllButton, WorktreeChangesBody, useSectionCollapse } from "./worktree-changes-body";
+import { WorktreeHistoryView } from "./worktree-history";
 import { RevertAllDialog, RevertFileDialog } from "./worktree-revert-dialogs";
 
 interface WorktreeChangesPanelProps {
+  /** "Working tree" or "History" in the thread's view selector. */
+  view: "worktree" | "history";
   profileId: Id<"cliProfiles">;
   pathId: string;
   /** Toolbar toggles, owned by the thread's Changes toolbar. */
@@ -26,12 +33,85 @@ interface WorktreeChangesPanelProps {
   onMentionFile?: (path: string) => void;
 }
 
+/** The thread Changes tab's views of its checkout (docs/specs/cli-thread-run-diffs.md). */
+export function WorktreeChangesPanel({ view, ...props }: WorktreeChangesPanelProps) {
+  return view === "history" ? <HistoryPanel {...props} /> : <WorkingTreePanel {...props} />;
+}
+
+/** Calls `refresh` when `refreshKey` changes; the mount fetch already covers the first key. */
+function useRefreshOnKey(refreshKey: string | undefined, refresh: () => void) {
+  const lastRefreshKey = useRef(refreshKey);
+  useEffect(() => {
+    if (lastRefreshKey.current !== refreshKey) {
+      lastRefreshKey.current = refreshKey;
+      refresh();
+    }
+  }, [refreshKey, refresh]);
+}
+
+type PanelProps = Omit<WorktreeChangesPanelProps, "view">;
+
+/** "History" (OS-2535): the worktree page's History view, one pane at a time at this width. */
+function HistoryPanel({ profileId, pathId, allCollapsed, diffStyle, wordWrap, refreshKey }: PanelProps) {
+  const profile = useQuery(api.cli.profiles.get, { profileId });
+  const isOnline = profile?.isOnline ?? false;
+  const entry = profile?.paths.find((path) => path.id === pathId);
+  const canFetch = isOnline && entry !== undefined && supportsWorktreeHistory(profile?.appVersion);
+  const history = useWorktreeHistory(profileId, pathId, canFetch);
+  const diffOptions = usePatchDiffOptions(diffStyle, wordWrap);
+  const [selectedHash, setSelectedHash] = useState<string | null>(null);
+  useRefreshOnKey(refreshKey, history.refresh);
+  if (profile === undefined) {
+    return null;
+  }
+  const refreshing = history.initialLoading || history.refreshing;
+  return (
+    <div className="flex h-full min-h-0 flex-col">
+      {canFetch && (
+        <div className="flex h-9 shrink-0 items-center border-b border-border px-3">
+          {/* aria-disabled, not disabled: a disabled button drops keyboard focus mid-refresh. */}
+          <Button
+            type="button"
+            variant="ghost"
+            size="sm"
+            className="ml-auto h-7 cursor-pointer gap-1.5 text-xs aria-disabled:opacity-50"
+            onClick={() => {
+              if (!refreshing) {
+                history.refresh();
+              }
+            }}
+            aria-disabled={refreshing}
+            aria-label="Refresh history"
+          >
+            <RefreshCw className={cn("size-3.5", refreshing && "animate-spin")} />
+            Refresh
+          </Button>
+        </div>
+      )}
+      <div className="min-h-0 flex-1">
+        <WorktreeHistoryView
+          profileId={profileId}
+          pathId={pathId}
+          history={history}
+          registered={entry !== undefined}
+          isOnline={isOnline}
+          appVersion={profile?.appVersion}
+          diffOptions={diffOptions}
+          allCollapsed={allCollapsed}
+          wordWrap={wordWrap}
+          selectedHash={selectedHash}
+          onSelect={setSelectedHash}
+        />
+      </div>
+    </div>
+  );
+}
+
 /**
- * The thread Changes tab's "Working tree" view (OS-2234,
- * docs/specs/cli-thread-run-diffs.md): uncommitted changes of the thread's
- * checkout with Refresh, per-file Revert and Revert all.
+ * "Working tree" (OS-2234): uncommitted changes of the thread's checkout with
+ * Refresh, per-file Revert and Revert all.
  */
-export function WorktreeChangesPanel({
+function WorkingTreePanel({
   profileId,
   pathId,
   allCollapsed,
@@ -40,7 +120,7 @@ export function WorktreeChangesPanel({
   fileTreeOpen,
   refreshKey,
   onMentionFile,
-}: WorktreeChangesPanelProps) {
+}: PanelProps) {
   const state = useWorktreeChanges(profileId, pathId);
   const collapse = useSectionCollapse(allCollapsed);
   const diffOptions = usePatchDiffOptions(diffStyle, wordWrap);
@@ -48,15 +128,7 @@ export function WorktreeChangesPanel({
   const sectionRefs = useRef(new Map<string, HTMLElement>());
   const [selectedPath, setSelectedPath] = useState<string>();
 
-  // The mount fetch already covers the current key; only later changes refetch.
-  const { refresh } = state;
-  const lastRefreshKey = useRef(refreshKey);
-  useEffect(() => {
-    if (lastRefreshKey.current !== refreshKey) {
-      lastRefreshKey.current = refreshKey;
-      refresh();
-    }
-  }, [refreshKey, refresh]);
+  useRefreshOnKey(refreshKey, state.refresh);
 
   const registerSection = useCallback((path: string, element: HTMLElement | null) => {
     if (element) {

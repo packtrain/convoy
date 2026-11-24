@@ -258,6 +258,7 @@ function ChangesViewForCheckout({ profileId, pathId }: WorktreeChangesViewProps)
             profileId={profileId}
             pathId={pathId}
             history={history}
+            registered={entry !== undefined}
             isOnline={isOnline}
             appVersion={profile?.appVersion}
             diffOptions={diffOptions}

@@ -928,7 +928,7 @@ function ThreadWorkspaceBody({
     [isFullView, openSidebar, setActivePanel]
   );
   const handleSelectChangesView = useCallback(
-    (kind: "latest" | "all" | "worktree") => {
+    (kind: "latest" | "all" | "worktree" | "history") => {
       setChangesView({ kind });
       setActivePanel("changes");
     },
@@ -1110,6 +1110,9 @@ function ThreadWorkspaceBody({
     }
     if (changesView.kind === "worktree") {
       return "Working tree";
+    }
+    if (changesView.kind === "history") {
+      return "History";
     }
     if (changesView.kind === "range") {
       return changesView.label;
@@ -1835,7 +1838,7 @@ function ThreadWorkspaceBody({
           changesViewKind={changesView.kind}
           runs={timelineRuns}
           onSelectView={handleSelectChangesView}
-          showWorktreeView={runFileOpContext !== undefined}
+          showCheckoutViews={runFileOpContext !== undefined}
           onOpenRange={handleOpenTimelineRange}
           // Same gate the transcript's run cards use: reverting goes through
           // the owner-scoped `worktreeOps.enqueue`, so a viewer gets no handler
@@ -1852,7 +1855,8 @@ function ThreadWorkspaceBody({
             })
           }
           fileTreeOpen={changesFileTree}
-          onToggleFileTree={() => {
+          // History has no file tree, as on the worktree page.
+          onToggleFileTree={changesView.kind === "history" ? undefined : () => {
             const next = !changesFileTree;
             setChangesFileTree(next);
             writeChangesFileTree(next);
@@ -1866,10 +1870,11 @@ function ThreadWorkspaceBody({
           }
         />
         <div className="min-h-0 flex-1 overflow-auto">
-          {changesView.kind === "worktree" && runFileOpContext ? (
+          {(changesView.kind === "worktree" || changesView.kind === "history") && runFileOpContext ? (
             <WorktreeChangesPanel
               // A path switch is a different checkout: start fresh.
-              key={`${runFileOpContext.profileId}:${runFileOpContext.pathId}`}
+              key={`${changesView.kind}:${runFileOpContext.profileId}:${runFileOpContext.pathId}`}
+              view={changesView.kind}
               profileId={runFileOpContext.profileId as Id<"cliProfiles">}
               pathId={runFileOpContext.pathId}
               allCollapsed={changesAllCollapsed}
