@@ -8,6 +8,8 @@ export const WORKTREE_OPEN_FILE_MIN_CLI_VERSION = "0.82.0";
 export const WORKTREE_DOWNLOAD_MIN_CLI_VERSION = "0.83.0";
 /** First @useconvoy/cli that answers `revertWorkingTree` (OS-2234). */
 export const WORKTREE_REVERT_ALL_MIN_CLI_VERSION = "0.125.0";
+/** First @useconvoy/cli that answers `gitLog` and `commitPatch` (OS-2534). */
+export const WORKTREE_HISTORY_MIN_CLI_VERSION = "0.171.0";
 
 export function supportsWorktreeChanges(appVersion: string | undefined): boolean {
   return atLeast(appVersion, WORKTREE_CHANGES_MIN_CLI_VERSION);
@@ -23,4 +25,8 @@ export function supportsWorktreeDownload(appVersion: string | undefined): boolea
 
 export function supportsWorktreeRevertAll(appVersion: string | undefined): boolean {
   return atLeast(appVersion, WORKTREE_REVERT_ALL_MIN_CLI_VERSION);
+}
+
+export function supportsWorktreeHistory(appVersion: string | undefined): boolean {
+  return atLeast(appVersion, WORKTREE_HISTORY_MIN_CLI_VERSION);
 }

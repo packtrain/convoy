@@ -119,9 +119,10 @@ after 1h TTL; 10 min for file ops, whose results carry file contents).
 
 - `enqueue` (web): `{ profileId, kind: "rescan" | "remove" | "readFile" |
 "diffFile" | "revertRun" | "revertFile" | "searchFiles" | "worktreeChanges" |
-"revertWorkingFile" | "revertWorkingTree" | "downloadFile", pathId }` plus
+"revertWorkingFile" | "revertWorkingTree" | "downloadFile" | "gitLog" |
+"commitPatch", pathId }` plus
   `filePath`/`preRef`/`postRef` for file/revert ops, `filePaths` for
-  `revertWorkingTree`, and `query` for searches. `readFile` needs only `filePath`:
+  `revertWorkingTree`, `query` for searches, and `cursor` for `gitLog`. `readFile` needs only `filePath`:
   without `postRef` it reads the working tree (OS-2041).
   The server resolves and snapshots `path` (and `parentPath` for removals) so
   the CLI stays stateless. Rescan ops dedupe against a pending rescan of the
@@ -191,6 +192,42 @@ no handler for it and completes the op with `Unsupported operation … update
 @useconvoy/cli`, and the web does not enqueue it at all when the profile's
 reported `appVersion` is older. The web never caches the result: the working
 tree is mutable.
+
+### Commit history (OS-2534)
+
+Two read-only kinds for any path entry, on the 10-minute file-op TTL. The CLI
+side lives in `apps/cli/src/lib/git/history.ts`.
+
+- `{ kind: "gitLog", pathId, cursor? }` returns `resultJson = { commits,
+  nextCursor? }`: 50 commits of `git log --topo-order HEAD`, newest first.
+  Each commit has `hash`, `parents` (full hashes, first parent first),
+  `authorName`, `authorEmail`, `committedAt` (committer time, ms), `refs`
+  (`%D` entries such as `HEAD -> main`, `origin/main`, `tag: v1`; Convoy's
+  `refs/convoy/*` checkpoint refs are excluded, at most 20) and `subject`
+  (git's first paragraph). Display fields are cut: the subject at 500
+  characters, author name, email and each ref at 200. The page also has a
+  byte budget, the file ops' 700 kB: when the serialized commits would pass
+  it, the page ends early and `nextCursor` resumes after the last commit
+  returned. The parents and
+  refs are there for the commit graph (OS-2536), so the graph needs no new
+  request. `nextCursor` is `<tip>:<skip>`, present when more commits follow.
+  Later pages walk from the first page's `HEAD`, so commits made while the
+  user pages don't shift or repeat rows. `enqueue` and the CLI both reject
+  any other cursor shape. An unborn branch returns `{ commits: [] }`.
+- `{ kind: "commitPatch", pathId, postRef }` returns `resultJson = { body,
+  patch, truncated }` for the commit in `postRef`. `enqueue` accepts a full
+  40- or 64-character lowercase hex hash only, and the CLI checks it again
+  before git sees it. The patch is `git show --cc` with the pinned diff format
+  (`SHOW_ARGS`, the `git show` form of `DIFF_ARGS`) on `<hash>^{commit}`, so
+  an annotated tag's hash shows its commit, capped by `capFileOpText`.
+  A merge commit gets git's dense combined diff (`diff --cc`), which holds only
+  conflict resolutions, so a clean merge has an empty patch. A root commit
+  shows its files as added. `body` is the message after the subject, cut at
+  20,000 characters.
+
+A CLI older than 0.171.0 fails both kinds with `Unsupported operation`, and the
+web shows an update prompt instead of enqueueing. There is no `convoy`
+command for history: anyone at the terminal already has `git log`.
 
 ### Revert a working file (OS-2043)
 
@@ -491,8 +528,10 @@ every row, header included, past a phone viewport. The right pane is the file tr
 
 - Header: the worktree's branch (or the checkout's label) and a Refresh
   button. Below it a 41px toolbar row (same height as the thread Changes
-  toolbar, so it lines up with the sidebar's "New thread" row) with the full
-  path, `N files +A -D` once the patch is in, and the Changes tab's three
+  toolbar, so it lines up with the sidebar's "New thread" row) with a
+  Changes | History switch (Changes carries the file count once the patch
+  has files), the full path, `N files +A -D` once the patch is in (Changes
+  only), and the Changes tab's three
   toggles on the right: collapse/expand all, split/unified, word wrap
   (`components/custom/diff/changes-view-toggles.tsx`, shared with
   `ThreadChangesToolbar`). Diff style and
@@ -557,6 +596,35 @@ every row, header included, past a phone viewport. The right pane is the file tr
   the patch on screen. It shares the busy state with per-file revert and
   download; a toast reports the outcome and the view refreshes. A truncated
   patch disables Revert all, since the file list on screen is incomplete.
+- History (OS-2534, `worktree-history.tsx`, mockup `/playground/git-history`):
+  the commit list on the left (340px) and the selected commit on the right,
+  for a worktree and the main checkout alike. Rows are two lines: subject,
+  then author, relative time, short hash and ref badges (the `HEAD ->` branch
+  highlighted); a merge row has a merge icon and a muted subject. The newest
+  commit opens first. The detail shows subject, body, author (email on
+  hover), date, a copy button for the full hash, and the parents; a parent in
+  the loaded list opens that commit, one not loaded yet is disabled. Below,
+  `N files +A -D` and one `PatchFileSection` per file with `PatchDiff`, using
+  the toolbar's toggles. A combined (`diff --cc`) section shows as plain text,
+  since the diff viewer reads two-sided patches only, and wraps with the
+  toolbar's word wrap; its ±counts read every parent column, and a binary
+  resolution keeps its row with the binary note. "Load more" under the
+  list fetches the next page and keeps the rows above. `gitLog` is first sent
+  when History opens, and the list and the open commit stay across tab
+  switches; opening another checkout starts from a fresh view. Refresh on
+  the History tab starts over from the first page; with one page loaded the
+  rows stay while it runs and the button spins. A commit's patch is fetched
+  once per browser tab and served from an in-memory cache after that (100
+  commits, oldest dropped), since a commit never changes. States: skeleton
+  rows of the loaded row's height while the first page loads, "No commits on
+  this branch yet.", the offline and update-prompt copy, and the CLI's error
+  with Retry, which re-sends the failed page. A malformed CLI answer is that
+  error too. The first-page skeleton covers both panes: list rows, and the
+  detail's header and file bars. The file tree and its "Show files" button
+  are hidden on History. On a phone one pane shows at a time: the list,
+  then the tapped commit full width under a "← History" back row. Copying
+  the hash toasts "Failed to copy the hash" where the clipboard is missing
+  or denied.
 - File tree (OS-2037, `components/custom/diff/worktree-file-tree.tsx`): the changed files nested by
   folder in `ThreadWorkspaceSplitPane`'s sidebar, titled "Files". Folders come
   first, in patch order, each with the ±sum of its files and a chevron that

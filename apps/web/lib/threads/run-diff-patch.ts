@@ -6,6 +6,9 @@ import { isRecord } from "@/lib/type-guards";
  * the same path, so a path with spaces still splits unambiguously.
  */
 function headerPath(part: string): string | undefined {
+  if (part.startsWith("diff --cc ")) {
+    return part.slice("diff --cc ".length, part.indexOf("\n")) || undefined;
+  }
   const header = part.slice("diff --git ".length, part.indexOf("\n"));
   const length = (header.length - "a/ b/".length) / 2;
   if (!Number.isInteger(length) || length <= 0 || !header.startsWith("a/")) {
@@ -24,8 +27,9 @@ function headerPath(part: string): string | undefined {
  */
 export function splitRunPatch(patch: string): Map<string, string> {
   const sections = new Map<string, string>();
-  for (const part of patch.split(/^(?=diff --git )/m)) {
-    if (!part.startsWith("diff --git ")) {
+  // `diff --cc`: a merge commit's combined diff (OS-2534).
+  for (const part of patch.split(/^(?=diff --(?:git|cc) )/m)) {
+    if (!part.startsWith("diff --git ") && !part.startsWith("diff --cc ")) {
       continue;
     }
     const path =
@@ -81,11 +85,23 @@ export function parseRunPatchFiles(sections: Map<string, string>): CliRunDiffFil
         : ("modified" as const);
     let additions = 0;
     let deletions = 0;
+    // A combined diff has one marker column per parent: `@@@` means two (OS-2534).
+    const columns = Math.max(1, (section.match(/^(@+) /m)?.[1].length ?? 2) - 1);
     if (!binary) {
+      // Header lines come before the first hunk; inside one, `+++x` is content.
+      let inHunk = false;
       for (const line of section.split("\n")) {
-        if (line.startsWith("+") && !line.startsWith("+++")) {
+        if (line.startsWith("@@")) {
+          inHunk = true;
+          continue;
+        }
+        if (!inHunk) {
+          continue;
+        }
+        const markers = line.slice(0, columns);
+        if (markers.includes("+")) {
           additions++;
-        } else if (line.startsWith("-") && !line.startsWith("---")) {
+        } else if (markers.includes("-")) {
           deletions++;
         }
       }

@@ -186,10 +186,11 @@ export const MAX_FILE_OP_BLOB_BYTES = 5 * 1024 * 1024;
 
 // Pinned diff format: user config (diff.noprefix, mnemonicPrefix, external
 // diff, color) must not change the headers the web parser keys on.
-export const DIFF_ARGS = [
-  "-c", "diff.noprefix=false", "-c", "diff.mnemonicPrefix=false",
-  "diff", "--no-color", "--no-ext-diff", "--no-renames",
-];
+const DIFF_CONFIG = ["-c", "diff.noprefix=false", "-c", "diff.mnemonicPrefix=false"];
+const DIFF_FLAGS = ["--no-color", "--no-ext-diff", "--no-renames"];
+export const DIFF_ARGS = [...DIFF_CONFIG, "diff", ...DIFF_FLAGS];
+/** The same pinned format for one commit's patch (OS-2534). */
+export const SHOW_ARGS = [...DIFF_CONFIG, "-c", "log.showSignature=false", "show", ...DIFF_FLAGS];
 
 /** Trim `text` so the JSON-encoded result stays under MAX_FILE_OP_BYTES. */
 export function capFileOpText(text: string): { text: string; truncated: boolean } {

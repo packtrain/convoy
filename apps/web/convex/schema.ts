@@ -1273,8 +1273,9 @@ export default defineSchema({
     filePaths: v.optional(v.array(v.string())), // revertWorkingTree: the files the user saw
     allowLegacyCheckpoint: v.optional(v.boolean()),
     preRef: v.optional(v.string()), // diffFile: baseline checkpoint ref
-    postRef: v.optional(v.string()), // readFile/diffFile: post-run checkpoint ref
+    postRef: v.optional(v.string()), // readFile/diffFile: post-run checkpoint ref; commitPatch: the commit
     query: v.optional(v.string()), // searchFiles: composer @-mention search text
+    cursor: v.optional(v.string()), // gitLog: the previous page's nextCursor
     status: cliWorktreeOpStatusValidator,
     error: v.optional(v.string()),
     resultJson: v.optional(v.string()), // rescan: `{ refs: [...] }`

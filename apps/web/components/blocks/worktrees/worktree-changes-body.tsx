@@ -15,11 +15,11 @@ import { cn } from "@/lib/utils";
 
 type DiffOptions = ReturnType<typeof usePatchDiffOptions>;
 
-function Message({ children, destructive = false }: { children: React.ReactNode; destructive?: boolean }) {
+export function Message({ children, destructive = false }: { children: React.ReactNode; destructive?: boolean }) {
   return <p className={cn("p-4 text-sm", destructive ? "text-destructive" : "text-muted-foreground")}>{children}</p>;
 }
 
-function ErrorWithRetry({ error, onRetry }: { error: string | null; onRetry: () => void }) {
+export function ErrorWithRetry({ error, onRetry }: { error: string | null; onRetry: () => void }) {
   return (
     <div className="flex flex-col items-start gap-2 p-4">
       <p className="text-sm text-destructive">{error}</p>
@@ -31,7 +31,7 @@ function ErrorWithRetry({ error, onRetry }: { error: string | null; onRetry: () 
   );
 }
 
-function Fetching() {
+export function Fetching() {
   return (
     <div className="flex items-center gap-2 p-4">
       <Spinner
@@ -45,7 +45,7 @@ function Fetching() {
   );
 }
 
-function Truncated() {
+export function Truncated() {
   return <p className="border-b border-border px-4 py-2 text-xs text-muted-foreground">Output truncated — showing the first 700 kB.</p>;
 }
 

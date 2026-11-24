@@ -1028,7 +1028,10 @@ export const cliWorktreeOpKindValidator = v.union(
   // Discard uncommitted changes of the listed files (OS-2234).
   v.literal("revertWorkingTree"),
   // Current on-disk bytes via file storage, for the browser to save (OS-2050).
-  v.literal("downloadFile")
+  v.literal("downloadFile"),
+  // Commit history of the checkout and one commit's patch (OS-2534).
+  v.literal("gitLog"),
+  v.literal("commitPatch")
 );
 export type CliWorktreeOpKind = Infer<typeof cliWorktreeOpKindValidator>;
 

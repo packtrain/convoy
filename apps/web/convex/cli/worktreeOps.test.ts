@@ -621,6 +621,54 @@ describe("cli worktreeOps", () => {
     expect(await s.asUser.query(api.cli.worktreeOps.get, { opId })).toBeNull();
   });
 
+  test("gitLog carries the cursor to the CLI and is pruned on the file-op TTL (OS-2534)", async () => {
+    const s = await setup();
+
+    const opId = await s.asUser.mutation(api.cli.worktreeOps.enqueue, {
+      profileId: s.profile._id,
+      kind: "gitLog",
+      pathId: s.repoPath.id,
+      cursor: `${"a".repeat(40)}:50`,
+      postRef: "ignored",
+    });
+    const [pending] = await s.t.query(api.cli.worktreeOps.listPending, { profileId: s.profile._id, apiKey: s.apiKey });
+    expect(pending).toMatchObject({ kind: "gitLog", path: s.repoPath.path, cursor: `${"a".repeat(40)}:50` });
+    expect(pending.postRef).toBeUndefined();
+
+    await expect(
+      s.asUser.mutation(api.cli.worktreeOps.enqueue, { profileId: s.profile._id, kind: "gitLog", pathId: s.repoPath.id, cursor: "--all:0" })
+    ).rejects.toThrow("History cursor is invalid");
+
+    await vi.advanceTimersByTimeAsync(10 * 60 * 1000 + 1000);
+    await s.t.finishInProgressScheduledFunctions();
+    expect(await s.asUser.query(api.cli.worktreeOps.get, { opId })).toBeNull();
+  });
+
+  test("commitPatch requires a commit hash and carries it as postRef (OS-2534)", async () => {
+    const s = await setup();
+
+    for (const postRef of [undefined, "--output=/tmp/x", "HEAD"]) {
+      await expect(
+        s.asUser.mutation(api.cli.worktreeOps.enqueue, {
+          profileId: s.profile._id,
+          kind: "commitPatch",
+          pathId: s.worktreePath.id,
+          ...(postRef ? { postRef } : {}),
+        })
+      ).rejects.toThrow("Commit patch requires a commit hash");
+    }
+
+    const hash = "0123456789abcdef0123456789abcdef01234567";
+    await s.asUser.mutation(api.cli.worktreeOps.enqueue, {
+      profileId: s.profile._id,
+      kind: "commitPatch",
+      pathId: s.worktreePath.id,
+      postRef: hash,
+    });
+    const [pending] = await s.t.query(api.cli.worktreeOps.listPending, { profileId: s.profile._id, apiKey: s.apiKey });
+    expect(pending).toMatchObject({ kind: "commitPatch", path: s.worktreePath.path, postRef: hash });
+  });
+
   test("revertWorkingFile needs a file path, no refs, and is pruned on the file-op TTL", async () => {
     const s = await setup();
 
