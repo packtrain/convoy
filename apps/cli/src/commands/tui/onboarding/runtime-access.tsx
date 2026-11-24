@@ -3,6 +3,7 @@ import { useEffect, useRef, useState, useSyncExternalStore } from "react";
 import type { Browser } from "../workflow.js";
 import { Box, Text, useInput } from "ink";
 import { ActionDialog } from "../actions/index.js";
+import { Clickable } from "../dialog/index.js";
 import { palette, plain, wrapLines } from "../formatters.js";
 import { MANAGED_RUNTIME_LABELS, type ManagedCredentialStatus } from "../../../lib/config/credentials/validators.js";
 import type { WorkerState } from "../../service/validators.js";
@@ -168,7 +169,9 @@ function AccessMenu({ lines, error, impact, width, height, buttons, onCancel }: 
     {text.slice(start, start + textCapacity).map((line, i) => <Text key={i} bold={line.heading} color={line.color ?? palette.text}>{line.text || " "}</Text>)}
     <Box marginTop={1}><Text bold color={palette.muted}>{text.length > textCapacity ? `Actions · PgUp/PgDn details ${start + 1}-${Math.min(start + textCapacity, text.length)}/${text.length}` : "Actions"}</Text></Box>
     <Box flexDirection="column">
-      {buttons.slice(first, first + capacity).map((button, i) => <Text key={button.label} wrap="truncate" color={first + i === selected ? palette.accent : palette.text}>{first + i === selected ? "> " : "  "}{plain(button.label)}</Text>)}
+      {buttons.slice(first, first + capacity).map((button, i) => <Clickable key={button.label} onClick={() => { setFocus(first + i); button.activate(); }}>
+        <Text wrap="truncate" color={first + i === selected ? palette.accent : palette.text}>{first + i === selected ? "> " : "  "}{plain(button.label)}</Text>
+      </Clickable>)}
     </Box>
     <Text color={palette.muted}>Tab/↑/↓ focus · Enter choose · Esc back</Text>
   </Box>;

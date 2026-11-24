@@ -10,8 +10,11 @@ import { exportLogs } from "./export.js";
 import { Dialog } from "../dialog/index.js";
 import type { Key } from "ink";
 import { displayLines } from "./formatters.js";
+import { useWheel } from "../mouse.js";
 
-export function LogDetail({ browser, row, width, height, small = false }: { browser: Browser; row: Row; width: number; height: number; small?: boolean }) {
+export function LogDetail({ browser, row, width, height, small = false, mouse, toggleMouse }: {
+  browser: Browser; row: Row; width: number; height: number; small?: boolean; mouse: boolean; toggleMouse(): void;
+}) {
   const { exit } = useApp();
   const [logs] = useState(() => new Logs(args => browser.readLogs(row, args)));
   const state = useSyncExternalStore(logs.subscribe, logs.getSnapshot);
@@ -24,7 +27,15 @@ export function LogDetail({ browser, row, width, height, small = false }: { brow
   const exporting = useRef<AbortController | undefined>(undefined);
   const lines = useMemo(() => displayLines(state.events, Math.max(1, width)), [state.events, width]);
   const capacity = Math.max(1, height - 8);
-  const start = state.following ? Math.max(0, lines.length - capacity) : Math.min(offset, Math.max(0, lines.length - capacity));
+  const end = Math.max(0, lines.length - capacity);
+  const start = state.following ? end : Math.min(offset, end);
+  // Reads `following` live and uses an updater, so a burst of wheel reports or keys moves once per tick.
+  const scroll = (delta: number) => {
+    const fromEnd = logs.getSnapshot().following;
+    logs.pause();
+    setOffset(old => Math.max(0, Math.min(end, (fromEnd ? end : Math.min(old, end)) + delta)));
+  };
+  useWheel(mode === "view" && !small ? scroll : undefined);
   useEffect(() => {
     active.current = true; logs.start();
     return () => { active.current = false; exporting.current?.abort(); logs.dispose(); };
@@ -85,6 +96,7 @@ export function LogDetail({ browser, row, width, height, small = false }: { brow
     if (key.ctrl || key.meta) return;
     if (input === "q" && mode === "view") { browser.dispose(); exit(); return; }
     if (mode !== "view") return;
+    if (input === "m") { toggleMouse(); return; }
     if (input === "e") { logs.pause(); setNotice(""); setMode("path"); setPath(path || `convoy-${row.run!.messageId}.jsonl`); return; }
     if (input === "f" || key.end) { logs.latest(); return; }
     if (input === " ") { if (state.following) { setOffset(start); logs.pause(); } else logs.latest(); return; }
@@ -92,7 +104,7 @@ export function LogDetail({ browser, row, width, height, small = false }: { brow
     if (input === "n") { logs.newer(); setOffset(Math.max(0, lines.length - capacity)); return; }
     if (input === "r") { logs.retry(); return; }
     const delta = key.pageUp ? -capacity : key.pageDown ? capacity : key.upArrow || input === "k" ? -1 : key.downArrow || input === "j" ? 1 : 0;
-    if (delta) { logs.pause(); setOffset(Math.max(0, Math.min(lines.length - capacity, start + delta))); }
+    if (delta) scroll(delta);
   });
   const prompt = mode !== "view" && <Dialog inline={mode === "notice" || mode === "exporting" || mode === "checking"} key={mode} width={width} height={height} onCancel={cancel}
       scrollable={mode === "notice" || mode === "exporting"}
@@ -112,7 +124,7 @@ export function LogDetail({ browser, row, width, height, small = false }: { brow
       {lines.length ? lines.slice(start, start + capacity).map((line, i) => <Text key={i} wrap="truncate" color={palette.text}>{line || " "}</Text>) : <Text color={palette.text}>{state.loading ? "Loading stored events…" : "No stored events available. Live deltas are not retained history."}</Text>}
     </Box>
     <Text color={palette.warning} wrap="truncate">{state.error ?? "Stored payloads; original completeness unknown. Ingestion may have shortened historical data."}</Text>
-    <Text wrap="truncate" color={palette.muted}>{`Events ${state.events[0]?.order ?? "–"}…${state.events.at(-1)?.order ?? "–"} · native terminal selection/copy`}</Text>
+    <Text wrap="truncate" color={palette.muted}>{`Events ${state.events[0]?.order ?? "–"}…${state.events.at(-1)?.order ?? "–"} · [m] ${mouse ? "select text" : "mouse"}`}</Text>
     <Text color={palette.muted} wrap="truncate">↑/↓ scroll · PgUp/PgDn · p older · n newer · Space pause · f latest</Text>
     <Text color={palette.muted} wrap="truncate">[e] Export entire stored run · r retry · Esc {mode === "exporting" ? "cancel export" : "back"} · q detach</Text>
     {prompt}

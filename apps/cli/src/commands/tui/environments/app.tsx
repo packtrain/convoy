@@ -22,6 +22,7 @@ const recovery = {
 };
 type Draft = Omit<EnvironmentForm, "mounts"> & { mode: "shared" | "isolated"; mounts: string };
 const radios = { mode: ["shared", "isolated"], networkMode: ["open", "strict"] } as const;
+const radioLabels = { shared: "Shared", isolated: "Isolated", open: "Unrestricted", strict: "Restricted" };
 
 export function Environments({ browser, width, height }: { browser: Browser; width: number; height: number }) {
   const state = browser.getSnapshot();
@@ -136,15 +137,16 @@ export function Environments({ browser, width, height }: { browser: Browser; wid
     {small ? <Text>Resize to 45×{minHeight}. Esc cancels.</Text> : <>
       <>
         {fields.map((field, i) => <Box key={field} flexDirection="column">
-          <Text color={index === i ? palette.accent : palette.text ?? "white"}>{labels[field]}</Text>
-          {field === "mode" ? <>
-            <Text color={palette.text}>{index === i ? ">" : " "} {form.mode === "shared" ? "(●)" : "( )"} Shared  {form.mode === "isolated" ? "(●)" : "( )"} Isolated</Text>
-            <Text color={palette.muted}>{MODE_COPY[form.mode]}</Text>
-          </> : field === "networkMode" ? <>
-            <Text color={palette.text}>{index === i ? ">" : " "} {form.networkMode === "open" ? "(●)" : "( )"} Unrestricted  {form.networkMode === "strict" ? "(●)" : "( )"} Restricted</Text>
-            <Text color={palette.muted}>{form.networkMode === "open" ? "Web research and downloads from any site." : "Only built-in and extra allowed destinations."}</Text>
-            {form.networkMode === "strict" && <Text color={palette.muted}>Advanced network settings: add your Convex backend below.</Text>}
-          </> : <Text wrap="truncate" color={palette.text}>{index === i ? ">" : " "} <Text backgroundColor={index === i ? palette.idle : palette.surface}>[ {form[field] || " "}{index === i ? "▏" : ""} ]</Text></Text>}
+          <Clickable onClick={() => setIndex(i)}><Text color={index === i ? palette.accent : palette.text ?? "white"}>{labels[field]}</Text></Clickable>
+          {field === "mode" || field === "networkMode" ? <>
+            <Box><Text color={palette.text}>{index === i ? ">" : " "} </Text><Box gap={2}>{radios[field].map(option => <Clickable key={option} onClick={() => { setIndex(i); setForm(old => ({ ...old, [field]: option })); }}>
+              <Text color={palette.text}>{form[field] === option ? "(●)" : "( )"} {radioLabels[option]}</Text>
+            </Clickable>)}</Box></Box>
+            {field === "mode" ? <Text color={palette.muted}>{MODE_COPY[form.mode]}</Text> : <>
+              <Text color={palette.muted}>{form.networkMode === "open" ? "Web research and downloads from any site." : "Only built-in and extra allowed destinations."}</Text>
+              {form.networkMode === "strict" && <Text color={palette.muted}>Advanced network settings: add your Convex backend below.</Text>}
+            </>}
+          </> : <Clickable onClick={() => setIndex(i)}><Text wrap="truncate" color={palette.text}>{index === i ? ">" : " "} <Text backgroundColor={index === i ? palette.idle : palette.surface}>[ {form[field] || " "}{index === i ? "▏" : ""} ]</Text></Text></Clickable>}
         </Box>)}
         <Box gap={2}>{([["Cancel", cancelIndex], ["Review", reviewIndex]] as const).map(([label, at]) => <Clickable key={label} onClick={() => { setIndex(at); press(at); }}>
           <Text bold color={index === at ? palette.selectedText : palette.accent} backgroundColor={index === at ? palette.selected : undefined}>{index === at ? ">" : " "} [ {label} ]</Text>

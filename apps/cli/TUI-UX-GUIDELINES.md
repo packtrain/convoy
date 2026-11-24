@@ -122,7 +122,7 @@ Lists stop at their first and last item; arrow keys never wrap around. This incl
 
 Show key hints beside visible controls and a short context-specific footer. Use d, a and c for environment views and r and a for project tabs. Add shortcuts accelerate controls users can already find; they are never the only entry point. Terminal shortcuts stay out of the independently released web shortcuts dialog.
 
-The mouse is a shortcut too. A click on a row, tab or button does what its key does, and the wheel scrolls what ↑/↓ scrolls. Never put an action behind a click alone. Make a new control clickable by wrapping it in `Clickable` from `dialog/` (or `useClick` from `mouse.ts` on an existing ref), and give a scrollable view `useWheel`. A click calls the same function as the key, so the two can't drift apart. While keys are locked, such as during a workflow, a pending action or an edit, clicks are locked too. `m` turns the mouse off so users can select text; keep its footer hint visible.
+The mouse is a shortcut too. A click on a row, tab or button does what its key does, and the wheel scrolls what ↑/↓ scrolls. Never put an action behind a click alone. Make a new control clickable by wrapping it in `Clickable` from `dialog/` (or `useClick` from `mouse.ts` on an existing ref), and give a scrollable view `useWheel`. A click calls the same function as the key, so the two can't drift apart. While keys are locked, such as during a workflow, a pending action or an edit, clicks are locked too. `m` turns the mouse off so users can select text; keep its footer hint visible, and leave `m` to text inputs while one has focus. A click on a form field only moves focus; it never clears what was typed.
 
 ## Manual acceptance walkthrough
 

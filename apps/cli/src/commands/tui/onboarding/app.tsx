@@ -10,6 +10,7 @@ import { savedDeploymentUrls, loadChoices, validateForm } from "./workflow.js";
 import { RuntimeAccess } from "./runtime-access.js";
 import { resultMessage } from "./formatters.js";
 import { Clickable, Dialog } from "../dialog/index.js";
+import { useWheel } from "../mouse.js";
 import { MODE_COPY, prerequisiteFailure, prerequisiteLines } from "../../environment/formatters.js";
 import type { Prerequisite } from "../../environment/validators.js";
 
@@ -170,6 +171,24 @@ export function Onboarding({ browser, width: columns, height: rows, load = loadC
     catch (error) { setMessage(error instanceof Error ? error.message : "Check inputs."); }
   };
   const pressConfirm = (at: number) => { if (at === 0) move("details"); else void submit(); };
+  // Enter or a click on a list row, dropdown option or select field.
+  const chooseItem = (at: number) => {
+    if (step === "choice") { move(at === 0 ? "project" : "organization"); return; }
+    edited.current.clear();
+    if (step === "project") {
+      const p = choices.projects[at]; const profileKey = toProfileKey(p.alias) || "project";
+      setOptions({ project: p._id, profileName: p.name, profileKey }); setDirectory(profileKey);
+    } else {
+      setOptions({ create: true, org: choices.organizations[at]._id, projectName: "New project", projectAlias: suggestProjectAlias("New project"), profileName: "New project", profileKey: "new-project" }); setDirectory("new-project");
+    }
+    move("details");
+  };
+  const pick = (at: number) => {
+    if (step === "auth") { changeUrl(deployments[at] ?? ""); setIndex(1); }
+    else setMode(at);
+    setDropdown(undefined); setCursor(undefined);
+  };
+  const openDropdown = () => setDropdown(step === "auth" ? Math.max(0, deployments.indexOf(url)) : mode);
   useInput((input, key) => {
     if (discard || updating || compatible !== true) return;
     if (["result", "access", "mode", "prerequisites", "notice"].includes(step)) return;
@@ -182,11 +201,7 @@ export function Onboarding({ browser, width: columns, height: rows, load = loadC
       if (small) return;
       if (key.upArrow) setDropdown(value => Math.max(0, (value ?? 0) - 1));
       if (key.downArrow) setDropdown(value => Math.min(dropdownOptions.length - 1, (value ?? 0) + 1));
-      if (key.return) {
-        if (step === "auth") { changeUrl(deployments[dropdown] ?? ""); setIndex(1); }
-        else setMode(dropdown);
-        setDropdown(undefined); setCursor(undefined);
-      }
+      if (key.return) pick(dropdown);
       return;
     }
     if (key.escape) {
@@ -203,20 +218,10 @@ export function Onboarding({ browser, width: columns, height: rows, load = loadC
     if (["choice", "project", "organization"].includes(step)) {
       if (key.upArrow) setIndex(value => Math.max(0, value - 1));
       if (key.downArrow) setIndex(value => Math.min(lists.length - 1, value + 1));
-      if (!key.return || !lists.length) return;
-      if (step === "choice") { move(index === 0 ? "project" : "organization"); return; }
-      edited.current.clear();
-      if (step === "project") {
-        const p = choices.projects[index]; const profileKey = toProfileKey(p.alias) || "project";
-        setOptions({ project: p._id, profileName: p.name, profileKey }); setDirectory(profileKey);
-      } else {
-        setOptions({ create: true, org: choices.organizations[index]._id, projectName: "New project", projectAlias: suggestProjectAlias("New project"), profileName: "New project", profileKey: "new-project" }); setDirectory("new-project");
-      }
-      move("details"); return;
+      if (key.return && lists.length) chooseItem(index);
+      return;
     }
-    if (fields[index]?.select && (key.return || input === " ")) {
-      setDropdown(step === "auth" ? Math.max(0, deployments.indexOf(url)) : mode); return;
-    }
+    if (fields[index]?.select && (key.return || input === " ")) { openDropdown(); return; }
     if (key.pageUp || key.pageDown) {
       setIndex(value => Math.max(0, Math.min(fields.length - 1, Math.min(value, fields.length - 1) + (key.pageUp ? -count : count)))); setCursor(undefined); return;
     }
@@ -242,6 +247,13 @@ export function Onboarding({ browser, width: columns, height: rows, load = loadC
       field.set(chars.slice(0, field.secret ? 4096 : 256).join("")); setCursor(position + inserted.length);
     }
   });
+  // The wheel moves the highlight or focus as ↑/↓ do, so rows past the visible window scroll in.
+  const clamp = (value: number, length: number) => Math.max(0, Math.min(length - 1, value));
+  const form = step === "auth" || step === "details";
+  useWheel(discard || updating || compatible !== true || busy || small ? undefined
+    : dropdown !== undefined ? delta => setDropdown(value => clamp((value ?? 0) + delta, dropdownOptions.length))
+    : lists.length ? delta => setIndex(value => clamp(value + delta, lists.length))
+    : form ? delta => { setIndex(value => clamp(Math.min(value, fields.length - 1) + delta, fields.length)); setCursor(undefined); } : undefined);
   if (updating) return null;
   if (discard) return <Dialog width={columns} height={rows} lines={["Discard project draft?", "Entered fields and the credential will be cleared. Prepared files and remote data remain."]} onCancel={() => setDiscard(false)} buttons={[{ label: "Keep editing", activate: () => setDiscard(false) }, { label: "Discard", activate: finish }]} />;
   if (compatible !== true) return <Dialog inline key={`compatibility:${probe}`} width={columns} height={rows} onCancel={close}
@@ -263,7 +275,6 @@ export function Onboarding({ browser, width: columns, height: rows, load = loadC
   if (step === "notice") return <Dialog inline key="notice" width={columns} height={rows} scrollable onCancel={close}
     lines={["Project separation · result", ...(notice ?? "").split("\n")]} buttons={[{ label: "Continue", activate: () => move(modeOpen() ? "mode" : "auth") }]} />;
   if (step === "access") return <RuntimeAccess browser={browser} profile={options.profileKey!} width={columns} height={rows} onDone={() => { if (session?.origin === "actions") { browser.closeOnboarding(); return; } if (browser.onboardingSession) browser.onboardingSession.step = "result"; setStep("result"); }} />;
-  const form = step === "auth" || step === "details";
   const first = Math.max(0, Math.min(index - count + 1, fields.length - count));
   const visible = fields.slice(first, first + count);
   const title = { auth: "Connect to Convoy", choice: "Add project", project: "Link existing project", organization: "Choose organization", details: "Project details", confirm: "Review registration" }[step];
@@ -282,7 +293,7 @@ export function Onboarding({ browser, width: columns, height: rows, load = loadC
           : dropdown !== undefined ? <>
             <Text bold>{step === "auth" ? "Saved deployments" : "Workspace mode"}</Text>
             {dropdownOptions.slice(Math.max(0, dropdown - height + 11), Math.max(0, dropdown - height + 11) + height - 10).map((value, offset) =>
-              <Text key={value} wrap="truncate" color={offset + Math.max(0, dropdown - height + 11) === dropdown ? palette.accent : palette.text ?? "white"}>{offset + Math.max(0, dropdown - height + 11) === dropdown ? "> " : "  "}{plain(value)}</Text>)}
+              <Clickable key={value} onClick={() => pick(offset + Math.max(0, dropdown - height + 11))}><Text wrap="truncate" color={offset + Math.max(0, dropdown - height + 11) === dropdown ? palette.accent : palette.text ?? "white"}>{offset + Math.max(0, dropdown - height + 11) === dropdown ? "> " : "  "}{plain(value)}</Text></Clickable>)}
             {explanation.length > 0 && <Box flexDirection="column" marginTop={1}><Text>{workspaceModes[dropdown].description}</Text></Box>}
           </> : form ? <>
             {visible.map((field, offset) => {
@@ -292,14 +303,14 @@ export function Onboarding({ browser, width: columns, height: rows, load = loadC
               const before = wrapLines([...value].slice(0, position).join(""), width - 12).at(-1) ?? "";
               const after = [...value].slice(position);
               const placeholder = step === "auth" ? field.secret ? "Paste your Convoy API key" : "https://your-deployment.convex.cloud" : field.label.startsWith("Git repository") ? "https://github.com/owner/repo.git" : "Enter a value";
-              return <Box key={field.label} flexDirection="column" marginBottom={fieldRows - 2}>
+              return <Clickable key={field.label} flexDirection="column" marginBottom={fieldRows - 2} onClick={() => { setIndex(first + offset); setCursor(undefined); if (field.select) openDropdown(); }}>
                 <Text color={active ? palette.accent : palette.text ?? "white"} wrap="truncate">{active ? "> " : "  "}{field.label}</Text>
                 <Text wrap="truncate" backgroundColor={rich ? active ? palette.idle : palette.surface : active ? "gray" : "black"} color={palette.text ?? "white"}>[ {field.select ? `${value} ▾` : active ? <>{before}<Text inverse>{after[0] || " "}</Text>{after.slice(1).join("") || (!value ? <Text color={palette.muted}>{placeholder}</Text> : "")}</> : value || <Text color={palette.muted}>{placeholder}</Text>} ]</Text>
-              </Box>;
+              </Clickable>;
             })}
             {hint > 0 && <Text color={palette.muted} wrap="truncate">{AUTH_HINT}</Text>}
             {fields.length > count && <Text color={palette.muted}>Inputs {first + 1}-{Math.min(fields.length, first + count)} of {fields.length} · PgUp/PgDn scroll</Text>}
-          </> : (lists.length ? lists.slice(Math.max(0, index - height + 11), Math.max(0, index - height + 11) + height - 10).map((line, i) => <Text key={line} wrap="truncate">{i + Math.max(0, index - height + 11) === index ? ">" : " "} {plain(line)}</Text>) : <Text>No accessible entries. Esc to go back.</Text>)}
+          </> : (lists.length ? lists.slice(Math.max(0, index - height + 11), Math.max(0, index - height + 11) + height - 10).map((line, i) => <Clickable key={line} onClick={() => chooseItem(i + Math.max(0, index - height + 11))}><Text wrap="truncate">{i + Math.max(0, index - height + 11) === index ? ">" : " "} {plain(line)}</Text></Clickable>) : <Text>No accessible entries. Esc to go back.</Text>)}
       </Box>
       {!busy && message && <Text color={palette.warning}>{message}</Text>}
       {form && dropdown === undefined && !busy && target.addProject && <Box gap={width < 50 ? 0 : 2} flexDirection={width < 50 ? "column" : "row"}>{button("Cancel", fields.length, pressForm)}{button(step === "auth" ? "Load choices" : "Review registration", fields.length + 1, pressForm)}</Box>}

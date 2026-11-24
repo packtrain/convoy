@@ -27,7 +27,9 @@ if (["access", "remount"].includes(process.argv[2])) {
 browser.openOnboarding();
 const mount = () => render(<Box width={80} height={23}><Onboarding browser={browser} width={80} height={23} load={async (_url, secret) => {
   assert.equal(secret, "PRIVATE_API_KEY_qard");
-  return { projects: [{ _id: "existing", name: "Existing", alias: "EX", organizationName: "Org", organizationId: "org" }], organizations: [{ _id: "org", name: "Org", slug: "org" }] };
+  // The mouse run sorts 19 projects above the target, past the menu's visible rows.
+  const filler = process.argv[2] === "mouse" ? Array.from({ length: 19 }, (_, i) => ({ _id: `f${i}`, name: `Filler ${i}`, alias: `F${i}`, organizationName: "Alpha", organizationId: "alpha" })) : [];
+  return { projects: [...filler, { _id: "existing", name: "Existing", alias: "EX", organizationName: "Org", organizationId: "org" }], organizations: [{ _id: "org", name: "Org", slug: "org" }] };
 }} /></Box>, { stdout: stdout as unknown as NodeJS.WriteStream, stdin: stdin as unknown as NodeJS.ReadStream, stderr: stderr as unknown as NodeJS.WriteStream, debug: true, exitOnCtrlC: false, patchConsole: false });
 let instance = mount();
 async function wait(check: () => boolean) {
@@ -38,25 +40,38 @@ async function wait(check: () => boolean) {
 async function key(value: string) { const before = frame; stdin.write(value); await wait(() => frame !== before || browser.getSnapshot().onboarding === false); }
 try {
   await wait(() => frame.includes("Deployment HTTPS"));
-  await key("https://example.convex.cloud"); await key("\t"); await key("PRIVATE_API_KEY_qard");
-  assert(!output.includes("PRIVATE_API_KEY_qard"), frame);
-  browser.select({ connection: 0, details: false }); assert(browser.getSnapshot().scope.details);
   const click = async (text: string) => {
     const y = screen.split("\n").findIndex(line => line.includes(text));
     assert(y >= 0, `${text} is on screen:\n${screen}`);
     const x = screen.split("\n")[y].indexOf(text) + 1;
     await key(`\u001b[<0;${x + 1};${y + 1}M\u001b[<0;${x + 1};${y + 1}m`);
   };
+  await key("https://example.convex.cloud");
+  if (process.argv[2] === "mouse") {
+    await click("Convoy API key"); await key("PRIVATE_API_KEY_qard");
+    await click("Deployment HTTPS URL");
+    assert(screen.includes("> Deployment HTTPS URL") && screen.includes("https://example.convex.cloud") && screen.includes("*".repeat(16)), "Moving focus by click keeps both inputs:\n" + screen);
+  } else { await key("\t"); await key("PRIVATE_API_KEY_qard"); }
+  assert(!output.includes("PRIVATE_API_KEY_qard"), frame);
+  browser.select({ connection: 0, details: false }); assert(browser.getSnapshot().scope.details);
   if (process.argv[2] === "mouse") await click("[ Load choices ]");
   else { await key("\t"); await key("\t"); await key("\r"); }
   await wait(() => frame.includes("Link existing"));
   if (process.argv[2] === "mouse") {
-    await key("\r"); await key("\r"); await wait(() => frame.includes("Profile name"));
+    await click("Link existing project");
+    assert(!screen.includes("Org / Existing (EX)"), "The target project starts below the visible rows:\n" + screen);
+    await key("\u001b[<65;10;10M".repeat(30));
+    await click("Org / Existing (EX)"); await wait(() => frame.includes("Profile name"));
+    await click("Workspace mode"); await click("Reuse existing directory");
+    assert(screen.includes("[ Reuse existing directory ▾ ]"), "Clicking a dropdown option picks it:\n" + screen);
+    await click("Profile key"); await key("-custom");
+    assert(screen.includes("ex-custom"), "A clicked field takes typed text:\n" + screen);
     await click("[ Review registration ]"); await wait(() => frame.includes("[ Register ]"));
     await click("[ Back ]"); await wait(() => frame.includes("Profile name"));
     await click("[ Review registration ]"); await wait(() => frame.includes("[ Register ]"));
     await click("[ Register ]"); await wait(() => frame.includes("preparation failed"));
     assert.equal(calls, 1, "Clicking Register submits once");
+    assert.equal(requests[0].reuse, true); assert.equal(requests[0].profileKey, "ex-custom");
   } else if (process.argv[2] === "cancel") {
     await key("\u001b"); await key("\u001b");
     assert(frame.includes("Discard project draft"), "Leaving a nonempty form requires an explicit discard");
@@ -104,7 +119,7 @@ try {
           assert(!frame.includes("Deployment HTTPS"));
         }
         for (let i = 0; i < 30; i++) await new Promise<void>(resolve => setImmediate(resolve));
-        await key("\r");
+        if (process.argv[2] === "access") await click("> Skip"); else await key("\r");
       }
       await wait(() => frame.includes("Service applied"));
       assert.equal(calls, 2); assert.equal(requests[1].project, "created-project"); assert.equal(requests[1].create, undefined);

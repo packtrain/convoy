@@ -295,11 +295,22 @@ try {
     output = ""; await key("m");
     assert(output.includes("\u001b[?1002l\u001b[?1006l"), "m turns tracking off in the warnings list, to copy its text");
     await key("m"); await key("\u001b");
+    const page = Array.from({ length: 10 }, (_, order) => ({ order, eventJson: `{"event":"LOG_${order}"}`, bytes: 20, length: 20, truncated: false, fidelity: "stored" }));
+    browser.readLogs = async () => ({ v: 1, id: "raw", ok: true, result: { raw: true, run: { status: "completed" }, page, cursor: 9, latest: 9, hasMore: false } });
     output = "";
     browser.logs({ profile: "a", thread: { id: "t", title: "Thread" }, run: { messageId: "m1", runId: "r1", status: "completed" } } as unknown as Parameters<typeof browser.logs>[0]); await settle(80);
-    assert(output.includes("\u001b[?1002l\u001b[?1006l"), "The log view turns tracking off for native selection");
-    output = ""; browser.logs(); await settle(80);
-    assert(output.includes("\u001b[?1002h\u001b[?1006h"), "Leaving the log view turns tracking back on");
+    assert(!output.includes("\u001b[?1002l"), "The log view keeps tracking on for the wheel");
+    const lastLog = () => Math.max(...[...plain(frame).matchAll(/LOG_(\d+)/g)].map(match => Number(match[1])));
+    assert.equal(lastLog(), 9, "The log view follows the end: " + plain(frame));
+    await wheel(64, 2); await wheel(65);
+    assert.equal(lastLog(), 8, "The wheel scrolls the log by every tick: " + plain(frame));
+    assert(plain(frame).includes("Paused"), "Scrolling pauses following");
+    assert(plain(frame).includes("[m] select text"), plain(frame));
+    output = ""; await key("m");
+    assert(output.includes("\u001b[?1002l\u001b[?1006l") && plain(frame).includes("[m] mouse"), "m turns tracking off in the log view: " + plain(frame));
+    await key("m"); output = ""; await key("e"); await key("m");
+    assert(!output.includes("\u001b[?1002l") && plain(frame).includes(".jsonlm"), "The export path takes m as text: " + plain(frame));
+    await key("\u001b"); browser.logs(); await settle(80);
   } else if (scenario === "mouse-buttons") {
     // Fewer rows lift the confirmation's buttons over the Actions menu's [z] Stop environment row.
     stdout.rows = 24; stdout.emit("resize"); await settle(80);
@@ -354,6 +365,13 @@ try {
     assert(lines().some(line => line.includes("Use a lowercase environment name")), "Clicking Review validates the form:\n" + lines().join("\n"));
     await click("[ Cancel ]");
     assert.equal(browser.getSnapshot().environment, undefined, "Clicking Cancel closes an empty form");
+    await key("E"); await click("[ Review ]"); await click("Environment name"); await key("dev");
+    await click("Internet access"); await click("Environment name"); await key("1");
+    assert(lines().some(line => line.includes("[ dev1▏ ]")), "A click focuses the field and keeps its text:\n" + lines().join("\n"));
+    await click("( ) Isolated");
+    assert(lines().some(line => line.includes("> ( ) Shared  (●) Isolated")) && !lines().some(line => line.includes("Mount folders")), "Clicking a radio option focuses and picks it:\n" + lines().join("\n"));
+    await click("[ Cancel ]"); await click("[ Discard ]");
+    assert.equal(browser.getSnapshot().environment, undefined, "Cancel and Discard close a filled form");
   } else if (scenario === "project") {
     browser.select({ connection: 0, profile: "one", details: false }); await settle(80); await key("a");
     assert(plain(frame).includes("Pause project"), plain(frame));

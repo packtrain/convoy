@@ -1445,9 +1445,8 @@ pending or busy action. The warnings list still scrolls with the wheel.
 
 `m` turns mouse tracking off so the terminal's drag-to-select works, and on again.
 It works on the main screen and in the warnings list, whose footers show
-`[m] select text` or `[m] mouse`. The log view turns tracking off while it is open:
-it promises native selection and copy, and its export path is typed text where `m`
-must stay a letter. Shift-drag (Ghostty) or
+`[m] select text` or `[m] mouse`. Until CLI 0.168.0 the log view turned tracking
+off while open; it now keeps it on for the wheel (see Forms and logs). Shift-drag (Ghostty) or
 Option-drag (iTerm2) also selects while tracking is on. A remount after a project
 shell starts with the mouse on.
 
@@ -1497,6 +1496,46 @@ toggles a row and clicks Install, Cancel and Refresh. `navigation.tsx mouse-butt
 also clicks `[c] Cancel selected run`, `[w] Details` and `[s] Retry check`. `onboarding.tsx mouse` clicks Load choices,
 Review registration, Back and Register, and checks that Register submits once.
 
+### Forms and logs, CLI 0.168.0, OS-2453
+
+Step 4 of the mouse plan.
+
+- Add environment: a click on a field's label or input focuses it. A click on a
+  radio option (`Shared`, `Isolated`, `Unrestricted`, `Restricted`) focuses the
+  radio and picks that option, as ←/→ do.
+- Add project: a click on a field focuses it and puts the cursor at the end. A click
+  on a select field (`Saved deployment`, `Workspace mode`) also opens its dropdown,
+  as Enter does, and a click on a dropdown option picks it. A row in Link existing
+  project, Choose organization and the link-or-create choice is chosen on one
+  click, as Enter does: these are menus, not selections that something else acts on.
+- Add project: the wheel moves the highlight in a list or open dropdown, and the
+  focus between fields in a form, as ↑/↓ do. The window follows, so a project past
+  the visible rows scrolls in and can be clicked.
+- Runtime access: a click on an action row runs it, as Enter does.
+- Moving focus by click never clears typed text. The one rule that clears a field
+  is unchanged: editing the deployment URL clears the API key.
+
+The log view keeps mouse tracking on, so the wheel scrolls its lines as ↑/↓ do and
+pauses following. Wheel bursts and key bursts count every tick: `scroll` reads
+`following` from the store, not the render, and moves the offset with an updater.
+In view mode `m` toggles tracking, and the footer shows `[m] select text` or
+`[m] mouse` in place of the old "native terminal selection/copy" note. The
+export path and its dialogs take `m` as text and leave tracking alone. The
+`mouse` state lives in `App` and is shared with the main screen, so turning it off
+in one carries over to the other. This replaces OS-2451's rule that the log view
+turns tracking off.
+
+`navigation.tsx mouse` loads a ten-event log, checks that tracking stays on, sends
+two wheel-up ticks and one wheel-down in two chunks, and checks the view scrolled
+by one line and paused. It checks `m` in the view and that `m` types into the
+export path. `navigation.tsx mouse-buttons` clicks Environment name and Internet
+access, types into the name and checks the text survives the focus move, then
+clicks `( ) Isolated`. `onboarding.tsx mouse` clicks the API key field and types
+the key, clicks back to the URL and checks both inputs, then picks Link existing
+project, scrolls 19 filler projects with the wheel until the target shows, then
+picks it and Reuse existing directory by click and types into a
+clicked Profile key. `onboarding.tsx access` clicks Skip in Runtime access.
+
 ### Terminal modes
 
 `App` writes `?1002h ?1006h` (button-event tracking, SGR encoding) from an effect
@@ -1535,5 +1574,5 @@ non-mouse bytes. `navigation.tsx mouse` checks that tracking turns on, then
 writes SGR clicks on a project row, the Actions tab, the Credentials row and the
 environment row and checks the selection. It also checks that wheel ticks scroll
 Details and the warnings list, also when two reports share a chunk. It checks that
-`m` turns tracking off and on and changes the hint, that `m` works in the warnings
-list, and that the log view turns tracking off until it closes.
+`m` turns tracking off and on and changes the hint, and that `m` works in the warnings
+list.

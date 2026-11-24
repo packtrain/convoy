@@ -205,8 +205,7 @@ export function App({ browser, onboardingLoad }: { browser: Browser; onboardingL
     }
     else scroll(delta);
   });
-  // The log view promises native selection, and its export path takes typed m.
-  useMouseTracking(mouse && !state.detail);
+  useMouseTracking(mouse);
   useWheel(locked || state.actions || state.credentials || state.runtimes || state.scope.addProject ? undefined : scroll);
   if (small && !state.detail && !state.onboarding && !state.environment && !editing) return <Box flexDirection="column"><Text>Resize to 45×10 to browse.</Text><Text>q / Ctrl+C detach</Text></Box>;
   const fill = (selected: boolean, active: boolean) => selected ? { backgroundColor: active ? palette.selected : palette.idle, color: active ? palette.selectedText : palette.idleText } : {};
@@ -244,7 +243,7 @@ export function App({ browser, onboardingLoad }: { browser: Browser; onboardingL
         <Box flexGrow={1} flexDirection="column" overflow="hidden">
         {state.onboarding && <Onboarding browser={browser} load={onboardingLoad} width={actionWidth} height={Math.max(1, size.height - 7)} />}
         {state.environment && <Environments browser={browser} width={actionWidth} height={Math.max(1, size.height - 7)} />}
-        {!workflow && (state.detail ? <LogDetail key={`${state.scope.connection}:${state.detail.run?.messageId}`} browser={browser} row={state.detail} width={Math.max(1, size.width - (small ? 0 : sidebarWidth) - 2)} height={Math.max(1, size.height - 3)} small={small} /> : <>
+        {!workflow && (state.detail ? <LogDetail key={`${state.scope.connection}:${state.detail.run?.messageId}`} browser={browser} row={state.detail} width={Math.max(1, size.width - (small ? 0 : sidebarWidth) - 2)} height={Math.max(1, size.height - 3)} small={small} mouse={mouse} toggleMouse={() => setMouse(on => !on)} /> : <>
         <Box gap={2} marginBottom={1}>
           {tabs.length ? tabs.map(([label, selected, activate]) => <Clickable key={label} onClick={unlocked(activate)}><Text {...(selected ? fill(true, true) : { color: palette.accent })}>{` ${label} `}</Text></Clickable>) : <Text bold color={palette.text}>{title}</Text>}
           <Box flexShrink={1}><Text wrap="truncate" color={palette.muted}>{plain(target.name)}{state.scope.profile ? ` / ${plain(state.scope.profile)}` : ""}{state.history ? " / execution history" : ""}</Text></Box>
