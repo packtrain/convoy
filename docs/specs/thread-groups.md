@@ -478,7 +478,9 @@ strip retains the source and draft tabs while a newly formed group loads.
     header as its title, with no underline. A chevron on that tab opens a
     bottom sheet when other unfinished tabs exist. The sheet lists unfinished
     tabs in creation order and the selected done tab, if any. It includes and
-    highlights the current tab with `aria-current`.
+    highlights the current tab with `aria-current`. Tapping the title tab's
+    task or PR ref only follows that link (the task opens in the sidebar); it
+    does not open the sheet.
     - The separate Done button opens another bottom sheet with all completed
       threads in completion order. The current done thread is highlighted.
       Both sheets use `MobileSheet` and retain task refs and plain navigation

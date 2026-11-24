@@ -155,8 +155,10 @@ export function ThreadTabNode<Id extends string>({
       // The whole tab selects, not just the label button: the button is
       // content-sized, so a short title ("2") would leave the padding and the
       // task ref beside it inert.
-      onClick={() => {
-        if (tab.disabled) {
+      onClick={(event) => {
+        // A link inside the tab (the active tab's task or PR ref) navigates on
+        // its own; selecting too would open the host tab's thread menu.
+        if (tab.disabled || (event.target as Element).closest("a")) {
           return;
         }
         onSelect(tab.id);

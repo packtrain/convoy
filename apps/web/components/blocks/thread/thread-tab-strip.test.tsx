@@ -124,6 +124,39 @@ describe("ThreadTabStrip", () => {
     expect(row.querySelector(".shrink-0")?.textContent).toBe("OS-511");
   });
 
+  // The active tab's task ref is a link that opens the task in the sidebar; its
+  // click bubbled to the tab, which on the chevron host opens the sheet too.
+  test("clicking the active tab's task ref link does not open the thread sheet", () => {
+    let navigated = false;
+    render(
+      <ThreadTabStrip
+        tabs={tabs.slice(0, 2).map((tab, index) => ({
+          ...tab,
+          leading:
+            index === 0 ? (
+              <a
+                href="/task"
+                onClick={(event) => {
+                  event.preventDefault();
+                  navigated = true;
+                }}
+              >
+                OS-511
+              </a>
+            ) : undefined,
+        }))}
+        activeId={tabs[0].id}
+        onSelect={() => {}}
+        collapsed
+      />
+    );
+
+    fireEvent.click(screen.getByRole("link", { name: "OS-511" }));
+
+    expect(navigated).toBe(true);
+    expect(screen.queryByRole("dialog")).toBeNull();
+  });
+
   // Rows truncate long titles, so the full one has to be reachable on hover.
   test("shows a menu row's full title on hover", () => {
     render(
