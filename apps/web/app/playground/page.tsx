@@ -8,6 +8,21 @@ interface PlaygroundLink {
 
 const ACTIVE_PLAYGROUNDS: PlaygroundLink[] = [
   {
+    href: "/playground/tui-layout",
+    title: "TUI layout",
+    description: "Proposed terminal layout with titled panes, scope tabs, a command palette and a key reference, drawn at 110×34 and 80×24 next to frames from today's TUI (OS-2547).",
+  },
+  {
+    href: "/playground/git-history",
+    title: "Git history",
+    description: "Commit history as a plain list (diff on the right) or a branch graph, on the worktree page and in the thread Changes tab, with the real diff renderer on fixtures (OS-2508).",
+  },
+  {
+    href: "/playground/recurring-tasks",
+    title: "Recurring tasks",
+    description: "A recurring task in any list with its occurrences as subtasks: table, board, the Recurring filter, the repeat dropdown and a clock to step through slots, on local state (OS-2506).",
+  },
+  {
     href: "/playground/single-project-sidebar",
     title: "Single-project sidebar",
     description: "Left sidebar scoped to one project: a selector at the top, then that project's notifications, Watch Tower, threads, PRs and lists (OS-1755).",
