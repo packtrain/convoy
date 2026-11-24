@@ -134,6 +134,9 @@ export default function Home() {
 
         <div className={`mx-auto max-w-[1200px] border-x ${LINE}`}>
           <div aria-hidden className="pt-[120px] lg:pt-[240px]" />
+          <div className={`border-y ${LINE}`}>
+            <CliLogoGrid />
+          </div>
           <section id="product" className={`scroll-mt-[61px] border-b ${LINE}`}>
             <div className="reveal px-8 py-20 sm:px-10 sm:py-24">
               <h2 className="max-w-[18ch] text-4xl font-[450] leading-[1.08] tracking-[-0.035em] text-balance sm:text-[48px]">
