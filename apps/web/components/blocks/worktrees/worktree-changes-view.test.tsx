@@ -13,7 +13,6 @@ const state = vi.hoisted(() => ({
   enqueue: vi.fn(),
   changes: { resultJson: null as string | null, loading: false, error: null as string | null, refresh: vi.fn() },
   toast: { error: vi.fn(), success: vi.fn() },
-  mobile: true,
 }));
 
 vi.mock("convex/react", () => ({
@@ -70,8 +69,9 @@ vi.mock("@/lib/threads/hooks/use-diff-theme", () => ({
   useDiffTheme: () => ({}),
 }));
 
+const mobile = vi.hoisted(() => ({ value: true }));
 vi.mock("@/hooks/browser/use-mobile", () => ({
-  useIsMobile: () => state.mobile,
+  useIsMobile: () => mobile.value,
 }));
 
 vi.mock("@pierre/diffs/react", () => ({
@@ -120,7 +120,7 @@ describe("WorktreeChangesView", () => {
     state.toast.error.mockReset();
     state.toast.success.mockReset();
     navigate.mockReset();
-    state.mobile = true;
+    mobile.value = true;
     url.search = "?profileId=profile_1&pathId=path_1&view=changes";
   });
 
@@ -130,7 +130,7 @@ describe("WorktreeChangesView", () => {
 
   test("the file tree toggle stays in the toolbar and flips the tree on and off", () => {
     onlineWithOneFile();
-    state.mobile = false;
+    mobile.value = false;
     render(<WorktreeChangesView profileId={"profile_1" as Id<"cliProfiles">} pathId="path_1" />);
 
     const hide = screen.getByRole("button", { name: "Hide file tree" });
@@ -181,6 +181,43 @@ describe("WorktreeChangesView", () => {
 
     expect(back).toHaveBeenCalledTimes(1);
     back.mockRestore();
+  });
+
+  test("on a phone the History toolbar fits: an icon-only layout toggle, diff toggles only over a commit (UX OS-2536 round 1 #4)", () => {
+    state.profile = { paths: WORKTREE_PATHS, isOnline: true, appVersion: "0.171.0" };
+    const commit = { hash: "a".repeat(40), parents: [], authorName: "Ada", authorEmail: "a@x", committedAt: 1, refs: [], subject: "first" };
+    state.changes = { resultJson: JSON.stringify({ commits: [commit] }), loading: false, error: null, refresh: vi.fn() };
+    url.search = "?profileId=profile_1&pathId=path_1&view=history";
+    const { rerender } = render(<WorktreeChangesView profileId={"profile_1" as Id<"cliProfiles">} pathId="path_1" />);
+
+    expect(screen.getByText("Graph").className).toContain("sr-only");
+    expect(screen.queryByRole("button", { name: "Enable word wrap" })).toBeNull();
+
+    fireEvent.click(screen.getByRole("option", { name: /^first/ }));
+    rerender(<WorktreeChangesView profileId={"profile_1" as Id<"cliProfiles">} pathId="path_1" />);
+
+    expect(screen.getByRole("button", { name: "Enable word wrap" })).toBeTruthy();
+    expect(screen.queryByRole("group", { name: "History layout" })).toBeNull();
+  });
+
+  test("on desktop the Graph table with no commit open leaves out the diff toggles (UX OS-2536 round 2 #1)", () => {
+    mobile.value = false;
+    window.localStorage.setItem("convoy.history-layout", "graph");
+    state.profile = { paths: WORKTREE_PATHS, isOnline: true, appVersion: "0.171.0" };
+    const commit = { hash: "a".repeat(40), parents: [], authorName: "Ada", authorEmail: "a@x", committedAt: 1, refs: ["HEAD -> feat/x"], subject: "first" };
+    state.changes = { resultJson: JSON.stringify({ commits: [commit] }), loading: false, error: null, refresh: vi.fn() };
+    url.search = "?profileId=profile_1&pathId=path_1&view=history";
+    const { rerender } = render(<WorktreeChangesView profileId={"profile_1" as Id<"cliProfiles">} pathId="path_1" />);
+
+    // Hidden but holding their place, so List | Graph does not move when a commit opens (round 3 Opus #1).
+    expect(screen.getByRole("button", { name: "Enable word wrap" }).closest(".invisible")).toBeTruthy();
+
+    fireEvent.click(screen.getByRole("option", { name: /^first/ }));
+    rerender(<WorktreeChangesView profileId={"profile_1" as Id<"cliProfiles">} pathId="path_1" />);
+
+    expect(screen.getByRole("button", { name: "Enable word wrap" }).closest(".invisible")).toBeNull();
+    mobile.value = true;
+    window.localStorage.clear();
   });
 
   test("Refresh keeps keyboard focus while it runs: busy, not disabled (OS-2534 UX review 3)", () => {

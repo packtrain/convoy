@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useRef, useState, type KeyboardEvent } from "react";
+import { useEffect, useMemo, useRef, useState, type KeyboardEvent, type ReactNode } from "react";
 import { ArrowLeft, Check, Copy, GitCommitHorizontal, GitGraph, GitMerge, List, Tag, X } from "lucide-react";
 import { toast } from "sonner";
 import { PatchDiff } from "@pierre/diffs/react";
@@ -30,10 +30,35 @@ const LABEL_SUBJECT_CHARS = 120;
 const short = (hash: string) => hash.slice(0, 7);
 const noop = () => {};
 const isHead = (commit: CommitSummary) => commit.refs.some((ref) => ref === "HEAD" || ref.startsWith("HEAD -> "));
-const formatDate = (timestamp: number) =>
-  new Date(timestamp).toLocaleString(undefined, { day: "numeric", month: "short", year: "numeric", hour: "2-digit", minute: "2-digit" });
+/** The table's date: the year only outside the current one; the full date is in the cell's title. */
+const formatDate = (timestamp: number) => {
+  const date = new Date(timestamp);
+  const year = date.getFullYear() === new Date().getFullYear() ? undefined : "numeric";
+  return date.toLocaleString(undefined, { day: "numeric", month: "short", year, hour: "2-digit", minute: "2-digit" });
+};
+/** Badges to draw: `origin/HEAD` only repeats the default branch's badge. */
+const visibleRefs = (commit: CommitSummary) => commit.refs.filter((ref) => ref !== "origin/HEAD");
+const refLabel = (ref: string) =>
+  ref.startsWith("HEAD -> ")
+    ? `HEAD, branch ${ref.slice("HEAD -> ".length)}`
+    : ref.startsWith("tag: ")
+      ? `tag ${ref.slice("tag: ".length)}`
+      : ref === "HEAD"
+        ? ref
+        : // ponytail: `origin/` is the only remote told apart, as RefBadge's muted style does.
+          `${ref.startsWith("origin/") ? "remote branch" : "branch"} ${ref}`;
+/** What the graph and badges show, in words: the SVG is hidden from assistive technology. */
 const rowLabel = (commit: CommitSummary) =>
-  `${commit.subject.length > LABEL_SUBJECT_CHARS ? `${commit.subject.slice(0, LABEL_SUBJECT_CHARS - 1)}…` : commit.subject}, ${commit.authorName}, ${new Date(commit.committedAt).toLocaleString()}`;
+  [
+    commit.subject.length > LABEL_SUBJECT_CHARS ? `${commit.subject.slice(0, LABEL_SUBJECT_CHARS - 1)}…` : commit.subject,
+    ...visibleRefs(commit).map(refLabel),
+    commit.parents.length > 1 && "merge",
+    commit.authorName,
+    new Date(commit.committedAt).toLocaleString(),
+    short(commit.hash),
+  ]
+    .filter(Boolean)
+    .join(", ");
 const ROW_CLASS = "cursor-pointer text-left hover:bg-muted/60 focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-ring";
 const SELECTED_CLASS = "bg-muted shadow-[inset_2px_0_0_var(--color-primary)]";
 
@@ -42,7 +67,16 @@ const LAYOUTS = [
   { layout: "graph", label: "Graph", Icon: GitGraph },
 ] as const;
 
-export function HistoryLayoutToggle({ value, onChange }: { value: HistoryLayout; onChange: (layout: HistoryLayout) => void }) {
+export function HistoryLayoutToggle({
+  value,
+  onChange,
+  iconOnly = false,
+}: {
+  value: HistoryLayout;
+  onChange: (layout: HistoryLayout) => void;
+  /** A phone toolbar: the labels stay for screen readers only. */
+  iconOnly?: boolean;
+}) {
   return (
     <div className="flex shrink-0 items-center rounded-md border border-border p-0.5" role="group" aria-label="History layout">
       {LAYOUTS.map(({ layout, label, Icon }) => (
@@ -57,7 +91,7 @@ export function HistoryLayoutToggle({ value, onChange }: { value: HistoryLayout;
           onClick={() => onChange(layout)}
         >
           <Icon className="size-3.5" aria-hidden />
-          {label}
+          <span className={cn(iconOnly && "sr-only")}>{label}</span>
         </button>
       ))}
     </div>
@@ -67,13 +101,14 @@ export function HistoryLayoutToggle({ value, onChange }: { value: HistoryLayout;
 /** The graph column's slice for one row, or null in the List layout. */
 type RowGraph = { row: GraphRow; lanes: number } | null;
 
-function RefBadge({ name }: { name: string }) {
+function RefBadge({ name, className }: { name: string; className?: string }) {
   const head = name.startsWith("HEAD -> ");
   const tag = name.startsWith("tag: ");
   return (
     <span
       className={cn(
         "flex max-w-40 min-w-0 items-center gap-0.5 rounded-sm border px-1 font-mono text-[11px] leading-4",
+        className,
         head
           ? "border-info/40 bg-info/10 text-info"
           : name.startsWith("origin/")
@@ -123,7 +158,8 @@ function CommitRow(props: RowProps) {
       className={cn(
         "group flex w-full items-center pr-3",
         ROW_CLASS,
-        graph ? "gap-1" : "gap-2 border-b border-border pl-3",
+        // pl-1: lane 0 sits 12px in, where List's icon starts.
+        graph ? "gap-1 pl-1" : "gap-2 border-b border-border pl-3",
         selected && SELECTED_CLASS
       )}
     >
@@ -145,7 +181,7 @@ function CommitRow(props: RowProps) {
             {formatCompactRelativeTime(commit.committedAt)}
           </span>
           <span className="shrink-0 font-mono">{short(commit.hash)}</span>
-          {commit.refs.map((ref) => (
+          {visibleRefs(commit).map((ref) => (
             <RefBadge key={ref} name={ref} />
           ))}
         </span>
@@ -169,9 +205,14 @@ function TableRow(props: RowProps & { graph: NonNullable<RowGraph> }) {
     >
       <GraphCell row={graph.row} hash={commit.hash} parents={commit.parents} lanes={graph.lanes} height={TABLE_ROW_HEIGHT} head={isHead(commit)} selected={selected} />
       <span className="flex min-w-0 items-center gap-1.5">
-        {commit.refs.map((ref) => (
-          <RefBadge key={ref} name={ref} />
-        ))}
+        {/* The subject truncates first, down to the badges' 60% cap; past it the badges truncate. */}
+        {visibleRefs(commit).length > 0 && (
+          <span data-ref-badges className="flex max-w-[60%] shrink-0 items-center gap-1.5 overflow-hidden">
+            {visibleRefs(commit).map((ref) => (
+              <RefBadge key={ref} name={ref} />
+            ))}
+          </span>
+        )}
         <span className={cn("truncate text-sm", commit.parents.length > 1 && "text-muted-foreground")} title={commit.subject}>
           {commit.subject}
         </span>
@@ -242,13 +283,19 @@ function CommitDetailSkeleton() {
   );
 }
 
-/** Rows at the loaded list's height: icon, subject line, meta line. */
-function CommitListSkeleton() {
+/** Rows at the loaded list's height: icon (Graph: a lane), subject line, meta line. */
+function CommitListSkeleton({ graph }: { graph: boolean }) {
   return (
     <div aria-label="Loading commits">
       {Array.from({ length: 12 }, (_, index) => (
-        <div key={index} style={{ height: ROW_HEIGHT }} className="flex items-center gap-2 border-b border-border px-3">
-          <Skeleton className="size-3.5 shrink-0 self-start mt-[11px] rounded-full" />
+        <div key={index} style={{ height: ROW_HEIGHT }} className={cn("flex items-center pr-3", graph ? "gap-1 pl-1" : "gap-2 border-b border-border pl-3")}>
+          {graph ? (
+            <span data-lane-stub className="flex h-full shrink-0 justify-center" style={{ width: graphWidth(1) }}>
+              <span className="h-full w-px bg-muted" />
+            </span>
+          ) : (
+            <Skeleton className="size-3.5 shrink-0 self-start mt-[11px] rounded-full" />
+          )}
           <div className="flex flex-1 flex-col gap-1.5">
             <Skeleton className="h-3.5" style={{ width: `${45 + ((index * 17) % 40)}%` }} />
             <Skeleton className="h-3 w-40" />
@@ -519,6 +566,10 @@ interface WorktreeHistoryViewProps {
   selectedHash: string | null;
   /** `push` when the pane changes in one-pane mode, so Back returns to the list; `back` pops that entry. */
   onSelect: (hash: string | null, mode: "push" | "replace" | "back") => void;
+  /** The thread panel's row above the list: the layout toggle (All commits over a one-pane commit), then `actions`. */
+  toolbar?: { onLayoutChange: (layout: HistoryLayout) => void; actions: ReactNode };
+  /** Whether a commit's diff is on screen, so the host shows its diff toggles only then. */
+  onDiffShownChange?: (shown: boolean) => void;
 }
 
 /** Below this pane width the list and the commit take turns, as on a phone. */
@@ -550,6 +601,8 @@ export function WorktreeHistoryView({
   wordWrap,
   selectedHash,
   onSelect,
+  toolbar,
+  onDiffShownChange,
 }: WorktreeHistoryViewProps) {
   const isMobile = useIsMobile();
   const rootRef = useRef<HTMLDivElement>(null);
@@ -563,7 +616,12 @@ export function WorktreeHistoryView({
   const loadedHashes = useMemo(() => new Set(commits.map((commit) => commit.hash)), [commits]);
   // Laid out over every loaded page, so lanes stay continuous across Load more.
   const graphRows = useMemo(() => (layout === "graph" ? layoutGraph(commits) : null), [layout, commits]);
-  const lanes = graphRows ? graphLanes(graphRows) : 1;
+  // The column only widens, so a Refresh back to page 1 doesn't shift every row.
+  const [lanes, setLanes] = useState(1);
+  const loadedLanes = graphRows ? graphLanes(graphRows) : 1;
+  if (loadedLanes > lanes) {
+    setLanes(loadedLanes);
+  }
   // Two panes in the Graph layout: the table on top, the open commit below it at full width.
   const table = graphRows !== null && !onePane;
 
@@ -581,8 +639,14 @@ export function WorktreeHistoryView({
   }
   const canSeek = history.hasMore && commits.length - seekStart.rows < MAX_SEEK_ROWS && !history.error;
   const seeking = selectedHash !== null && !found && !history.initialLoading && (history.loadingMore || canSeek);
-  // The default branch's newer tip can come first (OS-2536); with nothing picked, HEAD's commit opens.
-  const shown = opened ?? (seeking || table ? undefined : (commits.find(isHead) ?? commits[0]));
+  // The default branch's newer tip can fill the first pages (OS-2536): page on to HEAD, which opens with nothing picked.
+  const head = commits.find(isHead);
+  const seekingHead =
+    selectedHash === null &&
+    !head &&
+    commits.length > 0 &&
+    (history.loadingMore || (history.hasMore && commits.length < MAX_SEEK_ROWS && !history.error));
+  const shown = opened ?? (seeking || seekingHead || table ? undefined : (head ?? commits[0]));
   const pushedHash = useRef<string | null>(null);
   const lastOpened = useRef<string | null>(null);
   // A hash paging could not find; the note above the list outlives the URL param.
@@ -601,18 +665,44 @@ export function WorktreeHistoryView({
   }, [missing, fallbackHash, onSelect]);
 
   useEffect(() => {
-    if (seeking && !history.loadingMore && canSeek) {
+    if (((seeking && canSeek) || seekingHead) && !history.loadingMore) {
       history.loadMore();
     }
   });
 
   // The open row scrolls into view when it changes or arrives by paging; "nearest" leaves a visible row alone.
+  // The first commit opened under the table centers its row, which would sit on the shrunk table's edge.
   const foundHash = found?.hash;
+  const scrolledHash = useRef<string | null>(null);
   useEffect(() => {
     if (foundHash) {
-      listRef.current?.querySelector<HTMLElement>(`[data-hash="${foundHash}"]`)?.scrollIntoView?.({ block: "nearest" });
+      const block = table && scrolledHash.current === null ? "center" : "nearest";
+      listRef.current?.querySelector<HTMLElement>(`[data-hash="${foundHash}"]`)?.scrollIntoView?.({ block });
     }
-  }, [foundHash]);
+    scrolledHash.current = foundHash ?? null;
+  }, [foundHash, table]);
+  // A Refresh that drops the later pages starts the list from the top, like a fresh first page.
+  const loadedRows = useRef(commits.length);
+  useEffect(() => {
+    if (commits.length < loadedRows.current && selectedHash === null) {
+      const scroller = listRef.current?.closest<HTMLElement>(".overflow-y-auto");
+      if (scroller) {
+        scroller.scrollTop = 0;
+      }
+    }
+    loadedRows.current = commits.length;
+  }, [commits.length, selectedHash]);
+  // HEAD found by paging past the first page: its row scrolls into view once.
+  const headHash = head?.hash;
+  const pagedToHead = useRef(false);
+  useEffect(() => {
+    if (seekingHead) {
+      pagedToHead.current = true;
+    } else if (headHash && pagedToHead.current && selectedHash === null) {
+      pagedToHead.current = false;
+      listRef.current?.querySelector<HTMLElement>(`[data-hash="${headHash}"]`)?.scrollIntoView?.({ block: "center" });
+    }
+  }, [seekingHead, headHash, selectedHash]);
 
   useEffect(() => {
     // Back to the list in one-pane mode, by the back row or the browser: the row you came from gets focus.
@@ -620,8 +710,11 @@ export function WorktreeHistoryView({
     if (onePane && lastOpened.current && !now && !pendingFocus.current) {
       pendingFocus.current = { kind: "row", hash: lastOpened.current };
     }
-    // Browser Forward (or a link) opens the commit pane without a click: its heading gets focus.
-    if (onePane && !lastOpened.current && now && !pendingFocus.current) {
+    // Browser Forward (or a link) opens the commit pane without a click: its heading gets focus,
+    // unless focus is on something else outside the view (a layout toggle that remounted it).
+    const active = document.activeElement;
+    const focusFree = !active || active === document.body || rootRef.current?.contains(active);
+    if (onePane && !lastOpened.current && now && !pendingFocus.current && focusFree) {
       pendingFocus.current = { kind: "heading", hash: now };
     }
     lastOpened.current = now;
@@ -677,6 +770,39 @@ export function WorktreeHistoryView({
     pendingFocus.current = { kind: "rowAt", index: commits.length };
     history.loadMore();
   };
+  const onePaneDetail = onePane && (opened !== undefined || seeking);
+  const diffShown = shown !== undefined && (!onePane || onePaneDetail);
+  useEffect(() => {
+    onDiffShownChange?.(diffShown);
+  }, [diffShown, onDiffShownChange]);
+  // Escape closes the commit under the table, or goes back to the list in one pane.
+  const onKeyDown = (event: KeyboardEvent<HTMLDivElement>) => {
+    if (event.key !== "Escape" || event.defaultPrevented) {
+      return;
+    }
+    if (table && opened) {
+      closeCommit();
+    } else if (onePaneDetail) {
+      backToList();
+    } else {
+      return;
+    }
+    event.preventDefault();
+  };
+  const backButton = (inToolbar: boolean) => (
+    <button
+      type="button"
+      className={cn(
+        "flex shrink-0 cursor-pointer items-center gap-1.5 text-xs",
+        // In the toolbar row it sits beside Refresh, with the same weight.
+        inToolbar ? "-ml-1 h-7 rounded-sm px-1 font-medium hover:bg-muted" : "h-9 border-b border-border px-3 text-muted-foreground hover:text-foreground"
+      )}
+      onClick={backToList}
+    >
+      <ArrowLeft className="size-3.5" />
+      All commits
+    </button>
+  );
   const onListKeyDown = (event: KeyboardEvent<HTMLDivElement>) => {
     const step = NEXT_KEYS[event.key];
     const hash = (event.target as HTMLElement).dataset.hash;
@@ -727,11 +853,11 @@ export function WorktreeHistoryView({
         );
       }
       return onePane ? (
-        <CommitListSkeleton />
+        <CommitListSkeleton graph={graphRows !== null} />
       ) : (
         <div className={PANES}>
           <div className="min-h-0 overflow-y-auto border-r border-border">
-            <CommitListSkeleton />
+            <CommitListSkeleton graph={false} />
           </div>
           <CommitDetailSkeleton />
         </div>
@@ -744,7 +870,7 @@ export function WorktreeHistoryView({
     const detailOpen = (!onePane && !table) || opened !== undefined || seeking;
     // In one-pane mode the row marks the commit you came from.
     const markedHash = onePane ? kept?.hash : shown?.hash;
-    const tabbableHash = [focusedHash, shown?.hash, commits[0].hash].find((hash) => hash != null && loadedHashes.has(hash));
+    const tabbableHash = [focusedHash, shown?.hash, head?.hash, commits[0].hash].find((hash) => hash != null && loadedHashes.has(hash));
     const list = (
       <div
         className={cn(
@@ -821,7 +947,7 @@ export function WorktreeHistoryView({
           <div className="p-4">
             <Spinner
               className="text-sm text-muted-foreground"
-              text={`Finding commit ${short(selectedHash ?? "")}… ${commits.length} commits searched`}
+              text={`Finding ${selectedHash === null ? "HEAD" : `commit ${short(selectedHash)}`}… ${commits.length} commits searched`}
               textClassName="text-current"
               textPlacement="inline"
             />
@@ -850,14 +976,7 @@ export function WorktreeHistoryView({
         {list}
         {detailOpen && (
           <>
-            <button
-              type="button"
-              className="flex h-9 shrink-0 cursor-pointer items-center gap-1.5 border-b border-border px-3 text-xs text-muted-foreground hover:text-foreground"
-              onClick={backToList}
-            >
-              <ArrowLeft className="size-3.5" />
-              All commits
-            </button>
+            {!toolbar && backButton(false)}
             {detail}
           </>
         )}
@@ -865,9 +984,20 @@ export function WorktreeHistoryView({
     );
   };
 
+  if (!toolbar) {
+    return (
+      <div ref={rootRef} className="h-full min-h-0" onKeyDown={onKeyDown}>
+        {body()}
+      </div>
+    );
+  }
   return (
-    <div ref={rootRef} className="h-full min-h-0">
-      {body()}
+    <div ref={rootRef} className="flex h-full min-h-0 flex-col" onKeyDown={onKeyDown}>
+      <div className="flex h-9 shrink-0 items-center border-b border-border px-3">
+        {onePaneDetail ? backButton(true) : <HistoryLayoutToggle value={layout} onChange={toolbar.onLayoutChange} />}
+        <div className="ml-auto flex items-center">{toolbar.actions}</div>
+      </div>
+      <div className="min-h-0 flex-1">{body()}</div>
     </div>
   );
 }

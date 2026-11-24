@@ -934,6 +934,18 @@ function ThreadWorkspaceBody({
     },
     [setActivePanel]
   );
+  // Kept here, not in the panel: a full-view switch remounts the panel (UX OS-2535 round 1).
+  const [historyDiffShown, setHistoryDiffShown] = useState(true);
+  const handleOpenHistoryCommit = useCallback((commit: string | null) => setChangesView({ kind: "history", ...(commit ? { commit } : {}) }), []);
+  // The toggle moves between the header and the sidebar tab bar; focus follows it.
+  const layoutToggleRef = useRef<HTMLButtonElement>(null);
+  const refocusLayoutToggle = useRef(false);
+  useEffect(() => {
+    if (refocusLayoutToggle.current) {
+      refocusLayoutToggle.current = false;
+      layoutToggleRef.current?.focus();
+    }
+  }, [isFullView]);
   const handleToggleLayoutMode = useCallback(() => {
     const next: ThreadLayoutMode = layoutMode === "full" ? "split" : "full";
     // Split has no thread panel; full view keeps whatever the open sidebar was
@@ -950,6 +962,7 @@ function ThreadWorkspaceBody({
             ? activePanel
             : "thread";
 
+    refocusLayoutToggle.current = true;
     setLayoutMode(next);
     setActivePanel(nextPanel);
     // Split always lands with the pane open on `nextPanel` — the panel tabs
@@ -1707,6 +1720,7 @@ function ThreadWorkspaceBody({
       type="button"
       variant="ghost"
       size="icon-sm"
+      ref={layoutToggleRef}
       onClick={handleToggleLayoutMode}
       aria-label={layoutToggleLabel}
       title={layoutToggleLabel}
@@ -1855,6 +1869,8 @@ function ThreadWorkspaceBody({
             })
           }
           fileTreeOpen={changesFileTree}
+          // History reports whether a diff is on screen (one-pane list or Graph table: none).
+          diffToggles={changesView.kind !== "history" || historyDiffShown}
           // History has no file tree, as on the worktree page.
           onToggleFileTree={changesView.kind === "history" ? undefined : () => {
             const next = !changesFileTree;
@@ -1883,6 +1899,9 @@ function ThreadWorkspaceBody({
               fileTreeOpen={changesFileTree}
               refreshKey={timelineRuns.at(-1)?.diffSummary.postRef}
               onMentionFile={handleMentionFile}
+              openCommit={changesView.kind === "history" ? (changesView.commit ?? null) : null}
+              onOpenCommit={handleOpenHistoryCommit}
+              onHistoryDiffShownChange={setHistoryDiffShown}
             />
           ) : changesViewer && runFileOpContext ? (
             <RunFileViewerPanel

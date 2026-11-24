@@ -80,9 +80,11 @@ function parseCommitPatch(resultJson: string | undefined): CommitPatch | null {
 export function useWorktreeHistory(profileId: Id<"cliProfiles">, pathId: string, enabled: boolean) {
   const [cursor, setCursor] = useState<string>();
   const [earlier, setEarlier] = useState<CommitSummary[]>([]);
+  // The rows before a Refresh, on screen until the first page is back.
+  const [previous, setPrevious] = useState<CommitSummary[]>([]);
   const op = useWorktreeOp({ profileId, pathId, kind: "gitLog", cursor, enabled });
   const page = useMemo(() => parseCommitPage(op.resultJson), [op.resultJson]);
-  const commits = useMemo(() => (page ? [...earlier, ...page.commits] : earlier), [earlier, page]);
+  const commits = useMemo(() => (page ? [...earlier, ...page.commits] : earlier.length > 0 ? earlier : previous), [earlier, page, previous]);
   const nextCursor = page?.nextCursor;
   const loading = op.loading;
 
@@ -95,10 +97,11 @@ export function useWorktreeHistory(profileId: Id<"cliProfiles">, pathId: string,
   }, [commits, nextCursor, loading]);
   const refreshOp = op.refresh;
   const refresh = useCallback(() => {
+    setPrevious(commits);
     setEarlier([]);
     setCursor(undefined);
     refreshOp();
-  }, [refreshOp]);
+  }, [commits, refreshOp]);
 
   return {
     commits,

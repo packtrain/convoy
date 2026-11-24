@@ -3,7 +3,7 @@
  */
 import { useState } from "react";
 import { afterEach, beforeEach, describe, expect, test, vi } from "vitest";
-import { cleanup, fireEvent, render, renderHook, screen } from "@testing-library/react";
+import { act, cleanup, fireEvent, render, renderHook, screen } from "@testing-library/react";
 import type { Id } from "@/convex/_generated/dataModel";
 import type { WorktreeOpState } from "@/lib/worktrees/hooks/use-worktree-op";
 import { useWorktreeHistory } from "@/lib/worktrees/hooks/use-worktree-history";
@@ -52,7 +52,8 @@ const commit = (char: string, subject: string, parents: string[] = []) => ({
   subject,
 });
 
-const PAGE_1 = { commits: [commit("a", "second", [hash("b")]), commit("b", "first")], nextCursor: `${hash("a")}:2` };
+// The CLI decorates HEAD; without it History pages on to find HEAD.
+const PAGE_1 = { commits: [{ ...commit("a", "second", [hash("b")]), refs: ["HEAD -> main"] }, commit("b", "first")], nextCursor: `${hash("a")}:2` };
 const PAGE_2 = { commits: [commit("c", "older")] };
 const PATCH = (path: string) => ({ body: "", patch: `diff --git a/${path} b/${path}\n--- a/${path}\n+++ b/${path}\n@@ -1 +1 @@\n-x\n+y\n`, truncated: false });
 
@@ -69,7 +70,11 @@ function Harness({
   wordWrap = false,
   initialHash = null,
   layout = "list",
+  toolbar = false,
+  onDiffShownChange,
 }: {
+  toolbar?: boolean;
+  onDiffShownChange?: (shown: boolean) => void;
   layout?: "list" | "graph";
   appVersion?: string;
   isOnline?: boolean;
@@ -106,6 +111,8 @@ function Harness({
         allCollapsed={false}
         wordWrap={wordWrap}
         selectedHash={selectedHash}
+        toolbar={toolbar ? { onLayoutChange: () => {}, actions: <span>Toolbar action</span> } : undefined}
+        onDiffShownChange={onDiffShownChange}
         onSelect={(hash, mode) => {
           selections.push({ hash, mode });
           setSelectedHash(hash);
@@ -593,7 +600,7 @@ describe("WorktreeHistoryView", () => {
   test("a row's accessible name is the subject, author and date, not the raw meta line (OS-2534 UX review 2)", () => {
     render(<Harness />);
 
-    expect(screen.getByRole("option", { name: /^second, Ada, / }).getAttribute("aria-label")).not.toContain("·");
+    expect(screen.getByRole("option", { name: /^second, HEAD, branch main, Ada, / }).getAttribute("aria-label")).not.toContain("·");
   });
 
   test("combined diff lines get the diff viewer's row tints (OS-2534 UX review 2)", () => {
@@ -667,7 +674,7 @@ describe("WorktreeHistoryView", () => {
       if (args.kind === "gitLog") {
         return args.cursor
           ? { resultJson: undefined, error: "fatal: bad object", loading: false, refresh: retry }
-          : done({ commits: [commit("a", "second", [hash("c")])], nextCursor: `${hash("a")}:1` });
+          : done({ commits: [{ ...commit("a", "second", [hash("c")]), refs: ["HEAD -> main"] }], nextCursor: `${hash("a")}:1` });
       }
       return done(PATCH(`${args.postRef?.[0]}.txt`));
     };
@@ -692,5 +699,278 @@ describe("WorktreeHistoryView", () => {
     expect(selections.at(-1)).toEqual({ hash: null, mode: "replace" });
     expect(screen.getByText("Commit ccccccc isn't in this checkout's history.")).toBeTruthy();
     expect(screen.getByTestId("patch").textContent).toContain("a.txt");
+  });
+});
+
+describe("WorktreeHistoryView, UX review OS-2535 OS-2536 round 1", () => {
+  const headPages = (args: OpArgs) =>
+    args.kind === "gitLog"
+      ? done(
+          args.cursor
+            ? { commits: [{ ...commit("h", "my branch", [hash("b")]), refs: ["HEAD -> feature"] }, commit("b", "first")] }
+            : { commits: [{ ...commit("m", "main tip", [hash("b")]), refs: ["origin/main", "origin/HEAD"] }], nextCursor: `${hash("m")}:1` }
+        )
+      : done(PATCH(`${args.postRef?.[0]}.txt`));
+
+  beforeEach(() => {
+    mobile.value = false;
+    paneWidth.value = null;
+    selections.length = 0;
+    ops.calls = [];
+    ops.answer = (args) => (args.kind === "gitLog" ? done(args.cursor ? PAGE_2 : PAGE_1) : done(PATCH(`${args.postRef?.[0]}.txt`)));
+  });
+
+  afterEach(() => {
+    cleanup();
+  });
+
+  test("List pages to HEAD when the default branch fills the first page, and opens it (#1)", () => {
+    ops.answer = headPages;
+    render(<Harness />);
+
+    expect(ops.calls.some((call) => call.kind === "gitLog" && call.cursor === `${hash("m")}:1`)).toBe(true);
+    expect(screen.getByTestId("patch").textContent).toContain("h.txt");
+  });
+
+  test("Graph pages to HEAD too and scrolls its row into view (#1)", () => {
+    ops.answer = headPages;
+    const scrolled: string[] = [];
+    Element.prototype.scrollIntoView = function (this: Element) {
+      scrolled.push(this.getAttribute("data-hash") ?? "");
+    };
+    render(<Harness layout="graph" />);
+
+    expect(screen.getByRole("option", { name: /^my branch/ })).toBeTruthy();
+    expect(scrolled).toContain(hash("h"));
+    delete (Element.prototype as { scrollIntoView?: unknown }).scrollIntoView;
+  });
+
+  test("origin/HEAD gets no badge; it repeats the default branch (#2)", () => {
+    ops.answer = headPages;
+    render(<Harness />);
+
+    expect(screen.getByText("origin/main")).toBeTruthy();
+    expect(screen.queryByText("origin/HEAD")).toBeNull();
+  });
+
+  test("in the table the ref badges keep their width and the subject truncates first (#2)", () => {
+    ops.answer = headPages;
+    render(<Harness layout="graph" />);
+
+    expect(screen.getByText("origin/main").closest("[data-ref-badges]")?.className).toContain("shrink-0");
+  });
+
+  test("Escape closes the commit open under the table and focuses its row (#3)", () => {
+    render(<Harness layout="graph" />);
+    fireEvent.click(screen.getByRole("option", { name: /^first/ }));
+
+    fireEvent.keyDown(screen.getByRole("heading", { name: "first" }), { key: "Escape" });
+
+    expect(screen.queryByTestId("patch")).toBeNull();
+    expect(document.activeElement).toBe(screen.getByRole("option", { name: /^first/ }));
+  });
+
+  test("Escape in one pane goes back to the list (#3)", () => {
+    mobile.value = true;
+    render(<Harness />);
+    fireEvent.click(screen.getByText("first"));
+
+    fireEvent.keyDown(screen.getByRole("heading", { name: "first" }), { key: "Escape" });
+
+    expect(screen.queryByTestId("patch")).toBeNull();
+    expect(document.activeElement).toBe(screen.getByRole("option", { name: /^first/ }));
+  });
+
+  test("a row's accessible name carries HEAD, refs, merge and the short hash (#5, #10)", () => {
+    ops.answer = (args) =>
+      args.kind === "gitLog"
+        ? done({ commits: [{ ...commit("f", "Merge main", [hash("a"), hash("b")]), refs: ["HEAD -> feature", "tag: v1"] }] })
+        : done({ body: "", patch: "", truncated: false });
+    render(<Harness layout="graph" />);
+
+    const label = screen.getByRole("option").getAttribute("aria-label") ?? "";
+    expect(label).toMatch(/^Merge main, HEAD, branch feature, tag v1, merge, Ada, .+, fffffff$/);
+  });
+
+  test("Refresh after Load more keeps the rows on screen until the first page is back (#3, Sol)", () => {
+    let refreshed = false;
+    ops.answer = (args) =>
+      args.kind === "gitLog"
+        ? refreshed && !args.cursor
+          ? { resultJson: undefined, error: null, loading: true, refresh: () => {} }
+          : done(args.cursor ? PAGE_2 : PAGE_1)
+        : done(PATCH(`${args.postRef?.[0]}.txt`));
+    const { result } = renderHook(() => useWorktreeHistory("profile_1" as Id<"cliProfiles">, "path_1", true));
+    act(() => result.current.loadMore());
+    refreshed = true;
+
+    act(() => result.current.refresh());
+
+    expect(result.current.commits).toHaveLength(3);
+    expect(result.current.initialLoading).toBe(false);
+    expect(result.current.refreshing).toBe(true);
+  });
+
+  test("the graph column keeps its widest width after Refresh drops the later pages (#6)", () => {
+    paneWidth.value = 560;
+    // Page 1 is one lane; page 2's merge opens a second.
+    ops.answer = (args) =>
+      args.kind === "gitLog"
+        ? done(
+            args.cursor
+              ? { commits: [commit("c", "merge", [hash("d"), hash("e")]), commit("d", "left"), commit("e", "right")] }
+              : { commits: [{ ...commit("a", "second", [hash("b")]), refs: ["HEAD -> main"] }, commit("b", "first", [hash("c")])], nextCursor: "x:2" }
+          )
+        : done(PATCH(`${args.postRef?.[0]}.txt`));
+    const { container } = render(<Harness layout="graph" />);
+    fireEvent.click(screen.getByRole("button", { name: "Load more" }));
+    const wide = container.querySelector("[role=option] svg:not(.lucide)")?.getAttribute("width");
+    expect(wide).toBe("30");
+
+    fireEvent.click(screen.getByRole("button", { name: "Harness refresh" }));
+
+    expect(container.querySelector("[role=option] svg:not(.lucide)")?.getAttribute("width")).toBe(wide);
+  });
+
+  test("one-pane Graph rows inset the lane like List's icon column (#7)", () => {
+    paneWidth.value = 560;
+    render(<Harness layout="graph" />);
+
+    expect(screen.getByRole("option", { name: /^first/ }).className).toContain("pl-1");
+  });
+
+  test("the first commit opened under the table centers its row (#8)", () => {
+    const blocks: string[] = [];
+    Element.prototype.scrollIntoView = function (this: Element, options?: boolean | ScrollIntoViewOptions) {
+      if (this.getAttribute("data-hash") === hash("b") && typeof options === "object") {
+        blocks.push(options.block ?? "");
+      }
+    };
+    render(<Harness layout="graph" />);
+
+    fireEvent.click(screen.getByRole("option", { name: /^first/ }));
+
+    expect(blocks[0]).toBe("center");
+    delete (Element.prototype as { scrollIntoView?: unknown }).scrollIntoView;
+  });
+
+  test("the one-pane Graph skeleton has Graph rows: no borders, a lane stub (#9)", () => {
+    paneWidth.value = 560;
+    ops.answer = () => ({ resultJson: undefined, error: null, loading: true, refresh: () => {} });
+    render(<Harness layout="graph" />);
+
+    const rows = screen.getByLabelText("Loading commits").children;
+    expect(rows[0].className).not.toContain("border-b");
+    expect(rows[0].querySelector("[data-lane-stub]")).toBeTruthy();
+  });
+
+  test("with a toolbar, one pane puts All commits in that row instead of the layout toggle (OS-2535 #4, #5)", () => {
+    paneWidth.value = 560;
+    render(<Harness toolbar />);
+    expect(screen.getByRole("group", { name: "History layout" })).toBeTruthy();
+
+    fireEvent.click(screen.getByText("first"));
+
+    expect(screen.queryByRole("group", { name: "History layout" })).toBeNull();
+    expect(screen.getAllByRole("button", { name: "All commits" })).toHaveLength(1);
+    expect(screen.getByRole("button", { name: "All commits" }).parentElement?.textContent).toContain("Toolbar action");
+  });
+
+  test("with nothing open, the table's Tab stop is HEAD's row, not the default branch tip (round 2 Sol #1)", () => {
+    ops.answer = headPages;
+    render(<Harness layout="graph" />);
+
+    expect(screen.getByRole("option", { name: /^my branch/ }).tabIndex).toBe(0);
+    expect(screen.getByRole("option", { name: /^main tip/ }).tabIndex).toBe(-1);
+  });
+
+  test("a Refresh that drops later pages scrolls the list back to the top (round 2 Opus #3)", () => {
+    paneWidth.value = 560;
+    render(<Harness layout="graph" />);
+    fireEvent.click(screen.getByRole("button", { name: "Load more" }));
+    const scroller = screen.getByRole("listbox", { name: "Commits" }).closest(".overflow-y-auto") as HTMLElement;
+    scroller.scrollTop = 400;
+
+    fireEvent.click(screen.getByRole("button", { name: "Harness refresh" }));
+
+    expect(scroller.scrollTop).toBe(0);
+  });
+
+  test("the table's date leaves out the current year (round 2 Opus #4)", () => {
+    render(<Harness layout="graph" />);
+
+    const date = screen.getAllByRole("option")[0].children[2].textContent ?? "";
+    expect(date).not.toContain(String(new Date().getFullYear()));
+  });
+
+  test("All commits in the toolbar row has the weight of Refresh beside it (round 2 Opus #5)", () => {
+    paneWidth.value = 560;
+    render(<Harness toolbar />);
+    fireEvent.click(screen.getByText("first"));
+
+    expect(screen.getByRole("button", { name: "All commits" }).className).not.toContain("text-muted-foreground");
+  });
+
+  test("a remote ref reads as a remote branch, a local one as a branch (round 2 Opus #6)", () => {
+    ops.answer = (args) =>
+      args.kind === "gitLog"
+        ? done({ commits: [{ ...commit("f", "tip"), refs: ["HEAD -> feature", "origin/main", "main"] }] })
+        : done(PATCH("f.txt"));
+    render(<Harness />);
+
+    expect(screen.getByRole("option").getAttribute("aria-label")).toMatch(/^tip, HEAD, branch feature, remote branch origin\/main, branch main, /);
+  });
+
+  test("a remount with a commit open leaves focus where it is outside the view (round 3 Sol #1)", () => {
+    paneWidth.value = 560;
+    const outside = document.createElement("button");
+    document.body.append(outside);
+    outside.focus();
+
+    render(<Harness initialHash={hash("b")} />);
+
+    expect(screen.getByRole("heading", { name: "first" })).toBeTruthy();
+    expect(document.activeElement).toBe(outside);
+    outside.remove();
+  });
+
+  test("only origin/HEAD is dropped; a branch or tag named .../HEAD keeps its badge (CR UX fixes #3)", () => {
+    ops.answer = (args) =>
+      args.kind === "gitLog"
+        ? done({ commits: [{ ...commit("f", "tip"), refs: ["HEAD -> feature/HEAD", "tag: release/HEAD", "origin/HEAD"] }] })
+        : done(PATCH("f.txt"));
+    render(<Harness />);
+
+    expect(screen.getByText("feature/HEAD")).toBeTruthy();
+    expect(screen.getByText("release/HEAD")).toBeTruthy();
+    expect(screen.queryByText("origin/HEAD")).toBeNull();
+  });
+
+  test("the table's badges sit in a group bounded inside the Description cell (CR UX fixes #2)", () => {
+    ops.answer = headPages;
+    render(<Harness layout="graph" />);
+
+    const group = screen.getByText("origin/main").closest("[data-ref-badges]");
+    expect(group?.className).toContain("max-w-[60%]");
+    expect(group?.className).toContain("overflow-hidden");
+  });
+
+  test("the view reports whether a diff is on screen, for the host's diff toggles (CR UX fixes #1)", () => {
+    const reports: boolean[] = [];
+    render(<Harness onDiffShownChange={(shown) => reports.push(shown)} />);
+    // Two panes in List: HEAD's diff opens with nothing picked.
+    expect(reports.at(-1)).toBe(true);
+
+    cleanup();
+    paneWidth.value = 560;
+    render(<Harness onDiffShownChange={(shown) => reports.push(shown)} />);
+    expect(reports.at(-1)).toBe(false);
+    fireEvent.click(screen.getByText("first"));
+    expect(reports.at(-1)).toBe(true);
+
+    cleanup();
+    paneWidth.value = null;
+    render(<Harness layout="graph" onDiffShownChange={(shown) => reports.push(shown)} />);
+    expect(reports.at(-1)).toBe(false);
   });
 });

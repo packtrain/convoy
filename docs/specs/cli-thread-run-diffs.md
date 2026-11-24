@@ -93,13 +93,21 @@ model: one run (one assistant message) = one run.
   same visibility rule. It lists the commits of the thread's checkout through
   the worktrees module's History view (`cli-worktrees.md` → Commit history and
   the History bullet), at the panel's 560px in its one-pane layout: compact
-  two-line rows, and a tapped commit opens in place under an "← All commits"
-  back row. A panel widened past 600px (full view) gets the two panes. The
-  open commit lives in component state, not the URL, so browser Back does not
-  step through commits. The list is fetched when the view opens, on the
-  Refresh button in a row above it (which also holds the List | Graph toggle,
-  OS-2536: Graph adds a graph column to the two-line rows in the narrow
-  panel, and is the table in full view; `cli-worktrees.md` → Layout), and again from the first page whenever a
+  two-line rows, and a tapped commit opens in place. A panel widened past
+  600px (full view) gets the two panes. The open commit lives in the thread
+  workspace's state (the History view kind), not the URL, so browser Back
+  does not step through commits, and a switch to or from full view (which
+  remounts the panel) reopens it. One row above the list holds the List |
+  Graph toggle (OS-2536: Graph adds a graph column to the two-line rows in
+  the narrow panel, and is the table in full view; `cli-worktrees.md` →
+  Layout) and Refresh; over a commit in one pane "← All commits" takes the
+  toggle's place, at Refresh's weight, so the panel spends one row on
+  controls, not two. The diff toggles show only while History has a
+  commit's diff on screen, which the view reports (`onDiffShownChange`): not
+  over the one-pane list or a Graph table with no commit open, but yes over
+  a split panel widened past 600px that shows `HEAD`'s diff. The full-view toggle keeps keyboard focus
+  across the switch. The list
+  is fetched when the view opens, on Refresh, and again from the first page whenever a
   new run with a change summary lands in this thread (the newest run's
   `postRef`, as Working tree uses), so a commit the agent made shows up after
   its run; the open commit stays open. Patches come from the same per-tab

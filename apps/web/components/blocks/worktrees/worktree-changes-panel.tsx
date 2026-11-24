@@ -15,7 +15,7 @@ import { useWorktreeChanges } from "@/lib/worktrees/hooks/use-worktree-changes";
 import { useHistoryLayout, useWorktreeHistory } from "@/lib/worktrees/hooks/use-worktree-history";
 import { cn } from "@/lib/utils";
 import { ChangesSummary, RevertAllButton, WorktreeChangesBody, useSectionCollapse } from "./worktree-changes-body";
-import { HistoryLayoutToggle, WorktreeHistoryView } from "./worktree-history";
+import { WorktreeHistoryView } from "./worktree-history";
 import { RevertAllDialog, RevertFileDialog } from "./worktree-revert-dialogs";
 
 interface WorktreeChangesPanelProps {
@@ -31,6 +31,11 @@ interface WorktreeChangesPanelProps {
   /** A change refetches the patch, e.g. the newest run's `postRef`. */
   refreshKey?: string;
   onMentionFile?: (path: string) => void;
+  /** History's open commit, kept by the host so a full-view switch (a remount) reopens it. */
+  openCommit: string | null;
+  onOpenCommit: (hash: string | null) => void;
+  /** Whether History shows a commit's diff, for the host's diff toggles. */
+  onHistoryDiffShownChange: (shown: boolean) => void;
 }
 
 /** The thread Changes tab's views of its checkout (docs/specs/cli-thread-run-diffs.md). */
@@ -52,14 +57,23 @@ function useRefreshOnKey(refreshKey: string | undefined, refresh: () => void) {
 type PanelProps = Omit<WorktreeChangesPanelProps, "view">;
 
 /** "History" (OS-2535): the worktree page's History view, one pane at a time at this width. */
-function HistoryPanel({ profileId, pathId, allCollapsed, diffStyle, wordWrap, refreshKey }: PanelProps) {
+function HistoryPanel({
+  profileId,
+  pathId,
+  allCollapsed,
+  diffStyle,
+  wordWrap,
+  refreshKey,
+  openCommit,
+  onOpenCommit,
+  onHistoryDiffShownChange,
+}: PanelProps) {
   const profile = useQuery(api.cli.profiles.get, { profileId });
   const isOnline = profile?.isOnline ?? false;
   const entry = profile?.paths.find((path) => path.id === pathId);
   const canFetch = isOnline && entry !== undefined && supportsWorktreeHistory(profile?.appVersion);
   const history = useWorktreeHistory(profileId, pathId, canFetch);
   const diffOptions = usePatchDiffOptions(diffStyle, wordWrap);
-  const [selectedHash, setSelectedHash] = useState<string | null>(null);
   const [layout, setLayout] = useHistoryLayout();
   useRefreshOnKey(refreshKey, history.refresh);
   if (profile === undefined) {
@@ -67,46 +81,47 @@ function HistoryPanel({ profileId, pathId, allCollapsed, diffStyle, wordWrap, re
   }
   const refreshing = history.initialLoading || history.refreshing;
   return (
-    <div className="flex h-full min-h-0 flex-col">
-      {canFetch && (
-        <div className="flex h-9 shrink-0 items-center border-b border-border px-3">
-          <HistoryLayoutToggle value={layout} onChange={setLayout} />
-          {/* aria-disabled, not disabled: a disabled button drops keyboard focus mid-refresh. */}
-          <Button
-            type="button"
-            variant="ghost"
-            size="sm"
-            className="ml-auto h-7 cursor-pointer gap-1.5 text-xs aria-disabled:opacity-50"
-            onClick={() => {
-              if (!refreshing) {
-                history.refresh();
-              }
-            }}
-            aria-disabled={refreshing}
-            aria-label="Refresh history"
-          >
-            <RefreshCw className={cn("size-3.5", refreshing && "animate-spin")} />
-            Refresh
-          </Button>
-        </div>
-      )}
-      <div className="min-h-0 flex-1">
-        <WorktreeHistoryView
-          profileId={profileId}
-          pathId={pathId}
-          history={history}
-          layout={layout}
-          registered={entry !== undefined}
-          isOnline={isOnline}
-          appVersion={profile?.appVersion}
-          diffOptions={diffOptions}
-          allCollapsed={allCollapsed}
-          wordWrap={wordWrap}
-          selectedHash={selectedHash}
-          onSelect={setSelectedHash}
-        />
-      </div>
-    </div>
+    <WorktreeHistoryView
+      profileId={profileId}
+      pathId={pathId}
+      history={history}
+      layout={layout}
+      registered={entry !== undefined}
+      isOnline={isOnline}
+      appVersion={profile?.appVersion}
+      diffOptions={diffOptions}
+      allCollapsed={allCollapsed}
+      wordWrap={wordWrap}
+      selectedHash={openCommit}
+      onSelect={onOpenCommit}
+      onDiffShownChange={onHistoryDiffShownChange}
+      toolbar={
+        canFetch
+          ? {
+              onLayoutChange: setLayout,
+              actions: (
+                // aria-disabled, not disabled: a disabled button drops keyboard focus mid-refresh.
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="sm"
+                  className="h-7 cursor-pointer gap-1.5 text-xs aria-disabled:opacity-50"
+                  onClick={() => {
+                    if (!refreshing) {
+                      history.refresh();
+                    }
+                  }}
+                  aria-disabled={refreshing}
+                  aria-label="Refresh history"
+                >
+                  <RefreshCw className={cn("size-3.5", refreshing && "animate-spin")} />
+                  Refresh
+                </Button>
+              ),
+            }
+          : undefined
+      }
+    />
   );
 }
 

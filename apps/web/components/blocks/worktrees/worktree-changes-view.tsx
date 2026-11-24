@@ -66,6 +66,8 @@ function ChangesViewForCheckout({ profileId, pathId }: WorktreeChangesViewProps)
     historyOpened && state.isOnline && state.entry !== undefined && supportsWorktreeHistory(state.profile?.appVersion)
   );
   const [historyLayout, setHistoryLayout] = useHistoryLayout();
+  // History reports whether a commit's diff is on screen; the diff toggles follow it.
+  const [historyDiffShown, setHistoryDiffShown] = useState(true);
   const [diffStyle, setDiffStyle] = useState<ChangesDiffStyle>(readChangesDiffStyle);
   const [wordWrap, setWordWrap] = useState(readChangesWordWrap);
   const [allCollapsed, setAllCollapsed] = useState(false);
@@ -119,6 +121,8 @@ function ChangesViewForCheckout({ profileId, pathId }: WorktreeChangesViewProps)
   const title = entry ? (entry.kind === "worktree" ? (entry.branch ?? entry.label) : entry.label) : "Changes";
   const hasFiles = sections !== null && files.length > 0;
   const onHistory = tab === "history";
+  const phoneCommit = isMobile && onHistory && target?.commit != null;
+  const noDiffShown = onHistory && !historyDiffShown;
   const route = (view: WorktreeView, commit: string | null) =>
     appRoute.projectThreadsWithPreselection(params.organizationSlug, params.projectAlias, { profileId, pathId, view, commit });
   const openTab = (next: WorktreeView) => {
@@ -219,12 +223,7 @@ function ChangesViewForCheckout({ profileId, pathId }: WorktreeChangesViewProps)
         {entry && (
           <div className="flex h-[41px] shrink-0 items-center gap-3 border-b border-border bg-card px-4 text-xs text-muted-foreground">
             <div className="flex shrink-0 items-center gap-1" role="group" aria-label="Worktree view">
-              <button
-                type="button"
-                aria-pressed={!onHistory}
-                className={tabClass(!onHistory)}
-                onClick={() => openTab("changes")}
-              >
+              <button type="button" aria-pressed={!onHistory} className={tabClass(!onHistory)} onClick={() => openTab("changes")}>
                 Changes
                 {hasFiles && <span className="rounded-sm bg-background px-1 tabular-nums">{files.length}</span>}
               </button>
@@ -241,17 +240,23 @@ function ChangesViewForCheckout({ profileId, pathId }: WorktreeChangesViewProps)
             {!onHistory && <ChangesSummary files={files} />}
             {isOnline && !onHistory && <RevertAllButton state={state} />}
             <div className="ml-auto flex items-center gap-1">
-              {onHistory && <HistoryLayoutToggle value={historyLayout} onChange={setHistoryLayout} />}
-              <ChangesViewToggles
-                allCollapsed={allCollapsed}
-                onToggleCollapseAll={() => setAllCollapsed((value) => !value)}
-                diffStyle={diffStyle}
-                onToggleDiffStyle={toggleDiffStyle}
-                wordWrap={wordWrap}
-                onToggleWordWrap={toggleWordWrap}
-                fileTreeOpen={sidebarOpen}
-                onToggleFileTree={hasFiles && !isMobile && !onHistory ? () => setSidebarOpen((open) => !open) : undefined}
-              />
+              {/* The diff toggles only while a diff is on screen; a phone's commit pane drops the layout toggle. */}
+              {onHistory && !phoneCommit && <HistoryLayoutToggle value={historyLayout} onChange={setHistoryLayout} iconOnly={isMobile} />}
+              {/* A phone leaves them out; a desktop keeps their place so List | Graph doesn't move. */}
+              {!(noDiffShown && isMobile) && (
+                <div className={cn("flex items-center gap-1", noDiffShown && "invisible")}>
+                  <ChangesViewToggles
+                    allCollapsed={allCollapsed}
+                    onToggleCollapseAll={() => setAllCollapsed((value) => !value)}
+                    diffStyle={diffStyle}
+                    onToggleDiffStyle={toggleDiffStyle}
+                    wordWrap={wordWrap}
+                    onToggleWordWrap={toggleWordWrap}
+                    fileTreeOpen={sidebarOpen}
+                    onToggleFileTree={hasFiles && !isMobile && !onHistory ? () => setSidebarOpen((open) => !open) : undefined}
+                  />
+                </div>
+              )}
             </div>
           </div>
         )}
@@ -269,6 +274,7 @@ function ChangesViewForCheckout({ profileId, pathId }: WorktreeChangesViewProps)
             wordWrap={wordWrap}
             selectedHash={target?.commit ?? null}
             onSelect={selectCommit}
+            onDiffShownChange={setHistoryDiffShown}
           />
         ) : (
           <div className="flex min-h-0 flex-col">

@@ -346,3 +346,16 @@ test("the file tree toggle exposes its state and invokes its action", () => {
   fireEvent.click(button);
   expect(onToggleFileTree).toHaveBeenCalledOnce();
 });
+
+describe("ThreadChangesToolbar diff toggles (UX OS-2535 round 2 #1)", () => {
+  afterEach(() => {
+    cleanup();
+  });
+
+  test("leaves out the diff toggles when no diff is on screen", () => {
+    renderToolbar({ changesViewKind: "history", label: "History", diffToggles: false });
+
+    expect(screen.queryByRole("button", { name: "Enable word wrap" })).toBeNull();
+    expect(screen.queryByRole("button", { name: "Collapse all files" })).toBeNull();
+  });
+});
