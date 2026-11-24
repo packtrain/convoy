@@ -96,6 +96,7 @@ function Harness({
         profileId={profileId}
         pathId="path_1"
         history={history}
+        registered
         isOnline={isOnline}
         appVersion={appVersion}
         diffOptions={{} as never}

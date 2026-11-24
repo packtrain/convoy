@@ -89,8 +89,25 @@ model: one run (one assistant message) = one run.
   and file-tree toggles apply as in the other views. The item is hidden for a
   read-only viewer; an offline CLI shows the offline placeholder and a CLI
   older than 0.77.0 an update prompt.
+- **History** (OS-2535) is the fourth item, below "Working tree", with the
+  same visibility rule. It lists the commits of the thread's checkout through
+  the worktrees module's History view (`cli-worktrees.md` → Commit history and
+  the History bullet), at the panel's 560px in its one-pane layout: compact
+  two-line rows, and a tapped commit opens in place under an "← All commits"
+  back row. A panel widened past 600px (full view) gets the two panes. The
+  open commit lives in component state, not the URL, so browser Back does not
+  step through commits. The list is fetched when the view opens, on the
+  Refresh button in a row above it, and again from the first page whenever a
+  new run with a change summary lands in this thread (the newest run's
+  `postRef`, as Working tree uses), so a commit the agent made shows up after
+  its run; the open commit stays open. Patches come from the same per-tab
+  cache as the worktree page. The collapse-all, diff-style and wrap toggles
+  apply to the open commit; the file-tree toggle is hidden on History.
+  Offline, an unsupported CLI (older than 0.171.0), a checkout no longer
+  registered on the CLI and errors show the worktree page's copy; the Refresh
+  row shows only when the list can be fetched.
 - **Run timeline** (OS-1160) lives in the **changes toolbar's view selector
-  dropdown** (below the "Working tree" item; the selector button shows the
+  dropdown** (below the "History" item; the selector button shows the
   active view label): a list of the loaded runs newest-first,
   each row labeled by the user prompt that triggered the run (falling back to
   "Untitled run") with `+/−` totals, file count, and relative time. Rows

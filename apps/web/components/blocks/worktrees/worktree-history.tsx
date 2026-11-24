@@ -368,6 +368,8 @@ interface WorktreeHistoryViewProps {
   profileId: Id<"cliProfiles">;
   pathId: string;
   history: WorktreeHistory;
+  /** False when the path is gone from the CLI's profile. */
+  registered: boolean;
   isOnline: boolean;
   appVersion: string | undefined;
   diffOptions: DiffOptions;
@@ -399,6 +401,7 @@ export function WorktreeHistoryView({
   profileId,
   pathId,
   history,
+  registered,
   isOnline,
   appVersion,
   diffOptions,
@@ -541,6 +544,9 @@ export function WorktreeHistoryView({
   };
 
   const body = () => {
+    if (!registered) {
+      return <Message>This checkout is no longer registered on the CLI.</Message>;
+    }
     if (!isOnline) {
       return <Message>CLI offline. Connect it to fetch history.</Message>;
     }

@@ -41,6 +41,8 @@ export type ThreadChangesView =
   | { kind: "all" }
   /** Uncommitted changes of the thread's checkout against HEAD (OS-2234). */
   | { kind: "worktree" }
+  /** Commit history of the thread's checkout (OS-2535). */
+  | { kind: "history" }
   /** A committed run range from the selector's timeline. */
   | { kind: "range"; diffSummary: CliRunDiffSummary; label: string }
   /** A single run scrolled to `file` (opened from a Changes-card row). */
@@ -303,9 +305,9 @@ interface ThreadChangesToolbarProps {
   changesViewKind: ThreadChangesView["kind"];
   /** Oldest-first, as built by `buildTimelineRuns`; shown in the dropdown. */
   runs: TimelineRun[];
-  onSelectView: (kind: "latest" | "all" | "worktree") => void;
-  /** Offers the "Working tree" item; off for a read-only viewer. */
-  showWorktreeView?: boolean;
+  onSelectView: (kind: (typeof FIXED_VIEWS)[number][0]) => void;
+  /** Offers the "Working tree" and "History" items; off for a read-only viewer. */
+  showCheckoutViews?: boolean;
   /** Same contract as the run timeline's range commit. */
   onOpenRange: (
     diffSummary: CliRunDiffSummary,
@@ -332,19 +334,20 @@ const FIXED_VIEWS = [
   ["latest", "Latest run"],
   ["all", "All changes"],
   ["worktree", "Working tree"],
+  ["history", "History"],
 ] as const;
 
 /**
  * Toolbar row between the tab bar and the Changes panel content. Its selector
  * button shows the active changes view and opens the "Latest run" / "All
- * changes" / "Working tree" / run timeline dropdown to switch it.
+ * changes" / "Working tree" / "History" / run timeline dropdown to switch it.
  */
 export function ThreadChangesToolbar({
   label,
   changesViewKind,
   runs,
   onSelectView,
-  showWorktreeView = false,
+  showCheckoutViews = false,
   onOpenRange,
   onRevertRun,
   allCollapsed,
@@ -374,7 +377,7 @@ export function ThreadChangesToolbar({
           </button>
         </PopoverTrigger>
         <PopoverContent align="start" className="w-80 gap-0 overflow-hidden p-0">
-          {FIXED_VIEWS.filter(([kind]) => kind !== "worktree" || showWorktreeView).map(([kind, viewLabel]) => (
+          {FIXED_VIEWS.filter(([kind]) => showCheckoutViews || (kind !== "worktree" && kind !== "history")).map(([kind, viewLabel]) => (
             <button
               key={kind}
               type="button"
