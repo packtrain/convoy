@@ -19,11 +19,12 @@ const browser = new Browser([...(scenario === "delete-success" ? [{ id: "local",
 }], scenario === "delete-success" ? 1 : 0);
 const instance = render(<App browser={browser} />, { stdout: stdout as unknown as NodeJS.WriteStream, stdin: stdin as unknown as NodeJS.ReadStream, debug: true, exitOnCtrlC: false, patchConsole: false });
 async function key(value: string) { stdin.write(value); await settle(80); }
-// Body rows below the two-row header, split into the 30-column sidebar and the panel.
-const sidebar = () => frame.split("\n").slice(2).map(line => plain(line).slice(0, 30));
-// Row text without the project status dot.
-const label = (line: string) => line.replace(/\s*●\s*$/, "").trim();
-const panel = () => frame.split("\n").slice(2).map(line => plain(line).slice(30)).join("\n");
+// Body rows below the header, split into the sidebar (22 columns below 100, else 30) and the panel.
+const sidebarWidth = () => stdout.columns < 100 ? 22 : 30;
+const sidebar = () => frame.split("\n").slice(2).map(line => plain(line).slice(0, sidebarWidth()));
+// Row text without the selection marker, status dot or key.
+const label = (line: string) => line.replace(/^›/, " ").replace(/\s+[●○!ac+]\s*$/, "").trim();
+const panel = () => frame.split("\n").slice(2).map(line => plain(line).slice(sidebarWidth())).join("\n");
 try {
   await settle(80);
   if (scenario === "delete-success") {
@@ -143,7 +144,7 @@ try {
     assert.equal(executed, 0);
     await key("\u001b");
     assert.equal(browser.getSnapshot().environment, undefined);
-    assert(plain(frame).includes("> [u] Update CLI"), "Cancel must restore focus to Update CLI");
+    assert(plain(frame).includes("› [u] Update CLI"), "Cancel must restore focus to Update CLI");
   } else if (scenario === "local") {
     await key("a");
     assert(plain(frame).includes("not managed"), plain(frame));
@@ -174,8 +175,9 @@ try {
       browser.showActions(view.endsWith("actions"));
       if (view === "credentials") browser.showCredentials(true);
       await settle(80);
-      assert(panel().includes("Project notices"), panel());
-      assert(panel().includes("Needs sign-in: Claude Code, Cursor, OpenCode"), panel());
+      // One line: the first project's summary, then a count that never truncates.
+      assert(panel().includes(scenario.endsWith("narrow") ? "! a: Needs sign-in: Claude" : "! a: Needs sign-in: Claude Code, Cursor, OpenCode"), panel());
+      assert(panel().includes(project ? "OpenCode · [w] all notices" : "· +2 more · [w] all notices"), panel());
       assert(!panel().includes("Run project login"), panel());
       await key("w");
       assert(plain(frame).includes("Warning details"), plain(frame));
@@ -194,15 +196,15 @@ try {
       { profile: "b", status: "online", attempts: 1 },
     ];
     browser.select({ connection: 0, details: true }); await settle(80);
-    assert(panel().includes("a · failed") && panel().includes("codex is not installed for this project."), panel());
+    assert(panel().includes("! a: codex is not installed for this project."), panel());
     assert(!panel().includes("b: online ·"), panel());
     for (const name of ["a", "b"]) {
       const line = sidebar().find(value => value.trim().startsWith(`${name} `))!;
-      assert.equal(line.indexOf("●"), 27, `Project ${name} shows its status dot one column inside the right edge: ${line}`);
-      assert(!line.includes("!"), line);
+      // Projects of an unconnected environment show a muted, hollow dot.
+      assert.equal(line.indexOf("○"), 27, `Project ${name} shows its status dot one column inside the right edge: ${line}`);
     }
     browser.select({ connection: 0, profile: "a", details: false }); await settle(80);
-    assert(panel().includes("a · failed") && panel().includes("codex is not installed"), panel());
+    assert(panel().includes("! a: codex is not installed"), panel());
     browser.select({ connection: 0, profile: "b", details: false }); await settle(80);
     assert(!panel().includes("codex is not installed"), panel());
   } else if (scenario === "sidebar-views") {
@@ -232,7 +234,7 @@ try {
     await key("\u001b[A");
     assert(browser.getSnapshot().scope.details && !browser.getSnapshot().actions && !browser.getSnapshot().credentials, "The environment row shows Details");
   } else if (scenario === "sidebar-arrows") {
-    const header = () => sidebar().map(line => line.trim()).find(line => line.includes("Test target"));
+    const header = () => sidebar().map(label).find(line => line.includes("Test target"));
     browser.select({ connection: 0, details: true }); await settle(80);
     assert(header()?.startsWith("▾"), sidebar().join("\n"));
     await key("\u001b[D");
@@ -322,7 +324,7 @@ try {
     await key("\u001b"); browser.logs(); await settle(80);
   } else if (scenario === "mouse-buttons") {
     // Fewer rows lift the confirmation's buttons over the Actions menu's [z] Stop environment row.
-    stdout.rows = 24; stdout.emit("resize"); await settle(80);
+    stdout.rows = 22; stdout.emit("resize"); await settle(80);
     const lines = () => stripVTControlCharacters(frame).split("\n");
     const click = async (text: string, line?: number) => {
       const y = line ?? lines().findIndex(value => value.includes(text));
@@ -350,7 +352,7 @@ try {
     (browser as unknown as { set(patch: object): void }).set({ rows: [thread("t1", "First thread"), thread("t2", "Second thread")] }); await settle(80);
     await click("Second thread");
     assert.equal(browser.getSnapshot().history, undefined, "The first click on a run row only selects it");
-    assert(lines().some(line => line.includes("› ") && lines()[lines().indexOf(line) + 1]?.includes("Second thread")), "The clicked row is selected:\n" + lines().join("\n"));
+    assert(lines().some(line => line.includes("› Second thread")), "The clicked row is selected:\n" + lines().join("\n"));
     await click("Second thread");
     assert.equal(browser.getSnapshot().history?.thread.threadId, "t2", "Clicking the selected row opens its history");
     const run = { threadId: "t2", messageId: "m1", runId: "r1", status: "streaming", createdAt: 1, updatedAt: 1 };
@@ -360,8 +362,8 @@ try {
     await key("\u001b"); await key("\u001b");
     browser.getSnapshot().observations[0].profiles = [{ profile: "a", status: "failed", attempts: 4, warning: "a is broken." }];
     browser.select({ connection: 0, details: true }); await settle(80);
-    await click("[w] Details");
-    assert(lines().some(line => line.includes("Warning details")), "Clicking [w] Details opens the warnings:\n" + lines().join("\n"));
+    await click("[w] all notices");
+    assert(lines().some(line => line.includes("Warning details")), "Clicking [w] all notices opens the warnings:\n" + lines().join("\n"));
     await key("\u001b");
     let inspected = 0;
     browser.inspectEnvironment = async () => { inspected++; };
@@ -370,19 +372,21 @@ try {
     await click("[s] Retry check");
     assert.equal(inspected, 1, "Clicking the [s] Retry check line inspects the environment");
     browser.getSnapshot().observations[0].environmentError = undefined;
+    // The form needs 17 panel rows.
+    stdout.rows = 24; stdout.emit("resize"); await settle(80);
     await key("E"); await click("[ Review ]");
     assert(lines().some(line => line.includes("Use a lowercase environment name")), "Clicking Review validates the form:\n" + lines().join("\n"));
     await click("[ Cancel ]");
     assert.equal(browser.getSnapshot().environment, undefined, "Clicking Cancel closes an empty form");
     await key("E"); await click("[ Review ]"); await click("Environment name"); await key("dev");
     await click("Internet access"); await click("Environment name"); await key("1");
-    assert(lines().some(line => line.includes("[ dev1▏ ]")), "A click focuses the field and keeps its text:\n" + lines().join("\n"));
+    assert(lines().some(line => line.includes("> [ dev1  ]")), "A click focuses the field and keeps its text:\n" + lines().join("\n"));
     await click("( ) Isolated");
     assert(lines().some(line => line.includes("> ( ) Shared  (●) Isolated")) && !lines().some(line => line.includes("Mount folders")), "Clicking a radio option focuses and picks it:\n" + lines().join("\n"));
     await click("[ Cancel ]"); await click("[ Discard ]");
     assert.equal(browser.getSnapshot().environment, undefined, "Cancel and Discard close a filled form");
     // A sidebar click leaves an open form: a filled one asks first, an empty one goes straight there.
-    const sidebarRow = (text: string) => lines().findIndex(line => line.slice(0, 30).trim() === text);
+    const sidebarRow = (text: string) => lines().findIndex(line => label(line.slice(0, sidebarWidth())) === text);
     await key("E"); await key("dev"); await click("Actions", sidebarRow("Actions"));
     assert(lines().some(line => line.includes("Discard environment draft?")), lines().join("\n"));
     await click("[ Discard ]");

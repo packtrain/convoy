@@ -59,9 +59,12 @@ async function wait(check: () => boolean) {
 async function key(value: string) { for (let i = 0; i < 5; i++) await new Promise<void>(resolve => setImmediate(resolve)); const before = output; stdin.write(value); await wait(() => output !== before || !browser.getSnapshot().environment && !browser.getSnapshot().onboarding); await new Promise<void>(resolve => setImmediate(resolve)); }
 try {
   await wait(() => frame.includes("ENVIRONMENTS"));
-  if (scenario === "create" || scenario === "create-local") {
+  if (scenario === "create" || scenario === "create-local" || scenario === "cursor") {
     await key("E"); await wait(() => frame.includes("Environment name"));
-    await key("new-env");
+    if (scenario === "cursor") {
+      await key("nw-env"); for (let i = 0; i < 5; i++) await key("\u001b[D");
+      await key("e"); await wait(() => frame.includes("[ new-env"));
+    } else await key("new-env");
     for (let i = 0; i < 5; i++) await key("\t");
     await key("\r"); await wait(() => frame.includes("Create / resume"));
     assert(frame.includes(scenario === "create-local" ? "install /tmp/cli.tgz" : "install from npm"), frame);

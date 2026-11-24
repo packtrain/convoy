@@ -265,6 +265,15 @@ try {
       assert.deepEqual(requests, [{ action: "add", name: "work-a", secret: SECRET, provider: "anthropic" }]);
       assert.deepEqual(allowed, []);
       await until("work-a · enabled · 0 assigned · rev 1 · Anthropic · API key");
+    } else if (scenario === "cursor") {
+      await key("n"); await until("Add credential · Fixture");
+      // One chunk carries several keys when keys repeat, so edits must not read a stale render.
+      await key("w", "r", "k", "-", "a", "x", "x", DEL + DEL, LEFT, LEFT + LEFT + LEFT, "o"); await until("[ work-a");
+      await key(TAB, RIGHT, RIGHT, RIGHT, TAB); await until("(●) Anthropic API");
+      stdin.write(SECRET); await settle(60);
+      await key(TAB, TAB, ENTER); await until("Name: work-a");
+      await key(RIGHT, ENTER); await until("Added work-a.");
+      assert.deepEqual(requests, [{ action: "add", name: "work-a", secret: SECRET, provider: "anthropic" }]);
     } else if (scenario === "add-rejected") {
       await key("n"); await until("Add credential · Fixture");
       await key("w", "o", "r", "k", "-", "a", TAB, RIGHT, RIGHT, RIGHT, TAB);

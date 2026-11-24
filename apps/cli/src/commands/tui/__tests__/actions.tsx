@@ -97,7 +97,7 @@ try {
   stdin.write("c"); await until(() => browser.locked);
   stdin.write("\t"); await settle(70);
   stdin.write("\r"); await until(() => browser.getSnapshot().action?.message?.includes("Cancellation accepted") === true);
-  if (process.argv[2] !== "escape") await until(() => frame.includes("Return to Runs to refresh."));
+  if (process.argv[2] !== "escape") await until(() => frame.includes("Return to Runs to"));
   assert(!frame.includes("╭") && frame.includes("[ Back ]"), "action outcome must stay in the panel: " + screen);
   assert.equal(requests.filter(request => request.op === "runs.cancel").length, 1);
   await until(() => peer.getSnapshot().observations[0].profiles[0].activeRuns === 0);

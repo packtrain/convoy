@@ -23,9 +23,12 @@ export const palette: Record<"base" | "surface" | "footer" | "text" | "muted" | 
   selected: 238, selectedText: 255, idle: 236, idleText: 249, running: 116, warning: 222, success: 151, danger: 217 }).map(([key, value]) => [key, `ansi256(${value})`])) as typeof palette : { base: undefined, surface: undefined, footer: undefined, text: undefined, muted: "gray", accent: "cyan",
   selected: "blue", selectedText: "white", idle: "gray", idleText: "white", running: "cyan", warning: "yellow", success: "green", danger: "red" };
 
-export const healthTones: Record<Health, keyof typeof palette> = { unknown: "muted", connecting: "warning", connected: "success", reconnecting: "warning", incompatible: "warning" };
+/** The tones of a status dot; each has its own glyph, so state reads without color. Spec: docs/specs/cli-tui.md#tui-ux-review-cli-01700-os-2547 */
+export type DotTone = "success" | "warning" | "danger" | "muted";
+export const DOT_GLYPHS: Record<DotTone, string> = { success: "●", muted: "○", warning: "!", danger: "!" };
+export const healthTones: Record<Health, DotTone> = { unknown: "muted", connecting: "warning", connected: "success", reconnecting: "warning", incompatible: "warning" };
 /** Live health when connected, else the last environment check. Spec: docs/specs/cli-tui.md#environment-row-layout-cli-01320 */
-export function environmentTone(observation: Observation): keyof typeof palette {
+export function environmentTone(observation: Observation): DotTone {
   if (observation.health !== "unknown") return healthTones[observation.health];
   if (observation.environmentError) return "warning";
   return observation.environmentStatus?.serviceRunning === true ? "success" : "muted";
@@ -39,16 +42,18 @@ export function duration(ms: number) {
   const s = Math.max(0, Math.floor(ms / 1000)), m = Math.floor(s / 60), h = Math.floor(m / 60), d = Math.floor(h / 24);
   return d ? `${d}d ${h % 24}h` : h ? `${h}h ${String(m % 60).padStart(2, "0")}m` : m ? `${m}m ${String(s % 60).padStart(2, "0")}s` : `${s}s`;
 }
-/** Run-table cells: task label before the title, runtime under the project, state symbol and age. History rows are runs of one thread, told apart by start time. */
+/** Service states as the runs table words them; others show with underscores as spaces. */
+const STATE_LABELS: Record<string, string> = { waiting_input: "needs input" };
+/** Run-table cells: the title, then a meta line with the task ref and short thread ID. History rows are runs of one thread, told apart by start time. */
 export function rowCells(row: Row, now = Date.now()) {
   const status = plain(row.run?.status ?? (row.thread.hasPendingUserMessages ? `${row.thread.status ?? "idle"}+queued` : row.thread.status ?? "unknown"));
   const [, symbol, tone] = tones.find(([pattern]) => pattern.test(status)) ?? [/$/, "·", "muted" as const];
-  const task = row.thread.associatedTaskId ? row.thread.associatedTaskRef ?? "task unavailable" : "no task";
+  const label = status.split("+").map(part => STATE_LABELS[part] ?? part.replaceAll("_", " ")).join(" · ");
   const time = row.run ? duration((/^(streaming|running)/.test(status) ? now : row.run.updatedAt) - row.run.createdAt) : `${duration(now - row.thread.lastActivityAt)} ago`;
-  const identity = { task: plain(`[${task}]`), id: plain(row.thread.threadId), title: plain(row.thread.title) };
-  if (row.run) Object.assign(identity, { task: `Started ${new Date(row.run.createdAt).toLocaleString()}`, id: "", title: plain(`Run ${row.run.runId ?? row.run.messageId}`) });
-  return { ...identity,
-    profile: plain(row.profile), runtime: plain(row.thread.cliType ?? "runtime unknown"), status, symbol, color: palette[tone], time };
+  const cells = { status, label, symbol, color: palette[tone], time };
+  if (row.run) return { ...cells, task: "", runtime: "", title: plain(`Run ${row.run.runId ?? row.run.messageId}`), meta: `Started ${new Date(row.run.createdAt).toLocaleString()}` };
+  const task = row.thread.associatedTaskId ? plain(row.thread.associatedTaskRef ?? "task unavailable") : "";
+  return { ...cells, task, runtime: row.thread.cliType ? plain(row.thread.cliType) : "", title: plain(row.thread.title), meta: [task, plain(row.thread.threadId.slice(0, 8))].filter(Boolean).join(" · ") };
 }
 
 const unhealthy = (profile: WorkerState) => Boolean(profile.warning) || ["failed", "blocked", "retrying"].includes(profile.status);
@@ -158,8 +163,10 @@ export function detailLines(state: BrowseState, endpoint: string, clientVersion:
 
 const segments = new Intl.Segmenter(undefined, { granularity: "grapheme" });
 
-/** Wrap sanitized terminal text without splitting graphemes. */
-export function wrapLines(text: string, columns: number): string[] {
+const graphemeWidth = (segment: string) => segment.length === 1 && segment.charCodeAt(0) < 0x7f ? 1 : stringWidth(segment);
+
+/** Break sanitized terminal text at the column limit, keeping every character; for raw content such as log JSON. */
+export function breakLines(text: string, columns: number): string[] {
   columns = Math.max(1, columns);
   if (/^[\x20-\x7e]*$/.test(text)) {
     const lines: string[] = [];
@@ -169,12 +176,58 @@ export function wrapLines(text: string, columns: number): string[] {
   const lines: string[] = [];
   let line = "", width = 0;
   for (const { segment } of segments.segment(text)) {
-    const size = segment.length === 1 && segment.charCodeAt(0) < 0x7f ? 1 : stringWidth(segment);
+    const size = graphemeWidth(segment);
     if (width + size > columns && line) { lines.push(line); line = ""; width = 0; }
     line += segment; width += size;
   }
   lines.push(line);
   return lines;
+}
+
+/** Wrap sanitized terminal text at the last space that fits, dropping that space; a longer word breaks hard. */
+export function wrapLines(text: string, columns: number): string[] {
+  columns = Math.max(1, columns);
+  const lines: string[] = [];
+  let line: { segment: string; size: number }[] = [], width = 0;
+  const flush = (next: typeof line) => { lines.push(line.map(item => item.segment).join("")); line = next; width = next.reduce((sum, item) => sum + item.size, 0); };
+  for (const { segment } of segments.segment(text)) {
+    const size = graphemeWidth(segment);
+    if (width + size > columns && line.length) {
+      if (segment === " ") { flush([]); continue; }
+      // A space at 0 is indentation, not a break.
+      let space = line.length - 1;
+      while (space > 0 && line[space].segment !== " ") space--;
+      if (space > 0) flush(line.splice(space).slice(1));
+      if (width + size > columns && line.length) flush([]);
+    }
+    line.push({ segment, size }); width += size;
+  }
+  flush([]);
+  return lines;
+}
+
+/** Items `start` to `end` of a scrolled list; `above` and `below` count hidden items, each side taking one of `capacity` lines. `focus` stays in view. */
+export function scrollWindow(total: number, capacity: number, start: number, focus?: number) {
+  const at = focus === undefined ? undefined : Math.max(0, Math.min(total - 1, focus));
+  if (capacity < 3 || total <= capacity) {
+    const max = Math.max(0, total - capacity);
+    let first = Math.min(Math.max(0, start), max);
+    if (at !== undefined) first = Math.max(0, Math.min(Math.max(first, at - capacity + 1), at, max));
+    return { start: first, end: Math.min(total, first + capacity), above: 0, below: 0 };
+  }
+  const fit = (first: number) => { const shown = capacity - (first > 0 ? 1 : 0); return shown - (first + shown < total ? 1 : 0); };
+  let first = Math.max(0, start);
+  if (at !== undefined) { if (at < first) first = at; while (at >= first + fit(first)) first++; }
+  while (first > 0 && first + fit(first) > total) first--;
+  return { start: first, end: first + fit(first), above: first, below: total - first - fit(first) };
+}
+
+/** Footer key hints that fit `width`, dropping from the end of `hints` and never from `tail`. */
+export function fitHints(hints: [string, string][], tail: [string, string][], width: number): [string, string][] {
+  const size = (list: [string, string][]) => list.reduce((sum, [key, label], index) => sum + (index ? 2 : 0) + stringWidth(`${key} ${label}`), 0);
+  const kept = [...hints];
+  while (kept.length && size([...kept, ...tail]) > width) kept.pop();
+  return [...kept, ...tail];
 }
 
 /** Escape terminal controls while preserving parsed JSON values. */

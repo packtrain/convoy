@@ -18,7 +18,7 @@ export async function run(targets: Connection[], selected = 0, localPackage?: st
     instance.unmount();
   }));
   browser.localPackage = localPackage;
-  const mount = () => { enterScreen(); return render(<App browser={browser} />, { exitOnCtrlC: false, patchConsole: false }); };
+  const mount = () => { enterScreen(); return render(<App browser={browser} />, { exitOnCtrlC: false, patchConsole: false, incrementalRendering: true }); };
   let instance = mount();
   const stop = () => { stopped = true; abort.abort(); browser.dispose(); instance.unmount(); };
   const interrupt = () => { if (!handoff) stop(); };

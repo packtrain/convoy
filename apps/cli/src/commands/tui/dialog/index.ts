@@ -1,1 +1,1 @@
-export { Clickable, Dialog, Spinner } from "./app.js";
+export { Caret, Clickable, Dialog, Spinner, editText } from "./app.js";

@@ -2,8 +2,8 @@ import { useEffect, useRef, useState } from "react";
 import { Box, Text, useInput } from "ink";
 import { useLeave, type LeaveRef } from "../mouse.js";
 import type { Browser } from "../workflow.js";
-import { Clickable, Dialog } from "../dialog/index.js";
-import { palette, plain, printable } from "../formatters.js";
+import { Caret, Clickable, Dialog, editText } from "../dialog/index.js";
+import { palette, plain } from "../formatters.js";
 import { getCliVersion } from "../../../lib/version.js";
 import { environmentFormSchema, type EnvironmentProposal, type UpdateProposal, type EnvironmentOperation, type EnvironmentForm } from "../../environment/validators.js";
 import { MODE_COPY } from "../../environment/formatters.js";
@@ -21,7 +21,8 @@ const recovery = {
   delete: "Deletion did not complete. Some data may already be removed. The local record is retained so you can retry.",
   other: "Inspect status before retrying. Start recovers interrupted updates. Saved volumes and service logs are retained.",
 };
-type Draft = Omit<EnvironmentForm, "mounts"> & { mode: "shared" | "isolated"; mounts: string };
+// The cursor lives with the text, so keys that share one stdin chunk each see the last edit.
+type Draft = Omit<EnvironmentForm, "mounts"> & { mode: "shared" | "isolated"; mounts: string; cursor?: number };
 const radios = { mode: ["shared", "isolated"], networkMode: ["open", "strict"] } as const;
 const radioLabels = { shared: "Shared", isolated: "Isolated", open: "Unrestricted", strict: "Restricted" };
 
@@ -30,9 +31,11 @@ export function Environments({ browser, leave, width, height }: { browser: Brows
   const target = browser.targets[state.scope.connection];
   const [step, setStep] = useState<"form" | "confirm" | "busy" | "result">(state.environment === "create" ? "form" : "confirm");
   const [form, setForm] = useState<Draft>({ name: "", mode: "shared", mounts: "", networkMode: "open", deployment: "", domains: "" });
-  const submittedForm: EnvironmentForm = { ...form, ...(form.networkMode === "open" ? { deployment: "", domains: "" } : {}),
+  const { cursor, ...draft } = form;
+  const submittedForm: EnvironmentForm = { ...draft, ...(form.networkMode === "open" ? { deployment: "", domains: "" } : {}),
     mounts: form.mode === "shared" ? form.mounts.split(",").map(folder => folder.trim()).filter(Boolean) : [] };
   const [index, setIndex] = useState(0);
+  const focus = (at: number) => { setIndex(at); setForm(old => ({ ...old, cursor: undefined })); };
   const [chosen, setChosen] = useState(operations[0]);
   const [proposal, setProposal] = useState<UpdateProposal>();
   const [creation, setCreation] = useState<EnvironmentProposal>();
@@ -116,13 +119,12 @@ export function Environments({ browser, leave, width, height }: { browser: Brows
     if (index >= cancelIndex && (key.leftArrow || key.rightArrow)) {
       setIndex(key.leftArrow ? cancelIndex : reviewIndex); return;
     }
-    if (key.tab || key.downArrow || key.upArrow) { setIndex(old => (old + (key.upArrow || key.shift ? count - 1 : 1)) % count); return; }
+    if (key.tab || key.downArrow || key.upArrow) { setIndex(old => (old + (key.upArrow || key.shift ? count - 1 : 1)) % count); setForm(old => ({ ...old, cursor: undefined })); return; }
     if (key.return) { press(index); return; }
     if (step === "form" && index < fields.length) {
       const field = fields[index];
       if (field === "mode" || field === "networkMode") return;
-      if (key.backspace || key.delete) setForm(old => ({ ...old, [field]: old[field].slice(0, -1) }));
-      else if (input && !key.leftArrow && !key.rightArrow) setForm(old => ({ ...old, [field]: (old[field] + printable(input)).slice(0, 256) }));
+      setForm(old => { const edit = editText(old[field], old.cursor, input, key, 256); return edit ? { ...old, [field]: edit.value, cursor: edit.cursor } : old; });
     }
   });
   if (discard) return <Dialog width={width} height={height} lines={["Discard environment draft?", "Your entered settings will be lost."]} onCancel={() => setDiscard(false)} buttons={[{ label: "Keep editing", activate: () => setDiscard(false) }, { label: "Discard", activate: () => { browser.closeEnvironment(); leaving.current?.(); } }]} />;
@@ -141,7 +143,7 @@ export function Environments({ browser, leave, width, height }: { browser: Brows
     {small ? <Text>Resize to 45×{minHeight}. Esc cancels.</Text> : <>
       <>
         {fields.map((field, i) => <Box key={field} flexDirection="column">
-          <Clickable onClick={() => setIndex(i)}><Text color={index === i ? palette.accent : palette.text ?? "white"}>{labels[field]}</Text></Clickable>
+          <Clickable onClick={() => focus(i)}><Text color={index === i ? palette.accent : palette.text ?? "white"}>{labels[field]}</Text></Clickable>
           {field === "mode" || field === "networkMode" ? <>
             <Box><Text color={palette.text}>{index === i ? ">" : " "} </Text><Box gap={2}>{radios[field].map(option => <Clickable key={option} onClick={() => { setIndex(i); setForm(old => ({ ...old, [field]: option })); }}>
               <Text color={palette.text}>{form[field] === option ? "(●)" : "( )"} {radioLabels[option]}</Text>
@@ -150,7 +152,7 @@ export function Environments({ browser, leave, width, height }: { browser: Brows
               <Text color={palette.muted}>{form.networkMode === "open" ? "Web research and downloads from any site." : "Only built-in and extra allowed destinations."}</Text>
               {form.networkMode === "strict" && <Text color={palette.muted}>Advanced network settings: add your Convex backend below.</Text>}
             </>}
-          </> : <Clickable onClick={() => setIndex(i)}><Text wrap="truncate" color={palette.text}>{index === i ? ">" : " "} <Text backgroundColor={index === i ? palette.idle : palette.surface}>[ {form[field] || " "}{index === i ? "▏" : ""} ]</Text></Text></Clickable>}
+          </> : <Clickable onClick={() => focus(i)}><Text wrap="truncate" color={palette.text}>{index === i ? ">" : " "} <Text backgroundColor={index === i ? palette.idle : palette.surface}>[ {index === i ? <Caret value={form[field]} cursor={cursor} width={width - 10} /> : form[field] || " "} ]</Text></Text></Clickable>}
         </Box>)}
         <Box gap={2}>{([["Cancel", cancelIndex], ["Review", reviewIndex]] as const).map(([label, at]) => <Clickable key={label} onClick={() => { setIndex(at); press(at); }}>
           <Text bold color={index === at ? palette.selectedText : palette.accent} backgroundColor={index === at ? palette.selected : undefined}>{index === at ? ">" : " "} [ {label} ]</Text>

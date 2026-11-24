@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import { Box, Text, useInput } from "ink";
 import type { Browser } from "../workflow.js";
-import { masked, palette, plain, printable, rich, wrapLines } from "../formatters.js";
+import { masked, palette, plain, rich, wrapLines } from "../formatters.js";
 import { suggestProjectAlias } from "../../setup/resolution.js";
 import { toProfileKey } from "../../setup/prompts.js";
 import type { ProjectAddOptions } from "../../project/workflow.js";
@@ -9,7 +9,7 @@ import { savedDeploymentUrls, loadChoices, validateForm } from "./workflow.js";
 
 import { RuntimeAccess } from "./runtime-access.js";
 import { resultMessage } from "./formatters.js";
-import { Clickable, Dialog } from "../dialog/index.js";
+import { Caret, Clickable, Dialog, editText } from "../dialog/index.js";
 import { useLeave, useWheel, type LeaveRef } from "../mouse.js";
 import { MODE_COPY, prerequisiteFailure, prerequisiteLines } from "../../environment/formatters.js";
 import type { Prerequisite } from "../../environment/validators.js";
@@ -237,18 +237,11 @@ export function Onboarding({ browser, leave, width: columns, height: rows, load 
     if (key.return) { pressForm(index); return; }
     const field = fields[index];
     if (!field || field.select) return;
-    const chars = [...field.value];
-    const position = Math.min(cursor ?? chars.length, chars.length);
-    if (key.leftArrow || key.rightArrow || key.home || key.end) {
-      setCursor(key.home ? 0 : key.end ? chars.length : Math.max(0, Math.min(chars.length, position + (key.leftArrow ? -1 : 1)))); return;
-    }
-    if (key.backspace || key.delete) {
-      if (position) { chars.splice(position - 1, 1); field.set(chars.join("")); setCursor(position - 1); }
-    } else if (input) {
-      const inserted = [...printable(input)];
-      chars.splice(position, 0, ...inserted);
-      field.set(chars.slice(0, field.secret ? 4096 : 256).join("")); setCursor(position + inserted.length);
-    }
+    // A masked field shows no position, so its cursor stays at the end.
+    const edit = editText(field.value, field.secret ? undefined : cursor, input, key, field.secret ? 4096 : 256);
+    if (!edit) return;
+    if (edit.value !== field.value) field.set(edit.value);
+    setCursor(edit.cursor);
   });
   // The wheel moves the highlight or focus as ↑/↓ do, so rows past the visible window scroll in.
   const clamp = (value: number, length: number) => Math.max(0, Math.min(length - 1, value));
@@ -302,13 +295,10 @@ export function Onboarding({ browser, leave, width: columns, height: rows, load 
             {visible.map((field, offset) => {
               const active = first + offset === index;
               const value = field.secret ? masked(field.value) : plain(field.value);
-              const position = field.secret ? value.length : Math.min(cursor ?? [...value].length, [...value].length);
-              const before = wrapLines([...value].slice(0, position).join(""), width - 12).at(-1) ?? "";
-              const after = [...value].slice(position);
               const placeholder = step === "auth" ? field.secret ? "Paste your Convoy API key" : "https://your-deployment.convex.cloud" : field.label.startsWith("Git repository") ? "https://github.com/owner/repo.git" : "Enter a value";
               return <Clickable key={field.label} flexDirection="column" marginBottom={fieldRows - 2} onClick={() => { setIndex(first + offset); setCursor(undefined); if (field.select) openDropdown(); }}>
                 <Text color={active ? palette.accent : palette.text ?? "white"} wrap="truncate">{active ? "> " : "  "}{field.label}</Text>
-                <Text wrap="truncate" backgroundColor={rich ? active ? palette.idle : palette.surface : active ? "gray" : "black"} color={palette.text ?? "white"}>[ {field.select ? `${value} ▾` : active ? <>{before}<Text inverse>{after[0] || " "}</Text>{after.slice(1).join("") || (!value ? <Text color={palette.muted}>{placeholder}</Text> : "")}</> : value || <Text color={palette.muted}>{placeholder}</Text>} ]</Text>
+                <Text wrap="truncate" backgroundColor={rich ? active ? palette.idle : palette.surface : active ? "gray" : "black"} color={palette.text ?? "white"}>[ {field.select ? `${value} ▾` : active ? <Caret value={value} cursor={field.secret ? undefined : cursor} width={width - 12} placeholder={<Text color={palette.muted}>{placeholder}</Text>} /> : value || <Text color={palette.muted}>{placeholder}</Text>} ]</Text>
               </Clickable>;
             })}
             {hint > 0 && <Text color={palette.muted} wrap="truncate">{AUTH_HINT}</Text>}

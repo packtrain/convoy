@@ -29,6 +29,11 @@ it.each(["resize", "small-detach", "paste", "destination", "export-resize", "ove
   expect(result.stdout).toContain("Terminal keyboard, resize and detach checks passed");
 });
 
+it.each([["110x34", "1"], ["80x24", "0"]])("lays out the main views at %s, FORCE_COLOR=%s", async (size, color) => {
+  const result = await tsx("frames.tsx", [size], { FORCE_COLOR: color });
+  expect(result.stdout).toContain(`Frame checks passed: ${size}`);
+});
+
 it("handles contextual actions with a real socket and two independent clients", async () => {
   const result = await tsx("actions.tsx", [], { FORCE_COLOR: "1" });
   expect(result.stdout).toContain("Action confirmation, two-client state, saved logs, restart, resize and detach checks passed");
@@ -65,7 +70,7 @@ it.each(["sidebar-names", "target-incompatible", "creation-form", "form-visibili
   expect(result.stdout).toContain("Onboarding review checks passed: " + scenario);
 });
 
-it.each(["update", "cancel", "narrow", "failure", "unpublished", "transport", "create", "create-local", "retained", "probe-retry", "probe-start", "diagnostics", "installed"])("environment renderer: %s", async scenario => {
+it.each(["update", "cancel", "narrow", "failure", "unpublished", "transport", "create", "create-local", "retained", "probe-retry", "probe-start", "diagnostics", "installed", "cursor"])("environment renderer: %s", async scenario => {
   const result = await tsx("environments.tsx", [scenario]);
   expect(result.stdout).toContain("Environment renderer checks passed: " + scenario);
 });
@@ -80,7 +85,7 @@ it.each(["sidebar", "scope", "local", "error", "project", "draft", "stopped", "p
   expect(result.stdout).toContain("Navigation checks passed: " + scenario);
 });
 
-it.each(["unsupported", "shared", "shared-stale", "status-error", "assign", "leave", "rejection", "narrow", "narrow-forms", "vanish", "add", "add-anthropic", "add-rejected", "rotate", "disable-rollback", "remove", "project", "project-reload", "project-saved", "project-cursor", "add-gemini", "project-antigravity", "environment-reload", "mouse", "details", "details-shared", "details-narrow"])("runtime credentials renderer: %s", async scenario => {
+it.each(["unsupported", "shared", "shared-stale", "status-error", "assign", "leave", "rejection", "narrow", "narrow-forms", "vanish", "add", "add-anthropic", "add-rejected", "rotate", "disable-rollback", "remove", "project", "project-reload", "project-saved", "project-cursor", "add-gemini", "project-antigravity", "environment-reload", "mouse", "details", "details-shared", "details-narrow", "cursor"])("runtime credentials renderer: %s", async scenario => {
   const result = await tsx("credentials.tsx", [scenario]);
   expect(result.stdout).toContain("Credential renderer checks passed: " + scenario);
 });

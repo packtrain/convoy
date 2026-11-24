@@ -1,5 +1,5 @@
 import { expect, it } from "vitest";
-import { detailLines, environmentTone, plain, rowCells, warningLines, warningGroups } from "./formatters.js";
+import { breakLines, detailLines, scrollWindow, environmentTone, plain, rowCells, warningLines, warningGroups, wrapLines } from "./formatters.js";
 import { toServiceInspection } from "../service/validators.js";
 import { threadPageSchema } from "./validators.js";
 import type { BrowseState } from "./validators.js";
@@ -59,7 +59,7 @@ it("names a service that reports no runtime details (OS-2502)", () => {
 
 it("removes terminal controls while preserving Unicode", () => {
   expect(plain("\u001b[31m日本語 🚀\n\r\u0007\u202e")).toBe("日本語 🚀    ");
-  expect(rowCells({ profile: "a", thread: { threadId: "t", title: "你好\u202e", status: "pending", lastActivityAt: 1 } })).toMatchObject({ task: "[no task]", id: "t", title: "你好 " });
+  expect(rowCells({ profile: "a", thread: { threadId: "t", title: "你好\u202e", status: "pending", lastActivityAt: 1 } })).toMatchObject({ task: "", meta: "t", title: "你好 " });
 });
 it("projects only safe configuration and strips URL credentials, path, query and fragment", () => {
   const value = toServiceInspection([{ key: "a", identity: "identity", config: {
@@ -77,26 +77,28 @@ it("preserves Unicode joiners while removing bidi controls", () => {
 it("places the bracketed task reference before the title and preserves it through page parsing", () => {
   const thread = threadPageSchema.parse({ page: [{ threadId: "t", title: "Fix it", lastActivityAt: 1,
     associatedTaskId: "task", associatedTaskRef: "OS-2059" }], isDone: true, continueCursor: "" }).page[0];
-  expect(rowCells({ profile: "a", thread })).toMatchObject({ task: "[OS-2059]", id: "t", title: "Fix it" });
+  expect(rowCells({ profile: "a", thread })).toMatchObject({ task: "OS-2059", meta: "OS-2059 · t", title: "Fix it", runtime: "" });
   expect(rowCells({ profile: "a", thread, run: { threadId: "t", messageId: "m", status: "completed", createdAt: 1000, updatedAt: 39000 } }))
     .toMatchObject({ status: "completed", symbol: "✓", time: "38s" });
 });
 it("distinguishes runs of one thread by start time instead of repeating the thread title", () => {
   const thread = { threadId: "t", title: "sup?", lastActivityAt: 1 };
   const run = (messageId: string, createdAt: number) => rowCells({ profile: "a", thread, run: { threadId: "t", messageId, runId: `run-${messageId}`, status: "completed", createdAt, updatedAt: createdAt + 5000 } });
-  expect(run("m2", 60000)).toMatchObject({ task: `Started ${new Date(60000).toLocaleString()}`, id: "", title: "Run run-m2" });
+  expect(run("m2", 60000)).toMatchObject({ meta: `Started ${new Date(60000).toLocaleString()}`, title: "Run run-m2" });
   expect(run("m1", 0).title).not.toContain("sup?");
 });
 it("distinguishes unlinked threads from unavailable task references", () => {
   const thread = { threadId: "t", title: "Fix it", lastActivityAt: 1 };
-  expect(rowCells({ profile: "a", thread }).task).toBe("[no task]");
-  expect(rowCells({ profile: "a", thread: { ...thread, associatedTaskId: "task" } }).task).toBe("[task unavailable]");
+  expect(rowCells({ profile: "a", thread }).task).toBe("");
+  expect(rowCells({ profile: "a", thread: { ...thread, associatedTaskId: "task" } }).meta).toBe("task unavailable · t");
+  // A thread shows its runtime when known and the first 8 characters of its ID.
+  expect(rowCells({ profile: "a", thread: { ...thread, threadId: "k57abc12def34ghi", cliType: "codex" } })).toMatchObject({ meta: "k57abc12", runtime: "codex" });
 });
 it("maps service statuses to the design's state symbols and ages", () => {
   const thread = { threadId: "t", title: "Fix it", lastActivityAt: 0 };
   expect(rowCells({ profile: "a", thread: { ...thread, status: "streaming" } }, 252000)).toMatchObject({ symbol: "●", time: "4m 12s ago" });
-  expect(rowCells({ profile: "a", thread: { ...thread, status: "waiting_input" } }).symbol).toBe("?");
-  expect(rowCells({ profile: "a", thread: { ...thread, status: "idle", hasPendingUserMessages: true } })).toMatchObject({ status: "idle+queued", symbol: "·" });
+  expect(rowCells({ profile: "a", thread: { ...thread, status: "waiting_input" } })).toMatchObject({ symbol: "?", label: "needs input" });
+  expect(rowCells({ profile: "a", thread: { ...thread, status: "idle", hasPendingUserMessages: true } })).toMatchObject({ status: "idle+queued", label: "idle · queued", symbol: "·" });
   expect(rowCells({ profile: "a", thread, run: { threadId: "t", messageId: "m", status: "streaming", createdAt: 0, updatedAt: 0 } }, 7_260_000).time).toBe("2h 01m");
 });
 
@@ -186,4 +188,28 @@ it("colours an unconnected environment's dot from its last environment check", (
   expect(environmentTone({ health: "unknown", profiles: [], environmentStatus: { state: "stopped" } })).toBe("muted");
   expect(environmentTone({ health: "unknown", profiles: [], environmentError: "Docker host unavailable." })).toBe("warning");
   expect(environmentTone({ health: "unknown", profiles: [] })).toBe("muted");
+});
+
+it("wraps at spaces and breaks only a word longer than the line", () => {
+  expect(wrapLines("a managed Docker target or a Linux VM", 24)).toEqual(["a managed Docker target", "or a Linux VM"]);
+  expect(wrapLines("run as its control account.", 13)).toEqual(["run as its", "control", "account."]);
+  expect(wrapLines("see abcdefghijkl", 8)).toEqual(["see", "abcdefgh", "ijkl"]);
+  expect(wrapLines("  indented note that wraps", 16)).toEqual(["  indented note", "that wraps"]);
+  expect(wrapLines("日本語 テキスト", 8)).toEqual(["日本語", "テキスト"]);
+  expect(wrapLines("", 10)).toEqual([""]);
+  // Raw content keeps every character.
+  expect(breakLines('{"a": "b c"}', 5).join("")).toBe('{"a": "b c"}');
+});
+
+it("gives a line to each hidden side of a scrolled list and keeps the focus in view", () => {
+  expect(scrollWindow(5, 8, 0)).toEqual({ start: 0, end: 5, above: 0, below: 0 });
+  expect(scrollWindow(20, 8, 0)).toEqual({ start: 0, end: 7, above: 0, below: 13 });
+  expect(scrollWindow(20, 8, 5)).toEqual({ start: 5, end: 11, above: 5, below: 9 });
+  // Scrolled to the end, the window stays full.
+  expect(scrollWindow(20, 8, 99)).toEqual({ start: 13, end: 20, above: 13, below: 0 });
+  expect(scrollWindow(20, 8, 0, 6)).toEqual({ start: 0, end: 7, above: 0, below: 13 });
+  expect(scrollWindow(20, 8, 0, 7)).toEqual({ start: 2, end: 8, above: 2, below: 12 });
+  expect(scrollWindow(20, 8, 10, 3)).toEqual({ start: 3, end: 9, above: 3, below: 11 });
+  // Too short for markers: a plain window.
+  expect(scrollWindow(20, 2, 0, 5)).toEqual({ start: 4, end: 6, above: 0, below: 0 });
 });

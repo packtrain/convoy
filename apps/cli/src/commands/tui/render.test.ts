@@ -1,13 +1,15 @@
 import { afterEach, expect, it, vi } from "vitest";
 
-const { browsers, mounts, events } = vi.hoisted(() => ({
+const { browsers, mounts, events, options } = vi.hoisted(() => ({
+  options: [] as unknown[],
   browsers: [] as { shell: (operation: (signal: AbortSignal) => Promise<void>) => Promise<void> }[],
   mounts: [] as { unmount(): void }[],
   events: [] as string[],
 }));
 vi.mock("ink", () => ({
-  render: () => {
+  render: (_node: unknown, option: unknown) => {
     events.push("mount");
+    options.push(option);
     let exit!: () => void;
     const exited = new Promise<void>(resolve => { exit = resolve; });
     const instance = { unmount: () => exit(), clear: () => {}, cleanup: () => {}, waitUntilExit: () => exited };
@@ -39,7 +41,7 @@ function recordScreen() {
   Object.defineProperty(process.stdin, "setRawMode", { value: () => process.stdin, configurable: true });
 }
 
-afterEach(() => { vi.restoreAllMocks(); browsers.length = 0; mounts.length = 0; events.length = 0; });
+afterEach(() => { vi.restoreAllMocks(); browsers.length = 0; mounts.length = 0; events.length = 0; options.length = 0; });
 
 it("draws in the alternate screen and restores the shell screen on exit", async () => {
   recordScreen();
@@ -60,4 +62,14 @@ it("hands the shell screen to an operation and returns to the alternate screen",
   mounts[1]!.unmount();
   await done;
   expect(events).toEqual(["enter", "mount", "leave", "operation", "enter", "mount", "leave"]);
+});
+
+// A spinner frame then rewrites one line, not the whole screen. Spec: docs/specs/cli-tui.md#tui-ux-review-cli-01700-os-2547
+it("renders incrementally", async () => {
+  recordScreen();
+  const done = run([]);
+  await tick();
+  mounts[0]!.unmount();
+  await done;
+  expect(options[0]).toMatchObject({ incrementalRendering: true });
 });

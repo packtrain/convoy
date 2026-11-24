@@ -20,7 +20,7 @@ let frame = "", content = "";
 stdout.on("data", chunk => { if (plain(chunk.toString()).trim()) { frame = plain(chunk.toString()); const rows = stripVTControlCharacters(chunk.toString()).split("\n");
   const top = rows.findIndex(line => line.includes("╭"));
   const bottom = rows.findIndex(line => line.includes("╰"));
-  content = top < 0 ? rows.filter(line => !line.includes("[ Back ]")).join("") : rows.slice(top + 2, bottom - 3).map(line => line.slice(rows[top].indexOf("╭") + 3, rows[top].indexOf("╮") - 2)).join(""); } });
+  content = top < 0 ? rows.filter(line => !line.includes("[ Back ]") && !/[↑↓] \d+ more/.test(line)).join("") : rows.slice(top + 2, bottom - 3).map(line => line.slice(rows[top].indexOf("╭") + 3, rows[top].indexOf("╮") - 2)).filter(line => !/[↑↓] \d+ more/.test(line)).join(""); } });
 const height = ["duplicate", "menu"].includes(scenario) ? 16 : scenario === "small" ? 10 : 14;
 const width = scenario === "small" ? 23 : 68;
 const instance = render(<Box width={width} height={height} flexDirection="column"><Actions browser={browser} state={{ ...browser.getSnapshot(), actions: true, action }} active width={width} height={height} /><ActionDialog state={{ ...browser.getSnapshot(), action }} browser={browser} width={width} height={height} /></Box>, { stdout: stdout as unknown as NodeJS.WriteStream, stdin: stdin as unknown as NodeJS.ReadStream, debug: true, exitOnCtrlC: false, patchConsole: false });

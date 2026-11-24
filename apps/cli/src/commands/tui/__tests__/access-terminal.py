@@ -22,26 +22,33 @@ if pid == 0:
     os.execvp("node", ["node", "--import", "tsx", str(fixture), scenario])
 recording = bytearray()
 pending = bytearray()
+# Rows the TUI redrew since the last wait, read as the terminal shows them.
+from test_helpers import Screen
+import codecs
+screen = Screen(80, 24)
+decode = codecs.getincrementaldecoder("utf-8")(errors="replace").decode
 def size(columns, rows):
     fcntl.ioctl(fd, termios.TIOCSWINSZ, struct.pack("HHHH", rows, columns, 0, 0))
+    screen.resize(columns, rows)
     os.kill(pid, signal.SIGWINCH)
 # Waits for every text at once: wait() clears pending, so a second wait misses text in the same frame.
 def wait(*texts):
     text = " and ".join(texts)
     deadline = time.monotonic() + 8
-    while not all(t.encode() in pending for t in texts):
+    while not all(t.encode() in pending or screen.drawn(t) for t in texts):
         if time.monotonic() > deadline:
-            raise AssertionError("Missing " + text + "\n" + pending.decode(errors="replace"))
+            raise AssertionError("Missing " + text + "\n" + screen.text())
         if select.select([fd], [], [], .1)[0]:
             chunk = os.read(fd, 65536)
             if not chunk:
                 raise AssertionError("Terminal closed before " + text)
             recording.extend(chunk)
             pending.extend(chunk)
-    pending.clear()
+            screen.feed(decode(chunk))
+    pending.clear(); screen.take()
     time.sleep(.15)  # Ink binds a new view's key handler in an effect after writing its frame.
 def send(keys):
-    pending.clear()
+    pending.clear(); screen.take()
     os.write(fd, keys.encode())
 # Ink reads one stdin chunk as one key, so each key waits for its frame before the next is sent.
 def press(keys, text):
@@ -49,7 +56,7 @@ def press(keys, text):
     wait(text)
 def tab(label):
     press("\t", "> " + label)
-FOCUSED = "\x1b[38;5;255m> "  # palette.selectedText: the selection in the focused pane
+FOCUSED = "\x1b[38;5;255m› "  # palette.selectedText: the selection in the focused pane
 try:
     size(110, 30)
     if scenario == "actions-save":

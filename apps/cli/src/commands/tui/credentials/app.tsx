@@ -4,8 +4,8 @@ import { Box, Text, useInput } from "ink";
 import type { Browser } from "../workflow.js";
 import type { BrowseState } from "../validators.js";
 import type { Connection } from "../resolution.js";
-import { Clickable, Dialog } from "../dialog/index.js";
-import { masked, palette, plain, printable, wrapLines } from "../formatters.js";
+import { Caret, Clickable, Dialog, editText } from "../dialog/index.js";
+import { masked, palette, plain, wrapLines } from "../formatters.js";
 import { codexAwsHost } from "../../../agent/runtimes/codex/auth.js";
 import { MANAGED_RUNTIME_LABELS, awsRegionSchema, entryProviderSchema, keyNameSchema, secretSchema, type CredentialMutation, type ManagedCredentialStatus, type ManagedRuntime } from "../../../lib/config/credentials/validators.js";
 import { assignedRows, bindingRows, choices, draftMutations, entryRuntimes, pendingProfiles, rollbackRevision, sameBinding } from "./workflow.js";
@@ -301,7 +301,7 @@ function SecretDialog({ lines, label, width, height, onCancel, onSubmit }: { lin
   const [error, setError] = useState<string>();
   const submit = () => { const parsed = secretSchema.safeParse(secret); if (parsed.success) onSubmit(parsed.data); else setError("Enter a single-line API key of at most 4096 characters."); };
   return <Dialog width={width} height={height} onCancel={onCancel} onSubmit={submit} error={error} lines={[...lines, `New API key (masked): ${masked(secret)}▏`, "Enter rotates · Tab to buttons · Esc cancels"]}
-    onText={(input, key) => { if (key.backspace || key.delete) setSecret(old => old.slice(0, -1)); else if (input) setSecret(old => (old + printable(input)).slice(0, 4096)); }}
+    onText={(input, key) => setSecret(old => editText(old, undefined, input, key, 4096)?.value ?? old)}
     buttons={[{ label: "Cancel", activate: onCancel }, { label, activate: submit }]} />;
 }
 
@@ -315,7 +315,8 @@ const providers = [
 function AddCredential({ browser, target, entries, leave, width, height, onClose }: {
   browser: Browser; target: Connection; entries: Entry[]; leave: LeaveRef; width: number; height: number; onClose(name?: string, done?: string): void;
 }) {
-  const [form, setForm] = useState({ name: "", region: "", secret: "" });
+  // The cursor lives with the text, so keys that share one stdin chunk each see the last edit.
+  const [form, setForm] = useState({ name: "", region: "", secret: "", cursor: undefined as number | undefined });
   const [provider, setProvider] = useState(0);
   const [index, setIndex] = useState(0);
   const [step, setStep] = useState<"form" | "review" | "busy">("form");
@@ -362,11 +363,10 @@ function AddCredential({ browser, target, entries, leave, width, height, onClose
     const field = fields[index];
     if (field === "provider" && (key.leftArrow || key.rightArrow || input === " ")) { setProvider(old => (old + (key.leftArrow ? providers.length - 1 : 1)) % providers.length); return; }
     if (index >= fields.length && (key.leftArrow || key.rightArrow)) { setIndex(fields.length + (key.rightArrow ? 1 : 0)); return; }
-    if (key.tab || key.upArrow || key.downArrow) { setIndex(old => (old + (key.upArrow || key.shift ? count - 1 : 1)) % count); return; }
+    if (key.tab || key.upArrow || key.downArrow) { setIndex(old => (old + (key.upArrow || key.shift ? count - 1 : 1)) % count); setForm(old => ({ ...old, cursor: undefined })); return; }
     if (key.return) { press(index); return; }
     if (!field || field === "provider") return;
-    if (key.backspace || key.delete) setForm(old => ({ ...old, [field]: old[field].slice(0, -1) }));
-    else if (input && !key.leftArrow && !key.rightArrow) setForm(old => ({ ...old, [field]: (old[field] + printable(input)).slice(0, field === "secret" ? 4096 : 80) }));
+    setForm(old => { const edit = editText(old[field], field === "secret" ? undefined : old.cursor, input, key, field === "secret" ? 4096 : 80); return edit ? { ...old, [field]: edit.value, cursor: edit.cursor } : old; });
   });
   if (discard) return <Dialog width={width} height={height} lines={["Discard credential draft?", "The entered name and key are cleared."]} onCancel={() => setDiscard(false)}
     buttons={[{ label: "Keep editing", activate: () => setDiscard(false) }, { label: "Discard", activate: () => { onClose(); leaving.current?.(); } }]} />;
@@ -385,11 +385,14 @@ function AddCredential({ browser, target, entries, leave, width, height, onClose
   const providerRow = choiceRow.length + 2 <= width ? choiceRow : `◂ (●) ${providers[provider].label} ▸  ${provider + 1} of ${providers.length}`;
   return <Box flexDirection="column" width={width} height={height}>
     <Box marginBottom={1}><Text bold color={palette.text}>Add credential · {plain(target.name)}</Text></Box>
-    {fields.map((field, i) => <Box key={field} flexDirection="column">
-      <Text color={index === i ? palette.accent : palette.text}>{labels[field]}</Text>
-      <Text wrap="truncate" color={palette.text}>{index === i ? ">" : " "} {field === "provider" ? providerRow
-        : <Text backgroundColor={index === i ? palette.idle : palette.surface}>[ {(field === "secret" ? masked(form.secret) : plain(form[field])) || " "}{index === i ? "▏" : ""} ]</Text>}</Text>
-    </Box>)}
+    {fields.map((field, i) => {
+      const value = field === "secret" ? masked(form.secret) : field === "provider" ? "" : plain(form[field]);
+      return <Box key={field} flexDirection="column">
+        <Text color={index === i ? palette.accent : palette.text}>{labels[field]}</Text>
+        <Text wrap="truncate" color={palette.text}>{index === i ? ">" : " "} {field === "provider" ? providerRow
+          : <Text backgroundColor={index === i ? palette.idle : palette.surface}>[ {index === i ? <Caret value={value} cursor={field === "secret" ? undefined : form.cursor} width={width - 8} /> : value || " "} ]</Text>}</Text>
+      </Box>;
+    })}
     <Box gap={2} marginTop={1}>{(["Cancel", "Review"] as const).map((label, i) => <Clickable key={label} onClick={() => { setIndex(fields.length + i); press(fields.length + i); }}>
       <Text bold color={index === fields.length + i ? palette.selectedText : palette.accent} backgroundColor={index === fields.length + i ? palette.selected : undefined}>{index === fields.length + i ? ">" : " "} [ {label} ]</Text>
     </Clickable>)}</Box>

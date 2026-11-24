@@ -1,6 +1,6 @@
 # Service terminal browser
 
-The [CLI 0.103.2 interaction contract](#unified-interactions-cli-01032) supersedes earlier popup, action grouping and shortcut descriptions below. [CLI 0.105.0](#design-palette-cli-01050) defines the visual layout. [CLI 0.115.0](#sidebar-views-cli-01150) moves environment views into the sidebar and drops All projects. Earlier version sections preserve implementation history.
+The [CLI 0.103.2 interaction contract](#unified-interactions-cli-01032) supersedes earlier popup, action grouping and shortcut descriptions below. [CLI 0.105.0](#design-palette-cli-01050) defines the visual layout. [CLI 0.115.0](#sidebar-views-cli-01150) moves environment views into the sidebar and drops All projects. [CLI 0.170.0](#tui-ux-review-cli-01700-os-2547) revises run rows, project notices, the header, the footer and the sidebar width. Earlier version sections preserve implementation history.
 
 OS-2059 adds `convoy tui` in CLI 0.95.1. It attaches to an existing service. CLI 0.98.0 adds explicit confirmed
 service and run controls through Actions. `--environment <name>` initially selects a saved
@@ -29,7 +29,7 @@ All projects and individual projects align at the same indentation beneath their
 Runs shows execution threads, including unlinked threads and separate threads
 for the same task. Enter opens the selected thread's paginated execution history,
 where repeated runs have distinct message/run IDs. Escape returns to the thread
-list or focuses the sidebar. Rows place the task label before the title: [no task] for an unlinked thread or
+list or focuses the sidebar. Since CLI 0.170.0 the title leads and the task ref follows on a muted line ([TUI UX review](#tui-ux-review-cli-01700-os-2547)). Before that, rows placed the task label before the title: [no task] for an unlinked thread or
 [PROJECT-123] for a linked task. Linked tasks whose references are unavailable,
 including older backends, use [task unavailable]. History retains its selected
 thread's task label. Enter on an execution opens raw JSON detail. The UI does not parse transcripts or compute usage.
@@ -1151,7 +1151,8 @@ project is unhealthy when it has a warning or is `failed`, `blocked` or `retryin
   notices group runtime names under Needs sign-in; unknown or mixed warnings keep
   their first sentence as a preview. These remain service notices, not fresh
   account checks.
-- At most two projects appear in the summary, or one below 28 terminal rows.
+- Since CLI 0.170.0 the summary is one line, see [TUI UX review](#tui-ux-review-cli-01700-os-2547).
+  Before that, at most two projects appeared in the summary, or one below 28 terminal rows.
   Additional projects have an explicit count. Long preview rows use an ellipsis.
   The `w` shortcut opens Warning details with every scoped warning and recovery
   command, split into readable paragraphs. Up/Down and PageUp/PageDown scroll;
@@ -1741,3 +1742,100 @@ Actions. `credentials.tsx details` checks the isolated columns, unassigns the fi
 login and both reloads; `details-narrow` checks that a row's three actions
 wrap at 43 columns. `actions/workflow.test.ts` also replaces a project during the
 login and checks that it is not reloaded.
+
+## TUI UX review, CLI 0.170.0, OS-2547
+
+Fixes from a review of the TUI against a general terminal UI guide. The layout stays
+as it is; each change is local to an existing component. This section supersedes
+the earlier descriptions of run rows, project notices, the second header line and
+the footer.
+
+**Wrapping.** `wrapLines` breaks at the last space that fits and drops that space;
+only a word longer than the line breaks mid-word. Raw content that must keep every
+character, the log JSON viewer and the text cursor, uses `breakLines`, the old
+column break.
+
+**Selection without color.** The selected sidebar row and Details runtime row start
+with `›`, as run rows do, and Actions uses `›` in place of `>`. The sidebar has a
+marker column at its left edge; a busy project's spinner stays to its right.
+Status dots pick a glyph from their tone: `●` online or connected, `○` not
+connected or stopped, `!` warning or failed. Colors stay.
+
+**Rendering.** `render` passes `incrementalRendering: true`, so Ink rewrites only
+the lines that changed. A spinner frame costs one line of output instead of the
+whole screen, about 50 KB/s less over SSH while a project is busy.
+
+**Footer.** The footer lists the focused view's keys, then always `[m] select text`
+(or `mouse`), `[?] keys` and `[q] detach`. Hints that do not fit are dropped
+from the end of the view's list, never from that tail. Views: sidebar (Enter open,
+←/→ expand on an environment row, E, f, ↑/↓), Details (↑/↓ rows, s, f, Esc),
+Actions, Credentials, Agent runtimes, Runs (Enter open, n/p page, Esc, ↑/↓) and
+execution history (Enter logs, c cancel on an active run, Esc, n/p, ↑/↓). Forms
+and workflows keep their own footer.
+
+**Key reference.** `?` opens a read-only inline list in the panel: the focused
+view's keys, then the global ones. It scrolls like Warning details and Esc or
+Back closes it. While it is open it owns input, like Warning details; text inputs
+keep `?` as text.
+
+**Sidebar keys.** The Actions, Credentials and + Add project rows show their key,
+`a`, `c` and `+`, in the dot column.
+
+**Density.** Project notices take one line: `! os: Needs sign-in: Codex · +1 more
+· [w] all notices`, naming the first unhealthy project and counting the others.
+`w` and a click still open Warning details. The header's second line, the
+endpoint, shows only while the connection is reconnecting or incompatible;
+Details lists it otherwise, and the sidebar lists the projects. The status bar
+leaves out unknown facts: no "queued count unknown", and the active count only
+when every project reports one.
+
+**Runs.** The PROJECT column is gone, since Runs always belongs to one selected
+project. A row is two lines with no spacer: the title, then a muted line with the
+task ref and the first 8 characters of the thread ID. An unlinked thread shows
+only the ID; a known runtime ends the title line. History rows show `Run <id>`,
+then the start time. States read `needs input` for `waiting_input`, underscores
+become spaces and `+queued` reads `· queued`; symbols are unchanged. UPDATED
+shows from 60 panel columns. The Runs and Execution history titles and the
+project tabs never shrink beside a long thread title.
+
+**Hidden content.** The sidebar, Details, the Actions menu and scrollable dialogs
+replace their first or last line with `↑ N more` or `↓ N more` when content is
+hidden; `· PgDn` follows where PgDn scrolls. `scrollWindow` computes the window
+once for all four and keeps the selection in view.
+
+**Sidebar width.** Below 100 columns the sidebar is 22 columns instead of 30, so
+Details keeps its values; long environment names truncate. The drawer below 76
+columns is unchanged.
+
+**Form fields.** Every form text field has an editing cursor: Add project,
+Add environment, Add credential and the key rotation dialog. ←/→ move it,
+Home/End jump to either end, and typed or pasted text and Backspace act at the
+cursor. Moving focus to another field puts the cursor at the end. Masked fields
+keep the cursor at the end. While a button or option has focus, ←/→ keep their
+meaning. `editText` and `Caret` in `dialog/` hold the logic for all forms.
+
+**Paste.** A paste arrives as one input. Its line breaks are dropped and never
+submit a form, and Ink strips bracketed-paste markers, so no `usePaste` handling
+is needed. A terminal that sends a paste's final Enter as a separate chunk
+submits as Enter would.
+
+Not changed: OSC 8 links for task refs (they need the web origin in the CLI and
+conflict with mouse tracking), box-drawn borders, tabs for environment views and a
+command palette.
+
+### Request cost
+
+None of these changes sends a request or adds a timer. Incremental rendering
+lowers terminal output while a spinner runs.
+
+### Verification
+
+`formatters.test.ts` covers word wrapping, `breakLines`, `scrollWindow` and the run
+row cells. `render.test.ts` checks the incremental render option.
+`__tests__/frames.tsx` renders Details, Actions, the key list, Runs and execution
+history of a two-project shared Docker environment at 110×34 with color and 80×24
+without, and checks each fix as plain text. With `FRAMES_DIR=<dir>` it also writes
+each frame there as text, for review. `credentials.tsx cursor` and `environments.tsx cursor`
+type, move the cursor back and insert mid-word. The PTY drivers read output
+through a small screen model (`__tests__/test_helpers.py`): with incremental
+rendering a label need not reach the stream in one piece.

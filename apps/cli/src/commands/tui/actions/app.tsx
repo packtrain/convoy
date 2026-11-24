@@ -3,7 +3,7 @@ import { useState } from "react";
 import { Text, useInput } from "ink";
 import type { Browser } from "../workflow.js";
 import type { BrowseState, Row } from "../validators.js";
-import { palette, plain, terminalJson, wrapLines } from "../formatters.js";
+import { palette, plain, scrollWindow, terminalJson, wrapLines } from "../formatters.js";
 import { confirmationLines } from "./formatters.js";
 import { Clickable, Dialog } from "../dialog/index.js";
 
@@ -108,7 +108,7 @@ export function Actions({ browser, state, row, active, width, height, selectedKe
   </>;
   const menu = controls.flatMap((control, i) => [
     ...(i === 0 || control.section !== controls[i - 1].section ? [{ text: control.section, index: -1 }] : []),
-    { text: `${i === choice ? ">" : " "} [${control.key}] ${control.label}${unavailable(control) ? " · unavailable" : ""}`, index: i },
+    { text: `${i === choice ? "›" : " "} [${control.key}] ${control.label}${unavailable(control) ? " · unavailable" : ""}`, index: i },
   ]);
   const focused = controls[choice];
   const reason = focused ? unavailable(focused) : undefined;
@@ -120,10 +120,12 @@ export function Actions({ browser, state, row, active, width, height, selectedKe
     : focused?.type === "credentials" ? "Choose each runtime's managed key, unassign it or use native login. Changes apply after reload." : "Enter to choose · Esc back");
   const hintLines = wrapLines(plain(hint), width).slice(0, Math.max(1, Math.floor(height / 3)));
   const menuCapacity = Math.max(1, height - hintLines.length);
-  const menuStart = Math.max(0, menu.findIndex(line => line.index === choice) - menuCapacity + 1);
+  const menuView = scrollWindow(menu.length, menuCapacity, 0, menu.findIndex(line => line.index === choice));
   return <>
-    {menu.slice(menuStart, menuStart + menuCapacity).map((line, i) => line.index < 0 ? <Text key={i} wrap="truncate" color={palette.muted}>{line.text}</Text>
+    {menuView.above > 0 && <Text color={palette.muted}>↑ {menuView.above} more</Text>}
+    {menu.slice(menuView.start, menuView.end).map((line, i) => line.index < 0 ? <Text key={i} wrap="truncate" color={palette.muted}>{line.text}</Text>
       : <Clickable key={i} onClick={click(controls[line.index])} backgroundColor={line.index === choice ? active ? palette.selected : palette.idle : undefined}><Text wrap="truncate" color={line.index === choice ? active ? palette.selectedText : palette.idleText : palette.text}>{line.text}</Text></Clickable>)}
+    {menuView.below > 0 && <Text color={palette.muted}>↓ {menuView.below} more</Text>}
     {hintLines.map((line, i) => <Text key={i} color={reason ? palette.warning : palette.muted}>{line}</Text>)}
   </>;
 }

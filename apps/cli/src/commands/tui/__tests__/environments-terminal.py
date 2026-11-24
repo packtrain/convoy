@@ -19,22 +19,29 @@ if pid == 0:
     os.execvp("node", ["node", "--import", "tsx", str(fixture), *sys.argv[1:]])
 recording = bytearray()
 pending = bytearray()
+# Rows the TUI redrew since the last wait, read as the terminal shows them.
+from test_helpers import Screen
+import codecs
+screen = Screen(80, 24)
+decode = codecs.getincrementaldecoder("utf-8")(errors="replace").decode
 def size(columns, rows):
     fcntl.ioctl(fd, termios.TIOCSWINSZ, struct.pack("HHHH", rows, columns, 0, 0))
+    screen.resize(columns, rows)
     os.kill(pid, signal.SIGWINCH)
 def wait(text):
     deadline = time.monotonic() + 8
-    while text.encode() not in pending:
+    while text.encode() not in pending and not screen.drawn(text):
         if time.monotonic() > deadline:
-            raise AssertionError("Missing " + text + "\n" + pending.decode(errors="replace"))
+            raise AssertionError("Missing " + text + "\n" + screen.text())
         if select.select([fd], [], [], .1)[0]:
             chunk = os.read(fd, 65536)
             recording.extend(chunk)
             pending.extend(chunk)
-    pending.clear()
+            screen.feed(decode(chunk))
+    pending.clear(); screen.take()
     time.sleep(.08)
 def send(keys):
-    pending.clear()
+    pending.clear(); screen.take()
     os.write(fd, keys.encode())
 try:
     size(100, 30)

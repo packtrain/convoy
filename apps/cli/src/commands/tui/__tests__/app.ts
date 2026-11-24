@@ -68,13 +68,15 @@ try {
     assert(!/[│─┌┐└┘]/.test(plain(frame)), "panes are separated by fills, not box-drawing lines: " + plain(frame));
   }
   const sidebarLabels = frame.split("\n").slice(2).map(line => plain(line).slice(0, 30));
-  const actions = sidebarLabels.find(label => label.trim() === "Actions")!;
+  // Rows end with a status dot or a key.
+  const name = (label: string) => label.replace(/\s+[●○!ac+]\s*$/, "").trim();
+  const actions = sidebarLabels.find(label => name(label) === "Actions")!;
   for (const profile of ["all", "details", "zeta"]) {
-    const label = sidebarLabels.find(value => value.replace("●", "").trim() === profile)!;
+    const label = sidebarLabels.find(value => name(value) === profile)!;
     assert.equal(label.indexOf(profile), actions.indexOf("Actions"), "projects and environment views must align as siblings");
   }
   const selectedLine = frame.split("\n").find(line => /▾ Local 日本語/.test(plain(line)) && line.includes(selectedFill))!;
-  assert.equal(filledColumns(selectedLine), 28, "selection must fill the sidebar row including trailing spaces: " + JSON.stringify(selectedLine));
+  assert.equal(filledColumns(selectedLine), 29, "selection must fill the sidebar row from its marker including trailing spaces: " + JSON.stringify(selectedLine));
   const selectedText = plain(selectedLine);
   assert.match(selectedText, /Local 日本語 +unix ●/);
   assert.equal(stringWidth(selectedText.slice(0, selectedText.indexOf("●") + 1)), 28, "type and status sit one column inside the sidebar's right edge: " + selectedText);
