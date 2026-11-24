@@ -9,7 +9,10 @@ import {
   type CodeBlockEditorProps,
 } from "@mdxeditor/editor";
 import { Trash2 } from "lucide-react";
+import { useState } from "react";
+import { flushSync } from "react-dom";
 
+import { MermaidDiagram } from "./mermaid-diagram";
 import { Button } from "./ui/button";
 import { Select, SelectContent, SelectItem, SelectItemText, SelectTrigger } from "./ui/select";
 
@@ -26,6 +29,7 @@ export const codeBlockLanguages = {
   sh: "Shell",
   shell: "Shell",
   md: "Markdown",
+  mermaid: "Mermaid",
 } as const;
 
 export function createCodeBlockEditorDescriptor(): CodeBlockEditorDescriptor {
@@ -46,6 +50,21 @@ function CodeBlockEditor(props: CodeBlockEditorProps) {
   const isActiveCodeBlock =
     editorInFocus?.editorType === "codeblock" &&
     editorInFocus.rootNode?.getKey?.() === lexicalNode.getKey();
+  const isMermaid = props.language === "mermaid";
+  const [showSource, setShowSource] = useState(false);
+  const [wasActive, setWasActive] = useState(isActiveCodeBlock);
+
+  // A mermaid block folds back to the diagram once focus leaves it.
+  if (wasActive !== isActiveCodeBlock) {
+    setWasActive(isActiveCodeBlock);
+    if (!isActiveCodeBlock) setShowSource(false);
+  }
+
+  const revealSource = () => {
+    // CodeMirror can't take focus while hidden, so render the reveal first.
+    flushSync(() => setShowSource(true));
+    lexicalNode.select();
+  };
 
   return (
     <div className="mdx-editor-kit__code-block-shell">
@@ -82,7 +101,11 @@ function CodeBlockEditor(props: CodeBlockEditorProps) {
         </Button>
       </div>
 
-      <div className="mdx-editor-kit__code-block-body">
+      <div
+        className="mdx-editor-kit__code-block-body"
+        data-source-hidden={isMermaid && !showSource ? "" : undefined}
+      >
+        {isMermaid && <MermaidDiagram code={props.code} onEdit={revealSource} />}
         <CodeMirrorEditor {...props} />
       </div>
     </div>

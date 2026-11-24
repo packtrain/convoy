@@ -159,6 +159,11 @@ const ACTIVE_PLAYGROUNDS: PlaygroundLink[] = [
     description: "Reusable MDX authoring surface with live preview and source inspection.",
   },
   {
+    href: "/playground/mermaid-diagrams",
+    title: "Mermaid diagrams",
+    description: "Mermaid fences rendered in the artifact editor: one example of each diagram type, plus an invalid one (OS-913).",
+  },
+  {
     href: "/playground/tanstack-table-dnd-div-virtualization-native_dnd",
     title: "TanStack Table DnD",
     description: "Native drag-and-drop table virtualization experiment.",

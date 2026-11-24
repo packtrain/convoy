@@ -22,6 +22,8 @@ This document defines the reusable MDX editor in `apps/web` and its playground d
   - Links to `/playground/mdx-editor`.
 - `/playground/mdx-editor`
   - Hosts the MDX editor playground.
+- `/playground/mermaid-diagrams`
+  - The shared editor with the artifact panel's props, seeded with one Mermaid diagram of each common type, an invalid diagram, and a plain code block.
 
 ## MDX Editor Demo
 
@@ -110,7 +112,28 @@ This document defines the reusable MDX editor in `apps/web` and its playground d
 - The toolbar mode switch is a single cycling button:
   - when `showDiffMode` is `true`, it cycles `rich-text -> diff -> source -> rich-text`
   - when `showDiffMode` is `false`, it cycles `rich-text -> source -> rich-text`
+- Mermaid diagrams: see [Mermaid code blocks](#mermaid-code-blocks).
 - When source or diff mode returns to rich text, the editor normalizes the current source markdown before MDXEditor re-imports it.
+
+## Mermaid Code Blocks
+
+- A ` ```mermaid ` fence renders as a diagram. `Mermaid` is in the code-block language picker, so switching an existing block to it renders the diagram at once.
+- The markdown stays a plain fenced code block: saving, source/diff mode, and CLI/MCP reads see the fence unchanged.
+- The source editor is hidden by default. The diagram's **Edit diagram source** button reveals it under the diagram and focuses it. The diagram re-renders as the source changes. When focus moves to another part of the editor, the source folds away again.
+- While the source is mid-edit and fails to parse, the last good diagram stays and the parser message shows under it. A diagram that never parsed shows the message, the raw source, and the edit button.
+- Rendering uses `mermaid` through `@streamdown/mermaid` (the instance chat uses), loaded lazily on the first diagram. `securityLevel: "strict"` sanitizes the SVG. The theme follows the app theme: `neutral` in light mode, `dark` in dark mode.
+- Mermaid's `initialize` is global and persists across client navigation, so every renderer passes its theme on each render. Chat passes the same mapping through Streamdown's `mermaid.config`; without it, chat would draw with whatever theme the editor set last.
+
+### Diagram viewer
+
+- A toolbar in the diagram's top-right corner appears on hover or keyboard focus (always on touch devices): edit source, download, fullscreen, zoom out, zoom in, reset view. The buttons are the app's ghost `icon-sm` buttons with `TooltipExt` labels (see [Panel header icon buttons](../guidelines/frontend-development.md#panel-header-icon-buttons)), in a frame styled like the code block's language toolbar. The toolbar stays visible while its download popover is open.
+- Inline, the diagram shows at natural size, scaled down to the content width. Diagrams taller than `40rem` clip at that height; drag to pan, zoom out, or open fullscreen to see the rest.
+- Drag pans. The zoom buttons step by 1.25×, clamped to 0.25×–8×. Inline, ctrl/⌘+wheel (and trackpad pinch) zooms, and a plain wheel scrolls the page. Reset restores 1× with no offset.
+- Fullscreen opens a dialog portaled to `<body>` (so transformed ancestors such as the artifact panel can't confine it). The diagram fits the screen, and any wheel zooms. Escape or the close button exits. Fullscreen has its own view state and the same download and zoom controls.
+- Download opens a popover with three settings and a **Download** button: **Format** (PNG or SVG, default PNG), **Theme** (Light or Dark, default Light) and a **Transparent background** switch (default off). Settings persist while the diagram stays mounted. The file is saved as `diagram-<theme>.<format>`. The export theme ignores the site theme, so a dark-mode user still gets a light diagram for a document or slide unless they pick Dark.
+- An export re-renders the diagram with `%%{init: {"theme": …}}%%` appended to its source. Mermaid applies a directive to that render only, inside its render queue, so the export never changes the global config the on-screen diagrams use. A directive the author wrote is overridden for the export. If the source is invalid mid-edit, the export fails with a toast.
+- Unless transparent, the export gets the app's background for its theme (`#ffffff` light, `#131313` dark, matching `--background` in `app/globals.css`): a `background-color` on the SVG root, and a canvas fill for PNG. PNG renders at 2×, scaled down when a side would pass the browser's 16384px canvas limit. Both formats give the SVG pixel dimensions from its `viewBox` and re-serialize it as XML so `foreignObject` labels survive rasterizing.
+- Read-only surfaces (`disabled`) block pointer events on the editor. The diagram viewport and toolbar opt back in, so viewers can pan, zoom, open fullscreen, and download. The edit button is hidden there.
 
 ## Preview Behavior
 

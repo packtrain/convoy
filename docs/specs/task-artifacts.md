@@ -122,6 +122,7 @@ copy: the artifact leaves the source task.
 - The artifact pill badge shows `md` or `html` based on `contentType`.
 - Artifact markdown opens in rich-text mode after shared editor import normalization, so prose placeholders such as `<project role>` and prose command names such as `web:lint` display as literal text and do not crash MDX/JSX or directive parsing.
 - Artifact fenced code blocks remain visible and editable as code blocks; unsupported or unlabeled no-metadata fences fall back to plain-text code-block editing instead of blocking rich-text mode.
+- Markdown artifacts render ` ```mermaid ` fences as diagrams ([MDX editor → Mermaid code blocks](ui-playground-mdx-editor.md#mermaid-code-blocks)).
 - When artifact content grows, the artifact editor toolbar remains pinned to the top of the artifact editor scroll region while the document body scrolls underneath it.
 - Markdown artifact surfaces (panel and full page, including read-only states) enable the shared editor's inline table of contents wired to the artifact scroll container; it supports the shared pin/unpin sidebar behavior, and heading navigation stays interactive even when editing is disabled.
 - Artifact editing supports autosave and flushes pending edits when the panel closes.

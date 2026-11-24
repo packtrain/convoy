@@ -21,6 +21,7 @@ import { math } from "@streamdown/math";
 import { mermaid } from "@streamdown/mermaid";
 import type { UIMessage } from "ai";
 import { ChevronLeftIcon, ChevronRightIcon } from "lucide-react";
+import { useTheme } from "next-themes";
 import type { ComponentProps, HTMLAttributes, ReactElement } from "react";
 import { createContext, memo, useContext, useEffect, useMemo, useState } from "react";
 import { Streamdown, type StreamdownProps } from "streamdown";
@@ -337,6 +338,12 @@ export type MessageResponseProps = ComponentProps<typeof Streamdown>;
 export const MessageResponse = memo(
   ({ className, components, ...props }: MessageResponseProps) => {
     const { markdown: codeThemes } = useCodeTheme();
+    const { resolvedTheme } = useTheme();
+    // mermaid.initialize is global; an explicit theme keeps the artifact editor's from leaking in.
+    const mermaidOptions = useMemo(
+      () => ({ config: { theme: resolvedTheme === "light" ? "neutral" : "dark" } }) as const,
+      [resolvedTheme]
+    );
     type StreamdownShikiTheme = NonNullable<MessageResponseProps["shikiTheme"]>;
     type CodePluginThemes = NonNullable<
       NonNullable<Parameters<typeof createCodePlugin>[0]>["themes"]
@@ -382,6 +389,7 @@ export const MessageResponse = memo(
         )}
         plugins={plugins}
         shikiTheme={shikiTheme}
+        mermaid={mermaidOptions}
         {...props}
         components={components ? { ...markdownComponents, ...components } : markdownComponents}
       />

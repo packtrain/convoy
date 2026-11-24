@@ -5,9 +5,10 @@ import { afterEach, describe, expect, test, vi } from "vitest";
 import { cleanup, fireEvent, render, screen } from "@testing-library/react";
 import { MessageResponse } from "./message";
 
-const { useThemeMock, createCodePluginSpy } = vi.hoisted(() => ({
+const { useThemeMock, createCodePluginSpy, streamdownPropsSpy } = vi.hoisted(() => ({
   useThemeMock: vi.fn((): { resolvedTheme?: string } => ({ resolvedTheme: "dark" })),
   createCodePluginSpy: vi.fn(),
+  streamdownPropsSpy: vi.fn(),
 }));
 
 vi.mock("next-themes", () => ({ useTheme: useThemeMock }));
@@ -20,6 +21,15 @@ vi.mock("@streamdown/code", async (importOriginal) => {
       return actual.createCodePlugin(options);
     },
   };
+});
+
+vi.mock("streamdown", async (importOriginal) => {
+  const actual = await importOriginal<typeof import("streamdown")>();
+  const Spy = (props: Parameters<typeof actual.Streamdown>[0]) => {
+    streamdownPropsSpy(props);
+    return <actual.Streamdown {...props} />;
+  };
+  return { ...actual, Streamdown: Spy };
 });
 
 afterEach(() => {
@@ -50,6 +60,22 @@ describe("MessageResponse code theme", () => {
     expect(createCodePluginSpy).toHaveBeenCalledWith({
       themes: ["catppuccin-latte", "catppuccin-mocha"],
     });
+  });
+});
+
+describe("MessageResponse mermaid theme", () => {
+  // mermaid.initialize is global: without an explicit theme, chat inherits
+  // whichever theme the artifact editor initialized last.
+  test.each([
+    ["dark", "dark"],
+    ["light", "neutral"],
+  ])("app theme %s renders diagrams with mermaid theme %s", (appTheme, mermaidTheme) => {
+    useThemeMock.mockReturnValue({ resolvedTheme: appTheme });
+    render(<MessageResponse>{"text"}</MessageResponse>);
+
+    expect(streamdownPropsSpy).toHaveBeenLastCalledWith(
+      expect.objectContaining({ mermaid: { config: { theme: mermaidTheme } } })
+    );
   });
 });
 
