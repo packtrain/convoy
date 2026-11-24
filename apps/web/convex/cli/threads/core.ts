@@ -20,6 +20,7 @@ import {
   isThreadDone,
   requiresThreadAttention,
   threadNeedsAttentionAck,
+  threadDisplayTaskId,
   threadNeedsReadPatch,
 } from "../lib/watchStatus";
 import { failStreamingChat, requeueClaimedNonStreamingChat } from "./runControl";
@@ -196,7 +197,7 @@ export const get = query({
     // Get profile info
     const [profile, taskSummaries, threadAgents, container] = await Promise.all([
       getCliProfileById(ctx, chat.profileId),
-      resolveTaskSummaries(ctx, [chat.associatedTaskId]),
+      resolveTaskSummaries(ctx, [threadDisplayTaskId(chat)]),
       resolveCliThreadAgents(ctx, [chat.projectAgentId]),
       chat.parentThreadId ? getThreadById(ctx, chat.parentThreadId) : null,
     ]);
@@ -213,7 +214,7 @@ export const get = query({
         hasUnread: !chat.readAt || chat.readAt < chat.lastActivityAt,
         requiresAttention: requiresThreadAttention(chat),
         isDone: isThreadDone(chat),
-        associatedTask: taskSummaries.get(chat.associatedTaskId),
+        associatedTask: taskSummaries.get(threadDisplayTaskId(chat)),
         agent: threadAgents.get(chat.projectAgentId),
       }),
       metadata: chat.metadata,

@@ -44,7 +44,7 @@ import { isSharedForViewer } from "../lib/permissions";
 import { toAttachedPullRequest } from "../../lib/contracts/github";
 import { toExecutionWorkspace } from "../lib/validators";
 import { resolveCliThreadAgents } from "./lib/threadAgents";
-import { hasUnreadThreadActivity, isContainerThread, isThreadDone, requiresThreadAttention } from "../lib/watchStatus";
+import { hasUnreadThreadActivity, isContainerThread, isThreadDone, requiresThreadAttention, threadDisplayTaskId } from "../lib/watchStatus";
 import { watchTowerThreadItemValidator, toWatchTowerThreadItem, cliThreadItemValidator, toThreadItem, type CliThreadWorkflow } from "./lib/validators";
 
 /**
@@ -62,15 +62,6 @@ const CONTAINER_ITEM_STATUS: Record<CliThreadAggregateStatus, Doc<"cliThreads">[
 
 function containerItemStatus(aggregateStatus: Doc<"cliThreads">["aggregateStatus"]): Doc<"cliThreads">["status"] {
   return aggregateStatus ? CONTAINER_ITEM_STATUS[aggregateStatus] : "completed";
-}
-
-/**
- * The task shown on a thread's list card. The two fields are mutually
- * exclusive — only containers get `originTaskId` (the group origin's task,
- * OS-1557), only real threads get `associatedTaskId` — so no `kind` check.
- */
-function threadCardTaskId(thread: Doc<"cliThreads">) {
-  return thread.originTaskId ?? thread.associatedTaskId;
 }
 
 /**
@@ -98,7 +89,7 @@ async function resolveThreadWorkflows(
 
 async function enrichThreadItems(ctx: QueryCtx | MutationCtx, threads: Doc<"cliThreads">[]) {
   const [taskSummaries, threadAgents, threadWorkflows] = await Promise.all([
-    resolveTaskSummaries(ctx, threads.map(threadCardTaskId)),
+    resolveTaskSummaries(ctx, threads.map(threadDisplayTaskId)),
     resolveCliThreadAgents(
       ctx,
       threads.map((thread) => thread.projectAgentId)
@@ -134,7 +125,7 @@ async function enrichThreadItems(ctx: QueryCtx | MutationCtx, threads: Doc<"cliT
           ? thread.aggregateStatus === "needs_attention" || thread.aggregateStatus === "failed"
           : requiresThreadAttention(thread),
         isDone: isThreadDone(thread),
-        associatedTask: taskSummaries.get(threadCardTaskId(thread)),
+        associatedTask: taskSummaries.get(threadDisplayTaskId(thread)),
         agent: threadAgents.get(thread.projectAgentId),
         workflow: thread.workflowRunId !== undefined ? threadWorkflows.get(thread.workflowRunId) : undefined,
       });

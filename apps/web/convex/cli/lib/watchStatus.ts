@@ -43,6 +43,14 @@ export function threadExecutionBranch(
   return thread.git?.executionBranch ?? livePathBranch ?? thread.git?.worktree?.branch;
 }
 
+/**
+ * The task a thread's card and detail show: a container's is its origin's
+ * (`originTaskId`, OS-1557), a real thread's its own `associatedTaskId`.
+ */
+export function threadDisplayTaskId(thread: Pick<Doc<"cliThreads">, "originTaskId" | "associatedTaskId">) {
+  return thread.originTaskId ?? thread.associatedTaskId;
+}
+
 export function hasThreadAttentionStatus(status: Doc<"cliThreads">["status"]): boolean {
   return status === "failed" || status === "waiting_input";
 }

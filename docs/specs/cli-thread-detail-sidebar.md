@@ -236,7 +236,8 @@ This document defines the reusable task detail presentation infrastructure for t
   of `Changes` first. A Group child's task doesn't wait for the child's own
   doc: it comes from the strip's task summaries, or, right after a container
   redirects to the child, from the container's own task when the two match
-  (a run's lanes carry the run's task).
+  (a run's lanes carry the run's task; a group's `get` returns its origin
+  child's task).
 - Only the **active** tab's panel is mounted; switching tabs remounts panels (their internal state resets).
 - Closing the **sidebar** hides the pane but keeps the active panel, the Changes view, and any `task=<REF>` selection; reopening restores them.
 - The run-diff viewer has no chrome of its own until an "Open file" tab exists; only then does its inner Changes/file tab strip appear (the viewer has no close button). The task detail header keeps its close affordance.

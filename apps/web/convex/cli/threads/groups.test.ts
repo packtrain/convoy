@@ -422,6 +422,22 @@ describe("group row item (OS-1476)", () => {
     expect(result?.status).toBe("completed");
   });
 
+  test("get returns a container's origin task as its associatedTask (OS-2067)", async () => {
+    const ctx = createTestContext();
+    const { user, project, asUser } = await ctx.setupProject();
+    const profile = await ctx.cliProfile(user._id, project._id);
+    const task = await ctx.task(project._id, user._id);
+    const container = await ctx.cliThread(user._id, project._id, profile._id, {
+      kind: "group",
+      originTaskId: task._id,
+    });
+
+    const result = await asUser.query(api.cli.threads.core.get, { threadId: container._id });
+
+    // The redirect to a child seeds the task tab from this before the child's doc lands.
+    expect(result?.associatedTask?._id).toBe(task._id);
+  });
+
   test("container list item shows the oldest live child's branch", async () => {
     const ctx = createTestContext();
     const { user, project, asUser } = await ctx.setupProject();
