@@ -13,8 +13,10 @@ const PAGE_HEADROOM_BYTES = 256;
 
 const HASH = "[0-9a-f]{40}(?:[0-9a-f]{24})?";
 const HASH_PATTERN = new RegExp(`^${HASH}$`);
-// `<tip>:<skip>`: later pages walk from the first page's HEAD, so new commits don't shift them.
-const CURSOR_PATTERN = new RegExp(`^(${HASH}):(\\d+)$`);
+// `<tip>[,<tip>]:<skip>`: later pages walk from the first page's tips, so new commits don't shift them.
+const CURSOR_PATTERN = new RegExp(`^(${HASH}(?:,${HASH})?):(\\d+)$`);
+// The repo's default branch, drawn beside HEAD in the graph (OS-2536).
+const DEFAULT_BRANCH_REFS = ["refs/remotes/origin/HEAD", "refs/remotes/origin/main", "refs/remotes/origin/master"];
 const LOG_FORMAT = ["%H", "%P", "%an", "%ae", "%ct", "%D", "%s"].join("%x1f");
 
 /** Mirrored by the web in apps/web/lib/worktrees/hooks/use-worktree-history.ts. */
@@ -55,33 +57,49 @@ function parseCommit(record: string): CommitSummary {
   };
 }
 
+async function resolveCommit(cwd: string, ref: string): Promise<string | null> {
+  const result = await runGit(cwd, ["rev-parse", "--verify", "--quiet", `${ref}^{commit}`], { allowNonZeroExit: true });
+  return result.exitCode === 0 ? result.stdout.trim() : null;
+}
+
+async function resolveDefaultBranch(cwd: string): Promise<string | null> {
+  for (const ref of DEFAULT_BRANCH_REFS) {
+    const hash = await resolveCommit(cwd, ref);
+    if (hash) {
+      return hash;
+    }
+  }
+  return null;
+}
+
 /**
- * One page of `git log --topo-order HEAD`; an unborn branch has no commits.
+ * One page of `git log --topo-order HEAD <default branch>`; an unborn branch has no commits.
  * ponytail: `--skip` re-walks from the tip, so a page costs O(depth); key pages by a commit if huge repos time out.
  */
 export async function listCommits(cwd: string, cursor?: string, budgetBytes = MAX_FILE_OP_BYTES): Promise<CommitPage> {
-  let tip: string;
+  let tips: string[];
   let skip = 0;
   if (cursor !== undefined) {
     const match = CURSOR_PATTERN.exec(cursor);
     if (!match) {
       throw new Error("Invalid history cursor");
     }
-    tip = match[1]!;
+    tips = match[1]!.split(",");
     skip = Number(match[2]);
   } else {
-    const head = await runGit(cwd, ["rev-parse", "--verify", "--quiet", "HEAD^{commit}"], { allowNonZeroExit: true });
-    if (head.exitCode !== 0) {
+    const head = await resolveCommit(cwd, "HEAD");
+    if (!head) {
       return { commits: [] };
     }
-    tip = head.stdout.trim();
+    const base = await resolveDefaultBranch(cwd);
+    tips = base && base !== head ? [head, base] : [head];
   }
   const result = await runGit(
     cwd,
     [
       "-c", "log.showSignature=false",
       "log", "--topo-order", "-z", "--no-color", "--decorate-refs-exclude=refs/convoy/*",
-      `--format=${LOG_FORMAT}`, `--skip=${skip}`, `--max-count=${COMMIT_PAGE_SIZE + 1}`, tip,
+      `--format=${LOG_FORMAT}`, `--skip=${skip}`, `--max-count=${COMMIT_PAGE_SIZE + 1}`, ...tips,
     ],
     { timeoutMs: CAPTURE_TIMEOUT_MS }
   );
@@ -96,7 +114,7 @@ export async function listCommits(cwd: string, cursor?: string, budgetBytes = MA
     }
     kept++;
   }
-  return kept < commits.length ? { commits: commits.slice(0, kept), nextCursor: `${tip}:${skip + kept}` } : { commits };
+  return kept < commits.length ? { commits: commits.slice(0, kept), nextCursor: `${tips.join(",")}:${skip + kept}` } : { commits };
 }
 
 /** One commit's body and patch; a merge gets git's dense combined diff (`--cc`). */

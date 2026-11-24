@@ -68,7 +68,9 @@ function Harness({
   shown = true,
   wordWrap = false,
   initialHash = null,
+  layout = "list",
 }: {
+  layout?: "list" | "graph";
   appVersion?: string;
   isOnline?: boolean;
   shown?: boolean;
@@ -96,6 +98,7 @@ function Harness({
         profileId={profileId}
         pathId="path_1"
         history={history}
+        layout={layout}
         registered
         isOnline={isOnline}
         appVersion={appVersion}
@@ -111,6 +114,64 @@ function Harness({
     </>
   );
 }
+
+describe("WorktreeHistoryView, Graph layout (OS-2536)", () => {
+  beforeEach(() => {
+    mobile.value = false;
+    paneWidth.value = null;
+    selections.length = 0;
+    ops.answer = (args) => (args.kind === "gitLog" ? done(args.cursor ? PAGE_2 : PAGE_1) : done(PATCH(`${args.postRef?.[0]}.txt`)));
+  });
+
+  afterEach(() => {
+    cleanup();
+  });
+
+  test("two panes: a table with a graph cell per row, and no commit open until one is picked", () => {
+    const { container } = render(<Harness layout="graph" />);
+
+    expect(screen.getByText("Description")).toBeTruthy();
+    expect(container.querySelectorAll("[role=option] svg:not(.lucide) circle")).toHaveLength(2);
+    expect(screen.queryByTestId("patch")).toBeNull();
+
+    fireEvent.click(screen.getByRole("option", { name: /^first/ }));
+    expect(screen.getByTestId("patch").textContent).toContain("b.txt");
+
+    fireEvent.click(screen.getByRole("button", { name: "Close commit" }));
+    expect(screen.queryByTestId("patch")).toBeNull();
+    expect(selections.at(-1)).toEqual({ hash: null, mode: "replace" });
+  });
+
+  test("Load more adds the next page's rows to the graph", () => {
+    const { container } = render(<Harness layout="graph" />);
+    fireEvent.click(screen.getByRole("button", { name: "Load more" }));
+
+    expect(container.querySelectorAll("[role=option] svg:not(.lucide) circle")).toHaveLength(3);
+  });
+
+  test("an arrow key in the table moves focus only while no commit is open (CR OS-2536 #4)", () => {
+    render(<Harness layout="graph" />);
+    const [first, second] = screen.getAllByRole("option");
+    first.focus();
+
+    fireEvent.keyDown(first, { key: "ArrowDown" });
+
+    expect(document.activeElement).toBe(second);
+    expect(screen.queryByTestId("patch")).toBeNull();
+
+    fireEvent.click(first);
+    fireEvent.keyDown(first, { key: "ArrowDown" });
+    expect(selections.at(-1)).toEqual({ hash: hash("b"), mode: "replace" });
+  });
+
+  test("one pane: two-line rows get a graph column instead of the commit icon", () => {
+    paneWidth.value = 560;
+    const { container } = render(<Harness layout="graph" />);
+
+    expect(screen.queryByText("Description")).toBeNull();
+    expect(container.querySelectorAll("[role=option] svg:not(.lucide) circle")).toHaveLength(2);
+  });
+});
 
 describe("WorktreeHistoryView", () => {
   beforeEach(() => {
@@ -142,6 +203,17 @@ describe("WorktreeHistoryView", () => {
     expect(screen.getAllByText("second").length).toBeGreaterThan(0);
     expect(screen.getByText("older")).toBeTruthy();
     expect(screen.queryByRole("button", { name: "Load more" })).toBeNull();
+  });
+
+  test("List opens HEAD's commit when the default branch's newer tip comes first (CR OS-2536 #1)", () => {
+    ops.answer = (args) =>
+      args.kind === "gitLog"
+        ? done({ commits: [{ ...commit("m", "main tip", [hash("h")]), refs: ["origin/main"] }, { ...commit("h", "head"), refs: ["HEAD -> feature"] }] })
+        : done(PATCH(`${args.postRef?.[0]}.txt`));
+    render(<Harness />);
+
+    expect(screen.getByTestId("patch").textContent).toContain("h.txt");
+    expect(screen.getByRole("option", { name: /^head/ }).getAttribute("aria-selected")).toBe("true");
   });
 
   test("opens the newest commit, and a clicked parent opens that commit", () => {
@@ -434,7 +506,7 @@ describe("WorktreeHistoryView", () => {
   test("a linked commit not in the history says so and opens the newest (OS-2534 UX review 2)", () => {
     render(<Harness initialHash={hash("9")} />);
 
-    expect(screen.getByText("Commit 9999999 isn't in this branch's history.")).toBeTruthy();
+    expect(screen.getByText("Commit 9999999 isn't in this checkout's history.")).toBeTruthy();
     expect(selections.at(-1)).toEqual({ hash: null, mode: "replace" });
     expect(screen.getByTestId("patch").textContent).toContain("a.txt");
   });
@@ -566,7 +638,7 @@ describe("WorktreeHistoryView", () => {
     mobile.value = true;
     render(<Harness initialHash={hash("9")} />);
 
-    expect(screen.getByText("Commit 9999999 isn't in this branch's history.")).toBeTruthy();
+    expect(screen.getByText("Commit 9999999 isn't in this checkout's history.")).toBeTruthy();
     expect(screen.getByRole("option", { name: /^second/ })).toBeTruthy();
   });
 
@@ -618,7 +690,7 @@ describe("WorktreeHistoryView", () => {
     fireEvent.click(screen.getByRole("button", { name: "Harness refresh" }));
 
     expect(selections.at(-1)).toEqual({ hash: null, mode: "replace" });
-    expect(screen.getByText("Commit ccccccc isn't in this branch's history.")).toBeTruthy();
+    expect(screen.getByText("Commit ccccccc isn't in this checkout's history.")).toBeTruthy();
     expect(screen.getByTestId("patch").textContent).toContain("a.txt");
   });
 });

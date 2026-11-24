@@ -8,6 +8,8 @@ import {
   useFileTreeSide,
   writeFileTreeSide,
   readChangesFileTree,
+  readHistoryLayout,
+  writeHistoryLayout,
   writeChangesFileTree,
   readThreadLayoutMode,
   writeThreadLayoutMode,
@@ -65,5 +67,17 @@ describe("file tree side preference", () => {
     act(() => writeFileTreeSide("left"));
     expect(result.current).toBe("left");
     expect(readFileTreeSide()).toBe("left");
+  });
+});
+
+describe("History layout preference (OS-2536)", () => {
+  afterEach(() => window.localStorage.clear());
+
+  test("defaults to List, remembers Graph, and rejects unknown stored values", () => {
+    expect(readHistoryLayout()).toBe("list");
+    writeHistoryLayout("graph");
+    expect(readHistoryLayout()).toBe("graph");
+    window.localStorage.setItem("convoy.history-layout", "tree");
+    expect(readHistoryLayout()).toBe("list");
   });
 });

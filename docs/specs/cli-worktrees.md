@@ -199,7 +199,17 @@ Two read-only kinds for any path entry, on the 10-minute file-op TTL. The CLI
 side lives in `apps/cli/src/lib/git/history.ts`.
 
 - `{ kind: "gitLog", pathId, cursor? }` returns `resultJson = { commits,
-  nextCursor? }`: 50 commits of `git log --topo-order HEAD`, newest first.
+  nextCursor? }`: 50 commits of `git log --topo-order HEAD <default>`, newest
+  first. `<default>` is the repo's default branch (OS-2536): the first of
+  `refs/remotes/origin/HEAD`, `origin/main` and `origin/master` that resolves
+  to a commit, left out when none does or when it is `HEAD`'s commit. A local
+  `main` is not one. So a worktree shows its branch splitting off the default
+  branch and merging back, and the main checkout shows the default branch plus
+  unpushed commits. Other branches stay hidden; their names can still show as
+  ref badges on commits in the walk. Both layouts get the same pages. Git's
+  topo order puts the tip with the newer commit first, so commits on the
+  default branch newer than `HEAD` come above it, and a branch far behind a
+  busy default branch can have its own commits on page 2.
   Each commit has `hash`, `parents` (full hashes, first parent first),
   `authorName`, `authorEmail`, `committedAt` (committer time, ms), `refs`
   (`%D` entries such as `HEAD -> main`, `origin/main`, `tag: v1`; Convoy's
@@ -210,9 +220,10 @@ side lives in `apps/cli/src/lib/git/history.ts`.
   it, the page ends early and `nextCursor` resumes after the last commit
   returned. The parents and
   refs are there for the commit graph (OS-2536), so the graph needs no new
-  request. `nextCursor` is `<tip>:<skip>`, present when more commits follow.
-  Later pages walk from the first page's `HEAD`, so commits made while the
-  user pages don't shift or repeat rows. `enqueue` and the CLI both reject
+  request. `nextCursor` is `<tip>[,<tip>]:<skip>` (`HEAD`, then the default
+  branch), present when more commits follow. Later pages walk from the first
+  page's tips, so commits made or fetched while the user pages don't shift or
+  repeat rows. `enqueue` and the CLI both reject
   any other cursor shape. An unborn branch returns `{ commits: [] }`.
 - `{ kind: "commitPatch", pathId, postRef }` returns `resultJson = { body,
   patch, truncated }` for the commit in `postRef`. `enqueue` accepts a full
@@ -231,7 +242,9 @@ side lives in `apps/cli/src/lib/git/history.ts`.
   20,000 characters.
 
 A CLI older than 0.171.0 fails both kinds with `Unsupported operation`, and the
-web shows an update prompt instead of enqueueing. There is no `convoy`
+web shows an update prompt instead of enqueueing. A CLI older than 0.172.0
+walks `HEAD` only; the graph draws that as one lane, so there is no version
+gate for the default branch. There is no `convoy`
 command for history: anyone at the terminal already has `git log`.
 
 ### Revert a working file (OS-2043)
@@ -646,7 +659,7 @@ every row, header included, past a phone viewport. The right pane is the file tr
     the param is dropped, the newest commit opens (or the one that was open,
     if it is still in the loaded history; a rebase or reset can drop it),
     and a note above the list says "Commit <short> isn't in this
-    branch's history." until the next commit is opened. In one-pane mode a
+    checkout's history." until the next commit is opened. In one-pane mode a
     failed page during that search shows its error and Retry in the commit
     pane too, since the list (where Load more's error sits) is hidden.
   - `gitLog` is first sent when History opens, and the list stays across tab
@@ -676,6 +689,33 @@ every row, header included, past a phone viewport. The right pane is the file tr
     that row stays marked as selected. Browser Forward to a commit focuses
     its heading too. On a phone both scrollers end with
     `--mobile-nav-clearance` padding, so the floating nav covers nothing.
+  - Layout (OS-2536, `commit-graph.tsx`, `lib/worktrees/commit-graph.ts`): a
+    List | Graph toggle, List by default, kept per browser in localStorage
+    (`convoy.history-layout`) and shared by the worktree page (in the 41px
+    toolbar, before the diff toggles) and the thread Changes tab (in its
+    Refresh row). List is the view above, over the same commits (default
+    branch included); with no commit picked it opens `HEAD`'s commit (the
+    row with `HEAD` or `HEAD -> `), else the first row. Graph in two panes is a table
+    with the columns Graph, Description (ref badges, then the subject), Date,
+    Author and Commit, 28px rows under a sticky header. No commit is open
+    until a row is picked; the open commit shows below the table (the table
+    keeps 40% of the height) with a "Close commit" button, so the graph keeps
+    the full width. While no commit is open, ↑/↓ only move focus; Enter or a
+    click opens one, and after that the keys open as in List. The table
+    scroller has a 32px `scroll-padding-top`, so a row reached by keyboard
+    stops below the sticky header. Graph in one pane (the thread panel, a phone, a pane
+    under 600px) keeps the two-line rows and puts the graph column where the
+    commit icon was, with no row borders so the lines run on.
+  - Lane layout: a pure function over the loaded, newest-first commits. It
+    keeps a list of open lanes, each waiting for a parent hash. A commit
+    takes the leftmost lane waiting for it, or the first free one; other
+    lanes waiting for it join it there. The first parent continues the
+    lane, and each extra parent opens a lane unless one already waits for
+    it. The layout runs over every loaded page, so lines open at the end of
+    a page run off the bottom edge and continue when Load more adds rows.
+    Each row draws one SVG at the row height: 14px per lane, colors cycling
+    through `--info`, `--warning`, `--success`, `--chart-4`, `--chart-5` by
+    lane, a filled node for `HEAD`, a smaller node for a merge.
   - Copying the hash toasts "Commit hash copied"; where the clipboard is
     missing or denied it toasts "Failed to copy the hash" ("The full hash is
     selected beside it. Press Ctrl+C."), and a read-only field with the full

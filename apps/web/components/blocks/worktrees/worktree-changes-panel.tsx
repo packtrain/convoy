@@ -12,10 +12,10 @@ import { FileTreePane } from "@/components/custom/diff/file-tree-pane";
 import { WorktreeFileTree } from "@/components/custom/diff/worktree-file-tree";
 import { supportsWorktreeHistory } from "@/lib/worktrees/cli-version";
 import { useWorktreeChanges } from "@/lib/worktrees/hooks/use-worktree-changes";
-import { useWorktreeHistory } from "@/lib/worktrees/hooks/use-worktree-history";
+import { useHistoryLayout, useWorktreeHistory } from "@/lib/worktrees/hooks/use-worktree-history";
 import { cn } from "@/lib/utils";
 import { ChangesSummary, RevertAllButton, WorktreeChangesBody, useSectionCollapse } from "./worktree-changes-body";
-import { WorktreeHistoryView } from "./worktree-history";
+import { HistoryLayoutToggle, WorktreeHistoryView } from "./worktree-history";
 import { RevertAllDialog, RevertFileDialog } from "./worktree-revert-dialogs";
 
 interface WorktreeChangesPanelProps {
@@ -60,6 +60,7 @@ function HistoryPanel({ profileId, pathId, allCollapsed, diffStyle, wordWrap, re
   const history = useWorktreeHistory(profileId, pathId, canFetch);
   const diffOptions = usePatchDiffOptions(diffStyle, wordWrap);
   const [selectedHash, setSelectedHash] = useState<string | null>(null);
+  const [layout, setLayout] = useHistoryLayout();
   useRefreshOnKey(refreshKey, history.refresh);
   if (profile === undefined) {
     return null;
@@ -69,6 +70,7 @@ function HistoryPanel({ profileId, pathId, allCollapsed, diffStyle, wordWrap, re
     <div className="flex h-full min-h-0 flex-col">
       {canFetch && (
         <div className="flex h-9 shrink-0 items-center border-b border-border px-3">
+          <HistoryLayoutToggle value={layout} onChange={setLayout} />
           {/* aria-disabled, not disabled: a disabled button drops keyboard focus mid-refresh. */}
           <Button
             type="button"
@@ -93,6 +95,7 @@ function HistoryPanel({ profileId, pathId, allCollapsed, diffStyle, wordWrap, re
           profileId={profileId}
           pathId={pathId}
           history={history}
+          layout={layout}
           registered={entry !== undefined}
           isOnline={isOnline}
           appVersion={profile?.appVersion}
