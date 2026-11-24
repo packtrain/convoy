@@ -241,7 +241,7 @@ function ChangesViewForCheckout({ profileId, pathId }: WorktreeChangesViewProps)
             {isOnline && !onHistory && <RevertAllButton state={state} />}
             <div className="ml-auto flex items-center gap-1">
               {/* The diff toggles only while a diff is on screen; a phone's commit pane drops the layout toggle. */}
-              {onHistory && !phoneCommit && <HistoryLayoutToggle value={historyLayout} onChange={setHistoryLayout} iconOnly={isMobile} />}
+              {onHistory && !phoneCommit && <HistoryLayoutToggle value={historyLayout} onChange={setHistoryLayout} />}
               {/* A phone leaves them out; a desktop keeps their place so List | Graph doesn't move. */}
               {!(noDiffShown && isMobile) && (
                 <div className={cn("flex items-center gap-1", noDiffShown && "invisible")}>

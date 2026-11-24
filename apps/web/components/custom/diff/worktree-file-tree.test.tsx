@@ -41,6 +41,14 @@ describe("WorktreeFileTree", () => {
     expect(onOpenFile).toHaveBeenCalledTimes(1);
   });
 
+  test("a tree with no file actions has no context menu (OS-2536 commit sidebar)", () => {
+    render(<WorktreeFileTree files={FILES} onSelectFile={() => {}} />);
+
+    fireEvent.contextMenu(screen.getByRole("button", { name: /a\.ts/ }));
+
+    expect(screen.queryByRole("menuitem")).toBeNull();
+  });
+
   test("right-click offers Revert for any file, disabled while a revert runs (OS-2043)", () => {
     const onRevertFile = vi.fn();
     const { rerender } = render(<WorktreeFileTree files={FILES} onSelectFile={() => {}} onRevertFile={onRevertFile} />);
