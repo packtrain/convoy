@@ -108,9 +108,17 @@ export async function readCommitPatch(cwd: string, hash: string): Promise<Commit
   if (exists.exitCode !== 0) {
     throw new Error("Commit not found in this checkout");
   }
-  // NUL can't occur in a commit message, so it splits the body from the patch.
-  const result = await runGit(cwd, [...SHOW_ARGS, "--cc", "--format=%b%x00", `${hash}^{commit}`], { timeoutMs: CAPTURE_TIMEOUT_MS });
-  const split = result.stdout.indexOf("\0");
-  const capped = capFileOpText(result.stdout.slice(split + 1).replace(/^\n+/, ""));
-  return { body: result.stdout.slice(0, split).trim().slice(0, MAX_BODY_CHARS), patch: capped.text, truncated: capped.truncated };
+  // Body and patch come from separate calls, so a huge message can't eat the patch's output budget.
+  // A patch past the output cap (a huge root commit) shows its first part, like the display cap.
+  const target = `${hash}^{commit}`;
+  const [body, patch] = await Promise.all([
+    runGit(cwd, ["show", "-s", "--format=%b", target], { timeoutMs: CAPTURE_TIMEOUT_MS, allowTruncatedOutput: true }),
+    runGit(cwd, [...SHOW_ARGS, "--cc", "--format=", target], { timeoutMs: CAPTURE_TIMEOUT_MS, allowTruncatedOutput: true }),
+  ]);
+  const capped = capFileOpText(patch.stdout.replace(/^\n+/, ""));
+  return {
+    body: body.stdout.trim().slice(0, MAX_BODY_CHARS),
+    patch: capped.text,
+    truncated: capped.truncated || patch.truncated === true,
+  };
 }

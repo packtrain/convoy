@@ -29,12 +29,38 @@ vi.mock("convex/react", () => ({
 vi.mock("sonner", () => ({ toast: state.toast }));
 
 const navigate = vi.hoisted(() => vi.fn());
+// The URL as a tiny store: replace and push rewrite it and re-render readers.
+const url = vi.hoisted(() => ({ search: "", listeners: new Set<() => void>() }));
 
-vi.mock("@/lib/navigation", async () => ({
-  appRoute: (await vi.importActual<typeof import("@/lib/navigation/routes")>("@/lib/navigation/routes")).appRoute,
-  useRouteParams: () => ({ organizationSlug: "org", projectAlias: "ABC" }),
-  useNavigation: () => ({ push: navigate }),
-}));
+vi.mock("@/lib/navigation", async () => {
+  const { useSyncExternalStore } = await import("react");
+  const routes = await vi.importActual<typeof import("@/lib/navigation/routes")>("@/lib/navigation/routes");
+  const { href } = await vi.importActual<typeof import("@/lib/navigation/target")>("@/lib/navigation/target");
+  const go = (target: Parameters<typeof href>[0]) => {
+    url.search = `?${href(target).split("?")[1] ?? ""}`;
+    url.listeners.forEach((listener) => listener());
+  };
+  const subscribe = (listener: () => void) => {
+    url.listeners.add(listener);
+    return () => url.listeners.delete(listener);
+  };
+  return {
+    appRoute: routes.appRoute,
+    parseWorktreeChangesTarget: routes.parseWorktreeChangesTarget,
+    useRouteParams: () => ({ organizationSlug: "org", projectAlias: "ABC" }),
+    useNavigation: () => {
+      const search = useSyncExternalStore(subscribe, () => url.search);
+      return {
+        location: { pathname: "/o/org/ABC/threads", search, hash: "" },
+        push: (target: Parameters<typeof href>[0]) => {
+          navigate(target);
+          go(target);
+        },
+        replace: go,
+      };
+    },
+  };
+});
 
 vi.mock("@/lib/worktrees/hooks/use-worktree-op", () => ({
   useWorktreeOp: () => state.changes,
@@ -95,6 +121,7 @@ describe("WorktreeChangesView", () => {
     state.toast.success.mockReset();
     navigate.mockReset();
     state.mobile = true;
+    url.search = "?profileId=profile_1&pathId=path_1&view=changes";
   });
 
   afterEach(() => {
@@ -126,6 +153,51 @@ describe("WorktreeChangesView", () => {
     expect(screen.queryByRole("button", { name: "Download a.txt" })).toBeNull();
     expect(screen.getByText(/to view history \(connected: v0\.83\.0\)/)).toBeTruthy();
     expect(screen.getByRole("button", { name: "Refresh history" })).toBeTruthy();
+  });
+
+  test("the History tab is in the URL, so a reload reopens it (OS-2534 UX review)", () => {
+    state.profile = { paths: WORKTREE_PATHS, isOnline: true, appVersion: "0.83.0" };
+    const { unmount } = render(<WorktreeChangesView profileId={"profile_1" as Id<"cliProfiles">} pathId="path_1" />);
+
+    fireEvent.click(screen.getByRole("button", { name: "History" }));
+    expect(url.search).toBe("?profileId=profile_1&pathId=path_1&view=history");
+
+    unmount();
+    render(<WorktreeChangesView profileId={"profile_1" as Id<"cliProfiles">} pathId="path_1" />);
+    expect(screen.getByRole("button", { name: "History" }).getAttribute("aria-pressed")).toBe("true");
+  });
+
+  test("on a phone, All commits pops the entry its commit pushed (OS-2534 UX review 2)", () => {
+    state.profile = { paths: WORKTREE_PATHS, isOnline: true, appVersion: "0.171.0" };
+    const commit = { hash: "a".repeat(40), parents: [], authorName: "Ada", authorEmail: "a@x", committedAt: 1, refs: [], subject: "first" };
+    state.changes = { resultJson: JSON.stringify({ commits: [commit] }), loading: false, error: null, refresh: vi.fn() };
+    url.search = "?profileId=profile_1&pathId=path_1&view=history";
+    const back = vi.spyOn(window.history, "back").mockImplementation(() => {});
+    render(<WorktreeChangesView profileId={"profile_1" as Id<"cliProfiles">} pathId="path_1" />);
+
+    fireEvent.click(screen.getByRole("option", { name: /^first/ }));
+    expect(url.search).toBe(`?profileId=profile_1&pathId=path_1&view=history&commit=${"a".repeat(40)}`);
+    fireEvent.click(screen.getByRole("button", { name: "All commits" }));
+
+    expect(back).toHaveBeenCalledTimes(1);
+    back.mockRestore();
+  });
+
+  test("Refresh keeps keyboard focus while it runs: busy, not disabled (OS-2534 UX review 3)", () => {
+    state.profile = { paths: WORKTREE_PATHS, isOnline: true, appVersion: "0.171.0" };
+    state.changes = { resultJson: ONE_FILE_PATCH, loading: true, error: null, refresh: vi.fn() };
+    render(<WorktreeChangesView profileId={"profile_1" as Id<"cliProfiles">} pathId="path_1" />);
+
+    const refresh = screen.getByRole("button", { name: "Refresh changes" }) as HTMLButtonElement;
+    expect(refresh.disabled).toBe(false);
+    expect(refresh.getAttribute("aria-disabled")).toBe("true");
+  });
+
+  test("on a phone the toolbar leaves out the path; the header names the checkout (OS-2534 UX review 3)", () => {
+    onlineWithOneFile();
+    render(<WorktreeChangesView profileId={"profile_1" as Id<"cliProfiles">} pathId="path_1" />);
+
+    expect(screen.queryByTitle("/tmp/x")).toBeNull();
   });
 
   test("opening another checkout starts from a fresh view, not the previous one's state (OS-2534 review #1)", () => {

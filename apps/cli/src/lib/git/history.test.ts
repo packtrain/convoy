@@ -161,6 +161,33 @@ describe("git history (real git)", () => {
     expect((await readCommitPatch(repo, tagHash)).body).not.toContain("tag message");
   });
 
+  it("a commit message past the output cap still returns the real patch, not body text as a patch (CR OS-2534 UX #3)", async () => {
+    await writeFile(join(repo, "small.txt"), "one\n");
+    await runGit(repo, ["add", "small.txt"]);
+    const message = join(repo, "..", `msg-${Date.now()}.txt`);
+    await writeFile(message, "subject\n\n".concat("diff --git a/fake b/fake\n".repeat(500_000)));
+    await runGit(repo, [...IDENTITY, "commit", "-q", "-F", message]);
+    await rm(message);
+    const hash = (await runGit(repo, ["rev-parse", "HEAD"])).stdout.trim();
+
+    const result = await readCommitPatch(repo, hash);
+
+    expect(result.patch).toContain("diff --git a/small.txt b/small.txt");
+    expect(result.patch).not.toContain("a/fake");
+    expect(result.body).toHaveLength(20_000);
+  }, 30_000);
+
+  it("a patch past git's 10 MiB output cap comes back truncated, not as an error (OS-2534 UX review 3)", async () => {
+    // 12 MiB of text lines: git show's output passes runGit's maxBuffer.
+    const hash = await commit("big.txt", "x".repeat(99).concat("\n").repeat(12 * 10_486), "huge");
+
+    const result = await readCommitPatch(repo, hash);
+
+    expect(result.truncated).toBe(true);
+    expect(result.patch.length).toBeGreaterThan(0);
+    expect(result.patch.length).toBeLessThanOrEqual(MAX_FILE_OP_BYTES);
+  }, 30_000);
+
   it("refuses anything but a full commit hash", async () => {
     await commit("a.txt", "one\n", "first");
 

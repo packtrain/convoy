@@ -8,6 +8,8 @@ export interface GitResult {
   stdout: string;
   stderr: string;
   exitCode: number;
+  /** Set when `allowTruncatedOutput` cut stdout at the output cap. */
+  truncated?: boolean;
 }
 
 export interface RunGitOptions {
@@ -16,6 +18,8 @@ export interface RunGitOptions {
   allowNonZeroExit?: boolean;
   /** Extra environment variables merged over process.env (e.g. GIT_INDEX_FILE). */
   env?: Record<string, string>;
+  /** Resolve with the first 10 MiB of stdout instead of throwing when git prints more; `truncated` says so. */
+  allowTruncatedOutput?: boolean;
 }
 
 export class GitCommandError extends Error {
@@ -55,6 +59,11 @@ export async function runGit(cwd: string, args: string[], options: RunGitOptions
       (error: ExecFileException | null, stdout, stderr) => {
         if (!error) {
           resolve({ stdout, stderr, exitCode: 0 });
+          return;
+        }
+
+        if (error.code === "ERR_CHILD_PROCESS_STDIO_MAXBUFFER" && options.allowTruncatedOutput) {
+          resolve({ stdout, stderr, exitCode: 0, truncated: true });
           return;
         }
 

@@ -79,8 +79,6 @@ function parseCommitPatch(resultJson: string | undefined): CommitPatch | null {
 export function useWorktreeHistory(profileId: Id<"cliProfiles">, pathId: string, enabled: boolean) {
   const [cursor, setCursor] = useState<string>();
   const [earlier, setEarlier] = useState<CommitSummary[]>([]);
-  // Lives here, not in the tab, so switching to Changes and back keeps the open commit.
-  const [selectedHash, setSelectedHash] = useState<string | null>(null);
   const op = useWorktreeOp({ profileId, pathId, kind: "gitLog", cursor, enabled });
   const page = useMemo(() => parseCommitPage(op.resultJson), [op.resultJson]);
   const commits = useMemo(() => (page ? [...earlier, ...page.commits] : earlier), [earlier, page]);
@@ -112,9 +110,6 @@ export function useWorktreeHistory(profileId: Id<"cliProfiles">, pathId: string,
     error: op.error ?? (op.resultJson && !page ? MALFORMED : null),
     /** Re-sends the request that failed (the same page). */
     retry: refreshOp,
-    /** The commit the user opened; null shows the newest (the list, on a phone). */
-    selectedHash,
-    select: setSelectedHash,
     loadMore,
     refresh,
   };

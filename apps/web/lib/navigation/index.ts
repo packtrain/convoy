@@ -32,6 +32,7 @@ export type {
   ProjectSettingsSection,
   PullRequestTab,
   WorktreeChangesTarget,
+  WorktreeView,
 } from "./routes";
 export { useRouteParams } from "./use-route-params";
 export { useUnsavedChangesGuard } from "./use-unsaved-changes-guard";

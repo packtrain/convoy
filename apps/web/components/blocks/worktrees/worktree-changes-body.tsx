@@ -69,7 +69,8 @@ export function ChangesSummary({ files }: { files: CliRunDiffFile[] }) {
       <span>
         {files.length} {files.length === 1 ? "file" : "files"}
       </span>
-      <Counts additions={additions} deletions={deletions} />
+      {/* Binary files have no line counts; +0 -0 would read as an empty change. */}
+      {!files.every((file) => file.binary) && <Counts additions={additions} deletions={deletions} />}
     </span>
   );
 }
