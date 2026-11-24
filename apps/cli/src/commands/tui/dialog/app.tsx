@@ -28,7 +28,7 @@ export function Dialog({ lines, error, width: columns, height: rows, buttons, on
   const [selected, setSelected] = useState(onText ? -1 : 0);
   const [offset, setOffset] = useState(0);
   const width = Math.max(6, Math.min(inline ? columns : 72, columns - (inline ? 0 : 4)));
-  const errors = error ? wrapLines(`✗ ${plain(error)}`, width - 6) : [];
+  const errors = error ? [...wrapLines(`✗ ${plain(error)}`, width - 6), ""] : [];
   const wrapped = [...errors, ...lines.flatMap(line => wrapLines(plain(line), width - 6))];
   const capacity = Math.max(1, rows - (inline ? 4 : 8));
   const fits = wrapped.length <= capacity && buttons.reduce((sum, button) => sum + button.label.length + 6, -2) <= width - 6;

@@ -44,7 +44,7 @@ it.skipIf(process.platform !== "linux").each(["normal", "pause-shell", "nonzero"
   expect(result.stdout).toContain(`PTY project checks passed: ${scenario}`);
 });
 
-it.each(["normal", "cancel", "small", "link", "access", "remount", "mouse"])("guided onboarding renderer: %s", async scenario => {
+it.each(["normal", "cancel", "leave", "small", "link", "access", "remount", "mouse"])("guided onboarding renderer: %s", async scenario => {
   const result = await tsx("onboarding.tsx", [scenario]);
   expect(result.stdout.match(/Onboarding renderer checks passed/g)).toHaveLength(1);
 });

@@ -1,8 +1,8 @@
 import { Clickable, Dialog, Spinner } from "./dialog/index.js";
 import { Environments } from "./environments/index.js";
-import { useEffect, useState, useSyncExternalStore, type ComponentProps } from "react";
+import { useEffect, useRef, useState, useSyncExternalStore, type ComponentProps } from "react";
 import { Box, Text, useApp, useInput, useWindowSize } from "ink";
-import { useMouseTracking, useWheel } from "./mouse.js";
+import { useMouseTracking, useWheel, type LeaveRef } from "./mouse.js";
 import { getCliVersion } from "../../lib/version.js";
 import { detailLines, environmentTone, healthTones, palette, plain, rowCells, rowId, warningLines, warningGroups, wrapLines } from "./formatters.js";
 import type { Browser } from "./workflow.js";
@@ -36,6 +36,8 @@ export function App({ browser, onboardingLoad }: { browser: Browser; onboardingL
   const [detailOffset, setDetailOffset] = useState(0);
   const [warningsOpen, setWarningsOpen] = useState(false);
   const [mouse, setMouse] = useState(true);
+  // Set by an open form or editor: a sidebar click leaves it, asking first on a draft. Spec: docs/specs/cli-tui.md#leaving-editors-and-panel-spacing-cli-01681
+  const leave: LeaveRef = useRef(undefined);
   useEffect(() => { setWarningsOpen(false); }, [state.scope.connection, state.scope.profile, state.scope.details, state.actions, state.credentials, state.runtimes]);
   useEffect(() => {
     setAddEnvironmentSelected(false);
@@ -91,18 +93,19 @@ export function App({ browser, onboardingLoad }: { browser: Browser; onboardingL
   // A line with a key hint runs that key on click, where the key works too.
   const inspect = state.scope.details && !state.credentials && !state.runtimes ? () => void browser.inspectEnvironment() : undefined;
   const retry = !state.credentials && !state.runtimes ? () => browser.retryNow() : undefined;
-  const contextLines: { text: string; run?: () => void }[] = warningsOpen ? [] : [
-    ...(state.error ? wrapLines(plain(state.error), actionWidth).slice(0, 2).map(text => ({ text })) : []),
-    ...(observation.environmentError ? wrapLines(`${plain(observation.environmentError)} · [s] Retry check`, actionWidth).slice(0, 2).map(text => ({ text, run: inspect })) : []),
+  // A hint names its key only where the key and click work.
+  const contextLines: { text: string; warn?: boolean; run?: () => void }[] = warningsOpen ? [] : [
+    ...(state.error ? wrapLines(plain(state.error), actionWidth).slice(0, 2).map(text => ({ text, warn: true })) : []),
+    ...(observation.environmentError ? wrapLines(`${plain(observation.environmentError)}${inspect ? " · [s] Retry check" : ""}`, actionWidth).slice(0, 2).map(text => ({ text, warn: true, run: inspect })) : []),
     ...(observation.checkingEnvironment ? [{ text: "Checking status…" }] : []),
-    ...(state.stale && observation.snapshot ? [{ text: "Last observation is stale. [f] Retry connection", run: retry }] : []),
+    ...(state.stale && observation.snapshot ? [{ text: `Last observation is stale.${retry ? " [f] Retry connection" : ""}`, run: retry }] : []),
     ...(state.scope.details && !state.credentials && !target.maintenance ? [{ text: "Host lifecycle is not managed here. Service controls are in Actions." }] : []),
   ].slice(0, Math.max(1, size.height - 11));
   const warnings = state.scope.addProject || editing ? [] : warningGroups(observation.profiles, state.scope.profile);
   const visibleWarnings = warnings.slice(0, size.height >= 28 ? 2 : 1);
   const warningHeight = warnings.length && !warningsOpen ? visibleWarnings.length * 2 + 2 + (warnings.length > visibleWarnings.length ? 1 : 0) : 0;
   const toolbar = !warningsOpen && state.scope.details && !state.actions && !state.credentials && !state.runtimes && !state.scope.addProject;
-  const contentHeight = Math.max(1, size.height - 8 - contextLines.length - warningHeight - (toolbar ? 2 : 0));
+  const contentHeight = Math.max(1, size.height - 8 - (contextLines.length && contextLines.length + 1) - warningHeight - (toolbar ? 2 : 0));
   const compact = contentHeight < 10;
   const tableLines = contentHeight - 1 - (compact ? 0 : 2) - (state.rows[selectedRow]?.run ? 1 : 0);
   const visibleRows = Math.max(1, Math.floor((tableLines + (compact ? 0 : 1)) / (compact ? 2 : 3)));
@@ -125,6 +128,7 @@ export function App({ browser, onboardingLoad }: { browser: Browser; onboardingL
   // The states where useInput below stops before navigation keys; clicks and the wheel stop there too.
   const locked = Boolean(warningsOpen || workflow || state.detail || state.action?.busy || editing || state.action?.pending || (state.action?.message && !state.action.entries));
   const unlocked = (action: () => void) => () => { if (!locked) action(); };
+  const sidebarClick = (action: () => void) => () => { if (leave.current) leave.current(action); else if (!locked) action(); };
   // Enter on a run row: a thread opens its history, a run its logs.
   const openRow = (row: Row) => {
     if (!state.history) { browser.history(row); setSelectedId(undefined); }
@@ -223,7 +227,7 @@ export function App({ browser, onboardingLoad }: { browser: Browser; onboardingL
     <Box height={Math.max(1, size.height - (state.detail ? 1 : 4))}>
       <Box display={small || sidebarWidth === 0 ? "none" : "flex"} width={sidebarWidth} flexShrink={0} flexDirection="column" paddingX={1} paddingTop={1} backgroundColor={palette.surface}>
         <Text color={palette.muted}>ENVIRONMENTS</Text>
-        <Clickable onClick={unlocked(() => browser.openEnvironment("create"))} backgroundColor={fill(addEnvironmentSelected, pane === "sidebar").backgroundColor}><Text wrap="truncate" color={fill(addEnvironmentSelected, pane === "sidebar").color ?? palette.muted}>+ Add environment</Text></Clickable>
+        <Clickable onClick={sidebarClick(() => browser.openEnvironment("create"))} backgroundColor={fill(addEnvironmentSelected, pane === "sidebar").backgroundColor}><Text wrap="truncate" color={fill(addEnvironmentSelected, pane === "sidebar").color ?? palette.muted}>+ Add environment</Text></Clickable>
         <Text> </Text>
         {sidebarLines.slice(sidebarStart, sidebarStart + capacity).map((row, index) => {
           if (!row) return <Text key={`gap:${sidebarStart + index}`}> </Text>;
@@ -231,7 +235,7 @@ export function App({ browser, onboardingLoad }: { browser: Browser; onboardingL
           const { color, ...rowFill } = fill(selected, pane === "sidebar");
           const environment = row.scope.details && !row.scope.addProject && !row.view && !row.loading;
           const key = `${scopeId(row.scope)}:${row.view ?? ""}${row.loading ? ":loading" : ""}`;
-          const onClick = unlocked(() => clickRow(row));
+          const onClick = sidebarClick(() => clickRow(row));
           if (environment) return <Clickable key={key} onClick={onClick} {...rowFill}><Box flexGrow={1} flexShrink={1}><Text wrap="truncate" bold color={color ?? palette.text}>{plain(row.text)}</Text></Box>
             <Box flexShrink={0}><Text color={color ?? palette.muted}> {plain(row.transport)}<Text color={palette[environmentTone(state.observations[row.scope.connection])]}> ● </Text></Text></Box></Clickable>;
           return <Clickable key={key} onClick={onClick} {...rowFill}><Box flexGrow={1} flexShrink={1}><Text wrap="truncate" color={color ?? (row.scope.addProject || row.loading ? palette.muted : palette.text)}>
@@ -241,8 +245,8 @@ export function App({ browser, onboardingLoad }: { browser: Browser; onboardingL
       </Box>
       <Box display={narrow && sidebarWidth > 0 && !workflow ? "none" : "flex"} flexGrow={1} flexDirection="column" paddingX={1} paddingTop={1}>
         <Box flexGrow={1} flexDirection="column" overflow="hidden">
-        {state.onboarding && <Onboarding browser={browser} load={onboardingLoad} width={actionWidth} height={Math.max(1, size.height - 7)} />}
-        {state.environment && <Environments browser={browser} width={actionWidth} height={Math.max(1, size.height - 7)} />}
+        {state.onboarding && <Onboarding browser={browser} leave={leave} load={onboardingLoad} width={actionWidth} height={Math.max(1, size.height - 7)} />}
+        {state.environment && <Environments browser={browser} leave={leave} width={actionWidth} height={Math.max(1, size.height - 7)} />}
         {!workflow && (state.detail ? <LogDetail key={`${state.scope.connection}:${state.detail.run?.messageId}`} browser={browser} row={state.detail} width={Math.max(1, size.width - (small ? 0 : sidebarWidth) - 2)} height={Math.max(1, size.height - 3)} small={small} mouse={mouse} toggleMouse={() => setMouse(on => !on)} /> : <>
         <Box gap={2} marginBottom={1}>
           {tabs.length ? tabs.map(([label, selected, activate]) => <Clickable key={label} onClick={unlocked(activate)}><Text {...(selected ? fill(true, true) : { color: palette.accent })}>{` ${label} `}</Text></Clickable>) : <Text bold color={palette.text}>{title}</Text>}
@@ -256,13 +260,13 @@ export function App({ browser, onboardingLoad }: { browser: Browser; onboardingL
           </Box>)}
           {warnings.length > visibleWarnings.length && <Clickable onClick={unlocked(() => setWarningsOpen(true))}><Text color={palette.muted}>+{warnings.length - visibleWarnings.length} more projects · w shows all</Text></Clickable>}
         </Box>}
-        {contextLines.map(({ text, run }, index) => <Clickable key={index} onClick={unlocked(() => run?.())}><Text color={state.error || observation.environmentError ? palette.warning : palette.muted} wrap="truncate">{text}</Text></Clickable>)}
+        {contextLines.length > 0 && <Box flexDirection="column" marginBottom={1}>{contextLines.map(({ text, warn, run }, index) => <Clickable key={index} onClick={unlocked(() => run?.())}><Text color={warn ? palette.warning : palette.muted} wrap="truncate">{text}</Text></Clickable>)}</Box>}
         {toolbar && <Box marginBottom={1} gap={2}>{([["[s]", "Inspect status", () => void browser.inspectEnvironment()], ["[f]", "Retry connection", () => browser.retryNow()], ["[+]", "Add project", () => { browser.openOnboarding(); setPane("content"); }]] as const)
           .map(([hint, label, run]) => <Clickable key={hint} flexShrink={0} onClick={unlocked(run)}>{keys([[hint, label]])}</Clickable>)}</Box>}
         {warningsOpen ? <Dialog inline scrollable width={actionWidth} height={contentHeight}
           lines={[`Warning details · ${plain(target.name)}`, "↑/↓ PgUp/PgDn scroll · Esc back", ...(warnings.length ? warnings.flatMap(warning => ["", `${warning.profile} · ${warning.status}`, ...warning.details]) : ["No current project notices."])]}
           buttons={[{ label: "Back", activate: () => setWarningsOpen(false) }]} onCancel={() => setWarningsOpen(false)} />
-          : state.action && !state.actions && !state.action.pending ? <ActionDialog inline state={state} browser={browser} width={actionWidth} height={contentHeight} /> : state.runtimes ? <Runtimes key={scopeId(state.scope)} browser={browser} state={state} active={pane === "content"} onSidebar={() => setPane("sidebar")} onContent={() => setPane("content")} width={actionWidth} height={contentHeight} /> : state.credentials ? <Credentials key={scopeId(state.scope)} browser={browser} state={state} active={pane === "content"} onContent={() => setPane("content")} width={actionWidth} height={contentHeight} /> : state.actions ? <Actions onContent={() => setPane("content")} selectedKey={actionSelection?.scope === scopeId(state.scope) ? actionSelection.key : undefined} onSelect={key => setActionSelection({ scope: scopeId(state.scope), key })} browser={browser} state={state} row={state.rows[selectedRow]} active={pane === "content" && !state.environment} width={actionWidth} height={contentHeight} /> : state.scope.addProject ? <Text color={palette.text}>Press + to add or link a project. Enter or Space opens the selected sidebar row.</Text> : state.scope.details ? lines.slice(detailsStart, detailsStart + contentHeight).map((line, index) => {
+          : state.action && !state.actions && !state.action.pending ? <ActionDialog inline state={state} browser={browser} width={actionWidth} height={contentHeight} /> : state.runtimes ? <Runtimes key={scopeId(state.scope)} browser={browser} state={state} active={pane === "content"} onSidebar={() => setPane("sidebar")} onContent={() => setPane("content")} width={actionWidth} height={contentHeight} /> : state.credentials ? <Credentials key={scopeId(state.scope)} browser={browser} state={state} leave={leave} active={pane === "content"} onContent={() => setPane("content")} width={actionWidth} height={contentHeight} /> : state.actions ? <Actions onContent={() => setPane("content")} selectedKey={actionSelection?.scope === scopeId(state.scope) ? actionSelection.key : undefined} onSelect={key => setActionSelection({ scope: scopeId(state.scope), key })} browser={browser} state={state} row={state.rows[selectedRow]} active={pane === "content" && !state.environment} width={actionWidth} height={contentHeight} /> : state.scope.addProject ? <Text color={palette.text}>Press + to add or link a project. Enter or Space opens the selected sidebar row.</Text> : state.scope.details ? lines.slice(detailsStart, detailsStart + contentHeight).map((line, index) => {
           const [, label = "", value = line] = /^(\s*[^:]{1,40}:)( .*)$/.exec(line) ?? [];
           return <Text key={index} wrap="truncate" color={palette.text}><Text color={palette.muted}>{label}</Text>{value}</Text>;
         }) : <>

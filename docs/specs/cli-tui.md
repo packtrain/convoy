@@ -551,7 +551,8 @@ measured by the fixture tests.
 
 CLI 0.101.0 adds `+ Add project` for the selected existing connection. Since
 CLI 0.101.3 the form opens in a centered popup over the browser. Navigation,
-actions and run polling are locked until the form closes. Other clients keep
+actions and run polling are locked until the form closes; from CLI 0.168.1 a
+sidebar click leaves it ([Leaving editors](#leaving-editors-and-panel-spacing-cli-01681)). Other clients keep
 independent navigation. Local registration requires the configured Linux project
 environment; managed Docker registration uses the saved environment lock and
 rechecks owner, daemon and running container. SSH and environment creation remain
@@ -698,7 +699,7 @@ binding. No API keys are collected in this step.
 
 If registration was not applied, show "Start the service, then assign credentials
 from project Actions" instead. Access read failures offer Refresh and Skip without
-repeating registration. The sidebar stays locked until the form completes. Target and save impact stay
+repeating registration. The sidebar stays locked until Runtime access completes. Target and save impact stay
 visible; PageUp/PageDown scroll wrapped help and errors. Small panels require
 resize if the target, impact and controls cannot fit.
 
@@ -1053,7 +1054,8 @@ the draft. A row whose runtime uses another key shows `replaces <name>`. Uncheck
 a saved row unassigns it, which disables that runtime as `keys unassign` does. A
 disabled entry cannot gain assignments. Save changes sends one bind per changed
 row, in order. On a failure it stops, reports how many rows were saved and keeps the
-rest in the draft. Discard restores the saved bindings.
+rest in the draft. Discard drops the draft and closes the editor; on a clean draft
+the button reads Back. Save changes on a clean draft says `No changes to save.`
 
 Project Actions adds c Assign or unassign credentials. It opens the selected project's
 editor with one row per runtime. Enter or Space opens a dropdown, as in onboarding,
@@ -1068,7 +1070,10 @@ between projects. OpenCode keys (OS-2018) bind one key per provider slot, which
 these single-binding rows cannot show, so the panel lists no OpenCode rows;
 `convoy keys` manages them.
 
-While a checklist, editor, form or popup is open, the sidebar, tabs and q are locked.
+While a checklist, editor, form or popup is open, the sidebar keys, tabs and q are
+locked. A sidebar click on an open checklist or editor leaves it and goes to the
+clicked row; on a dirty draft it asks the leave prompt first (see
+[Leaving editors](#leaving-editors-and-panel-spacing-cli-01681)).
 Esc on a dirty draft asks Keep editing (selected), Discard and continue, or Save and
 continue. Below 45×12 the panel asks for a resize. The draft, the add form and popups
 keep their input, and only Esc works until the terminal is large enough again.
@@ -1468,8 +1473,8 @@ Step 3 of the mouse plan. A click does what its key does:
 - Inline hints on the main screen: `[w] Details` and the "more projects" line open
   the warnings, the `[c] Cancel selected run` line cancels, and the `[s] Retry check`
   and `[f] Retry connection` lines run their key. A hint line does nothing where its
-  key does nothing: `[s] Retry check` shows in Credentials, but `s` and the click are
-  off there.
+  key does nothing, and from CLI 0.168.1 it leaves the key out where the key is off:
+  Credentials and Agent runtimes show the error without `[s] Retry check`.
 - The Details toolbar: `[s] Inspect status`, `[f] Retry connection` and
   `[+] Add project`.
 - A run row: the first click selects it and focuses the table, and a click on the
@@ -1535,6 +1540,52 @@ the key, clicks back to the URL and checks both inputs, then picks Link existing
 project, scrolls 19 filler projects with the wheel until the target shows, then
 picks it and Reuse existing directory by click and types into a
 clicked Profile key. `onboarding.tsx access` clicks Skip in Runtime access.
+
+### Leaving editors and panel spacing, CLI 0.168.1
+
+An open form or editor registers a leave handler with the main screen
+(`useLeave` in `mouse.ts`). A sidebar row click (and `+ Add environment`) calls it
+instead of being dropped by the lock. An untouched form closes and the click goes
+through. One with input asks its existing prompt first, and its discard (or save)
+button then goes to the clicked row; Keep editing stays.
+
+- Credential checklist and project editor: `Save assignment changes?`, with Discard
+  and continue or Save and continue. The editor unlocks the browser as it closes,
+  so the navigation is not refused.
+- Add credential: `Discard credential draft?`.
+- Add environment, in every step but a running operation: `Discard environment
+  draft?`. Its maintenance flows opened over Add project's repair stay locked.
+- Add project, except while an operation runs, during the repair flow and in
+  Runtime access: `Discard project draft?`.
+
+Popups (rotate, confirmations, reload), running operations, the log view and the
+warnings list still ignore sidebar clicks.
+
+Spacing, so the main content, errors and info read apart:
+
+- The connection banner (attach error, environment error, checking, stale) sits
+  one blank line above the panel. Errors use the warning color, the rest muted. An
+  attach error that ends in a period gets no second one before `Retrying…`.
+- The checklist and project editor put a blank line between the hints and the
+  rows. The no-projects line is muted.
+- Add credential has a blank line under its title. Its validation error is marked
+  ✗ in the danger color, one blank line below the buttons.
+- A `Dialog` error is followed by a blank line before the dialog's text.
+- The log view marks a read error ✗ in the danger color. Without one the
+  completeness disclaimer is muted. An empty export path says `Enter a file path.`
+  Path errors show as the dialog error and keep the typing hint.
+
+Buttons that did nothing: Enter in the Rotate key field submits, as the hint says.
+The Add environment review's first button returns to the form, so it reads Back.
+
+`credentials.tsx mouse` checks the editor's blank line, Discard and Back by click,
+`No changes to save.`, and a sidebar click on a dirty draft (prompt, then Actions)
+on a clean one (straight to Actions) and on Add credential with input. `rotate` submits with Enter.
+`navigation.tsx mouse-buttons` leaves a filled and an empty Add environment and an
+open Add project by sidebar click; `onboarding.tsx leave` discards a filled Add
+project through the handler. `navigation.tsx error` checks the banner's blank line and the hidden `[s]` hint;
+`network` checks Back. `app.ts destination` checks the empty path, the dialog error
+and the ✗ read error.
 
 ### Terminal modes
 

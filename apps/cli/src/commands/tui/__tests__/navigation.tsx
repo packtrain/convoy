@@ -79,6 +79,9 @@ try {
       assert(!plain(frame).includes("deployment slug"), plain(frame));
       await key("\t"); await key("\u001b[C"); await key("\r");
       assert(plain(frame).includes("Internet access: Unrestricted"), plain(frame));
+      // The review's first button returns to the form, so it is named Back, not Cancel.
+      assert(plain(frame).includes("[ Back ]") && !plain(frame).includes("[ Cancel ]"), plain(frame));
+      await key("\r"); assert(plain(frame).includes("Internet access"), plain(frame)); assert.equal(browser.getSnapshot().environment, "create");
     }
   } else if (scenario === "separation") {
     let prepared: EnvironmentForm | undefined;
@@ -150,6 +153,12 @@ try {
     browser.start(); await settle(80);
     assert(panel().includes("offline"), panel());
     assert(panel().includes("Retry connection"), panel());
+    // The connection banner is set off from the panel below it, and its hints only show where they work.
+    const rows = panel().split("\n"), at = rows.findIndex(line => line.includes("Cannot attach"));
+    assert(at > 0 && rows[at + 1].trim() === "", panel());
+    browser.getSnapshot().observations[0].environmentError = "Service disconnected.";
+    await key("c"); stdout.emit("resize"); await settle(80);
+    assert(panel().includes("Service disconnected.") && !panel().includes("[s] Retry check"), panel());
     assert(!plain(frame).includes("0 observed active"), "An unobserved environment must not imply zero activity");
   } else if (scenario.startsWith("warning-layout")) {
     const warning = "Claude Code is not logged in for this project. Run project login a --runtime claude-code. Cursor is not logged in for this project. Run project login a --runtime cursor. OpenCode is not logged in for this project. Run project login a --runtime opencode.";
@@ -372,6 +381,17 @@ try {
     assert(lines().some(line => line.includes("> ( ) Shared  (●) Isolated")) && !lines().some(line => line.includes("Mount folders")), "Clicking a radio option focuses and picks it:\n" + lines().join("\n"));
     await click("[ Cancel ]"); await click("[ Discard ]");
     assert.equal(browser.getSnapshot().environment, undefined, "Cancel and Discard close a filled form");
+    // A sidebar click leaves an open form: a filled one asks first, an empty one goes straight there.
+    const sidebarRow = (text: string) => lines().findIndex(line => line.slice(0, 30).trim() === text);
+    await key("E"); await key("dev"); await click("Actions", sidebarRow("Actions"));
+    assert(lines().some(line => line.includes("Discard environment draft?")), lines().join("\n"));
+    await click("[ Discard ]");
+    assert.equal(browser.getSnapshot().environment, undefined); assert.equal(browser.getSnapshot().actions, true, lines().join("\n"));
+    await key("E"); await click("Credentials", sidebarRow("Credentials"));
+    assert.equal(browser.getSnapshot().environment, undefined); assert.equal(browser.getSnapshot().credentials, "view", lines().join("\n"));
+    await key("+"); assert.equal(browser.getSnapshot().onboarding, true);
+    await click("Actions", sidebarRow("Actions"));
+    assert.equal(browser.getSnapshot().onboarding, false); assert.equal(browser.getSnapshot().actions, true, lines().join("\n"));
   } else if (scenario === "project") {
     browser.select({ connection: 0, profile: "one", details: false }); await settle(80); await key("a");
     assert(plain(frame).includes("Pause project"), plain(frame));

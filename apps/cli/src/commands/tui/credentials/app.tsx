@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from "react";
+import { useLeave, type LeaveRef } from "../mouse.js";
 import { Box, Text, useInput } from "ink";
 import type { Browser } from "../workflow.js";
 import type { BrowseState } from "../validators.js";
@@ -21,10 +22,10 @@ type Notice = { tone: Tone; lines: string[] };
 const note = (tone: Tone, ...lines: string[]): Notice => ({ tone, lines });
 const MARK: Record<Tone, string> = { ok: "✓ ", error: "✗ ", warn: "! ", busy: "" };
 const TONE = { ok: "success", error: "danger", warn: "warning", busy: "accent" } as const;
-type Popup = { kind: "rotate" | "rollback" | "disable" | "remove"; entry: Entry } | { kind: "leave" } | { kind: "reload"; profiles: string[]; saved?: number; then?: () => void };
+type Popup = { kind: "rotate" | "rollback" | "disable" | "remove"; entry: Entry } | { kind: "leave"; then?: () => void } | { kind: "reload"; profiles: string[]; saved?: number; then?: () => void };
 
 /** Environment Credentials tab, or one project's runtime assignments. Spec: docs/specs/cli-tui.md#runtime-credentials-cli-01070 */
-export function Credentials({ browser, state, active, onContent, width, height }: { browser: Browser; state: BrowseState; active: boolean; onContent(): void; width: number; height: number }) {
+export function Credentials({ browser, state, leave, active, onContent, width, height }: { browser: Browser; state: BrowseState; leave: LeaveRef; active: boolean; onContent(): void; width: number; height: number }) {
   const target = browser.targets[state.scope.connection];
   const shared = target.mode === "shared";
   const project = state.scope.details ? undefined : state.scope.profile;
@@ -58,10 +59,13 @@ export function Credentials({ browser, state, active, onContent, width, height }
     finally { if (alive.current) setLoading(false); }
   };
   useEffect(() => { void load(); }, []); // Explicit reads only: open, after a change and f.
-  const close = () => { setDraft({}); setFocus(0); setOpen(undefined); setMessage(undefined); if (project) browser.showCredentials(false); else setEditing(undefined); };
+  // Unlocks at once, so a sidebar click continuing after close can navigate.
+  const close = () => { setDraft({}); setFocus(0); setOpen(undefined); setMessage(undefined); if (project) browser.showCredentials(false); else { setEditing(undefined); browser.editCredentials(false); } };
+  useLeave(leave, editorRows && !popup && !adding && !busy ? then => { if (dirty) setPopup({ kind: "leave", then }); else { close(); then(); } } : undefined);
   const save = async (then?: () => void) => {
     const changes = draftMutations(editorRows ?? [], draft);
-    if (!changes.length || busy) return;
+    if (busy) return;
+    if (!changes.length) { setMessage(note("warn", "No changes to save.")); return; }
     setBusy(true); setMessage(note("busy", `Saving ${changes.length} assignment change${changes.length === 1 ? "" : "s"}…`));
     let done = 0;
     try {
@@ -117,7 +121,6 @@ export function Credentials({ browser, state, active, onContent, width, height }
       if (used.length) setMessage(note("warn", `Unassign ${chosen.name} first: ${assignmentNames(used)}.`)); else setPopup({ kind: "remove", entry: chosen });
     }
   };
-  const discard = () => { setDraft({}); setMessage(note("ok", "Draft discarded. Saved assignments unchanged.")); };
   useInput((input, key) => {
     if (popup || adding || busy || (!locked && !active)) return;
     if (open !== undefined && editorRows?.[focus]) {
@@ -146,7 +149,7 @@ export function Credentials({ browser, state, active, onContent, width, height }
       if (focus >= editorRows.length) {
         if (key.leftArrow || key.rightArrow) setFocus(editorRows.length + (key.rightArrow ? 1 : 0));
         else if (key.return && focus === editorRows.length) void save();
-        else if (key.return) discard();
+        else if (key.return) close();
         return;
       }
       if (input !== " " && !key.return) return;
@@ -172,8 +175,8 @@ export function Credentials({ browser, state, active, onContent, width, height }
     "Managed runtime credentials live in a shared environment, a managed Docker target or a Linux project VM run as its control account.",
     "Provider keys of ordinary profiles on this machine stay in convoy keys and the desktop settings. This TUI does not change them.",
   ].flatMap(line => wrapLines(line, width)).map((line, i) => <Text key={i} color={i ? palette.muted : palette.text}>{line}</Text>)}</>;
-  if (adding) return <AddCredential browser={browser} target={target} entries={entries} width={width} height={height}
-    onClose={(name, done) => { setAdding(false); if (done) { setMessage(note("ok", done)); void load().then(value => { const index = value?.entries.findIndex(item => item.name === name) ?? -1; if (alive.current && index >= 0) setSelected(index + 1); }); } }} />;
+  if (adding) return <AddCredential browser={browser} target={target} entries={entries} leave={leave} width={width} height={height}
+    onClose={(name, done) => { setAdding(false); browser.editCredentials(false); if (done) { setMessage(note("ok", done)); void load().then(value => { const index = value?.entries.findIndex(item => item.name === name) ?? -1; if (alive.current && index >= 0) setSelected(index + 1); }); } }} />;
   if (popup?.kind === "reload") {
     const names = popup.profiles.join(", "), many = popup.profiles.length > 1;
     const runs = popup.profiles.reduce((sum, profile) => sum + (state.observations[state.scope.connection].profiles.find(value => value.profile === profile)?.activeRuns ?? 0), 0);
@@ -191,8 +194,8 @@ export function Credentials({ browser, state, active, onContent, width, height }
       `Reload stops active work in ${names} (${runs} observed active runs) and reconnects with the saved credentials. Other projects stay connected.`]} />;
   }
   if (popup?.kind === "leave") return <Dialog width={width} height={height} lines={["Save assignment changes?", `${project ?? entry?.name} has unsaved assignment changes.`]} onCancel={() => setPopup(undefined)}
-    buttons={[{ label: "Keep editing", activate: () => setPopup(undefined) }, { label: "Discard and continue", activate: () => { setPopup(undefined); close(); } },
-      { label: "Save and continue", activate: () => { setPopup(undefined); void save(close); } }]} />;
+    buttons={[{ label: "Keep editing", activate: () => setPopup(undefined) }, { label: "Discard and continue", activate: () => { setPopup(undefined); close(); popup.then?.(); } },
+      { label: "Save and continue", activate: () => { setPopup(undefined); void save(() => { close(); popup.then?.(); }); } }]} />;
   if (popup) {
     const affected = assignmentNames(assignedRows(rows, popup.entry.name));
     const heading = `${target.name} / ${popup.entry.name} · ${providerLabel(popup.entry)}`;
@@ -226,7 +229,7 @@ export function Credentials({ browser, state, active, onContent, width, height }
   const hints = (text: string) => <Text wrap="truncate" color={palette.muted}>{text}</Text>;
   const fill = (on: boolean) => on ? { backgroundColor: active || locked ? palette.selected : palette.idle, color: active || locked ? palette.selectedText : palette.idleText } : {};
   if (editorRows) {
-    const capacity = Math.max(1, height - 5 - (notices.length && notices.length + 1));
+    const capacity = Math.max(1, height - 6 - (notices.length && notices.length + 1));
     const start = Math.max(0, Math.min(focus, editorRows.length - 1) - capacity + 1);
     const title = <Text bold wrap="truncate" color={palette.text}>{project ? `Credentials · ${plain(project)}` : `Assign ${plain(entry!.name)} · ${plain(providerLabel(entry!))} · revision ${entry!.revision}${entry!.enabled ? "" : " · disabled"}`}</Text>;
     const row = editorRows[focus];
@@ -242,14 +245,16 @@ export function Credentials({ browser, state, active, onContent, width, height }
     return <>
       {title}
       {hints(project ? "Enter/Space choose · Tab/↑/↓ focus · Esc back" : "Space toggles · Tab/↑/↓ focus · Enter activate · Esc back")}
-      {!editorRows.length && <Text color={palette.text}>{loading ? "Loading…" : "No registered projects observed. Connect, or add a project first."}</Text>}
+      <Box flexDirection="column" marginTop={1}>
+      {!editorRows.length && <Text color={palette.muted}>{loading ? "Loading…" : "No registered projects observed. Connect, or add a project first."}</Text>}
       {editorRows.slice(start, start + capacity).map((row, i) => {
         const value = draft[row.key] ?? row.saved;
         const { color, ...rowFill } = fill(start + i === focus);
         const label = project ? `${MANAGED_RUNTIME_LABELS[row.runtime].padEnd(12)} [ ${bindingLabel(value, entries, shared)} ▾ ]` : `[${sameBinding(value, { mode: "managed", name: entry!.name }) ? "x" : " "}] ${plain(row.profile)} · ${MANAGED_RUNTIME_LABELS[row.runtime]}`;
         return <Box key={row.key} {...rowFill}><Text wrap="truncate" color={color ?? palette.text}>{start + i === focus ? ">" : " "} {label}  <Text color={color ?? palette.muted}>{plain(draftNote(row, value))}</Text></Text></Box>;
       })}
-      <Box gap={2} marginTop={1}>{(["Save changes", "Discard"] as const).map((label, i) => <Clickable key={label} onClick={() => { if (busy) return; setFocus(editorRows.length + i); if (i) discard(); else void save(); }}>
+      </Box>
+      <Box gap={2} marginTop={1}>{(["Save changes", dirty ? "Discard" : "Back"] as const).map((label, i) => <Clickable key={i} onClick={() => { if (busy) return; setFocus(editorRows.length + i); if (i) close(); else void save(); }}>
         <Text bold {...(focus === editorRows.length + i ? fill(true) : { color: dirty ? palette.accent : palette.muted })}>[ {label} ]</Text>
       </Clickable>)}</Box>
       {noticeBlock}
@@ -287,7 +292,7 @@ function SecretDialog({ lines, label, width, height, onCancel, onSubmit }: { lin
   const [secret, setSecret] = useState("");
   const [error, setError] = useState<string>();
   const submit = () => { const parsed = secretSchema.safeParse(secret); if (parsed.success) onSubmit(parsed.data); else setError("Enter a single-line API key of at most 4096 characters."); };
-  return <Dialog width={width} height={height} onCancel={onCancel} error={error} lines={[...lines, `New API key (masked): ${masked(secret)}▏`, "Tab to buttons · Enter activates"]}
+  return <Dialog width={width} height={height} onCancel={onCancel} onSubmit={submit} error={error} lines={[...lines, `New API key (masked): ${masked(secret)}▏`, "Enter rotates · Tab to buttons · Esc cancels"]}
     onText={(input, key) => { if (key.backspace || key.delete) setSecret(old => old.slice(0, -1)); else if (input) setSecret(old => (old + printable(input)).slice(0, 4096)); }}
     buttons={[{ label: "Cancel", activate: onCancel }, { label, activate: submit }]} />;
 }
@@ -299,8 +304,8 @@ const providers = [
   { label: "Cursor account", provider: "cursor", runtimes: "Cursor" },
   { label: "Gemini API", provider: "gemini", runtimes: "Antigravity" },
 ] as const;
-function AddCredential({ browser, target, entries, width, height, onClose }: {
-  browser: Browser; target: Connection; entries: Entry[]; width: number; height: number; onClose(name?: string, done?: string): void;
+function AddCredential({ browser, target, entries, leave, width, height, onClose }: {
+  browser: Browser; target: Connection; entries: Entry[]; leave: LeaveRef; width: number; height: number; onClose(name?: string, done?: string): void;
 }) {
   const [form, setForm] = useState({ name: "", region: "", secret: "" });
   const [provider, setProvider] = useState(0);
@@ -308,6 +313,7 @@ function AddCredential({ browser, target, entries, width, height, onClose }: {
   const [step, setStep] = useState<"form" | "review" | "busy">("form");
   const [error, setError] = useState<string>();
   const [discard, setDiscard] = useState(false);
+  const leaving = useRef<() => void>(undefined); // The sidebar click to run after Discard.
   const alive = useRef(true);
   useEffect(() => () => { alive.current = false; }, []);
   const choice = providers[provider].provider;
@@ -324,7 +330,8 @@ function AddCredential({ browser, target, entries, width, height, onClose }: {
     if (!secret.success) return "Enter a single-line API key of at most 4096 characters.";
     return { action: "add", name: form.name, secret: secret.data, ...(aws ? { aws: { provider: aws, region } } : {}), ...(entryProvider ? { provider: entryProvider } : {}) };
   };
-  const close = () => { if (form.name || form.region || form.secret) setDiscard(true); else onClose(); };
+  const close = (then?: () => void) => { leaving.current = then; if (form.name || form.region || form.secret) setDiscard(true); else { onClose(); then?.(); } };
+  useLeave(leave, step !== "busy" && !discard ? close : undefined);
   const submit = async () => {
     const value = request();
     if (typeof value === "string") { setError(value); setStep("form"); return; }
@@ -338,7 +345,7 @@ function AddCredential({ browser, target, entries, width, height, onClose }: {
     else if (at === fields.length + 1) { const value = request(); if (typeof value === "string") setError(value); else { setError(undefined); setStep("review"); } }
   };
   const count = fields.length + 2;
-  const minHeight = fields.length * 2 + 5;
+  const minHeight = fields.length * 2 + 7;
   const small = width < 45 || height < minHeight;
   useInput((input, key) => {
     if (discard || step !== "form") return;
@@ -354,7 +361,7 @@ function AddCredential({ browser, target, entries, width, height, onClose }: {
     else if (input && !key.leftArrow && !key.rightArrow) setForm(old => ({ ...old, [field]: (old[field] + printable(input)).slice(0, field === "secret" ? 4096 : 80) }));
   });
   if (discard) return <Dialog width={width} height={height} lines={["Discard credential draft?", "The entered name and key are cleared."]} onCancel={() => setDiscard(false)}
-    buttons={[{ label: "Keep editing", activate: () => setDiscard(false) }, { label: "Discard", activate: () => onClose() }]} />;
+    buttons={[{ label: "Keep editing", activate: () => setDiscard(false) }, { label: "Discard", activate: () => { onClose(); leaving.current?.(); } }]} />;
   if (step !== "form") {
     const host = aws && codexAwsHost({ provider: aws, region });
     return <Dialog inline key={step} error={step === "review" ? error : undefined} width={width} height={height} onCancel={() => step === "review" && setStep("form")} buttons={step === "busy" ? [] : [{ label: "Back", activate: () => setStep("form") }, { label: "Add credential", activate: () => void submit() }]} lines={step === "busy" ? [`Adding ${form.name} to ${target.name}…`, ...(host && target.credentials?.allowDomain ? [`Allowing ${host} first.`] : [])] : [
@@ -369,7 +376,7 @@ function AddCredential({ browser, target, entries, width, height, onClose }: {
   const choiceRow = providers.map((value, at) => `${at === provider ? "(●)" : "( )"} ${value.label}`).join("  ");
   const providerRow = choiceRow.length + 2 <= width ? choiceRow : `◂ (●) ${providers[provider].label} ▸  ${provider + 1} of ${providers.length}`;
   return <Box flexDirection="column" width={width} height={height}>
-    <Text bold color={palette.text}>Add credential · {plain(target.name)}</Text>
+    <Box marginBottom={1}><Text bold color={palette.text}>Add credential · {plain(target.name)}</Text></Box>
     {fields.map((field, i) => <Box key={field} flexDirection="column">
       <Text color={index === i ? palette.accent : palette.text}>{labels[field]}</Text>
       <Text wrap="truncate" color={palette.text}>{index === i ? ">" : " "} {field === "provider" ? providerRow
@@ -378,7 +385,7 @@ function AddCredential({ browser, target, entries, width, height, onClose }: {
     <Box gap={2} marginTop={1}>{(["Cancel", "Review"] as const).map((label, i) => <Clickable key={label} onClick={() => { setIndex(fields.length + i); press(fields.length + i); }}>
       <Text bold color={index === fields.length + i ? palette.selectedText : palette.accent} backgroundColor={index === fields.length + i ? palette.selected : undefined}>{index === fields.length + i ? ">" : " "} [ {label} ]</Text>
     </Clickable>)}</Box>
-    {error && <Text color={palette.warning}>{error}</Text>}
+    {error && <Box marginTop={1}><Text bold color={palette.danger}>✗ {error}</Text></Box>}
     <Text color={palette.muted}>Tab/↑/↓ focus · ←/→ choose · Enter activate · Esc close</Text>
   </Box>;
 }

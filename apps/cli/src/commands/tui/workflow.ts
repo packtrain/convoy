@@ -363,7 +363,7 @@ export class Browser {
         return;
       }
       this.observe({ health: "reconnecting" });
-      this.set({ loading: false, stale: true, error: `Cannot attach: ${error instanceof Error ? error.message : "Connection failed"}. Retrying…` });
+      this.set({ loading: false, stale: true, error: `Cannot attach: ${error instanceof Error ? error.message.replace(/\.$/, "") : "Connection failed"}. Retrying…` });
       clearTimeout(this.retry);
       this.retry = setTimeout(() => void this.connect(), 3000);
     }

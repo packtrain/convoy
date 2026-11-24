@@ -520,3 +520,9 @@ it("keeps a failing attach reconnecting across retries instead of flashing conne
   expect(seen.length).toBeGreaterThan(0);
   expect(seen.filter(([health, error]) => health !== "reconnecting" || !error?.includes("Cannot attach"))).toEqual([]);
 });
+
+it("does not double the period of an attach error that ends a sentence", async () => {
+  const browser = new Browser([{ id: "local", name: "Local", transport: "unix", endpoint: "local", open: async () => { throw new Error("Service unavailable. Run convoy service start -b."); } }]);
+  cleanups.push(() => browser.dispose()); browser.start();
+  await vi.waitFor(() => expect(browser.getSnapshot().error).toBe("Cannot attach: Service unavailable. Run convoy service start -b. Retrying…"));
+});

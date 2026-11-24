@@ -98,3 +98,14 @@ export function useMouseTracking(enabled: boolean) {
     return () => { stdout.write(trackingOff); };
   }, [stdout, enabled]);
 }
+
+/** Set by an open form or editor; a sidebar click calls it with the navigation to run once the form is left. */
+export type LeaveRef = RefObject<((then: () => void) => void) | undefined>;
+/** Registers `onLeave` while defined; leave it undefined while the form must stay, such as during an operation. */
+export function useLeave(ref: LeaveRef | undefined, onLeave: ((then: () => void) => void) | undefined) {
+  useEffect(() => {
+    if (!ref || !onLeave) return;
+    ref.current = onLeave;
+    return () => { ref.current = undefined; };
+  });
+}

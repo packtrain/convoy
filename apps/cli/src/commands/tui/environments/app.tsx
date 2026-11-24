@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import { Box, Text, useInput } from "ink";
+import { useLeave, type LeaveRef } from "../mouse.js";
 import type { Browser } from "../workflow.js";
 import { Clickable, Dialog } from "../dialog/index.js";
 import { palette, plain, printable } from "../formatters.js";
@@ -24,7 +25,7 @@ type Draft = Omit<EnvironmentForm, "mounts"> & { mode: "shared" | "isolated"; mo
 const radios = { mode: ["shared", "isolated"], networkMode: ["open", "strict"] } as const;
 const radioLabels = { shared: "Shared", isolated: "Isolated", open: "Unrestricted", strict: "Restricted" };
 
-export function Environments({ browser, width, height }: { browser: Browser; width: number; height: number }) {
+export function Environments({ browser, leave, width, height }: { browser: Browser; leave: LeaveRef; width: number; height: number }) {
   const state = browser.getSnapshot();
   const target = browser.targets[state.scope.connection];
   const [step, setStep] = useState<"form" | "confirm" | "busy" | "result">(state.environment === "create" ? "form" : "confirm");
@@ -41,8 +42,11 @@ export function Environments({ browser, width, height }: { browser: Browser; wid
   const [discard, setDiscard] = useState(false);
   const alive = useRef(true);
   const working = useRef(false);
+  const leaving = useRef<() => void>(undefined); // The sidebar click to run after Discard.
+  // Over Add project's repair flow the sidebar stays with Add project.
+  useLeave(leave, step !== "busy" && !discard && !state.onboarding ? then => close(then) : undefined);
   useEffect(() => () => { alive.current = false; }, []);
-  const close = () => { if (working.current) return; if (!created && state.environment === "create" && (form.name || form.deployment || form.domains || form.mounts || form.mode === "isolated" || form.networkMode === "strict")) setDiscard(true); else browser.closeEnvironment(); };
+  const close = (then?: () => void) => { if (working.current) return; leaving.current = then; if (!created && state.environment === "create" && (form.name || form.deployment || form.domains || form.mounts || form.mode === "isolated" || form.networkMode === "strict")) setDiscard(true); else { browser.closeEnvironment(); then?.(); } };
   const backToForm = () => { setMessage([]); setError(undefined); setStep("form"); };
   const progress = (text: string) => { if (alive.current) setMessage(old => [...old, plain(text.slice(-2048))].slice(-8)); };
   const run = async (action: () => Promise<void>, next: "result" | "confirm" = "result", label = chosen.label) => {
@@ -121,14 +125,14 @@ export function Environments({ browser, width, height }: { browser: Browser; wid
       else if (input && !key.leftArrow && !key.rightArrow) setForm(old => ({ ...old, [field]: (old[field] + printable(input)).slice(0, 256) }));
     }
   });
-  if (discard) return <Dialog width={width} height={height} lines={["Discard environment draft?", "Your entered settings will be lost."]} onCancel={() => setDiscard(false)} buttons={[{ label: "Keep editing", activate: () => setDiscard(false) }, { label: "Discard", activate: () => browser.closeEnvironment() }]} />;
+  if (discard) return <Dialog width={width} height={height} lines={["Discard environment draft?", "Your entered settings will be lost."]} onCancel={() => setDiscard(false)} buttons={[{ label: "Keep editing", activate: () => setDiscard(false) }, { label: "Discard", activate: () => { browser.closeEnvironment(); leaving.current?.(); } }]} />;
   if (step === "confirm") return <Dialog inline={state.environment === "create" || state.environment === "update"} key="confirm" width={width} height={height} onCancel={() => state.environment === "create" ? backToForm() : close()}
     lines={state.environment === "create" ? ["Create / resume managed Docker environment", `Target: ${form.name}`, `CLI: ${creation?.version} · ${creation?.install ? creation.localPackage ? `install ${creation.localPackage}` : "install from npm" : "retain installed release"}`,
       ...(creation?.mode === "isolated" ? ["Projects: isolated accounts"] : ["Projects: shared account", `Mount folders: ${creation?.mounts?.join(", ") || "none"}`]), `Internet access: ${creation?.networkMode === "open" ? "Unrestricted" : "Restricted"}`, ...(creation?.networkMode === "open" ? ["Allows web research and downloads from any site."] : [`Deployment: ${creation?.deployment || "none"}`, `Extra domains: ${creation?.domains || "none"}`]), "Builds a local image and retains private data volumes. Requires Linux Docker."] : [
       chosen.label, `Exact target: ${target.name} · ${target.endpoint}`, `Host ${getCliVersion()} / Installed ${proposal?.installed ?? state.observations[state.scope.connection].version ?? "unknown"}`,
       ...(proposal ? [proposal.localPackage ? `Install ${proposal.localPackage} (${proposal.proposed}).` : `Install @useconvoy/cli@${proposal.proposed} from npm.`] : []),
       ...(chosen.operation === "delete" ? ["Permanently deletes the container and all saved volumes.", "Includes project files, credentials, configuration and logs.", "This cannot be undone. Remote Convoy projects are not deleted."] : ["May stop all connections and active work on this target. Other clients are affected."]), "Cancel leaves the target unchanged.",
-    ]} buttons={[{ label: "Cancel", activate: () => state.environment === "create" ? backToForm() : close() }, { label: state.environment === "create" ? "Create / Resume" : chosen.operation === "update" ? "Update CLI" : chosen.label, activate: () => { void execute(); } }]} />;
+    ]} buttons={[{ label: state.environment === "create" ? "Back" : "Cancel", activate: () => state.environment === "create" ? backToForm() : close() }, { label: state.environment === "create" ? "Create / Resume" : chosen.operation === "update" ? "Update CLI" : chosen.label, activate: () => { void execute(); } }]} />;
   const inline = state.environment !== "stop" && state.environment !== "delete";
   if (step === "busy" || step === "result") return <Dialog inline={inline} key={step} width={width} height={height} scrollable error={step === "result" ? error : undefined} lines={message} onCancel={close}
     buttons={step === "busy" ? [] : [{ label: inline ? "Back" : "Close", activate: () => { if (state.environment === "create" && !created) { setIndex(0); backToForm(); } else close(); } }]} />;

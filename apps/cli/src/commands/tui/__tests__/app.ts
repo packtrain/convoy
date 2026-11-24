@@ -197,9 +197,15 @@ try {
         await until(() => plain(frame).includes("/tmp/pasted-log.jsonl"));
         assert(plain(frame).includes("Export path:"), "paste must not submit");
       } else {
+        stdin.write("\r"); await until(() => plain(frame).includes("✗ Enter a file path."));
         stdin.write("/tmp"); await until(() => plain(frame).includes("Export path: /tmp"));
-        stdin.write("\r"); await until(() => plain(frame).includes("Cannot use that destination"));
+        stdin.write("\r"); await until(() => plain(frame).includes("✗ Cannot use that destination"));
         assert(plain(frame).includes("Export path:"), "validation remains editable");
+        assert(plain(frame).includes("Type path"), "the error does not replace the hint");
+        // A failed read is marked as an error, not shown like the standing disclaimer.
+        browser.readLogs = async () => { throw new Error("offline"); };
+        stdin.write("\u001b"); await until(() => !plain(frame).includes("Export path:"));
+        stdin.write("r"); await until(() => plain(frame).includes("✗ "));
       }
     }
   } else {

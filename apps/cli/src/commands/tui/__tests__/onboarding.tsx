@@ -25,7 +25,8 @@ if (["access", "remount"].includes(process.argv[2])) {
   browser.prepareOnboardingAccess = async profile => ({ profile, status: "online", attempts: 1, runtimes: ["codex"] });
 }
 browser.openOnboarding();
-const mount = () => render(<Box width={80} height={23}><Onboarding browser={browser} width={80} height={23} load={async (_url, secret) => {
+const leave: { current: ((then: () => void) => void) | undefined } = { current: undefined };
+const mount = () => render(<Box width={80} height={23}><Onboarding browser={browser} leave={leave} width={80} height={23} load={async (_url, secret) => {
   assert.equal(secret, "PRIVATE_API_KEY_qard");
   // The mouse run sorts 19 projects above the target, past the menu's visible rows.
   const filler = process.argv[2] === "mouse" ? Array.from({ length: 19 }, (_, i) => ({ _id: `f${i}`, name: `Filler ${i}`, alias: `F${i}`, organizationName: "Alpha", organizationId: "alpha" })) : [];
@@ -72,6 +73,14 @@ try {
     await click("[ Register ]"); await wait(() => frame.includes("preparation failed"));
     assert.equal(calls, 1, "Clicking Register submits once");
     assert.equal(requests[0].reuse, true); assert.equal(requests[0].profileKey, "ex-custom");
+  } else if (process.argv[2] === "leave") {
+    // A sidebar click on a filled form asks to discard it, then runs the navigation.
+    let navigated = 0;
+    assert(leave.current, "An open form registers a leave handler");
+    leave.current(() => navigated++); await wait(() => frame.includes("Discard project draft"));
+    assert.equal(navigated, 0);
+    stdin.write("\t"); await settle(70); await key("\r");
+    assert.equal(browser.getSnapshot().onboarding, false); assert.equal(navigated, 1);
   } else if (process.argv[2] === "cancel") {
     await key("\u001b"); await key("\u001b");
     assert(frame.includes("Discard project draft"), "Leaving a nonempty form requires an explicit discard");

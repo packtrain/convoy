@@ -10,7 +10,7 @@ import { savedDeploymentUrls, loadChoices, validateForm } from "./workflow.js";
 import { RuntimeAccess } from "./runtime-access.js";
 import { resultMessage } from "./formatters.js";
 import { Clickable, Dialog } from "../dialog/index.js";
-import { useWheel } from "../mouse.js";
+import { useLeave, useWheel, type LeaveRef } from "../mouse.js";
 import { MODE_COPY, prerequisiteFailure, prerequisiteLines } from "../../environment/formatters.js";
 import type { Prerequisite } from "../../environment/validators.js";
 
@@ -24,7 +24,7 @@ const names = new Intl.Collator(undefined, { sensitivity: "base", numeric: true 
 const AUTH_HINT = "Find both in Convoy under Profile settings → API keys.";
 
 type Field = { label: string; value: string; secret?: boolean; select?: boolean; set(value: string): void };
-export function Onboarding({ browser, width: columns, height: rows, load = loadChoices }: { browser: Browser; width: number; height: number; load?: typeof loadChoices }) {
+export function Onboarding({ browser, leave, width: columns, height: rows, load = loadChoices }: { browser: Browser; leave?: LeaveRef; width: number; height: number; load?: typeof loadChoices }) {
   const session = browser.onboardingSession;
   const target = browser.targets[browser.getSnapshot().scope.connection];
   const [compatible, setCompatible] = useState<boolean | undefined>(!session && target.checkProject ? undefined : true);
@@ -65,6 +65,7 @@ export function Onboarding({ browser, width: columns, height: rows, load = loadC
   const [done, setDone] = useState(Boolean(session));
   const [retained, setRetained] = useState(false);
   const [discard, setDiscard] = useState(false);
+  const leaving = useRef<() => void>(undefined); // The sidebar click to run after Discard.
   const mounted = useRef(true);
   const discovery = useRef<AbortController | undefined>(undefined);
   const edited = useRef(new Set<string>());
@@ -99,8 +100,10 @@ export function Onboarding({ browser, width: columns, height: rows, load = loadC
   const count = Math.max(1, Math.floor((height - 8 - hint - (width < 50 ? 1 : 0) - (message ? 2 : 0)) / fieldRows));
   const payload = () => ({ ...options, url, apiKey: secret, reuse: mode === 1, clone: mode === 2 ? options.clone : undefined });
   const move = (next: typeof step) => { setStep(next); setIndex(0); setCursor(undefined); setMessage(""); };
+  // The sidebar leaves the form, but not during an operation, the repair flow or Runtime access.
+  useLeave(leave, !busy && !updating && !discard && step !== "access" ? then => close(then) : undefined);
   const finish = () => { setSecret(""); browser.closeOnboarding(done && applied ? options.profileKey : undefined, done && !applied); };
-  const close = () => { if (!done && (url !== (process.env.CONVOY_URL ?? "") || secret || Object.keys(options).length || directory)) setDiscard(true); else finish(); };
+  const close = (then?: () => void) => { leaving.current = then; if (!done && (url !== (process.env.CONVOY_URL ?? "") || secret || Object.keys(options).length || directory)) setDiscard(true); else { finish(); then?.(); } };
   const authenticate = async () => {
     if (!url.trim() || !secret.trim()) { setMessage("Enter the deployment URL and API key."); return; }
     const abort = new AbortController(); discovery.current = abort;
@@ -255,7 +258,7 @@ export function Onboarding({ browser, width: columns, height: rows, load = loadC
     : lists.length ? delta => setIndex(value => clamp(value + delta, lists.length))
     : form ? delta => { setIndex(value => clamp(Math.min(value, fields.length - 1) + delta, fields.length)); setCursor(undefined); } : undefined);
   if (updating) return null;
-  if (discard) return <Dialog width={columns} height={rows} lines={["Discard project draft?", "Entered fields and the credential will be cleared. Prepared files and remote data remain."]} onCancel={() => setDiscard(false)} buttons={[{ label: "Keep editing", activate: () => setDiscard(false) }, { label: "Discard", activate: finish }]} />;
+  if (discard) return <Dialog width={columns} height={rows} lines={["Discard project draft?", "Entered fields and the credential will be cleared. Prepared files and remote data remain."]} onCancel={() => setDiscard(false)} buttons={[{ label: "Keep editing", activate: () => setDiscard(false) }, { label: "Discard", activate: () => { finish(); leaving.current?.(); } }]} />;
   if (compatible !== true) return <Dialog inline key={`compatibility:${probe}`} width={columns} height={rows} onCancel={close}
     lines={[compatible === false ? "Remote update required" : compatibilityError || "Checking target setup support…",
       `Target: ${target.name}`, "Guided project registration requires target setup support. A version difference alone does not block supported targets.",

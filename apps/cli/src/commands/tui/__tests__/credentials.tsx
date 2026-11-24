@@ -128,8 +128,38 @@ try {
       await click("[f] Refresh"); await settle(100);
       assert.equal(statusReads, before + 1, "Clicking [f] Refresh rereads status");
       await click("+ Add credential"); await until("Add credential · Fixture");
-      await click("[ Review ]"); await until("Name uses letters");
+      const form = screen.split("\n"), heading = form.findIndex(line => line.includes("Add credential · Fixture"));
+      assert.equal(form[heading + 1].slice(form[heading].indexOf("Add credential")).trim(), "", "A blank line follows the form title:\n" + screen);
+      await click("[ Review ]"); await until("✗ Name uses letters");
       await click("[ Cancel ]"); await until("work-openai · enabled");
+      assert.equal(requests.length, 0);
+      // The editor separates its title and hints from the rows by a blank line.
+      await click("work-old · enabled"); await click("work-old · enabled"); await until("Assign work-old");
+      const lines = screen.split("\n"), hint = lines.findIndex(line => line.includes("Space toggles"));
+      assert.equal(lines[hint + 1].slice(lines[hint].indexOf("Space toggles")).trim(), "", screen);
+      // Discard drops the draft and leaves the editor.
+      await key(" "); await until("unsaved");
+      await click("[ Discard ]"); await until("Assignments · work-old");
+      assert.equal(browser.getSnapshot().credentials, "view");
+      // A clean editor's second button reads Back and leaves too.
+      await click("work-old · enabled"); await until("Assign work-old");
+      await click("[ Save changes ]"); await until("! No changes to save.");
+      await click("[ Back ]"); await until("Assignments · work-old");
+      // A sidebar click on a dirty draft asks first, then goes where it was clicked.
+      await click("work-old · enabled"); await until("Assign work-old");
+      await key(" "); await until("unsaved");
+      await click("Actions"); await until("Save assignment changes?");
+      await click("[ Discard and continue ]"); await settle(200);
+      assert.equal(browser.getSnapshot().actions, true, screen); assert.equal(browser.getSnapshot().credentials, undefined);
+      // On a clean editor the sidebar click goes straight there.
+      await key("c"); await until("work-old · enabled"); await key(DOWN, DOWN, ENTER); await until("Assign work-old");
+      await click("Actions"); await settle(200);
+      assert.equal(browser.getSnapshot().actions, true, screen);
+      // So does the Add credential form, asking first when it holds input.
+      await key("c"); await until("+ Add credential"); await click("+ Add credential"); await until("Add credential · Fixture");
+      await key("x"); await click("Actions"); await until("Discard credential draft?");
+      await click("[ Discard ]"); await settle(200);
+      assert.equal(browser.getSnapshot().actions, true, screen);
       assert.equal(requests.length, 0);
     }
     else if (scenario === "vanish") {
@@ -211,11 +241,13 @@ try {
       await key(TAB, TAB, ENTER, RIGHT, ENTER); await until("updated launcher");
       const at = frame.indexOf("✗ Not added: Managed Anthropic keys require");
       assert(at >= 0 && at < frame.indexOf("Add credential to Fixture"), frame);
+      const rows = screen.split("\n"), title = rows.findIndex(line => line.includes("Add credential to Fixture"));
+      assert.equal(rows[title - 1].slice(rows[title].indexOf("Add credential to Fixture")).trim(), "", "A blank line separates the error from the dialog text:\n" + screen);
       assert.equal(entries["work-a"], undefined);
     } else if (scenario === "rotate") {
       await key(DOWN, "o"); await until("Affected assignments: a (Codex).");
       stdin.write(SECRET); await settle(60);
-      await key(TAB, TAB, ENTER); await until("Rotated work-openai.");
+      await key(ENTER); await until("Rotated work-openai."); // Enter in the key field submits.
       assert.deepEqual(requests, [{ action: "rotate", name: "work-openai", secret: SECRET }]);
       await until("rev 3 · OpenAI · API key");
     } else if (scenario === "disable-rollback") {
@@ -309,7 +341,9 @@ try {
       await key(ENTER, UP, ENTER); await until("unsaved · was work-openai");
       await key("u"); await until("! Save or discard the draft before [u] Reload project.");
       assert.equal(browser.getSnapshot().credentials, "editing");
-      await key(TAB, TAB, TAB, TAB, TAB, ENTER); await until("pending reconnect · [u] Reload project");
+      await key(TAB, TAB, TAB, TAB, TAB, ENTER); await until("Assign or unassign credentials"); // Discard returns to Actions.
+      assert.equal(browser.getSnapshot().credentials, undefined);
+      await key("c"); await until("pending reconnect · [u] Reload project");
       await key("u"); await until("Reload a?");
       await key(RIGHT, ENTER); await until("✓ Reload requested for a.");
       assert.deepEqual(reconciles, [{ profile: "a", interrupt: true }]);

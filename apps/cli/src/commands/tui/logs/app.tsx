@@ -41,7 +41,7 @@ export function LogDetail({ browser, row, width, height, small = false, mouse, t
     return () => { active.current = false; exporting.current?.abort(); logs.dispose(); };
   }, [logs]);
   const chooseDestination = async () => {
-    if (!path.trim()) return;
+    if (!path.trim()) { setNotice("Enter a file path."); return; }
     const destination = resolve(path);
     setMode("checking");
     try {
@@ -108,7 +108,8 @@ export function LogDetail({ browser, row, width, height, small = false, mouse, t
   });
   const prompt = mode !== "view" && <Dialog inline={mode === "notice" || mode === "exporting" || mode === "checking"} key={mode} width={width} height={height} onCancel={cancel}
       scrollable={mode === "notice" || mode === "exporting"}
-      lines={mode === "path" ? ["Export stored run", "", `Export path: ${path}`, notice || "Type path · Tab selects buttons · Enter continues"]
+      error={mode === "path" ? notice || undefined : undefined}
+      lines={mode === "path" ? ["Export stored run", "", `Export path: ${path}`, "Type path · Tab selects buttons · Enter continues"]
         : mode === "confirm" ? [`${overwrite ? "Overwrite" : "Create"} ${path}?`, "", "Tab / arrows select · Enter activate"]
         : [mode === "checking" ? "Checking destination…" : notice, "", "↑/↓ PgUp/PgDn scroll"]}
       onText={mode === "path" ? editPath : undefined} onSubmit={chooseDestination}
@@ -123,7 +124,7 @@ export function LogDetail({ browser, row, width, height, small = false, mouse, t
     <Box height={capacity} flexShrink={0} flexDirection="column" overflow="hidden">
       {lines.length ? lines.slice(start, start + capacity).map((line, i) => <Text key={i} wrap="truncate" color={palette.text}>{line || " "}</Text>) : <Text color={palette.text}>{state.loading ? "Loading stored events…" : "No stored events available. Live deltas are not retained history."}</Text>}
     </Box>
-    <Text color={palette.warning} wrap="truncate">{state.error ?? "Stored payloads; original completeness unknown. Ingestion may have shortened historical data."}</Text>
+    {state.error ? <Text bold color={palette.danger} wrap="truncate">✗ {state.error}</Text> : <Text color={palette.muted} wrap="truncate">Stored payloads; original completeness unknown. Ingestion may have shortened historical data.</Text>}
     <Text wrap="truncate" color={palette.muted}>{`Events ${state.events[0]?.order ?? "–"}…${state.events.at(-1)?.order ?? "–"} · [m] ${mouse ? "select text" : "mouse"}`}</Text>
     <Text color={palette.muted} wrap="truncate">↑/↓ scroll · PgUp/PgDn · p older · n newer · Space pause · f latest</Text>
     <Text color={palette.muted} wrap="truncate">[e] Export entire stored run · r retry · Esc {mode === "exporting" ? "cancel export" : "back"} · q detach</Text>
