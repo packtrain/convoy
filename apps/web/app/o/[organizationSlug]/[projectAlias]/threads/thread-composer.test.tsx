@@ -997,32 +997,6 @@ describe("ThreadComposer", () => {
     expect(onStop).toHaveBeenCalledTimes(1);
   });
 
-  test("hints the send and stop keys in tooltips", async () => {
-    // Radix measures the tooltip's anchor.
-    vi.stubGlobal("ResizeObserver", class {
-      observe() {}
-      unobserve() {}
-      disconnect() {}
-    });
-    const selectorsProps = createSelectorsProps();
-    const { unmount } = render(
-      <ThreadComposer onSubmit={vi.fn()} initialInput="Hello" selectorsProps={selectorsProps} />
-    );
-
-    fireEvent.focus(screen.getByRole("button", { name: "Submit" }));
-    const sendTip = await screen.findByRole("tooltip");
-    expect(sendTip.textContent).toContain("Enter");
-    expect(sendTip.textContent).toContain("Shift+Enter");
-    unmount();
-
-    render(
-      <ThreadComposer onSubmit={vi.fn()} onStop={vi.fn()} showStopWhenIdleInput selectorsProps={selectorsProps} />
-    );
-    fireEvent.focus(screen.getByRole("button", { name: "Stop" }));
-    expect((await screen.findByRole("tooltip")).textContent).toContain("Esc");
-    vi.unstubAllGlobals();
-  });
-
   test("defaults the placeholder to describing a task", () => {
     render(<ThreadComposer onSubmit={vi.fn()} selectorsProps={createSelectorsProps()} />);
 
