@@ -29,6 +29,12 @@ runs (CLI 0.155.0 and newer).
   badge before the text, next to the queue icon, so it doesn't read as an
   action button (OS-1877). Both are non-interactive — Edit restores the
   attachments into the composer for inspection.
+- A row truncates its text to one line. Hovering the text for 1 second opens a
+  card above the row with the whole message, rendered like the sent bubble
+  (slash command pills, line breaks kept) and scrollable past 20rem. It
+  closes 150 ms after the pointer leaves the text and the card, the same
+  timing as the `/` menu's prompt preview (OS-2564). Files-only rows have no
+  card; their file names are the native `title`.
 - A row's text never depends on the loaded history window. A long run can
   write more chunks after a queued message than the window holds, so the
   thread view reads the chunks of unprocessed messages outside the window by

@@ -8,8 +8,11 @@ import {
   Send,
   Trash2,
 } from "lucide-react";
+import type { ReactElement } from "react";
+import { UserMessageText } from "@/components/blocks/thread/message-parts/components/user-message-text";
 import { Spinner } from "@/components/custom/spinner";
 import { Button } from "@/components/ui/button";
+import { HoverCard, HoverCardContent, HoverCardTrigger } from "@/components/ui/hover-card";
 import type { Id } from "@/convex/_generated/dataModel";
 import { SlashCommandDisplayText } from "@/lib/slash-commands/display";
 import { cn } from "@/lib/utils";
@@ -82,6 +85,7 @@ export function QueuedMessagesStrip({
                 {fileNames.length}
               </span>
             )}
+            <QueuedMessagePreview text={message.text}>
             <span className="min-w-0 flex-1 truncate text-sm">
               {message.text === "" && fileNames.length > 0 ? (
                 <span
@@ -96,6 +100,7 @@ export function QueuedMessagesStrip({
                 <SlashCommandDisplayText text={message.text} />
               )}
             </span>
+            </QueuedMessagePreview>
             {message.steerRequested ? (
               <Spinner
                 className="text-xs text-muted-foreground"
@@ -163,5 +168,24 @@ export function QueuedMessagesStrip({
         })}
       </ul>
     </div>
+  );
+}
+
+/** Hover card with the full message, rendered like the sent bubble, timed like the prompt preview (OS-2564). */
+function QueuedMessagePreview({ text, children }: { text: string; children: ReactElement }) {
+  if (text === "") return children;
+  return (
+    <HoverCard openDelay={1000} closeDelay={150}>
+      <HoverCardTrigger asChild>{children}</HoverCardTrigger>
+      <HoverCardContent
+        side="top"
+        align="start"
+        sideOffset={8}
+        aria-label="Queued message preview"
+        className="max-h-80 w-96 max-w-[calc(100vw-2rem)] overflow-y-auto break-words p-3"
+      >
+        <UserMessageText text={text} />
+      </HoverCardContent>
+    </HoverCard>
   );
 }

@@ -1,7 +1,7 @@
 /**
  * @vitest-environment jsdom
  */
-import { fireEvent, render, screen, within } from "@testing-library/react";
+import { act, fireEvent, render, screen, within } from "@testing-library/react";
 import { describe, expect, test, vi } from "vitest";
 import type { Id } from "@/convex/_generated/dataModel";
 import { QueuedMessagesStrip } from "./queued-messages-strip";
@@ -232,5 +232,30 @@ describe("QueuedMessagesStrip", () => {
     const list = screen.getByRole("list");
     expect(list.classList.contains("divide-y")).toBe(true);
     expect(within(list).getAllByRole("listitem")).toHaveLength(2);
+  });
+
+  test("hovering a row's text previews the whole message (OS-2564)", () => {
+    vi.useFakeTimers();
+    try {
+      const text = "First line of a long queued message\n\nSecond paragraph";
+      render(
+        <QueuedMessagesStrip
+          messages={[{ _id: "long" as Id<"cliMessages">, text, steerRequested: false }]}
+          canSteer={false}
+          onSteer={vi.fn()}
+          onEdit={vi.fn()}
+          onDelete={vi.fn()}
+        />
+      );
+      expect(screen.queryByLabelText("Queued message preview")).toBeNull();
+
+      fireEvent.pointerEnter(screen.getByText(/First line/));
+      act(() => vi.advanceTimersByTime(1000));
+
+      const preview = screen.getByLabelText("Queued message preview");
+      expect(preview.textContent).toBe(text);
+    } finally {
+      vi.useRealTimers();
+    }
   });
 });
