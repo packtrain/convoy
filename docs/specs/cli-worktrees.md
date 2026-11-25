@@ -226,6 +226,11 @@ side lives in `apps/cli/src/lib/git/history.ts`.
   page's tips, so commits made or fetched while the user pages don't shift or
   repeat rows. `enqueue` and the CLI both reject
   any other cursor shape. An unborn branch returns `{ commits: [] }`.
+  The web caches the loaded rows per browser tab (20 checkouts, oldest
+  dropped). A History remount within 60 s of the first page, with no run
+  finished since, shows them with no request; otherwise it shows them while
+  the first page is fetched again. The age is checked when History can first
+  fetch. Refresh and a finished run always fetch; a failed one leaves the age.
 - `{ kind: "commitPatch", pathId, postRef }` returns `resultJson = { body,
   patch, truncated }` for the commit in `postRef`. `enqueue` accepts a full
   40- or 64-character lowercase hex hash only, and the CLI checks it again

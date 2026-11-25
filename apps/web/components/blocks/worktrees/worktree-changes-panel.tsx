@@ -72,7 +72,7 @@ function HistoryPanel({
   const isOnline = profile?.isOnline ?? false;
   const entry = profile?.paths.find((path) => path.id === pathId);
   const canFetch = isOnline && entry !== undefined && supportsWorktreeHistory(profile?.appVersion);
-  const history = useWorktreeHistory(profileId, pathId, canFetch);
+  const history = useWorktreeHistory(profileId, pathId, canFetch, refreshKey);
   const diffOptions = usePatchDiffOptions(diffStyle, wordWrap);
   const [layout, setLayout] = useHistoryLayout();
   useRefreshOnKey(refreshKey, history.refresh);

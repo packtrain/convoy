@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { Id } from "@/convex/_generated/dataModel";
 import { type HistoryLayout, readHistoryLayout, writeHistoryLayout } from "@/lib/threads/changes-view-prefs";
 import { isRecord } from "@/lib/type-guards";
@@ -72,31 +72,89 @@ function parseCommitPatch(resultJson: string | undefined): CommitPatch | null {
   return { body: typeof parsed.body === "string" ? parsed.body : "", patch: parsed.patch, truncated: parsed.truncated === true };
 }
 
+interface CachedHistory {
+  commits: CommitSummary[];
+  nextCursor?: string;
+  /** When the first page came back. */
+  fetchedAt: number;
+  /** The caller's `refreshKey` then; a different one means a run landed since. */
+  refreshKey?: string;
+}
+
+// ponytail: per-tab cache of the loaded rows, 20 checkouts, oldest dropped; a remount within 60 s skips the fetch.
+const MAX_CACHED_HISTORIES = 20;
+const HISTORY_FRESH_MS = 60_000;
+const historyCache = new Map<string, CachedHistory>();
+
+export function clearHistoryCacheForTests() {
+  historyCache.clear();
+}
+
 /**
  * Commits of one checkout, 50 per `gitLog` page (docs/specs/cli-worktrees.md →
  * Commit history). Earlier pages are kept while the next one loads; Refresh
- * starts over from the first page.
+ * starts over from the first page. A remount starts from the tab's cache.
  */
-export function useWorktreeHistory(profileId: Id<"cliProfiles">, pathId: string, enabled: boolean) {
+export function useWorktreeHistory(profileId: Id<"cliProfiles">, pathId: string, enabled: boolean, refreshKey?: string) {
+  const cacheKey = `${profileId}:${pathId}`;
+  const [mountCache] = useState(() => historyCache.get(cacheKey));
+  const isFresh = (entry: CachedHistory | undefined): entry is CachedHistory =>
+    entry !== undefined &&
+    Date.now() - entry.fetchedAt < HISTORY_FRESH_MS &&
+    (refreshKey === undefined || entry.refreshKey === refreshKey);
+  // A fresh cache hit stands in for the first pages until Load more or Refresh.
+  const [held, setHeld] = useState(() => (isFresh(mountCache) ? mountCache : undefined));
+  // Freshness counts from when History can fetch: check again when it turns on.
+  const [wasEnabled, setWasEnabled] = useState(enabled);
+  if (enabled !== wasEnabled) {
+    setWasEnabled(enabled);
+    if (enabled && held && !isFresh(held)) {
+      setHeld(undefined);
+    }
+  }
   const [cursor, setCursor] = useState<string>();
   const [earlier, setEarlier] = useState<CommitSummary[]>([]);
-  // The rows before a Refresh, on screen until the first page is back.
-  const [previous, setPrevious] = useState<CommitSummary[]>([]);
-  const op = useWorktreeOp({ profileId, pathId, kind: "gitLog", cursor, enabled });
+  // The rows before a Refresh (or a stale cache hit), on screen until the first page is back.
+  const [previous, setPrevious] = useState<CommitSummary[]>(() => mountCache?.commits ?? []);
+  const op = useWorktreeOp({ profileId, pathId, kind: "gitLog", cursor, enabled: enabled && !held });
   const page = useMemo(() => parseCommitPage(op.resultJson), [op.resultJson]);
-  const commits = useMemo(() => (page ? [...earlier, ...page.commits] : earlier.length > 0 ? earlier : previous), [earlier, page, previous]);
-  const nextCursor = page?.nextCursor;
+  const commits = useMemo(
+    () => held?.commits ?? (page ? [...earlier, ...page.commits] : earlier.length > 0 ? earlier : previous),
+    [held, earlier, page, previous]
+  );
+  const nextCursor = held ? held.nextCursor : page?.nextCursor;
   const loading = op.loading;
+  const opError = op.error;
+  // Starts true so a result already there on mount counts as one that just came back.
+  const wasLoadingRef = useRef(true);
+
+  useEffect(() => {
+    const justSettled = wasLoadingRef.current && !loading;
+    wasLoadingRef.current = loading;
+    // Only a request that just succeeded renews the entry; a failed one keeps the last good page.
+    if (!justSettled || opError || !page) {
+      return;
+    }
+    const cached = historyCache.get(cacheKey);
+    const fetchedAt = cursor === undefined ? Date.now() : (cached?.fetchedAt ?? Date.now());
+    historyCache.delete(cacheKey);
+    historyCache.set(cacheKey, { commits, nextCursor, fetchedAt, refreshKey: refreshKey ?? cached?.refreshKey });
+    if (historyCache.size > MAX_CACHED_HISTORIES) {
+      historyCache.delete(historyCache.keys().next().value!);
+    }
+  }, [cacheKey, commits, cursor, loading, nextCursor, opError, page, refreshKey]);
 
   const loadMore = useCallback(() => {
     if (!nextCursor || loading) {
       return;
     }
+    setHeld(undefined);
     setEarlier(commits);
     setCursor(nextCursor);
   }, [commits, nextCursor, loading]);
   const refreshOp = op.refresh;
   const refresh = useCallback(() => {
+    setHeld(undefined);
     setPrevious(commits);
     setEarlier([]);
     setCursor(undefined);
@@ -111,7 +169,7 @@ export function useWorktreeHistory(profileId: Id<"cliProfiles">, pathId: string,
     refreshing: loading && cursor === undefined && commits.length > 0,
     loadingMore: loading && cursor !== undefined,
     hasMore: nextCursor !== undefined,
-    error: op.error ?? (op.resultJson && !page ? MALFORMED : null),
+    error: opError ?? (op.resultJson && !page ? MALFORMED : null),
     /** Re-sends the request that failed (the same page). */
     retry: refreshOp,
     loadMore,
