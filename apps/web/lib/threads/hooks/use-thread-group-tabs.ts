@@ -14,9 +14,14 @@ import { buildAddToGroupDraftSeed } from "@/lib/threads/draft-flow";
 import { writeGroupLastTab } from "@/lib/threads/group-last-tab";
 import { useCliProfiles } from "@/lib/threads/hooks/use-cli-profiles";
 import { useCreatedThreadHold } from "@/lib/threads/hooks/use-created-thread-hold";
-import type { CliThreadDetailItem, ThreadGroup } from "@/lib/threads/thread-query-patches";
+import type { CliThreadDetailItem, ThreadGroup, ThreadGroupChild } from "@/lib/threads/thread-query-patches";
 
 export const ADD_TO_GROUP_DRAFT_TAB_ID = "add-to-group-draft";
+
+/** A done thread moves to the Done menu only once its run ends, so a live spinner stays visible. */
+function isInDoneMenu(child: Pick<ThreadGroupChild, "isDone" | "status">): boolean {
+  return child.isDone && child.status !== "streaming" && child.status !== "pending";
+}
 
 interface UseThreadGroupTabsOptions {
   /** The active thread's doc; null for the round trip after a tab switch. */
@@ -257,17 +262,21 @@ export function useThreadGroupTabs({
     if (!groupChildren) {
       return groupChildren;
     }
-    const live = groupChildren.filter((child) => !child.isDone);
+    const live = groupChildren.filter((child) => !isInDoneMenu(child));
     if (live.length === groupChildren.length) {
       return groupChildren;
     }
     return [
       ...live,
       ...groupChildren
-        .filter((child) => child.isDone)
+        .filter(isInDoneMenu)
         .sort((a, b) => (b.doneAt ?? 0) - (a.doneAt ?? 0)),
     ];
   }, [groupChildren]);
+  const doneMenuIds = useMemo(
+    () => new Set<string>((groupChildren ?? []).filter(isInDoneMenu).map((child) => child._id)),
+    [groupChildren]
+  );
   // Placeholder tabs hold the strip's shape while the group and its refs load,
   // so the header never morphs from a lone title into a full strip (OS-1558).
   // `tabsReady` is one-way, so this is exactly "the strip has never rendered":
@@ -338,8 +347,8 @@ export function useThreadGroupTabs({
   return {
     showGroupStrip,
     stripPlaceholderCount,
-    threadTabs: threadTabs.filter((tab) => !tab.dimmed || tab.id === threadId),
-    doneThreadTabs: groupChildren ? threadTabs.filter((tab) => tab.dimmed) : [],
+    threadTabs: threadTabs.filter((tab) => !doneMenuIds.has(tab.id) || tab.id === threadId),
+    doneThreadTabs: threadTabs.filter((tab) => doneMenuIds.has(tab.id)),
     activeThreadTabId,
     onThreadTabSelect,
     addToGroupDraft,

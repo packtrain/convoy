@@ -318,7 +318,10 @@ strip retains the source and draft tabs while a newly formed group loads.
 - Tab strip details (OS-1477):
   - Unfinished tabs keep creation order. Done threads are hidden from the strip
     except for the selected thread, which stays visible even after it is marked
-    done (OS-1906). Its title remains struck through and muted.
+    done (OS-1906). Its title remains struck through and muted. A done thread
+    whose run is still `streaming` or `pending` also stays in the strip, with
+    its spinner, until the run ends. The sticky mark (OS-2176) would otherwise
+    hide a live run behind the Done menu, whose rows have no status glyph.
   - A **Done** button with the `CircleCheckBig` icon sits immediately after the
     thread's `...` actions menu, before the sidebar separator. It opens a menu
     of all done threads, newest `doneAt` first, including the selected thread

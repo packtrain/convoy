@@ -4712,6 +4712,23 @@ describe("ThreadWorkspace", () => {
         expect(screen.getByRole("button", { name: "Done threads" }).title).toBe("Done threads (1)");
       });
 
+      test("keeps a done thread that is still running in the strip with its spinner", () => {
+        useGroupChildThread();
+        const base = doneGroupChildren();
+        groupQueryResult = {
+          ...base,
+          children: base.children.map((child, index) => index === 1 ? { ...child, status: "streaming" } : child),
+        };
+        renderWorkspace();
+
+        const tabs = headerTabs();
+        expect(tabs.map((tab) => tab.textContent)).toEqual(["Existing thread", "Older done"]);
+        expect(within(tabs[1]).getByText("Older done").className).toContain("line-through");
+        const slot = tabs[1].closest('[data-slot="thread-tab"]')!.querySelector('[data-slot="thread-tab-indicator"]');
+        expect(slot?.firstElementChild?.getAttribute("title")).toBe("Streaming response");
+        expect(screen.getByRole("button", { name: "Done threads" }).title).toBe("Done threads (1)");
+      });
+
       test.each(["full", "read-only"])("keeps done threads accessible in %s view", async (mode) => {
         useGroupChildThread();
         groupQueryResult = doneGroupChildren();
