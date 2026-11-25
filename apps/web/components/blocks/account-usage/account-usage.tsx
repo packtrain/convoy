@@ -52,7 +52,7 @@ export function AccountUsage({ usage }: { usage: CliAccountUsage }) {
       </div>
       {usage.source === "last-reported" && <p className="text-xs text-muted-foreground">Historical thread data; account unverified. These values may belong to a previous login.</p>}
       {usage.source === "unavailable" && <p className="text-sm text-muted-foreground">Account quota unavailable</p>}
-      {usage.detail && <p className="text-xs text-muted-foreground">{usage.detail}</p>}
+      {usage.detail && <p className="text-sm text-muted-foreground">{usage.detail}</p>}
       {usage.buckets.map(bucket => (
         <div key={bucket.id} className="space-y-4">
           {usage.buckets.length > 1 && usage.provider !== "claude-code" && <p className="text-xs font-medium text-muted-foreground">{bucket.name ?? bucket.id}</p>}
