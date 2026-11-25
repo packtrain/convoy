@@ -20,14 +20,19 @@ export function CommitSidebarHeader({ onClose }: { onClose?: () => void }) {
   return (
     <div className="flex h-8 shrink-0 items-center justify-between border-b border-border pr-1 pl-4 text-xs font-medium text-muted-foreground">
       Commit
-      {onClose && (
-        <TooltipExt content="Close commit" delayDuration={500}>
-          <Button type="button" variant="ghost" size="icon-sm" className="size-7 cursor-pointer" aria-label="Close commit" onClick={onClose}>
-            <X className="size-4" />
-          </Button>
-        </TooltipExt>
-      )}
+      {onClose && <HeaderCloseButton label="Close commit" onClick={onClose} />}
     </div>
+  );
+}
+
+/** The X at the right end of the sidebar and diff headers, so the two line up. */
+function HeaderCloseButton({ label, onClick }: { label: string; onClick: () => void }) {
+  return (
+    <TooltipExt content={label} delayDuration={500}>
+      <Button type="button" variant="ghost" size="icon-sm" className="size-7 shrink-0 cursor-pointer" aria-label={label} onClick={onClick}>
+        <X className="size-4" />
+      </Button>
+    </TooltipExt>
   );
 }
 
@@ -166,14 +171,15 @@ export function CommitDiffPane({
   const patch = useCommitPatch(profileId, pathId, commit.hash, true);
   return (
     <div className="flex min-h-0 flex-1 flex-col">
-      <div className="flex h-8 shrink-0 items-center gap-2 border-b border-border px-2 text-xs">
+      <div className="flex h-8 shrink-0 items-center gap-2 border-b border-border pr-1 pl-2 text-xs">
         <button type="button" className="flex h-7 shrink-0 cursor-pointer items-center gap-1.5 rounded-sm px-1 font-medium hover:bg-muted" onClick={onBack}>
           <ArrowLeft className="size-3.5" aria-hidden />
           Back to graph
         </button>
-        <span className="truncate text-muted-foreground" title={commit.subject}>
+        <span className="min-w-0 flex-1 truncate text-muted-foreground" title={commit.subject}>
           {commit.subject}
         </span>
+        <HeaderCloseButton label="Close diff" onClick={onBack} />
       </div>
       {/* Focusable, so a click into the diff's text keeps Escape inside the view. */}
       <div className="min-h-0 flex-1 overflow-y-auto outline-none" tabIndex={-1}>

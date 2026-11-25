@@ -1076,6 +1076,19 @@ describe("WorktreeHistoryView, Graph sidebar (OS-2536 feedback)", () => {
     delete (Element.prototype as { scrollIntoView?: unknown }).scrollIntoView;
   });
 
+  test("the diff header's X closes the diff like Back to graph", () => {
+    render(<Harness layout="graph" />);
+    fireEvent.click(screen.getByRole("option", { name: /^first/ }));
+    fireEvent.click(screen.getByRole("button", { name: /one\.ts/ }));
+
+    fireEvent.click(screen.getByRole("button", { name: "Close diff" }));
+
+    expect(screen.queryByTestId("patch")).toBeNull();
+    expect(screen.getByRole("complementary", { name: "Commit" })).toBeTruthy();
+    expect(screen.getByRole("option", { name: /^first/ }).getAttribute("aria-selected")).toBe("true");
+    expect(document.activeElement).toBe(screen.getByRole("option", { name: /^first/ }));
+  });
+
   test("Escape leaves the diff for the graph first, then closes the sidebar", () => {
     render(<Harness layout="graph" />);
     fireEvent.click(screen.getByRole("option", { name: /^first/ }));
