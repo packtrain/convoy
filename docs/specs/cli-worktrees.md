@@ -702,10 +702,10 @@ every row, header included, past a phone viewport. The right pane is the file tr
     On a phone the 41px toolbar shows the layout toggle over the list and
     the diff toggles only over a commit, so it fits 390px. On a desktop the
     diff toggles follow the view's report of a diff on screen
-    (`onDiffShownChange`): hidden but keeping their place over the Graph
-    table (a commit's sidebar included, until a file opens its diff) or a
-    one-pane list with no commit open, so List | Graph does not move when
-    one opens.
+    (`onDiffShownChange`): left out over the Graph table (a commit's
+    sidebar included, until a file opens its diff) or a one-pane list with
+    no commit open. List | Graph is always last in the toolbar, so the diff
+    toggles come and go on its left and it never moves.
     A Refresh that drops later pages scrolls the list back to the top when
     no commit is picked.
   - Layout (OS-2536, `commit-graph.tsx`, `lib/worktrees/commit-graph.ts`): a
@@ -713,7 +713,7 @@ every row, header included, past a phone viewport. The right pane is the file tr
     styled like the project header's List | Board switch, List by default,
     kept per browser in localStorage
     (`convoy.history-layout`) and shared by the worktree page (in the 41px
-    toolbar, before the diff toggles) and the thread Changes tab (in its
+    toolbar, at its right end after the diff toggles) and the thread Changes tab (in its
     Refresh row). List is the view above, over the same commits (default
     branch included); with no commit picked it opens `HEAD`'s commit (the
     row with `HEAD` or `HEAD -> `). When the default branch fills the first
@@ -722,7 +722,8 @@ every row, header included, past a phone viewport. The right pane is the file tr
     row scrolls to the middle of the list. With no `HEAD` in reach the first
     row opens. Graph in a History pane of 900px or more is a table that
     fills the pane, with the columns Refs (up to 180px: the first ref badge,
-    then "+N" whose title names the rest), Graph, Description (at least
+    then "+N" whose title names the rest, right-aligned against the graph),
+    Graph, Description (at least
     160px), Date (up to 150px, the year only outside the current one),
     Author (up to 120px) and Commit, 28px rows under a sticky header; Refs,
     Date and Author give way before Description does. No commit is open

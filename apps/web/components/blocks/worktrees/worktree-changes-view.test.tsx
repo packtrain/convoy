@@ -200,7 +200,7 @@ describe("WorktreeChangesView", () => {
     expect(screen.queryByRole("group", { name: "History layout" })).toBeNull();
   });
 
-  test("on desktop the Graph table leaves out the diff toggles while no diff is open, a picked row included (UX OS-2536 round 2 #1)", () => {
+  test("List | Graph is last in the toolbar; the diff toggles come and go on its left (OS-2536 toolbar gap)", () => {
     mobile.value = false;
     window.localStorage.setItem("convoy.history-layout", "graph");
     state.profile = { paths: WORKTREE_PATHS, isOnline: true, appVersion: "0.171.0" };
@@ -208,15 +208,24 @@ describe("WorktreeChangesView", () => {
     state.changes = { resultJson: JSON.stringify({ commits: [commit] }), loading: false, error: null, refresh: vi.fn() };
     url.search = "?profileId=profile_1&pathId=path_1&view=history";
     const { rerender } = render(<WorktreeChangesView profileId={"profile_1" as Id<"cliProfiles">} pathId="path_1" />);
+    const isLast = () => {
+      const group = screen.getByRole("group", { name: "History layout" });
+      return group.parentElement?.lastElementChild === group;
+    };
 
-    // Hidden but holding their place, so List | Graph does not move when a commit opens (round 3 Opus #1).
-    expect(screen.getByRole("button", { name: "Enable word wrap" }).closest(".invisible")).toBeTruthy();
+    // Graph with nothing open: no diff toggles, and no hidden placeholder for them.
+    expect(screen.queryByRole("button", { name: "Enable word wrap" })).toBeNull();
+    expect(isLast()).toBe(true);
 
-    // A picked row opens the sidebar, not a diff; a file in it opens one (worktree-history.test.tsx).
+    // List with a commit open shows its diff, so the toggles show, left of List | Graph.
+    fireEvent.click(screen.getByRole("button", { name: "List" }));
     fireEvent.click(screen.getByRole("option", { name: /^first/ }));
     rerender(<WorktreeChangesView profileId={"profile_1" as Id<"cliProfiles">} pathId="path_1" />);
 
-    expect(screen.getByRole("button", { name: "Enable word wrap" }).closest(".invisible")).toBeTruthy();
+    const wrap = screen.getByRole("button", { name: "Enable word wrap" });
+    const group = screen.getByRole("group", { name: "History layout" });
+    expect(wrap.compareDocumentPosition(group) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+    expect(isLast()).toBe(true);
     mobile.value = true;
     window.localStorage.clear();
   });

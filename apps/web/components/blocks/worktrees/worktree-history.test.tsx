@@ -980,6 +980,8 @@ describe("WorktreeHistoryView, UX review OS-2535 OS-2536 round 1", () => {
     const cell = screen.getByText("feature").closest("[data-refs]");
     expect(cell?.textContent).toBe("feature+2");
     expect(screen.getByText("+2").getAttribute("title")).toBe("origin/main, tag: v1");
+    // Badge and count sit together at the column's right edge, next to the graph node.
+    expect(cell?.classList.contains("justify-end")).toBe(true);
   });
 
   test("the view reports whether a diff is on screen, for the host's diff toggles (CR UX fixes #1)", () => {

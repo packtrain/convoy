@@ -240,23 +240,21 @@ function ChangesViewForCheckout({ profileId, pathId }: WorktreeChangesViewProps)
             {!onHistory && <ChangesSummary files={files} />}
             {isOnline && !onHistory && <RevertAllButton state={state} />}
             <div className="ml-auto flex items-center gap-1">
-              {/* The diff toggles only while a diff is on screen; a phone's commit pane drops the layout toggle. */}
-              {onHistory && !phoneCommit && <HistoryLayoutToggle value={historyLayout} onChange={setHistoryLayout} />}
-              {/* A phone leaves them out; a desktop keeps their place so List | Graph doesn't move. */}
-              {!(noDiffShown && isMobile) && (
-                <div className={cn("flex items-center gap-1", noDiffShown && "invisible")}>
-                  <ChangesViewToggles
-                    allCollapsed={allCollapsed}
-                    onToggleCollapseAll={() => setAllCollapsed((value) => !value)}
-                    diffStyle={diffStyle}
-                    onToggleDiffStyle={toggleDiffStyle}
-                    wordWrap={wordWrap}
-                    onToggleWordWrap={toggleWordWrap}
-                    fileTreeOpen={sidebarOpen}
-                    onToggleFileTree={hasFiles && !isMobile && !onHistory ? () => setSidebarOpen((open) => !open) : undefined}
-                  />
-                </div>
+              {/* The diff toggles only while a diff is on screen, left of List | Graph so it never moves. */}
+              {!noDiffShown && (
+                <ChangesViewToggles
+                  allCollapsed={allCollapsed}
+                  onToggleCollapseAll={() => setAllCollapsed((value) => !value)}
+                  diffStyle={diffStyle}
+                  onToggleDiffStyle={toggleDiffStyle}
+                  wordWrap={wordWrap}
+                  onToggleWordWrap={toggleWordWrap}
+                  fileTreeOpen={sidebarOpen}
+                  onToggleFileTree={hasFiles && !isMobile && !onHistory ? () => setSidebarOpen((open) => !open) : undefined}
+                />
               )}
+              {/* A phone's commit pane drops the layout toggle. */}
+              {onHistory && !phoneCommit && <HistoryLayoutToggle value={historyLayout} onChange={setHistoryLayout} />}
             </div>
           </div>
         )}

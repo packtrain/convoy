@@ -170,8 +170,8 @@ function TableRow(props: RowProps & { graph: NonNullable<RowGraph> }) {
       style={{ gridTemplateColumns: tableColumns(graph.lanes), height: TABLE_ROW_HEIGHT }}
       className={cn("group grid w-full items-center gap-3 pr-3 pl-2 text-xs", ROW_CLASS, selected && SELECTED_CLASS)}
     >
-      {/* One badge fits; the rest are a count whose title names them, as the row's label does. */}
-      <span data-refs className="flex min-w-0 items-center gap-1">
+      {/* One badge fits, the rest a count whose title names them; right-aligned against the graph. */}
+      <span data-refs className="flex min-w-0 items-center justify-end gap-1">
         {first && <RefBadge name={first} className="max-w-full" />}
         {rest.length > 0 && (
           <span className="shrink-0 text-[11px] text-muted-foreground" title={rest.join(", ")}>
