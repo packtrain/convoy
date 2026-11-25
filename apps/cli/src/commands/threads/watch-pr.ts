@@ -28,7 +28,7 @@ function printWatch(result: WatchResult) {
   console.log(
     result.failingChecks.length > 0 || result.conflicts
       ? "Convoy reports only what changes from now on: fix what already fails, then end your turn."
-      : "Convoy messages this thread when checks fail. End your turn now."
+      : "Convoy messages this thread when checks fail or pass, the branch conflicts, or someone else comments or reviews. End your turn now."
   );
   console.log();
 }
@@ -36,7 +36,7 @@ function printWatch(result: WatchResult) {
 export const watchPullRequestCommand = addGlobalOptions(
   addOutputOptions(
     new Command("watch-pr")
-      .description("Watch the thread's pull request: Convoy messages the thread when its checks fail")
+      .description("Watch the thread's pull request: Convoy messages the thread when its checks, conflicts, or comments change")
       .argument("<threadId>", "Thread ID")
       .argument("[pullRequest]", "github.com PR URL, or owner/repo#number; attached first when the thread has none")
   )

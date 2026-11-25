@@ -56,6 +56,8 @@ export const verifiedEventValidator = v.object({
       number: v.number(),
     }),
     v.object({ kind: v.literal("accessChanged"), installationId: v.number() }),
+    // A new review or comment on PR `number`: only its watches care.
+    v.object({ kind: v.literal("comments"), installationId: v.number(), repositoryId: v.number(), number: v.number() }),
     // A check finished or a status changed on `headSha`; `numbers` lists the PRs GitHub matched, empty for a fork.
     v.object({
       kind: v.literal("checks"),

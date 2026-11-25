@@ -427,7 +427,7 @@ export const fanOutWebhook = internalMutation({
     const event = args.event.github;
     const paginationOpts = { numItems: PAGE_SIZE, cursor: args.cursor ?? null };
     let next: { isDone: boolean; continueCursor: string };
-    if (event.kind === "pullRequest" || event.kind === "checks") {
+    if (event.kind !== "accessChanged") {
       const result = await paginateRepositoriesByProviderIdentity(
         ctx,
         { provider: "github", host: GITHUB_HOST, providerRepositoryId: event.repositoryId },
@@ -438,6 +438,12 @@ export const fanOutWebhook = internalMutation({
         if (!link || link.github.installationId !== event.installationId) {
           continue;
         }
+        if (event.kind === "checks") {
+          // A fork's PR is found by its head alone; GitHub lists no PRs for it.
+          const byNumber = await Promise.all(event.numbers.map((number) => listWatchesForPullRequest(ctx, repository._id, number)));
+          await scheduleWatchEvaluations(ctx, [...byNumber.flat(), ...(await listWatchesForHead(ctx, repository._id, event.headSha))]);
+          continue;
+        }
         if (event.kind === "pullRequest") {
           await ctx.scheduler.runAfter(0, internal.integrations.github.sync.syncRepository, {
             repositoryId: repository._id,
@@ -445,12 +451,9 @@ export const fanOutWebhook = internalMutation({
             generation: link.generation,
             target: { kind: "pullRequest", number: event.number },
           });
-          await scheduleWatchEvaluations(ctx, await listWatchesForPullRequest(ctx, repository._id, event.number));
-        } else {
-          // A fork's PR is found by its head alone; GitHub lists no PRs for it.
-          const byNumber = await Promise.all(event.numbers.map((number) => listWatchesForPullRequest(ctx, repository._id, number)));
-          await scheduleWatchEvaluations(ctx, [...byNumber.flat(), ...(await listWatchesForHead(ctx, repository._id, event.headSha))]);
         }
+        // A comment only moves the PR's update time, which the reconcile pass picks up, so it schedules no sync.
+        await scheduleWatchEvaluations(ctx, await listWatchesForPullRequest(ctx, repository._id, event.number));
       }
       next = result;
     } else {

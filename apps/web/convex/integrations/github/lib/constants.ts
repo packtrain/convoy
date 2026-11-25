@@ -23,6 +23,12 @@ export const WATCH_EVALUATION_DELAY_MS = 45_000;
 export const WATCH_EVALUATION_STALE_MS = 5 * 60_000;
 /** Watches one PR takes, so an event reaches every one in a transaction. */
 export const WATCHES_PER_PULL_REQUEST_MAX = 50;
+/** Messages in a row with only comments before the watch ends: a reply loop with a review bot. */
+export const WATCH_COMMENT_ONLY_WAKES_MAX = 10;
+/** A comment read re-reads this far back, deduplicated by ID: a comment may land in a second already read, or after its endpoint was read. */
+export const WATCH_COMMENT_OVERLAP_MS = 2 * 60_000;
+/** The cron reads comments only this often: webhooks report them, and the cron only covers missed ones. */
+export const WATCH_IDLE_COMMENTS_MS = 30 * 60_000;
 /** How often the cron looks for idle watches: missed webhooks, base-branch pushes. */
 export const WATCH_IDLE_CRON_MINUTES = 1;
 /** A watch is idle after this long with no finished evaluation. With the cron's minute and a mergeability recheck, news is read within 10 minutes. */

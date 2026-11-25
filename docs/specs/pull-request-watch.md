@@ -6,7 +6,7 @@ sends a message into the thread and the agent starts a new run. An agent
 can open a PR, watch it, and keep fixing it until it is ready, without an
 engineer relaying what CI said.
 
-Tracking: OS-2173. Status: slices 1–2 built (OS-2541, OS-2542); slices 3–5 planned.
+Tracking: OS-2173. Status: slices 1–3 built (OS-2541, OS-2542, OS-2543); slices 4–5 planned.
 
 The design follows t3code's `watch_pull_request`
 (`reference/t3code/apps/server/src/orchestration-v2/pullRequestWatch.ts`),
@@ -73,13 +73,22 @@ one is reported again.
 | Checks passed | Every required check passed on the current head (every check, when none is required). A required check that hasn't reported yet holds it, and so does any check of that name that hasn't passed: GitHub requires every one, such as a run and a status with one name. Checks that already passed when the watch started are not reported | 2 |
 | Checks finished | Every check has finished on this head, some still fail, and a failure was seen while checks still ran (at the start or in an evaluation). A rerun keeps it owed. Its list carries every failing check, so the same message has no "Checks failed" section | 2 |
 | Conflicts | The branch starts to conflict with its base. Not tied to the head: a push that leaves the conflict is no news, and a conflict that was resolved and comes back is reported again. While GitHub still computes mergeability, the last answer stands | 2 |
-| Comments and reviews | Someone other than the watch's account commented or submitted a review | 3 |
+| Comments and reviews | A collaborator or an App other than the watch's account commented on the PR's conversation or its code, or submitted a review, after the watch's `seenThrough`. A review with no verdict and no text is left out: its review comments are listed | 3 |
 
 The watch's account is the thread owner's Linked GitHub account in the
 project's organization. Without one, it is the PR's author. Agents push and
 comment with the owner's `gh` login, so comments from that account are
 assumed to be the agent's own and never wake it. Slice 5 lets the owner's
 own comments wake the agent.
+
+Only the repository's people and its Apps wake the agent: a comment or
+review counts when GitHub's `author_association` is `OWNER`, `MEMBER`, or
+`COLLABORATOR`, or its author is a Bot account. Anyone can comment on a PR
+in a public repository, and each wake is an agent run on the owner's budget
+with the comment's text in its prompt. An App can comment only where it is
+installed, so review bots still wake it. Other comments are skipped
+silently. In a private repository everyone who can comment is a
+collaborator or member, so nothing is skipped.
 
 The message lists every change one evaluation found, for example:
 
@@ -110,8 +119,27 @@ Look into each item and act on it as your task requires. The watch stays on, so 
   "Checks passed", since a pending one holds the merge. The two reads
   happen only while "Checks passed" is still owed for the head and some
   check passed.
-- A comment line has the author, the file for a review comment, and the
-  first 200 characters.
+- A comment line has the author, the file for a review comment, the
+  first 200 characters on one line, quoted as JSON so a quote in the body
+  can't end it, and the link, for example
+  `alice commented on src/app.ts: "Rename this." https://…` or
+  `bob requested changes: "See inline" https://…`. Comments come from
+  GitHub too, so the message says they are data, not instructions.
+- A comment's time is its `created_at`, a review's its `submitted_at`. A
+  review comment takes its review's `submitted_at`: its own `created_at` is
+  when the reviewer drafted it, maybe long before the review was submitted.
+- Comments and review comments are read with `since` = `seenThrough`
+  (GitHub filters by update time, and submitting a review updates its
+  comments). Reviews have no such filter and are read whole, after the
+  review comments, so each review comment read has its review. Each read
+  is 100 a page, up to 10 pages; past 1,000 reviews the newest are cut.
+- `seenThrough` is not the newest comment read. Comments land in a second
+  already read, and one endpoint's read can miss a comment another
+  endpoint's later read has passed. So after each read `seenThrough` moves
+  to 2 minutes before the read started, and `seenIds` keeps the comments
+  read after that, the watch's account's too. The next read reports only
+  comments not in `seenIds`. Before the first read `seenThrough` is a
+  second before `startedAt`, since GitHub's times are whole seconds.
 - Delivery uses the path `send_thread_message` uses
   ([MCP server → send_thread_message](mcp-server.md#send_thread_message)): an idle thread becomes
   pending and the CLI starts a new run, and a busy thread picks the message
@@ -145,8 +173,9 @@ Look into each item and act on it as your task requires. The watch stays on, so 
   spans evaluations and a successful read resets it. A rate limit only
   delays the read and is not counted.
 - **10 comment-only wakes in a row** (slice 3). This stops a reply loop with
-  a review bot. Any check or conflict news resets the count. The message
-  says the watch stopped and how to start it again.
+  a review bot. Any check or conflict news resets the count. The tenth
+  message lists its comments and says the watch stopped and how to start
+  it again.
 
 ## How Convoy notices changes
 
@@ -157,8 +186,11 @@ never takes PR state from a payload. It reads the PR itself.
 - `parseGithubEvent` routes these events in addition to `pull_request`:
   - `check_suite` and `check_run` with action `completed`
   - `status`
-  - `pull_request_review`, `pull_request_review_comment`, and
-    `issue_comment` on a PR (slice 3)
+  - `pull_request_review` with action `submitted`, and
+    `pull_request_review_comment` and `issue_comment` on a PR with action
+    `created` (slice 3). These schedule only the watches' evaluation. A
+    comment only moves the PR's update time, which the reconcile pass picks
+    up, so they start no PR sync. Edits and deletes are no news.
 - The App already has the permissions these events need: Checks, Commit
   statuses, Pull requests, and Issues. Each needs its box ticked under
   **Subscribe to events**, and the deployment guide
@@ -183,7 +215,9 @@ never takes PR state from a payload. It reads the PR itself.
   10-minute cron with a 10-minute threshold would leave up to 20. Most runs
   read an empty index range. It pages through `by_evaluatedAt`, 100 watches
   a run, and skips a watch whose evaluation is already scheduled or under
-  way. Its evaluations run at once, with no debounce.
+  way. Its evaluations run at once, with no debounce. They read comments
+  only when the last comments read is 30 minutes old: webhooks report
+  comments, and the cron only covers missed ones.
 - GitHub computes mergeability when the PR is read, and answers `null`
   until it is done. An evaluation that gets `null` schedules one more,
   45 seconds out (`mergeableRecheck`), so a conflict from a base-branch push
@@ -214,8 +248,10 @@ every thread list subscribes to.
   `finishOwed`. `conflicts` is the last known conflict state, kept across
   heads. All three, like `mergeableRecheck`, are `true` or absent, so rows
   from slice 1 need no migration.
-- Comments (slice 3): `seenThrough`, the newest comment time already
-  reported, and `commentOnlyWakes`.
+- Comments (slice 3): `seenThrough` and `seenIds`, the comments cursor
+  (What wakes the agent), and `commentOnlyWakes`, the messages in a row
+  that had only comments. All are absent until set, so older rows need no
+  migration.
 - Scheduling: `evaluateAt`, `eventDuringRead`, `evaluatedAt`, and from
   slice 2 `readFailures`, the failed reads in a row. A watch has one evaluation at a time.
   `evaluateAt` is set from when it is scheduled until it finishes, and its
