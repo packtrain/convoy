@@ -53,7 +53,7 @@
 .detailsPane { display: none; min-width: 0; min-height: 0; overflow: hidden; }
 .withDetails { grid-template-columns: 256px 320px minmax(0, 1fr) 420px; }
 .withDetails .detailsPane { display: block; }
-.mobilePicker { display: none; }
+.threadsToggle, .scrim { display: none; }
 @media (min-width: 1800px) {
   .preview { grid-template-columns: 256px 400px minmax(0, 1fr); }
   .withDetails { grid-template-columns: 256px 400px minmax(0, 1fr) 520px; }
@@ -70,12 +70,13 @@
 }
 @media (max-width: 760px) {
   .preview, .withDetails { grid-template-columns: minmax(0, 1fr); height: 780px; }
-  .threadList { display: none; }
-  .mobilePicker { display: flex; align-items: center; gap: 12px; padding: 12px 16px; border-bottom: 1px solid var(--border); font-size: 12px; color: var(--muted); }
-  .mobilePicker select { min-width: 0; flex: 1; background: var(--sidebar); color: var(--foreground); padding: 6px; border: 1px solid var(--border); border-radius: 4px; }
+  /* Thread list becomes a left drawer; `.preview` outranks the navigation module's `.threads`. */
+  .preview .threadList { display: none; }
+  .preview .mobileThreadsOpen { display: flex; position: absolute; z-index: 3; inset: 0 auto 0 0; width: min(320px, 85%); box-shadow: 20px 0 60px #0005; }
+  .scrim { display: block; position: absolute; z-index: 2; inset: 0; border: 0; background: #0008; }
 }
 
-@media (max-width: 760px) { .headerDone, .headerPlus { display: none; } .sidebarToggle { margin-left: auto; } }
+@media (max-width: 760px) { .headerDone, .headerPlus { display: none; } .sidebarToggle { margin-left: auto; } .threadsToggle { display: grid; margin: 0 0 0 -6px; } }
 
 .preview.watchTower { grid-template-columns:256px minmax(0,1fr); }
 .compactNavigation { display:none; }
@@ -85,3 +86,4 @@
   .compactNavigation button[aria-pressed="true"] { color:#eee; background:#262626; }
 }
 @media (max-width:1100px) { .preview.watchTower { grid-template-columns:minmax(0,1fr); } }
+@media (max-width:760px) { .compactNavigation { display:none; } }

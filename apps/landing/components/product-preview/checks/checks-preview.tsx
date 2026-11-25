@@ -35,8 +35,44 @@ function rowsFor(checklist: string) {
   return checks.filter(check => check.status !== "pending" || checklist === "Feature");
 }
 
+/** A `<details>` popover that closes on outside click and Escape, with arrow-key item focus. */
+function useDetailsMenu() {
+  const menu = useRef<HTMLDetailsElement>(null);
+  useEffect(() => {
+    function dismiss(event: PointerEvent) {
+      if (event.target instanceof Node && menu.current && !menu.current.contains(event.target)) menu.current.open = false;
+    }
+    document.addEventListener("pointerdown", dismiss);
+    return () => document.removeEventListener("pointerdown", dismiss);
+  }, []);
+  function closeMenu() {
+    if (!menu.current) return;
+    menu.current.open = false;
+    menu.current.querySelector("summary")?.focus();
+  }
+  function handleMenuKey(event: KeyboardEvent<HTMLDetailsElement>) {
+    if (event.key === "Escape") { event.preventDefault(); closeMenu(); return; }
+    if (!["ArrowDown", "ArrowUp", "Home", "End"].includes(event.key) || !menu.current) return;
+    event.preventDefault();
+    menu.current.open = true;
+    const items = Array.from(menu.current.querySelectorAll<HTMLButtonElement>("button"));
+    const current = items.indexOf(document.activeElement as HTMLButtonElement);
+    const next = event.key === "Home" ? 0 : event.key === "End" ? items.length - 1 : event.key === "ArrowDown" ? (current + 1) % items.length : (current <= 0 ? items.length : current) - 1;
+    items[next]?.focus();
+  }
+  return { menu, closeMenu, handleMenuKey };
+}
+
 function ChecklistSelect({ value, onChange }: { value: string; onChange: (value: string) => void }) {
-  return <select aria-label="Checklist" value={value} onChange={event => onChange(event.target.value)}><option>Feature</option><option>Bug fix</option><option>No checks</option></select>;
+  const { menu, closeMenu, handleMenuKey } = useDetailsMenu();
+  return <details ref={menu} className={`${styles.menu} ${styles.badgeMenu}`} onKeyDown={handleMenuKey}>
+    <summary aria-haspopup="listbox" aria-label={`Checklist: ${value}`}>{value}<ChevronDown /></summary>
+    <div className={styles.options} role="listbox" aria-label="Checklist">
+      {["No checks", "Bug fix", "Feature"].map(name => <button type="button" role="option" aria-selected={value === name} key={name} onClick={() => { onChange(name); closeMenu(); }}>
+        <span>{name}</span>{name === "Feature" && <small>Default</small>}{value === name ? <Check aria-hidden /> : <span className={styles.checkSpace} aria-hidden />}
+      </button>)}
+    </div>
+  </details>;
 }
 
 export function TaskChecksPreview() {
@@ -67,30 +103,8 @@ function ThreadCrop() {
 
 export function ChecksPreview() {
   const [checklist, setChecklist] = useState("Feature");
-  const menu = useRef<HTMLDetailsElement>(null);
+  const { menu, closeMenu, handleMenuKey } = useDetailsMenu();
   const rows = rowsFor(checklist);
-  useEffect(() => {
-    function dismiss(event: PointerEvent) {
-      if (event.target instanceof Node && menu.current && !menu.current.contains(event.target)) menu.current.open = false;
-    }
-    document.addEventListener("pointerdown", dismiss);
-    return () => document.removeEventListener("pointerdown", dismiss);
-  }, []);
-  function closeMenu() {
-    if (!menu.current) return;
-    menu.current.open = false;
-    menu.current.querySelector("summary")?.focus();
-  }
-  function handleMenuKey(event: KeyboardEvent<HTMLDetailsElement>) {
-    if (event.key === "Escape") { event.preventDefault(); closeMenu(); return; }
-    if (!["ArrowDown", "ArrowUp", "Home", "End"].includes(event.key) || !menu.current) return;
-    event.preventDefault();
-    menu.current.open = true;
-    const items = Array.from(menu.current.querySelectorAll<HTMLButtonElement>("button"));
-    const current = items.indexOf(document.activeElement as HTMLButtonElement);
-    const next = event.key === "Home" ? 0 : event.key === "End" ? items.length - 1 : event.key === "ArrowDown" ? (current + 1) % items.length : (current <= 0 ? items.length : current) - 1;
-    items[next]?.focus();
-  }
   return <section className={styles.preview} aria-label="Checks and evidence preview">
     <ThreadCrop />
     <div className={styles.panel}>

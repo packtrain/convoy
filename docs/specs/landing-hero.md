@@ -12,8 +12,10 @@ The preview follows the product's Inter font, dark theme, 256px navigation,
 from the current product source without importing auth, Convex or editors.
 Users can select a thread and expand tool calls. The composer is read-only;
 the demo cannot execute agents. No looping animation or network requests.
-Below 1100px omit navigation; below 760px replace the list with a native thread
-picker. Keep conversation text at a readable fixed size.
+Below 1100px omit navigation. Below 760px show only the thread view, as phone
+apps do: a header button opens the thread list as a left drawer, and picking a
+thread or the backdrop closes it. Phones get no preview tabs. Keep conversation
+text at a readable fixed size.
 
 Validate the isolated rendering and interactions in a browser when possible.
 The existing hero PNG is an older reference. A matching capture of the current

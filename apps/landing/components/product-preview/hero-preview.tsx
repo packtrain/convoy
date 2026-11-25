@@ -1,7 +1,7 @@
 "use client";
 
 import { useRef, useState } from "react";
-import { Plus, MoreHorizontal, Bug, Layers3, Sparkles, SquareCheckBig, PanelRight, Wrench, FileText } from "lucide-react";
+import { Plus, MoreHorizontal, Bug, Layers3, Sparkles, SquareCheckBig, PanelLeft, PanelRight, Wrench, FileText } from "lucide-react";
 import { ProjectOrganizationPreview } from "./project-organization";
 import { WatchTowerPreview, watchThreads } from "./watch-tower";
 import { TaskSidebar } from "./task-sidebar";
@@ -31,6 +31,7 @@ export function HeroPreview() {
   const sidebarToggleRef = useRef<HTMLButtonElement>(null);
   const [sidebarOpen, setSidebarOpen] = useState(true);
   const [mobileSidebarOpen, setMobileSidebarOpen] = useState(false);
+  const [mobileThreadsOpen, setMobileThreadsOpen] = useState(false);
   const [selectedId, setSelectedId] = useState<string>(threads[0].id);
   const selectedWatchThread = watchThreads.find((thread) => thread.id === selectedId);
   const project = selectedWatchThread?.project ?? "Northstar";
@@ -50,15 +51,11 @@ export function HeroPreview() {
     <><nav className={styles.compactNavigation} aria-label="Preview navigation"><button type="button" aria-pressed={destination === "threads"} onClick={() => setDestination("threads")}>Threads preview</button><button type="button" aria-pressed={destination === "watch-tower"} onClick={() => setDestination("watch-tower")}>Watch Tower preview</button><button type="button" aria-pressed={destination === "project"} onClick={() => setDestination("project")}>Project preview</button></nav><section className={`${styles.preview} ${destination !== "threads" ? styles.watchTower : sidebarOpen && project === "Northstar" ? styles.withDetails : ""} ${mobileSidebarOpen ? styles.mobileDetailsOpen : ""}`} aria-label="Convoy interactive product preview">
       <WorkspaceNavigation selectedList={selectedList} onSelectList={(name) => { setSelectedList(name); setDestination("project"); }} className={styles.sidebar} destination={destination} onNavigate={(next) => { setDestination(next); if (next === "threads" && project !== "Northstar") setSelectedId(threads[0].id); }} />
       {destination === "project" ? <ProjectOrganizationPreview key={selectedList} listName={selectedList} initialMode={projectMode} onModeChange={setProjectMode} /> : destination === "watch-tower" ? <WatchTowerPreview mode={watchMode} onModeChange={setWatchMode} onOpen={(id) => { setSelectedId(id); setDestination("threads"); }} /> : <>
-      <ThreadNavigation className={styles.threadList} selectedId={selectedId} onSelect={setSelectedId} project={project} rows={visibleRows} />
+      <ThreadNavigation className={`${styles.threadList} ${mobileThreadsOpen ? styles.mobileThreadsOpen : ""}`} selectedId={selectedId} onSelect={(id) => { setSelectedId(id); setMobileThreadsOpen(false); }} project={project} rows={visibleRows} />
+      {mobileThreadsOpen && <button type="button" className={styles.scrim} aria-label="Close threads" onClick={() => setMobileThreadsOpen(false)} />}
 
       <div className={styles.conversation}>
-        <label className={styles.mobilePicker}>Thread
-          <select value={selected.id} onChange={(event) => setSelectedId(event.target.value)}>
-            {visibleRows.map((thread) => <option key={thread.id} value={thread.id}>{thread.id} · {thread.title}</option>)}
-          </select>
-        </label>
-        <header className={styles.threadHeader}><TaskIcon type={selected.type} /><span className={styles.reference}>{selected.id}</span><h2>{selected.title}</h2><Plus className={styles.headerPlus} /><span className={styles.headerDone}>Mark as done</span><MoreHorizontal />{project === "Northstar" && <button type="button" ref={sidebarToggleRef} className={styles.sidebarToggle} aria-label="Toggle task details" onClick={() => { if (window.matchMedia("(max-width: 1100px)").matches) { setMobileSidebarOpen((open) => !open); } else { setSidebarOpen((open) => !open); } }}><PanelRight /></button>}</header>
+        <header className={styles.threadHeader}><button type="button" className={`${styles.sidebarToggle} ${styles.threadsToggle}`} aria-label="Show threads" aria-expanded={mobileThreadsOpen} onClick={() => setMobileThreadsOpen(true)}><PanelLeft /></button><TaskIcon type={selected.type} /><span className={styles.reference}>{selected.id}</span><h2>{selected.title}</h2><Plus className={styles.headerPlus} /><span className={styles.headerDone}>Mark as done</span><MoreHorizontal />{project === "Northstar" && <button type="button" ref={sidebarToggleRef} className={styles.sidebarToggle} aria-label="Toggle task details" onClick={() => { if (window.matchMedia("(max-width: 1100px)").matches) { setMobileSidebarOpen((open) => !open); } else { setSidebarOpen((open) => !open); } }}><PanelRight /></button>}</header>
         <div className={styles.transcript} key={selected.id}>
           <div className={styles.messageWidth}>
             <div className={styles.userMessage}>{selected.prompt}</div>

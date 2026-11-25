@@ -83,7 +83,7 @@ export function TaskAssignmentPreview() {
                     <span className={styles.snake}>{[[0,0],[3,0],[6,0],[6,3],[6,6],[6,9],[3,9],[0,9],[0,6],[0,3]].map(([x,y], pixel) => <i key={pixel} style={{ left:x, top:y, animationDelay:`${pixel * .08}s` }} />)}</span>
                   </span>
                   <span className={styles.threadTitle} title={thread.title}>{thread.title}</span>
-                  <span className={styles.threadMeta}><RuntimeIcon runtime={thread.runtime} /><span>now</span></span>
+                  <span className={styles.threadMeta}><span>now</span><RuntimeIcon runtime={thread.runtime} /></span>
                 </div>
 
               </li>)}

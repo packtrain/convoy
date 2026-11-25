@@ -162,7 +162,7 @@ test("Project views share tasks, open details and fit both hosts", async (t) => 
     await page.getByRole('button',{name:'Kanban view'}).click();assert.equal(await scene.getAttribute('data-project-view'),'board');
     await page.getByRole('button',{name:'Watch Tower',exact:true}).click();await page.getByRole('heading',{name:'Watch Tower',exact:true}).waitFor();
     await page.getByRole('button',{name:'Threads',exact:true}).click();assert.equal(await scene.count(),0);
-    await page.setViewportSize({width:390,height:900});await page.getByRole('button',{name:'Project preview',exact:true}).click();await scene.waitFor();
+    await page.setViewportSize({width:900,height:900});await page.getByRole('button',{name:'Project preview',exact:true}).click();await scene.waitFor();
     assert(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth));
   });
   await page.setViewportSize({width:1600,height:1050});

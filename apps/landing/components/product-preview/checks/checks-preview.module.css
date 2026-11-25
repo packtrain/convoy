@@ -26,7 +26,10 @@
 .options button svg, .checkSpace { width: 14px; height: 14px; flex-shrink: 0; }
 .menuSeparator { margin: 4px -4px; border-top: 1px solid #ffffff26; }
 .menuLabel { margin: 0; padding: 4px 6px; color: #949494; font-size: 12px; }
-.preview select, .taskChecks select { padding: 3px 6px; border: 1px solid #ffffff26; border-radius: 5px; background: #202020; color: #ededed; font: inherit; font-size: 12px; cursor: pointer; }
+.badgeMenu > summary { gap: 4px; padding: 4px 6px 4px 8px; border: 0; border-radius: 8px; background: #222; color: #a1a1a1; font-size: 12px; line-height: 16px; }
+.badgeMenu > summary:hover { background: #2a2a2a; }
+.badgeMenu > summary svg { width: 12px; height: 12px; }
+.badgeMenu .options { width: 180px; }
 .row > summary { display: flex; align-items: center; gap: 8px; min-height: 32px; padding: 5px 0; list-style: none; cursor: pointer; }
 .row > summary > span { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .row small { color: #949494; font-size: 12px; white-space: nowrap; }
@@ -55,7 +58,7 @@
 .taskChecks .heading { justify-content: space-between; margin-bottom: 8px; }
 .taskChecks h4 small { color: #949494; font-size: 11px; }
 .taskChecks .row > summary { font-size: 13px; }
-.preview :is(summary, button, select, a):focus-visible, .taskChecks :is(summary, select):focus-visible { outline: 2px solid #a3a3a3; outline-offset: 3px; }
+.preview :is(summary, button, select, a):focus-visible, .taskChecks :is(summary, button):focus-visible { outline: 2px solid #a3a3a3; outline-offset: 3px; }
 .preview summary::-webkit-details-marker, .taskChecks summary::-webkit-details-marker { display: none; }
 .threadCrop { position: relative; flex: 1; min-width: 0; overflow: hidden; mask-image: linear-gradient(to right, transparent, #000 85%); }
 .thread { --border: #ffffff26; position: absolute; right: 0; top: 0; bottom: 0; display: flex; flex-direction: column; width: 470px; background: #131313; border-top: 1px solid var(--border); border-bottom: 1px solid var(--border); }
