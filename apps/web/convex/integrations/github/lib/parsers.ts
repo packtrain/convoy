@@ -262,11 +262,12 @@ function mergeSettings(repository: Record<string, unknown>): PullRequestOverview
   return { methods, deleteBranchOnMerge: repository.deleteBranchOnMerge === true };
 }
 
-/** A single-PR read's `mergeable` and `mergeable_state`. */
+/** A single-PR read's `mergeable`, `mergeable_state`, and `rebaseable`. */
 export function normalizeMergeability(pr: Record<string, unknown>): Mergeability {
   return {
     mergeable: pr.mergeable === true ? "clean" : pr.mergeable === false ? "conflicting" : "unknown",
     mergeBlock: pr.mergeable_state === "blocked" || pr.mergeable_state === "behind" ? pr.mergeable_state : null,
+    rebaseConflicts: pr.rebaseable === false,
   };
 }
 

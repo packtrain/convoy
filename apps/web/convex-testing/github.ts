@@ -31,6 +31,8 @@ export type FakePullRequest = {
   archived?: boolean;
   /** GitHub's `mergeable`, only on single-PR reads; null while it computes. */
   mergeable?: boolean | null;
+  /** GitHub's `rebaseable`, only on single-PR reads; false when replaying the commits onto the base conflicts. */
+  rebaseable?: boolean | null;
   /** Overview data; the defaults are empty. */
   commits?: { sha: string; message: string; login: string | null; name: string; date: string }[];
   reviews?: { id: number; login: string; state: string; submitted_at: string; body?: string }[];
@@ -261,6 +263,7 @@ export function createFakeGithub() {
       head: { ...json.head, repo: { id: pr.headRepositoryId ?? repositoryId } },
       mergeable: pr.mergeable === undefined ? true : pr.mergeable,
       mergeable_state: pr.mergeableState ?? "clean",
+      rebaseable: pr.rebaseable === undefined ? true : pr.rebaseable,
       commits: pr.commits?.length ?? 0,
       requested_reviewers: (pr.requestedReviewers ?? []).map((login) => ({ login })),
       requested_teams: (pr.requestedTeams ?? []).map((name) => ({ name, slug: name })),

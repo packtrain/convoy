@@ -319,10 +319,11 @@ describe("reading the overview", () => {
       asUser.action(api.integrations.github.pullRequests.readMergeability, { projectId: project._id, repositoryId, number: 1, baseSha: "base", headSha });
     const pr = github.state.pulls.get(1)![0];
     Object.assign(pr, { mergeable: null });
-    expect(await read("head-1")).toEqual({ mergeable: "unknown", mergeBlock: null });
-    Object.assign(pr, { mergeable: true, mergeableState: "behind" });
+    expect(await read("head-1")).toEqual({ mergeable: "unknown", mergeBlock: null, rebaseConflicts: false });
+    Object.assign(pr, { mergeable: true, mergeableState: "behind", rebaseable: false });
     const before = github.state.requests.length;
-    expect(await read("head-1")).toEqual({ mergeable: "clean", mergeBlock: "behind" });
+    // A merge commit applies cleanly while replaying the commits conflicts.
+    expect(await read("head-1")).toEqual({ mergeable: "clean", mergeBlock: "behind", rebaseConflicts: true });
     expect(github.state.requests.slice(before).filter((request) => request.includes("/repositories/"))).toEqual(["GET /repositories/1/pulls/1"]);
     expect(await read("head-0")).toBeNull();
   });

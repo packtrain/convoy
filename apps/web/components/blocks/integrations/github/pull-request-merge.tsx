@@ -74,6 +74,8 @@ export function stuckLayer(below: PullRequestSummary[]): { layer: PullRequestSum
   return layer ? { layer, reason: `#${layer.number} ${layer.draft ? "is a draft" : "has conflicts"}` } : null;
 }
 
+const REBASE_CONFLICTS = "This branch can't be rebased due to conflicts";
+
 /** Why Merge is disabled (its tooltip), or null. Blocking problems each have their own Merge status row too. */
 function mergeBlocker({ pr, commenting, overview }: Target, below: PullRequestSummary[] | null): string | null {
   const access = writeBlocker(commenting.account, commenting.role, "write");
@@ -129,6 +131,9 @@ export function mergePlan(target: Target, layers: PullRequestSummary[], picked: 
   const { label } = METHODS[method];
   // Without an active Linked GitHub account, Merge opens the connect popup instead.
   const connect = target.commenting.connect.needed;
+  const blocker = connect
+    ? null
+    : (mergeBlocker(target, below) ?? (method === "rebase" && overview.rebaseConflicts ? REBASE_CONFLICTS : null));
   return {
     allowed,
     method,
@@ -136,7 +141,9 @@ export function mergePlan(target: Target, layers: PullRequestSummary[], picked: 
     count,
     label: count > 1 ? `${method === "merge" ? "Merge" : label} ${count} pull requests` : label,
     connect,
-    blocker: connect ? null : mergeBlocker(target, below),
+    blocker,
+    // GitHub's rebase-only conflicts leave the method menu open, so another method can merge.
+    pickable: blocker === null || blocker === REBASE_CONFLICTS,
   };
 }
 export type MergePlan = ReturnType<typeof mergePlan>;
@@ -165,7 +172,7 @@ export function MergeButton({
             <Button
               size="icon-sm"
               aria-label="Merge method"
-              disabled={plan.blocker !== null}
+              disabled={!plan.pickable}
               className="border-l border-primary-foreground/20"
             >
               <ChevronDown />

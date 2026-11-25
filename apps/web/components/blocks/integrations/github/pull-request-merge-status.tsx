@@ -61,10 +61,10 @@ function reviewsRow(overview: PullRequestOverview, author: string) {
   return <StatusRow tone="pending" title="No reviews yet" body="Nobody has reviewed this pull request." />;
 }
 
-/** The header button's tone: conflicts, branch rules, or failing checks block; recomputing or running checks wait. */
-function overallTone(overview: PullRequestOverview): Tone {
+/** The header button's tone: conflicts (for the picked method), branch rules, or failing checks block; recomputing or running checks wait. */
+function overallTone(overview: PullRequestOverview, rebaseBlocked: boolean): Tone {
   const checks = checksRollup(overview.checks).state;
-  if (overview.mergeable === "conflicting" || overview.mergeBlock || checks === "failure") return "blocked";
+  if (overview.mergeable === "conflicting" || rebaseBlocked || overview.mergeBlock || checks === "failure") return "blocked";
   return overview.mergeable === "unknown" || checks === "pending" ? "pending" : "ok";
 }
 
@@ -94,13 +94,14 @@ export function MergeStatus({
   const [open, setOpen] = useState(false);
   const [picked, setPicked] = useMergeMethod(commenting);
   const [confirming, setConfirming] = useState(false);
-  const tone = overview ? overallTone(overview) : null;
-  const Icon = tone ? TONES[tone].icon : Loader2;
   const rollup = overview ? checksRollup(overview.checks) : null;
   const below = layersMergedWith(layers, current) ?? [];
   const stuck = stuckLayer(below);
   const target = overview ? { projectId, repositoryId, pr: current, commenting, overview } : null;
   const plan = target ? mergePlan(target, layers, picked) : null;
+  const rebaseBlocked = plan?.method === "rebase" && overview?.rebaseConflicts === true;
+  const tone = overview ? overallTone(overview, rebaseBlocked) : null;
+  const Icon = tone ? TONES[tone].icon : Loader2;
   return (
     <Popover open={open} onOpenChange={setOpen}>
       <PopoverTrigger asChild>
@@ -156,6 +157,12 @@ export function MergeStatus({
                 </a>
               </Button>
             </StatusRow>
+          ) : rebaseBlocked ? (
+            <StatusRow
+              tone="blocked"
+              title="This branch cannot be rebased due to conflicts"
+              body={`Rebase it onto ${overview.baseRef} locally and push, or pick another merge method.`}
+            />
           ) : (
             <StatusRow tone="ok" title="No conflicts with base branch" body="Merging can be performed automatically." />
           )}

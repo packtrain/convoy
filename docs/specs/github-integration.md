@@ -1269,7 +1269,10 @@ compact), and the reader's header, tab row, and Overview.
   with slices 5.5 and 6.
 - **Merge status** is read-only: the stack map, reviews, the checks list
   under the rollup, behind-base, mergeability ("Checking mergeability…"
-  while GitHub reports `null`), and conflicts with Resolve on GitHub. Its
+  while GitHub reports `null`), and conflicts with Resolve on GitHub. A head
+  that merges cleanly but that GitHub can't rebase (`rebaseable: false`)
+  reads "This branch cannot be rebased due to conflicts" in place of "No
+  conflicts with base branch" while Rebase and merge is the picked method. Its
   button's icon is red for conflicts or failing checks, the pending circle
   while either is unsettled, and green otherwise. GitHub sends no event
   when mergeability settles, so while it reads `null` the reader re-reads it
@@ -1865,8 +1868,9 @@ Slice 8 (OS-2185).
   stays enabled without an active Linked GitHub account and opens the
   connect popup instead ([Role](#state-actions-and-bulk-actions)). Merge is disabled, with the reason as its tooltip, for "Needs write
   access", a draft, the stack still
-  loading, conflicts, mergeability being checked, branch rules, and a blocking
-  Layer below. The behind-base row (blocking when the rules require an
+  loading, conflicts, mergeability being checked, branch rules, a blocking
+  Layer below, and, for Rebase and merge only, rebase conflicts; then the
+  method menu stays open so another method can merge. The behind-base row (blocking when the rules require an
   up-to-date branch) carries Update branch, disabled without write access. A
   "Merging is blocked" row covers the other branch rules. The confirm popup
   (a dialog outside the popover) is titled "Squash and merge #482", or the

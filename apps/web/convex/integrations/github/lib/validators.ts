@@ -312,6 +312,8 @@ export const pullRequestOverviewValidator = v.object({
   behindBy: v.union(v.number(), v.null()),
   /** GitHub's `mergeable_state` when the base branch's rules block the merge: unmet requirements, or a branch that must be up to date. */
   mergeBlock: v.union(v.literal("blocked"), v.literal("behind"), v.null()),
+  /** GitHub's `rebaseable` is false: the head merges cleanly, but replaying its commits onto the base conflicts. */
+  rebaseConflicts: v.boolean(),
   /** The repository's allowed merge methods and whether it deletes merged branches; null when GitHub didn't say. */
   mergeSettings: v.union(v.object({ methods: v.array(mergeMethodValidator), deleteBranchOnMerge: v.boolean() }), v.null()),
   commitCount: v.number(),
@@ -348,6 +350,7 @@ export type PullRequestOverview = Infer<typeof pullRequestOverviewValidator>;
 export const mergeabilityValidator = v.object({
   mergeable: pullRequestOverviewValidator.fields.mergeable,
   mergeBlock: pullRequestOverviewValidator.fields.mergeBlock,
+  rebaseConflicts: pullRequestOverviewValidator.fields.rebaseConflicts,
 });
 export type Mergeability = Infer<typeof mergeabilityValidator>;
 

@@ -1292,6 +1292,25 @@ describe("PullRequestReader GitHub comments (OS-2183)", () => {
     expect(await screen.findByRole("button", { name: "Squash and merge" })).toBeTruthy();
   });
 
+  test("a branch that merges cleanly but can't be rebased blocks only Rebase and merge, as on GitHub", async () => {
+    linkedAs({ login: "maya", githubUserId: 42, status: "active" });
+    readPermission.mockResolvedValue("write");
+    readOverview.mockResolvedValue({ ...overview, rebaseConflicts: true });
+    window.localStorage.setItem("convoy:github:merge-method:42", "rebase");
+    render(connected());
+    const popover = await openMergeStatus();
+    expect(within(popover).getByText("This branch cannot be rebased due to conflicts")).toBeTruthy();
+    expect(within(popover).queryByText("No conflicts with base branch")).toBeNull();
+    expect(mergeButton("Rebase and merge").disabled).toBe(true);
+    expect(mergeButton("Rebase and merge").closest("[title]")?.getAttribute("title")).toBe("This branch can't be rebased due to conflicts");
+
+    // Another method stays pickable and merges.
+    fireEvent.pointerDown(mergeButton("Merge method"), { button: 0, pointerType: "mouse" });
+    fireEvent.click(within(await screen.findByRole("menu")).getByRole("menuitemradio", { name: /Squash and merge/ }));
+    await waitFor(() => expect(mergeButton("Squash and merge").disabled).toBe(false));
+    expect(within(popover).getByText("No conflicts with base branch")).toBeTruthy();
+  });
+
   test("a mid-stack Layer merges the open Layers below it, and a draft below blocks it", async () => {
     linkedAs({ login: "maya", githubUserId: 42, status: "active" });
     readPermission.mockResolvedValue("write");
