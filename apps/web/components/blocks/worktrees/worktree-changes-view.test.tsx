@@ -13,6 +13,7 @@ const state = vi.hoisted(() => ({
   enqueue: vi.fn(),
   changes: { resultJson: null as string | null, loading: false, error: null as string | null, refresh: vi.fn() },
   toast: { error: vi.fn(), success: vi.fn() },
+  mobile: true,
 }));
 
 vi.mock("convex/react", () => ({
@@ -44,7 +45,7 @@ vi.mock("@/lib/threads/hooks/use-diff-theme", () => ({
 }));
 
 vi.mock("@/hooks/browser/use-mobile", () => ({
-  useIsMobile: () => true,
+  useIsMobile: () => state.mobile,
 }));
 
 vi.mock("@pierre/diffs/react", () => ({
@@ -93,10 +94,25 @@ describe("WorktreeChangesView", () => {
     state.toast.error.mockReset();
     state.toast.success.mockReset();
     navigate.mockReset();
+    state.mobile = true;
   });
 
   afterEach(() => {
     cleanup();
+  });
+
+  test("the file tree toggle stays in the toolbar and flips the tree on and off", () => {
+    onlineWithOneFile();
+    state.mobile = false;
+    render(<WorktreeChangesView profileId={"profile_1" as Id<"cliProfiles">} pathId="path_1" />);
+
+    const hide = screen.getByRole("button", { name: "Hide file tree" });
+    expect(hide.getAttribute("aria-pressed")).toBe("true");
+    fireEvent.click(hide);
+    const show = screen.getByRole("button", { name: "Show file tree" });
+    expect(show.getAttribute("aria-pressed")).toBe("false");
+    fireEvent.click(show);
+    expect(screen.getByRole("button", { name: "Hide file tree" })).toBeTruthy();
   });
 
   test("a failed changes fetch offers Retry, which refreshes the changes", () => {

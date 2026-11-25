@@ -5,6 +5,7 @@
  * to the defaults.
  */
 
+import { useSyncExternalStore } from "react";
 import { readLocalString, writeLocalString } from "@/lib/browser/local-storage";
 
 const DIFF_STYLE_KEY = "convoy.thread-changes-diff-style";
@@ -56,4 +57,37 @@ export function readChangesFileTree(): boolean {
 
 export function writeChangesFileTree(open: boolean): void {
   writeLocalString(FILE_TREE_KEY, open ? "1" : "0");
+}
+
+const FILE_TREE_SIDE_KEY = "convoy.changes-file-tree-side";
+const FILE_TREE_SIDE_EVENT = "convoy:changes-file-tree-side-change";
+
+/** Which side of a diff its changed-files tree sits on; set in Settings → Appearance. */
+export type FileTreeSide = "right" | "left";
+
+export function readFileTreeSide(): FileTreeSide {
+  return storedIs(FILE_TREE_SIDE_KEY, "left") ? "left" : "right";
+}
+
+export function writeFileTreeSide(side: FileTreeSide): void {
+  if (writeLocalString(FILE_TREE_SIDE_KEY, side)) {
+    window.dispatchEvent(new CustomEvent(FILE_TREE_SIDE_EVENT));
+  }
+}
+
+function subscribeToFileTreeSide(onChange: () => void): () => void {
+  const handleStorage = (event: StorageEvent) => {
+    if (event.key === null || event.key === FILE_TREE_SIDE_KEY) onChange();
+  };
+  window.addEventListener("storage", handleStorage);
+  window.addEventListener(FILE_TREE_SIDE_EVENT, onChange);
+  return () => {
+    window.removeEventListener("storage", handleStorage);
+    window.removeEventListener(FILE_TREE_SIDE_EVENT, onChange);
+  };
+}
+
+/** Live across mounted diffs: a settings change moves open trees at once. */
+export function useFileTreeSide(): FileTreeSide {
+  return useSyncExternalStore(subscribeToFileTreeSide, readFileTreeSide, () => "right");
 }

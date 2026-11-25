@@ -1,7 +1,7 @@
 "use client";
 
 import { useCallback, useRef, useState } from "react";
-import { MoreHorizontal, PanelRight, RefreshCw, Trash2 } from "lucide-react";
+import { MoreHorizontal, RefreshCw, Trash2 } from "lucide-react";
 import type { Id } from "@/convex/_generated/dataModel";
 import { Button } from "@/components/ui/button";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
@@ -18,6 +18,7 @@ import {
   type ChangesDiffStyle,
   readChangesDiffStyle,
   readChangesWordWrap,
+  useFileTreeSide,
   writeChangesDiffStyle,
   writeChangesWordWrap,
 } from "@/lib/threads/changes-view-prefs";
@@ -48,6 +49,7 @@ export function WorktreeChangesView({ profileId, pathId }: WorktreeChangesViewPr
   const [selectedPath, setSelectedPath] = useState<string>();
   const [sidebarOpen, setSidebarOpen] = useState(true);
   const isMobile = useIsMobile();
+  const treeSide = useFileTreeSide();
   const sectionRefs = useRef(new Map<string, HTMLElement>());
   const diffOptions = usePatchDiffOptions(diffStyle, wordWrap);
   const { push } = useNavigation();
@@ -98,6 +100,7 @@ export function WorktreeChangesView({ profileId, pathId }: WorktreeChangesViewPr
       isSidebarOpen={sidebarOpen && hasFiles && !isMobile}
       onCloseSidebar={() => setSidebarOpen(false)}
       sidebarTitle="Files"
+      sidebarSide={treeSide}
       sidebarContent={
         <WorktreeFileTree
           files={files}
@@ -153,18 +156,6 @@ export function WorktreeChangesView({ profileId, pathId }: WorktreeChangesViewPr
                     </DropdownMenuContent>
                   </DropdownMenu>
                 )}
-                {hasFiles && !sidebarOpen && !isMobile && (
-                  <Button
-                    type="button"
-                    variant="ghost"
-                    size="icon-sm"
-                    className="cursor-pointer"
-                    onClick={() => setSidebarOpen(true)}
-                    aria-label="Show files"
-                  >
-                    <PanelRight className="size-4" />
-                  </Button>
-                )}
               </>
             ) : undefined
           }
@@ -185,6 +176,8 @@ export function WorktreeChangesView({ profileId, pathId }: WorktreeChangesViewPr
                 onToggleDiffStyle={toggleDiffStyle}
                 wordWrap={wordWrap}
                 onToggleWordWrap={toggleWordWrap}
+                fileTreeOpen={sidebarOpen}
+                onToggleFileTree={hasFiles && !isMobile ? () => setSidebarOpen((open) => !open) : undefined}
               />
             </div>
           </div>

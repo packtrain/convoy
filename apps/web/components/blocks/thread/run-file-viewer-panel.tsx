@@ -21,6 +21,7 @@ import {
   InputGroupButton,
   InputGroupTextarea,
 } from "@/components/ui/input-group";
+import { FileTreePane } from "@/components/custom/diff/file-tree-pane";
 import { WorktreeFileTree } from "@/components/custom/diff/worktree-file-tree";
 import { FileTabStrip } from "@/components/custom/diff/file-tab-strip";
 import { PatchFileSection, usePatchDiffOptions } from "@/components/custom/diff/patch-file-sections";
@@ -34,9 +35,6 @@ import {
 } from "@/lib/threads/run-review-comments";
 import { parseFileOpResult, parseRunPatchFiles, splitRunPatch, type FileOpResult } from "@/lib/threads/run-diff-patch";
 import { useDiffTheme } from "@/lib/threads/hooks/use-diff-theme";
-import { useResizePanel } from "@/hooks/ui/use-resize-panel";
-import { SidebarResizeHandle } from "@/components/custom/sidebar-resize-handle";
-import { THREAD_CHANGES_FILE_TREE_RESIZE_BOUNDS } from "@/lib/threads/constants";
 import { getErrorMessage } from "@/lib/errors";
 
 /** Where run-file ops execute: the thread's profile + path entry. */
@@ -533,10 +531,6 @@ export function RunFileViewerPanel({
 }: RunFileViewerPanelProps) {
   const diffTheme = useDiffTheme();
   const changesContainerRef = useRef<HTMLDivElement>(null);
-  const { width: fileTreeWidth, handleMouseDown, adjustWidthBy } = useResizePanel(
-    changesContainerRef,
-    { bounds: THREAD_CHANGES_FILE_TREE_RESIZE_BOUNDS }
-  );
   const [activeTab, setActiveTab] = useState<string | null>(CHANGES_TAB);
   const [openFilePaths, setOpenFilePaths] = useState<string[]>([]);
   // Collapse state is XOR over the `allCollapsed` base: a path in the set is
@@ -750,35 +744,24 @@ export function RunFileViewerPanel({
           )}
         </div>
         {fileTreeOpen && runDiffResult && files.length > 0 && (
-          <div className="relative max-w-[60%] shrink-0" style={{ width: fileTreeWidth }}>
-            <SidebarResizeHandle
-              ariaLabel="Resize file tree"
-              currentWidth={fileTreeWidth}
-              bounds={THREAD_CHANGES_FILE_TREE_RESIZE_BOUNDS}
-              expandDirection="left"
-              onResizeMouseDown={handleMouseDown}
-              onResizeByStep={adjustWidthBy}
-              className="absolute inset-y-0 left-0 z-20 -translate-x-1/2"
+          <FileTreePane containerRef={changesContainerRef}>
+            <WorktreeFileTree
+              files={files}
+              selectedPath={activeTab ?? scrollPath}
+              onSelectFile={(path) => {
+                setActiveTab(CHANGES_TAB);
+                setTreeSelection({ path });
+                setCollapseToggledPaths((current) => {
+                  const next = new Set(current);
+                  if (allCollapsed) next.add(path);
+                  else next.delete(path);
+                  return next;
+                });
+              }}
+              onOpenFile={openFileTab}
+              onRevertFile={onRevertFile}
             />
-            <aside aria-label="Changed files" className="h-full overflow-auto border-l border-border">
-              <WorktreeFileTree
-                files={files}
-                selectedPath={activeTab ?? scrollPath}
-                onSelectFile={(path) => {
-                  setActiveTab(CHANGES_TAB);
-                  setTreeSelection({ path });
-                  setCollapseToggledPaths((current) => {
-                    const next = new Set(current);
-                    if (allCollapsed) next.add(path);
-                    else next.delete(path);
-                    return next;
-                  });
-                }}
-                onOpenFile={openFileTab}
-                onRevertFile={onRevertFile}
-              />
-            </aside>
-          </div>
+          </FileTreePane>
         )}
       </div>
     </div>

@@ -4,9 +4,10 @@ import type { ReactNode } from "react";
 import { useTheme } from "next-themes";
 import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
-import { Sun, Moon, Monitor, Check } from "lucide-react";
+import { Sun, Moon, Monitor, Check, PanelLeft, PanelRight } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useUserPreferences } from "@/lib/preferences/use-user-preferences";
+import { type FileTreeSide, useFileTreeSide, writeFileTreeSide } from "@/lib/threads/changes-view-prefs";
 import type {
   SectionColorStyle,
   SectionHeaderStyle,
@@ -58,7 +59,42 @@ export function AppearanceSection() {
 
       <CodeDiffThemeField />
 
+      <FileTreeSideField />
+
       <TaskSectionsField />
+    </div>
+  );
+}
+
+const FILE_TREE_SIDES = [
+  { value: "left", label: "Left", icon: PanelLeft },
+  { value: "right", label: "Right", icon: PanelRight },
+] as const satisfies readonly { value: FileTreeSide; label: string; icon: unknown }[];
+
+function FileTreeSideField() {
+  const side = useFileTreeSide();
+  return (
+    <div className="space-y-2">
+      <Label id="file-tree-side">Diff file tree</Label>
+      <div role="group" aria-labelledby="file-tree-side" className="grid grid-cols-2 gap-2">
+        {FILE_TREE_SIDES.map((option) => (
+          <Button
+            key={option.value}
+            type="button"
+            variant="outline"
+            aria-pressed={side === option.value}
+            onClick={() => writeFileTreeSide(option.value)}
+            className={cn("relative gap-2", side === option.value && "border-primary bg-accent")}
+          >
+            <option.icon className="size-4" />
+            {option.label}
+            {side === option.value && <Check className="absolute right-2 size-3 text-primary" />}
+          </Button>
+        ))}
+      </div>
+      <p className="text-sm text-muted-foreground">
+        Which side of a diff the changed-files tree sits on, on this device.
+      </p>
     </div>
   );
 }

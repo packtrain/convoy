@@ -564,8 +564,10 @@ every row, header included, past a phone viewport. The right pane is the file tr
   (`components/custom/diff/file-tree.ts`). File rows show the name, ±counts (or
   "binary"), deleted files struck through. Clicking a file marks it selected,
   expands its section if collapsed, and scrolls the middle pane to it. The
-  pane only appears once the patch has files, hides on mobile, and its close
-  button is undone by a "Show files" button in the header.
+  pane only appears once the patch has files and hides on mobile. A file tree
+  toggle at the end of the changes toolbar stays put and shows whether the
+  tree is open; clicking it closes or reopens the tree, as does the pane's
+  close button.
 - Icons (OS-2039, `lib/file-icons.ts`): the vscode-icons theme.
   `vscode-icons-js` maps a lowercased file name or a folder's last segment to
   an SVG name (open folders use the `_opened` variant, unknown names the

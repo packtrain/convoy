@@ -25,6 +25,8 @@ interface ThreadDetailSidebarShellProps {
   title?: string;
   header?: ReactNode;
   showHeader?: boolean;
+  /** Edge of the container the sidebar sits on; the resize handle goes on the other edge. */
+  side?: "left" | "right";
   children: ReactNode;
   className?: string;
 }
@@ -39,6 +41,7 @@ export function ThreadDetailSidebarShell({
   title = "Thread sidebar",
   header,
   showHeader = true,
+  side = "right",
   children,
   className,
 }: ThreadDetailSidebarShellProps) {
@@ -112,15 +115,19 @@ export function ThreadDetailSidebarShell({
         ariaLabel="Resize thread detail sidebar"
         currentWidth={width}
         bounds={bounds}
-        expandDirection="left"
+        expandDirection={side === "left" ? "right" : "left"}
         onResizeMouseDown={onResizeMouseDown}
         onResizeByStep={onResizeByStep}
-        className="absolute inset-y-0 left-0 z-10 -translate-x-1/2"
+        className={cn(
+          "absolute inset-y-0 z-10",
+          side === "left" ? "right-0 translate-x-1/2" : "left-0 -translate-x-1/2"
+        )}
       />
       <aside
         aria-label={title}
         className={cn(
-          "flex h-full min-h-0 w-full flex-col overflow-hidden border-l border-border bg-background",
+          "flex h-full min-h-0 w-full flex-col overflow-hidden border-border bg-background",
+          side === "left" ? "border-r" : "border-l",
           className
         )}
       >

@@ -296,6 +296,21 @@ describe("PullRequestReader tabs", () => {
 });
 
 describe("PullRequestReader diff", () => {
+  test("the file tree toggle stays in the toolbar and flips the Files pane on and off", async () => {
+    await openDiff();
+    expect(screen.getByRole("complementary", { name: "Files" })).toBeTruthy();
+
+    const hide = screen.getByRole("button", { name: "Hide file tree" });
+    expect(hide.getAttribute("aria-pressed")).toBe("true");
+    fireEvent.click(hide);
+    expect(screen.queryByRole("complementary", { name: "Files" })).toBeNull();
+
+    const show = screen.getByRole("button", { name: "Show file tree" });
+    expect(show.getAttribute("aria-pressed")).toBe("false");
+    fireEvent.click(show);
+    expect(screen.getByRole("complementary", { name: "Files" })).toBeTruthy();
+  });
+
   test("renders GitHub's files, labels a missing patch, and keeps the diff when new commits land", async () => {
     const view = await openDiff();
     expect(screen.getByText(/GitHub sent no text diff for this file/)).toBeTruthy();

@@ -1,7 +1,8 @@
 "use client";
 
-import { ChevronsDownUp, ChevronsUpDown, Columns2, Rows2, WrapText } from "lucide-react";
+import { ChevronsDownUp, ChevronsUpDown, Columns2, PanelLeft, PanelRight, Rows2, WrapText } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { useFileTreeSide } from "@/lib/threads/changes-view-prefs";
 import { cn } from "@/lib/utils";
 
 function ToolbarIconButton({
@@ -43,6 +44,9 @@ export interface ChangesViewTogglesProps {
   onToggleDiffStyle: () => void;
   wordWrap: boolean;
   onToggleWordWrap: () => void;
+  /** Omit to leave out the file tree toggle (e.g. on mobile). */
+  fileTreeOpen?: boolean;
+  onToggleFileTree?: () => void;
 }
 
 /**
@@ -56,7 +60,10 @@ export function ChangesViewToggles({
   onToggleDiffStyle,
   wordWrap,
   onToggleWordWrap,
+  fileTreeOpen = false,
+  onToggleFileTree,
 }: ChangesViewTogglesProps) {
+  const FileTreeIcon = useFileTreeSide() === "left" ? PanelLeft : PanelRight;
   return (
     <>
       <ToolbarIconButton
@@ -86,6 +93,15 @@ export function ChangesViewToggles({
       >
         <WrapText />
       </ToolbarIconButton>
+      {onToggleFileTree && (
+        <ToolbarIconButton
+          label={fileTreeOpen ? "Hide file tree" : "Show file tree"}
+          active={fileTreeOpen}
+          onClick={onToggleFileTree}
+        >
+          <FileTreeIcon />
+        </ToolbarIconButton>
+      )}
     </>
   );
 }

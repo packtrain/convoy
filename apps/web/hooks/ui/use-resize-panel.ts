@@ -63,6 +63,11 @@ function getRightAnchoredWidth({
   return containerRect.right - clientX - resizeOffset;
 }
 
+/** For a panel on the left edge of its container: it grows as the pointer moves right. */
+export function getLeftAnchoredWidth({ clientX, containerRect, resizeOffset }: ResizePointerArgs): number {
+  return clientX - containerRect.left - resizeOffset;
+}
+
 export function useResizePanel(
   containerRef: RefObject<HTMLDivElement | null>,
   options: UseResizePanelOptions

@@ -4,12 +4,10 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { RefreshCw } from "lucide-react";
 import type { Id } from "@/convex/_generated/dataModel";
 import { Button } from "@/components/ui/button";
-import { SidebarResizeHandle } from "@/components/custom/sidebar-resize-handle";
 import { FileTabStrip } from "@/components/custom/diff/file-tab-strip";
 import { usePatchDiffOptions } from "@/components/custom/diff/patch-file-sections";
+import { FileTreePane } from "@/components/custom/diff/file-tree-pane";
 import { WorktreeFileTree } from "@/components/custom/diff/worktree-file-tree";
-import { useResizePanel } from "@/hooks/ui/use-resize-panel";
-import { THREAD_CHANGES_FILE_TREE_RESIZE_BOUNDS } from "@/lib/threads/constants";
 import { useWorktreeChanges } from "@/lib/worktrees/hooks/use-worktree-changes";
 import { cn } from "@/lib/utils";
 import { ChangesSummary, RevertAllButton, WorktreeChangesBody, useSectionCollapse } from "./worktree-changes-body";
@@ -47,9 +45,6 @@ export function WorktreeChangesPanel({
   const collapse = useSectionCollapse(allCollapsed);
   const diffOptions = usePatchDiffOptions(diffStyle, wordWrap);
   const containerRef = useRef<HTMLDivElement>(null);
-  const { width: treeWidth, handleMouseDown, adjustWidthBy } = useResizePanel(containerRef, {
-    bounds: THREAD_CHANGES_FILE_TREE_RESIZE_BOUNDS,
-  });
   const sectionRefs = useRef(new Map<string, HTMLElement>());
   const [selectedPath, setSelectedPath] = useState<string>();
 
@@ -123,28 +118,17 @@ export function WorktreeChangesPanel({
           />
         </div>
         {showTree && (
-          <div className="relative max-w-[60%] shrink-0" style={{ width: treeWidth }}>
-            <SidebarResizeHandle
-              ariaLabel="Resize file tree"
-              currentWidth={treeWidth}
-              bounds={THREAD_CHANGES_FILE_TREE_RESIZE_BOUNDS}
-              expandDirection="left"
-              onResizeMouseDown={handleMouseDown}
-              onResizeByStep={adjustWidthBy}
-              className="absolute inset-y-0 left-0 z-20 -translate-x-1/2"
+          <FileTreePane containerRef={containerRef}>
+            <WorktreeFileTree
+              files={files}
+              selectedPath={state.activeTab ?? selectedPath}
+              onSelectFile={selectFile}
+              onOpenFile={state.canOpenFile ? state.openFile : undefined}
+              onRevertFile={state.setRevertTarget}
+              reverting={state.busy}
+              onDownloadFile={state.canDownload && !state.busy ? state.requestDownload : undefined}
             />
-            <aside aria-label="Changed files" className="h-full overflow-auto border-l border-border">
-              <WorktreeFileTree
-                files={files}
-                selectedPath={state.activeTab ?? selectedPath}
-                onSelectFile={selectFile}
-                onOpenFile={state.canOpenFile ? state.openFile : undefined}
-                onRevertFile={state.setRevertTarget}
-                reverting={state.busy}
-                onDownloadFile={state.canDownload && !state.busy ? state.requestDownload : undefined}
-              />
-            </aside>
-          </div>
+          </FileTreePane>
         )}
       </div>
       <RevertFileDialog state={state} />

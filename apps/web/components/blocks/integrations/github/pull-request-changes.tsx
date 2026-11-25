@@ -3,7 +3,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useAction } from "convex/react";
 import { File as FileView } from "@pierre/diffs/react";
-import { ArrowUpRight, PanelRight, X } from "lucide-react";
+import { ArrowUpRight, X } from "lucide-react";
 import { api } from "@/convex/_generated/api";
 import type { Id } from "@/convex/_generated/dataModel";
 import { ThreadWorkspaceSplitPane } from "@/components/blocks/thread/thread-workspace-split-pane";
@@ -15,6 +15,7 @@ import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
 import { useIsMobile } from "@/hooks/browser/use-mobile";
 import { getErrorMessage } from "@/lib/errors";
+import { useFileTreeSide } from "@/lib/threads/changes-view-prefs";
 import { toSectionFile, type PullRequestDiff, type PullRequestDiffFile } from "./github-patch";
 import { PullRequestFileSection } from "./pull-request-file-section";
 import { fileLineComments, toLineEditor, type LineEditor, type PullRequestReview } from "./pull-request-review";
@@ -57,6 +58,7 @@ export function PullRequestChanges({
   const [toggled, setToggled] = useState<ReadonlySet<string>>(new Set());
   const [selectedPath, setSelectedPath] = useState<string>();
   const [treeOpen, setTreeOpen] = useState(true);
+  const treeSide = useFileTreeSide();
   const [activeTab, setActiveTab] = useState<string | null>(null);
   const [openPaths, setOpenPaths] = useState<string[]>([]);
   const [contents, setContents] = useState<ReadonlyMap<string, FileState>>(new Map());
@@ -131,6 +133,7 @@ export function PullRequestChanges({
       isSidebarOpen={treeOpen && !isMobile}
       onCloseSidebar={() => setTreeOpen(false)}
       sidebarTitle="Files"
+      sidebarSide={treeSide}
       sidebarHeader={
         <div className="flex h-[41px] items-center justify-between border-b px-3 text-xs font-medium">
           Files
@@ -177,12 +180,9 @@ export function PullRequestChanges({
               onToggleDiffStyle={() => setDiffStyle(diffStyle === "unified" ? "split" : "unified")}
               wordWrap={wordWrap}
               onToggleWordWrap={() => setWordWrap(!wordWrap)}
+              fileTreeOpen={treeOpen}
+              onToggleFileTree={isMobile ? undefined : () => setTreeOpen(!treeOpen)}
             />
-            {!treeOpen && !isMobile ? (
-              <Button variant="ghost" size="icon-sm" aria-label="Show files" onClick={() => setTreeOpen(true)}>
-                <PanelRight />
-              </Button>
-            ) : null}
           </div>
         </div>
         <FileTabStrip
@@ -280,11 +280,13 @@ const SKELETON_FILES = [
 /** The Diff tab's outline while the diff loads: summary toolbar, file sections, and the Files pane. */
 export function PullRequestChangesSkeleton() {
   const isMobile = useIsMobile();
+  const treeSide = useFileTreeSide();
   return (
     <ThreadWorkspaceSplitPane
       isSidebarOpen={!isMobile}
       onCloseSidebar={() => {}}
       sidebarTitle="Files"
+      sidebarSide={treeSide}
       sidebarHeader={<div className="flex h-[41px] items-center border-b px-3 text-xs font-medium">Files</div>}
       sidebarContent={
         <ul aria-label="Loading files" className="py-1">

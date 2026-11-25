@@ -1,6 +1,7 @@
 // @vitest-environment jsdom
 import { fireEvent, render, screen, within } from "@testing-library/react";
 import { expect, test, vi } from "vitest";
+import { readFileTreeSide } from "@/lib/threads/changes-view-prefs";
 import { AppearanceSection } from "./appearance-section";
 
 const mocks = vi.hoisted(() => ({
@@ -56,7 +57,7 @@ test("each preview stays fixed when the other setting changes", () => {
 
 test("card labels sit at the bottom so they line up across preview heights", () => {
   render(<AppearanceSection />);
-  for (const card of document.querySelectorAll("[role=group] button")) {
+  for (const card of document.querySelectorAll("[role=group][aria-label] button")) {
     expect(card.className).toContain("justify-between");
   }
 });
@@ -73,4 +74,15 @@ test("the color accent label says it only applies to sections", () => {
   render(<AppearanceSection />);
   const group = screen.getByRole("group", { name: "Color accent" });
   expect(group.firstElementChild?.textContent).toBe("Color accent (sections only)");
+});
+
+test("the diff file tree side is picked between right and left", () => {
+  window.localStorage.clear();
+  render(<AppearanceSection />);
+  const group = within(screen.getByRole("group", { name: "Diff file tree" }));
+  expect(group.getByRole("button", { name: "Right" }).getAttribute("aria-pressed")).toBe("true");
+
+  fireEvent.click(group.getByRole("button", { name: "Left" }));
+  expect(readFileTreeSide()).toBe("left");
+  expect(group.getByRole("button", { name: "Left" }).getAttribute("aria-pressed")).toBe("true");
 });

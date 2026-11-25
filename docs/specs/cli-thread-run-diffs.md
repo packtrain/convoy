@@ -239,6 +239,26 @@ The local identity and recovery contracts are defined in `cli-worktrees.md`.
 - Terminal tool blocks use theme tokens rather than a code theme
   (`cli-thread-tool-parts.md`).
 
+## Diff file tree side
+
+- **User Settings → Appearance → Diff file tree** picks Left or Right (default
+  Right) for the changed-files tree beside every diff: the thread Changes tab,
+  the worktree changes panel and view, and a pull request's Diff tab.
+- Device-local like the code diff theme (`localStorage` key
+  `convoy.changes-file-tree-side`, unknown values read as Right). A change
+  moves every mounted tree at once through `useFileTreeSide()` in
+  `lib/threads/changes-view-prefs.ts`, without a reload.
+- On the left the resize handle moves to the tree's right edge and the border
+  flips. Mobile drawers are unchanged.
+- Every one of these views ends its changes toolbar with the same file tree
+  toggle, rendered by `ChangesViewToggles`: "Hide file tree" (pressed) while
+  the tree is open, "Show file tree" while closed. It never disappears, and its
+  panel icon points to the tree's side.
+- Hosts on `ThreadWorkspaceSplitPane` pass `sidebarSide`. The inline trees
+  render through `components/custom/diff/file-tree-pane.tsx`, which reads the
+  setting itself.
+- No CLI command: this is a per-browser view preference (hard rule 19).
+
 ## Fetch errors (OS-2256)
 
 - A failed file or diff fetch in the run file viewer

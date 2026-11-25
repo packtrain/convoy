@@ -5,7 +5,6 @@ import {
   Check,
   ChevronDown,
   PanelRightClose,
-  ListTree,
   X,
 } from "lucide-react";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
@@ -424,21 +423,9 @@ export function ThreadChangesToolbar({
           onToggleDiffStyle={onToggleDiffStyle}
           wordWrap={wordWrap}
           onToggleWordWrap={onToggleWordWrap}
+          fileTreeOpen={fileTreeOpen}
+          onToggleFileTree={onToggleFileTree}
         />
-        {onToggleFileTree && (
-          <Button
-            type="button"
-            variant="ghost"
-            size="icon-sm"
-            aria-label={fileTreeOpen ? "Hide file tree" : "Show file tree"}
-            title={fileTreeOpen ? "Hide file tree" : "Show file tree"}
-            aria-pressed={fileTreeOpen}
-            className={cn("cursor-pointer", fileTreeOpen ? "bg-muted text-foreground" : "text-muted-foreground")}
-            onClick={onToggleFileTree}
-          >
-            <ListTree />
-          </Button>
-        )}
       </div>
     </div>
   );
