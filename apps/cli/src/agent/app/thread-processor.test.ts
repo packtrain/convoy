@@ -473,10 +473,15 @@ describe("message-handler", () => {
 
     const approved = (script: string) => ({ status: "approved", repoKey: "packtrain/convoy", script, revision: 3 });
 
-    it("fails an unapproved setup before creating the worktree", async () => {
+    it("fails an unapproved setup before creating the worktree, with a notice the web links", async () => {
       const repo = await pendingWorktreeChat({ status: "unapproved", repoKey: "packtrain/convoy" });
       const result = await repo.run();
       expect(result.failure).toBe("This project has a worktree setup script for packtrain/convoy that you haven't approved. Review it in Project settings → Worktrees, then retry.");
+      expect(result.chunks.map((chunk) => JSON.parse(chunk.data))).toEqual([{
+        code: "worktree-setup-unapproved",
+        title: "Worktree setup",
+        message: "The setup script for `packtrain/convoy` needs your approval.",
+      }]);
       expect(existsSync(repo.worktreePath)).toBe(false);
       expect(result.calls.some((call) => call.name === "cli/worktrees:resolveCreated")).toBe(false);
       expect(mockRunner.execute).not.toHaveBeenCalled();

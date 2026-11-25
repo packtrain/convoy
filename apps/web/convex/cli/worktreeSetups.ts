@@ -2,7 +2,7 @@ import { v, type Infer } from "convex/values";
 import { mutation, query } from "../_generated/server";
 import type { Id } from "../_generated/dataModel";
 import { getAuthenticatedAccess } from "../lib/access/auth";
-import { requireAuthorizedProject } from "../lib/access/permissions";
+import { requireAuthorizedProject, type AuthenticatedAccess } from "../lib/access/permissions";
 import { ProjectPermission } from "../../lib/authz/permissions";
 import { ensure } from "../lib/shared/ensure";
 import { getUsersByIds } from "../users/lib/usersRepo";
@@ -32,10 +32,20 @@ const worktreeSetupRowValidator = v.object({
       revision: v.number(),
       updatedByName: v.union(v.string(), v.null()),
       updatedAt: v.number(),
-      approvedByMe: v.boolean(),
+      // "never": no approval row; "changed": the caller approved an older revision.
+      approval: v.union(v.literal("approved"), v.literal("never"), v.literal("changed")),
     }),
   ),
 });
+
+/** Only a web session approves a script; an agent holding the user's API key must not. */
+function requireWebSession(principal: AuthenticatedAccess) {
+  ensure(principal.apiKeyScope).isNull(errors.WORKTREE_SETUP_APPROVE_WEB_ONLY);
+}
+
+function approvalStatus(approved: number | undefined, current: number) {
+  return approved === undefined ? "never" : approved === current ? "approved" : "changed";
+}
 
 /**
  * The project's setups plus the caller's registered repos without one, in
@@ -66,7 +76,7 @@ export const list = query({
         revision: setup.revision,
         updatedByName: editorNames.get(setup.updatedBy) ?? null,
         updatedAt: setup.updatedAt,
-        approvedByMe: approvals[index]?.revision === setup.revision,
+        approval: approvalStatus(approvals[index]?.revision, setup.revision),
       },
     }));
     const known = new Set(rows.map((row) => row.repoKey));
@@ -87,6 +97,7 @@ export const save = mutation({
   returns: v.id("projectWorktreeSetups"),
   handler: async (ctx, args) => {
     const { user, principal } = await getAuthenticatedAccess(ctx);
+    requireWebSession(principal);
     await requireAuthorizedProject(ctx, principal, args.projectId, ProjectPermission.PROJECT_UPDATE);
 
     ensure(isRepoKey(args.repoKey)).isTrue(errors.WORKTREE_SETUP_REPO_KEY_INVALID);
@@ -119,6 +130,21 @@ export const remove = mutation({
     const setup = await ensure(getWorktreeSetupById(ctx, args.setupId)).notNull(errors.WORKTREE_SETUP_NOT_FOUND);
     await requireAuthorizedProject(ctx, principal, setup.projectId, ProjectPermission.PROJECT_UPDATE);
     await deleteWorktreeSetup(ctx, setup._id);
+    return null;
+  },
+});
+
+/** Web session only, like `save`. `revision` is the one the page showed; a newer one rejects it. */
+export const approve = mutation({
+  args: { setupId: v.id("projectWorktreeSetups"), revision: v.number() },
+  returns: v.null(),
+  handler: async (ctx, args) => {
+    const { user, principal } = await getAuthenticatedAccess(ctx);
+    requireWebSession(principal);
+    const setup = await ensure(getWorktreeSetupById(ctx, args.setupId)).notNull(errors.WORKTREE_SETUP_NOT_FOUND);
+    await requireAuthorizedProject(ctx, principal, setup.projectId, ProjectPermission.CLI_THREAD);
+    ensure(args.revision).eq(setup.revision, errors.WORKTREE_SETUP_REVISION_CHANGED);
+    await upsertWorktreeSetupApproval(ctx, user._id, setup._id, setup.revision);
     return null;
   },
 });

@@ -69,7 +69,8 @@ One exception is a project's worktree setup script. A project admin writes it
 in Project settings → Worktrees, and your CLI runs it with your rights, outside
 the runtime's permission mode, in every worktree it creates for that repo. It
 runs only when you approved that exact revision in the web: saving it yourself
-approves it, and any later change needs your approval again. An API key never
+approves it, and any later change needs your approval again. Approve it under
+the script in Project settings → Worktrees. An API key never
 approves a script, so an agent running with your key cannot add one for you.
 
 Practical consequences:

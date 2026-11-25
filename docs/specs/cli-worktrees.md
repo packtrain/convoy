@@ -880,7 +880,7 @@ every row, header included, past a phone viewport. The right pane is the file tr
 
 ## Worktree setup scripts
 
-Tickets: OS-1116 (epic), OS-2572 (this slice). A worktree the CLI creates has
+Tickets: OS-1116 (epic), OS-2572 (setup scripts), OS-2573 (teammate approval). A worktree the CLI creates has
 none of the parent's ignored files (`.mcp.json`, `.env.local`) and no
 installed dependencies. A project can hold one bash script per repo, and the
 CLI runs it in every worktree it creates for that repo, before the agent
@@ -937,18 +937,36 @@ fork's worktrees run no script.
 
 | Function | Permission | Notes |
 |---|---|---|
-| `list({ projectId })` | `cli:thread` | The project's setups, plus the repo keys of the caller's own profiles in this project that have none yet (`setup: null`). Sorted by repo key in code-unit order, like the index. Each setup carries `script`, `revision`, `updatedByName`, `updatedAt`, `approvedByMe`. Reads at most 100 setups, one approval point read per setup, the caller's profiles, and the editors' user rows. |
-| `save({ projectId, repoKey, script })` | `project:update` | Web session only, no `apiKey` argument. Inserts with `revision: 1` or bumps `revision` when the text changed, and writes the saver's approval in the same mutation. Saving unchanged text keeps the revision and approves it, which is how a second admin approves the first one's change. |
+| `list({ projectId })` | `cli:thread` | The project's setups, plus the repo keys of the caller's own profiles in this project that have none yet (`setup: null`). Sorted by repo key in code-unit order, like the index. Each setup carries `script`, `revision`, `updatedByName`, `updatedAt`, and the caller's `approval`: `approved`, `never`, or `changed`. Reads at most 100 setups, one approval point read per setup, the caller's profiles, and the editors' user rows. |
+| `save({ projectId, repoKey, script })` | `project:update` | Web session only, no `apiKey` argument; a principal with an `apiKeyScope` is refused, as in `approve`. Inserts with `revision: 1` or bumps `revision` when the text changed, and writes the saver's approval in the same mutation. Saving unchanged text keeps the revision and approves it. |
 | `remove({ setupId })` | `project:update` | Web session only. Deletes the row. |
+| `approve({ setupId, revision })` | `cli:thread` | Web session only: no `apiKey` argument, and a principal with an `apiKeyScope` is refused ("Approve setup scripts in the web app"). Upserts the caller's approval row with the current revision. |
 
 An API key never approves a script, including its owner's. An agent runs
 with the user's API key. If a save through the key counted as approval, the
 agent could write a script, start a worktree thread, and have the CLI run the
 script outside the agent's permission mode and sandbox. For the same reason
-there is no MCP tool. Slice 3 (OS-2574) adds `convoy worktree-setups`
-commands; they wait for slice 2's Approve button (OS-2573), because a save
-from the CLI approves for nobody and the saver would have to approve it in
-the web anyway.
+there is no MCP tool and no approve command. Slice 3 (OS-2574) adds
+`convoy worktree-setups` commands; a save from the CLI approves for nobody,
+so the saver approves it in the web like any teammate.
+
+### Approval
+
+A script runs on a user's machine only if that user approved its current
+revision in the web. `list` gives each setup one of three states for the
+caller, and the settings row shows it as a badge:
+
+| `approval` | Badge | Meaning |
+|---|---|---|
+| `approved` | Approved | The caller's approval row has the current revision. |
+| `never` | Needs your approval | The caller has no approval row for this setup. |
+| `changed` | Changed since you approved | The caller approved an older revision. |
+
+Saving approves for the saver. Everyone else with `cli:thread` approves in
+the settings page. `approve` takes the revision the page showed; if the
+setup has moved on, it fails with "The script changed. Review the new
+version.", so nobody approves text they did not read. A script change bumps
+the revision, so every earlier approval stops matching. There is no revoke.
 
 ### Run start
 
@@ -969,7 +987,13 @@ The pending-worktree block of the thread processor:
 
 - `unapproved`: fails the run before creating the worktree, with "This
   project has a worktree setup script for `<repoKey>` that you haven't
-  approved. Review it in Project settings → Worktrees, then retry." The check
+  approved. Review it in Project settings → Worktrees, then retry." Before
+  failing it appends a `convoy_notice` chunk with `code:
+  "worktree-setup-unapproved"` ("The setup script for `<repoKey>` needs your
+  approval."), which the thread renders with a "Review script" link to
+  Project settings → Worktrees (`appRoute.projectSettings`). Outside a
+  project route the notice shows its text only; the failure message is the
+  fallback for CLIs older than 0.178.0. The check
   runs before the CLI knows whether a reused worktree already ran its setup,
   so a second thread on a set-up branch also fails after someone changes the
   script. Accepted: approving fixes both.
@@ -1035,8 +1059,6 @@ happens only for older CLIs.
 
 ### Not built yet
 
-- Teammates approving a script in the web (OS-2573). Until then a script runs
-  only for whoever saved its current revision.
 - `convoy worktree-setups list | get | set | delete` (OS-2574).
 - A notice when a repo has no setup but another repo key would match, such as
   a fork of a repo that has one. The epic asks for it; today a fork's thread

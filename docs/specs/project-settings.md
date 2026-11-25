@@ -252,10 +252,19 @@ How and when it runs, the approval rule, and the script environment are in
   environment variables listed under it and an example as placeholder text.
   Save stays disabled while the script is empty or unchanged. Remove confirms
   first and deletes the script.
-- A row whose current revision the caller has not approved adds "Not approved
-  by you". An admin who opens it can press Approve without editing: it saves
-  the unchanged text, which keeps the revision and records their approval.
-  Teammates without `project:update` get their own Approve button in OS-2573.
+- A row with a script carries a badge with the caller's approval: "Approved",
+  "Needs your approval", or "Changed since you approved".
+- Under the script, the dialog shows "Last edited by <name>, <time>" and,
+  unless the caller approved the current revision, an Approve button. It sends
+  the revision on screen. An admin sees it while their text matches the
+  script on screen; once it differs, Save approves instead. Save stays disabled
+  while the text matches the saved script.
+- The dialog pins the version it opened with. If someone saves a change while
+  it is open, it keeps showing the text the reader was reading and adds "The
+  script changed. Review the new version." with a "Show new version" button
+  that loads the new text and discards unsaved edits. Approve keeps sending the
+  pinned revision, so the server rejects it with the same message until the
+  reader loads the new version.
 - Only `project:update` holders (project admins) can save or remove. Everyone
   else opens the editor read-only, under a notice that only project admins can
   edit setup scripts.

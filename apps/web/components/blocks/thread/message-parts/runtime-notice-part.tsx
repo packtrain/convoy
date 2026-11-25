@@ -9,6 +9,7 @@ import {
 import type { LucideIcon } from "lucide-react";
 import { Shimmer } from "@/components/ai-elements/shimmer";
 import { Marker, MarkerContent } from "@/components/ui/marker";
+import { AppLink, appRoute, href, useRouteParams } from "@/lib/navigation";
 import type { RuntimeNoticePart as RuntimeNoticePartModel } from "@/lib/cli-stream-ui";
 import { formatJsonString } from "@/lib/cli-stream-ui/runtime-notices";
 import { CollapsibleToolPart } from "./components/collapsible-tool-part";
@@ -37,7 +38,33 @@ function getNoticeIcon(part: RuntimeNoticePartModel): {
   return { icon: AlertTriangle };
 }
 
+/** The CLI's unapproved-setup notice (docs/specs/cli-worktrees.md#worktree-setup-scripts); approval happens in settings. */
+function WorktreeSetupUnapprovedNotice({ part }: RuntimeNoticePartProps) {
+  const params = useRouteParams<{ organizationSlug?: string; projectAlias?: string }>();
+  const link = params?.organizationSlug && params.projectAlias
+    ? href(appRoute.projectSettings(params.organizationSlug, params.projectAlias, "worktrees"))
+    : null;
+  return (
+    <CollapsibleToolPart
+      icon={AlertTriangle}
+      title={`${part.title}: ${part.message}`}
+      hasBody={false}
+      trailing={
+        link ? (
+          <AppLink href={link} className="shrink-0 underline underline-offset-2 hover:text-foreground">
+            Review script
+          </AppLink>
+        ) : null
+      }
+    />
+  );
+}
+
 export function RuntimeNoticePart({ part }: RuntimeNoticePartProps) {
+  if (part.code === "worktree-setup-unapproved") {
+    return <WorktreeSetupUnapprovedNotice part={part} />;
+  }
+
   if (part.code === "context-compaction") {
     return (
       <Marker variant="separator" className="my-2 text-xs">

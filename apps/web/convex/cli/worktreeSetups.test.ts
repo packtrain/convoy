@@ -4,6 +4,7 @@ import type { Id } from "../_generated/dataModel";
 import { createTestContext } from "../../convex-testing";
 import { buildPathEntry } from "../../convex-testing/builders";
 import * as setupsRepo from "./lib/projectWorktreeSetupsRepo";
+import * as auth from "../lib/access/auth";
 import { WORKTREE_SETUP_MIN_CLI_VERSION } from "../../lib/worktrees/cli-version";
 
 const SCRIPT = 'cp "$CONVOY_PARENT_PATH/.mcp.json" .\npnpm i';
@@ -136,7 +137,7 @@ describe("cli worktree setups", () => {
       const rows = await s.asUser.query(api.cli.worktreeSetups.list, { projectId: s.project._id });
       expect(rows.map((row) => row.repoKey)).toEqual(["acme/api", "packtrain/convoy", "zeta/tools"]);
       expect(rows[0].setup).toBeNull();
-      expect(rows[1].setup).toMatchObject({ script: SCRIPT, revision: 1, updatedByName: "Ada", approvedByMe: true });
+      expect(rows[1].setup).toMatchObject({ script: SCRIPT, revision: 1, updatedByName: "Ada", approval: "approved" });
     });
 
     test("orders rows by code unit, like the index", async () => {
@@ -153,13 +154,71 @@ describe("cli worktree setups", () => {
       await s.asUser.mutation(api.cli.worktreeSetups.save, { projectId: s.project._id, repoKey: "zeta/tools", script: "make" });
       const { as } = await s.member("member");
       const rows = await as.query(api.cli.worktreeSetups.list, { projectId: s.project._id });
-      expect(rows).toMatchObject([{ repoKey: "zeta/tools", setup: { approvedByMe: false } }]);
+      expect(rows).toMatchObject([{ repoKey: "zeta/tools", setup: { approval: "never" } }]);
     });
 
     test("requires cli:thread", async () => {
       const s = await setup();
       const { as } = await s.member("viewer");
       await expect(as.query(api.cli.worktreeSetups.list, { projectId: s.project._id })).rejects.toThrow();
+    });
+  });
+
+  describe("approve", () => {
+    async function withAdmin() {
+      const s = await setup();
+      const admin = await s.member("project-admin");
+      const adminSaves = (script: string) =>
+        admin.as.mutation(api.cli.worktreeSetups.save, { projectId: s.project._id, repoKey: "packtrain/convoy", script });
+      return { ...s, adminSaves };
+    }
+
+    test("a teammate approves the shown revision, until someone changes the script", async () => {
+      const s = await withAdmin();
+      const setupId = await s.adminSaves(SCRIPT);
+      expect((await s.pendingRun()).started.worktreeSetup).toEqual({ status: "unapproved", repoKey: "packtrain/convoy" });
+
+      await s.asUser.mutation(api.cli.worktreeSetups.approve, { setupId, revision: 1 });
+      expect((await s.pendingRun()).started.worktreeSetup).toEqual({ status: "approved", repoKey: "packtrain/convoy", script: SCRIPT, revision: 1 });
+      expect((await s.asUser.query(api.cli.worktreeSetups.list, { projectId: s.project._id }))[0].setup?.approval).toBe("approved");
+
+      await s.adminSaves("pnpm i");
+      expect((await s.pendingRun()).started.worktreeSetup).toEqual({ status: "unapproved", repoKey: "packtrain/convoy" });
+      expect((await s.asUser.query(api.cli.worktreeSetups.list, { projectId: s.project._id }))[0].setup?.approval).toBe("changed");
+    });
+
+    test("rejects a revision that is no longer current", async () => {
+      const s = await withAdmin();
+      const setupId = await s.adminSaves(SCRIPT);
+      await s.adminSaves("pnpm i");
+      await expect(s.asUser.mutation(api.cli.worktreeSetups.approve, { setupId, revision: 1 }))
+        .rejects.toThrow("The script changed. Review the new version.");
+      expect((await readSetup(s, setupId)).approvals.filter((a) => a.userId === s.user._id)).toEqual([]);
+    });
+
+    test("requires cli:thread", async () => {
+      const s = await withAdmin();
+      const setupId = await s.adminSaves(SCRIPT);
+      const viewer = await s.member("viewer");
+      await expect(viewer.as.mutation(api.cli.worktreeSetups.approve, { setupId, revision: 1 })).rejects.toThrow("Permission denied: cli:thread");
+    });
+
+    test("refuses an API-key principal, for approve and save alike", async () => {
+      const s = await withAdmin();
+      const setupId = await s.adminSaves(SCRIPT);
+      const user = await s.t.run((ctx) => ctx.db.get("users", s.user._id));
+      const access = vi.spyOn(auth, "getAuthenticatedAccess").mockResolvedValue({
+        user: user!, principal: { userId: s.user._id, apiKeyScope: { kind: "unscoped" } },
+      });
+      try {
+        await expect(s.asUser.mutation(api.cli.worktreeSetups.approve, { setupId, revision: 1 }))
+          .rejects.toThrow("Approve setup scripts in the web app");
+        await expect(s.asUser.mutation(api.cli.worktreeSetups.save, { projectId: s.project._id, repoKey: "packtrain/convoy", script: SCRIPT }))
+          .rejects.toThrow("Approve setup scripts in the web app");
+      } finally {
+        access.mockRestore();
+      }
+      expect((await readSetup(s, setupId)).approvals.filter((a) => a.userId === s.user._id)).toEqual([]);
     });
   });
 

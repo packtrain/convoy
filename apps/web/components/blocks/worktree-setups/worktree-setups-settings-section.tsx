@@ -19,6 +19,7 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
+import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Skeleton } from "@/components/ui/skeleton";
@@ -27,6 +28,17 @@ import { showConvexErrorToast } from "@/lib/errors";
 import { formatRelativeTime } from "@/lib/format-relative-time";
 
 type Row = FunctionReturnType<typeof api.cli.worktreeSetups.list>[number];
+type Setup = NonNullable<Row["setup"]>;
+
+const APPROVAL_BADGES: Record<Setup["approval"], { label: string; className: string }> = {
+  approved: { label: "Approved", className: "text-muted-foreground" },
+  never: { label: "Needs your approval", className: "text-warning" },
+  changed: { label: "Changed since you approved", className: "text-warning" },
+};
+
+function lastEdited(setup: Setup): string {
+  return `Last edited by ${setup.updatedByName ?? "a former member"}, ${formatRelativeTime(setup.updatedAt)}`;
+}
 
 const EXAMPLE_SCRIPT = `cp "$CONVOY_PARENT_PATH/.mcp.json" .
 cp "$CONVOY_PARENT_PATH/apps/web/.env.local" apps/web/
@@ -41,7 +53,9 @@ const ENV_VARS = [
 /** Project settings → Worktrees: one setup script per repo (docs/specs/cli-worktrees.md#worktree-setup-scripts). */
 export function WorktreeSetupsSettingsSection({ projectId, canEdit }: { projectId: Id<"projects"> | null; canEdit: boolean }) {
   const rows = useQuery(api.cli.worktreeSetups.list, projectId ? { projectId } : "skip");
-  const [editing, setEditing] = useState<Row | null>(null);
+  // A repo key, not a row snapshot: the open dialog follows the live row (a teammate's save).
+  const [editingKey, setEditingKey] = useState<string | null>(null);
+  const editing = rows?.find((row) => row.repoKey === editingKey) ?? null;
 
   if (!projectId || rows === undefined) {
     return (
@@ -81,20 +95,28 @@ export function WorktreeSetupsSettingsSection({ projectId, canEdit }: { projectI
           <button
             key={row.repoKey}
             type="button"
-            onClick={() => setEditing(row)}
-            aria-label={`${canEdit ? "Edit" : "View"} setup for ${row.repoKey}`}
-            className="flex w-full min-w-0 cursor-pointer flex-col items-start gap-1 p-4 text-left transition-colors hover:bg-muted/50 focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none focus-visible:ring-inset"
+            onClick={() => setEditingKey(row.repoKey)}
+            aria-label={`${canEdit ? "Edit" : "View"} setup for ${row.repoKey}${row.setup ? `, ${APPROVAL_BADGES[row.setup.approval].label}` : ""}`}
+            className="flex w-full min-w-0 cursor-pointer items-center gap-3 p-4 text-left transition-colors hover:bg-muted/50 focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none focus-visible:ring-inset"
           >
-            <span className="max-w-full truncate font-mono text-sm font-medium">{row.repoKey}</span>
-            <span className="max-w-full truncate text-xs text-muted-foreground">
-              {row.setup
-                ? `Last edited by ${row.setup.updatedByName ?? "a former member"}, ${formatRelativeTime(row.setup.updatedAt)}${row.setup.approvedByMe ? "" : " · Not approved by you"}`
-                : "No setup script"}
+            <span className="flex min-w-0 flex-1 flex-col items-start gap-1">
+              <span className="max-w-full truncate font-mono text-sm font-medium">{row.repoKey}</span>
+              <span className="max-w-full truncate text-xs text-muted-foreground">{row.setup ? lastEdited(row.setup) : "No setup script"}</span>
             </span>
+            {row.setup ? (
+              <Badge
+                variant="outline"
+                shape="rounded"
+                data-testid="approval-badge"
+                className={`shrink-0 ${APPROVAL_BADGES[row.setup.approval].className}`}
+              >
+                {APPROVAL_BADGES[row.setup.approval].label}
+              </Badge>
+            ) : null}
           </button>
         ))}
       </SettingsCatalogListFrame>
-      {editing ? <ScriptDialog projectId={projectId} row={editing} canEdit={canEdit} onClose={() => setEditing(null)} /> : null}
+      {editing ? <ScriptDialog projectId={projectId} row={editing} canEdit={canEdit} onClose={() => setEditingKey(null)} /> : null}
     </div>
   );
 }
@@ -102,12 +124,16 @@ export function WorktreeSetupsSettingsSection({ projectId, canEdit }: { projectI
 function ScriptDialog({ projectId, row, canEdit, onClose }: { projectId: Id<"projects">; row: Row; canEdit: boolean; onClose: () => void }) {
   const save = useMutation(api.cli.worktreeSetups.save);
   const remove = useMutation(api.cli.worktreeSetups.remove);
-  const [script, setScript] = useState(row.setup?.script ?? "");
+  const approve = useMutation(api.cli.worktreeSetups.approve);
+  // The version on screen stays pinned when a teammate saves, so Approve sends the revision the reader read.
+  const [seen, setSeen] = useState(row.setup);
+  const [draft, setDraft] = useState<string | null>(null);
   const [isSaving, setIsSaving] = useState(false);
   const [confirmingRemove, setConfirmingRemove] = useState(false);
-  // Saving unchanged text approves the current revision for the saver (docs/specs/cli-worktrees.md#worktree-setup-scripts).
-  const approvesOnly = row.setup !== null && !row.setup.approvedByMe && script.trim() === row.setup.script;
-  const canSave = canEdit && !isSaving && script.trim() !== "" && (script.trim() !== row.setup?.script || approvesOnly);
+  const script = draft ?? seen?.script ?? "";
+  const changedUnderReader = (seen?.revision ?? null) !== (row.setup?.revision ?? null);
+  const canSave = canEdit && !isSaving && draft !== null && draft.trim() !== "" && draft.trim() !== row.setup?.script;
+  const canApprove = seen !== null && row.setup?.approval !== "approved" && script.trim() === seen.script;
 
   const handleSave = async () => {
     if (!canSave) return;
@@ -117,6 +143,19 @@ function ScriptDialog({ projectId, row, canEdit, onClose }: { projectId: Id<"pro
       onClose();
     } catch (error) {
       showConvexErrorToast(error, "Failed to save the setup script");
+    } finally {
+      setIsSaving(false);
+    }
+  };
+
+  const handleApprove = async () => {
+    if (!seen) return;
+    setIsSaving(true);
+    try {
+      await approve({ setupId: seen._id, revision: seen.revision });
+      onClose();
+    } catch (error) {
+      showConvexErrorToast(error, "Failed to approve the setup script");
     } finally {
       setIsSaving(false);
     }
@@ -142,6 +181,23 @@ function ScriptDialog({ projectId, row, canEdit, onClose }: { projectId: Id<"pro
               Bash that runs once in every new worktree a CLI creates for this repo, before the agent starts.
             </DialogDescription>
           </DialogHeader>
+          {changedUnderReader ? (
+            <div className="flex items-center justify-between gap-3 rounded-md bg-muted/50 px-3 py-2 text-sm">
+              <span className="text-warning">The script changed. Review the new version.</span>
+              <Button
+                type="button"
+                size="sm"
+                variant="outline"
+                className="shrink-0 cursor-pointer"
+                onClick={() => {
+                  setSeen(row.setup);
+                  setDraft(null);
+                }}
+              >
+                Show new version
+              </Button>
+            </div>
+          ) : null}
           <form
             className="space-y-4"
             onSubmit={(event) => {
@@ -152,7 +208,7 @@ function ScriptDialog({ projectId, row, canEdit, onClose }: { projectId: Id<"pro
             <Textarea
               aria-label="Setup script"
               value={script}
-              onChange={(event) => setScript(event.target.value)}
+              onChange={(event) => setDraft(event.target.value)}
               placeholder={EXAMPLE_SCRIPT}
               readOnly={!canEdit}
               maxLength={MAX_WORKTREE_SETUP_SCRIPT_LENGTH}
@@ -161,6 +217,16 @@ function ScriptDialog({ projectId, row, canEdit, onClose }: { projectId: Id<"pro
               className="font-mono text-xs"
               autoFocus={canEdit}
             />
+            {seen ? (
+              <div className="flex items-center justify-between gap-3 text-xs text-muted-foreground">
+                <span className="min-w-0 truncate">{lastEdited(seen)}</span>
+                {canApprove ? (
+                  <Button type="button" size="sm" className="shrink-0 cursor-pointer" disabled={isSaving} onClick={() => void handleApprove()}>
+                    Approve
+                  </Button>
+                ) : null}
+              </div>
+            ) : null}
             <dl className="space-y-1 text-xs text-muted-foreground">
               {ENV_VARS.map(([name, meaning]) => (
                 <div key={name} className="flex flex-wrap gap-x-2">
@@ -183,7 +249,7 @@ function ScriptDialog({ projectId, row, canEdit, onClose }: { projectId: Id<"pro
                 </Button>
                 {canEdit ? (
                   <Button type="submit" className="cursor-pointer" disabled={!canSave}>
-                    {approvesOnly ? "Approve" : "Save"}
+                    Save
                   </Button>
                 ) : null}
               </div>
