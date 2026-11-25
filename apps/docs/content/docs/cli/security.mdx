@@ -65,6 +65,13 @@ Only a thread's owner can send, steer, retry, cancel, or answer approvals.
 Explicit project sharing gives eligible teammates read-only access to the
 transcript. See [AI threads](/docs/using/ai-threads#sharing-with-teammates).
 
+One exception is a project's worktree setup script. A project admin writes it
+in Project settings → Worktrees, and your CLI runs it with your rights, outside
+the runtime's permission mode, in every worktree it creates for that repo. It
+runs only when you approved that exact revision in the web: saving it yourself
+approves it, and any later change needs your approval again. An API key never
+approves a script, so an agent running with your key cannot add one for you.
+
 Practical consequences:
 
 - protect credentials that act as your user and review instructions before

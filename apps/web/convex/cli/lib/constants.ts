@@ -50,3 +50,7 @@ export const MAX_REVERT_ALL_FILES = 2000;
 /** Unsent composer uploads older than this are swept (OS-2141). Matches the web draft TTL. */
 export const PENDING_UPLOAD_RETENTION_MS = 30 * 24 * 60 * 60 * 1000;
 export const PENDING_UPLOAD_SWEEP_BATCH = 200;
+
+/** Worktree setup scripts (docs/specs/cli-worktrees.md#worktree-setup-scripts). */
+export const MAX_WORKTREE_SETUP_SCRIPT_LENGTH = 10_000;
+export const MAX_WORKTREE_SETUPS_PER_PROJECT = 100;

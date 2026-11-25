@@ -4,6 +4,7 @@ import {
   Coins,
   Download,
   FileText,
+  FolderGit2,
   GitPullRequest,
   List,
   ListChecks,
@@ -103,6 +104,12 @@ const PROJECT_SETTINGS_PRIMARY_SECTION_CONFIG: readonly SettingsSectionConfig[] 
     icon: ListChecks,
     label: "Checks",
     description: "Checks are claims agents prove with evidence. A checklist groups them and can be a task type's default.",
+  },
+  {
+    id: "worktrees",
+    icon: FolderGit2,
+    label: "Worktrees",
+    description: "Setup scripts that run in every worktree a CLI creates for a repo.",
   },
   {
     id: "customization",
@@ -220,6 +227,7 @@ const SECTION_PERMISSIONS: Partial<Record<SectionId, ProjectPermission>> = {
   skills: ProjectPermission.SKILLS_MANAGE,
   workflows: ProjectPermission.TASK_UPDATE,
   lists: ProjectPermission.LIST_MANAGE,
+  worktrees: ProjectPermission.CLI_THREAD,
 };
 
 /** False while either role loads, so a gated section never flashes in. */

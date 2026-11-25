@@ -23,13 +23,13 @@ const FORCE_KILL_GRACE_MS = 2_000;
 const EXIT_DRAIN_GRACE_MS = 2_000;
 
 export interface ScriptRunnerOptions {
-  spawnImpl?: (script: string, cwd: string) => ChildProcess;
+  spawnImpl?: (script: string, cwd: string, env?: Record<string, string>) => ChildProcess;
 }
 
-function defaultSpawn(script: string, cwd: string): ChildProcess {
+function defaultSpawn(script: string, cwd: string, env?: Record<string, string>): ChildProcess {
   return spawn("bash", ["-c", script], {
     cwd,
-    env: process.env,
+    env: { ...process.env, ...env },
     stdio: ["ignore", "pipe", "pipe"],
     // Its own process group, so a timeout or Stop takes the script's children too.
     detached: process.platform !== "win32",
@@ -98,7 +98,7 @@ export function createScriptRunner(options: ScriptRunnerOptions = {}): CliRuntim
         });
       };
 
-      const child = spawnImpl(request.script, workingDirectory);
+      const child = spawnImpl(request.script, workingDirectory, request.env);
       active = child;
       pump(child.stdout);
       pump(child.stderr);

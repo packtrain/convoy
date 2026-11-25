@@ -1,5 +1,5 @@
 import { mutation, query } from "../_generated/server";
-import { v } from "convex/values";
+import { ConvexError, v } from "convex/values";
 import { getAuthenticatedAccess } from "../lib/access/auth";
 import { requireAuthorizedProject } from "../lib/access/permissions";
 import { ProjectPermission } from "../../lib/authz/permissions";
@@ -10,6 +10,8 @@ import { getThreadById, repointThreadPath } from "./threads/lib/cliThreadsRepo";
 import { requireSessionOwnership, requireThreadClaimedBySession } from "./lib/permissions";
 import { cliExecutionWorkspaceValidator, toExecutionWorkspace } from "./lib/validators";
 import { isContainerThread } from "./lib/watchStatus";
+import { findWorktreeSetupForWorkspace } from "./lib/projectWorktreeSetupsRepo";
+import { supportsWorktreeSetup, WORKTREE_SETUP_MIN_CLI_VERSION } from "../../lib/worktrees/cli-version";
 
 /** Read the target under its execution claim. Spec: cli-worktrees.md. */
 export const getExecutionWorkspace = query({
@@ -152,6 +154,12 @@ export const resolveCreated = mutation({
     const worktree = await ensure(thread.git?.worktree).notNull(errors.WORKTREE_SPEC_MISSING);
 
     const profile = await ensure(getCliProfileById(ctx, thread.profileId)).notDeleted(errors.PROFILE_NOT_FOUND);
+
+    // A CLI too old to run the repo's setup script must not report the worktree as ready.
+    if (worktree.status === "pending" && !supportsWorktreeSetup(session.appVersion)) {
+      const found = await findWorktreeSetupForWorkspace(ctx, thread.projectId, toExecutionWorkspace(thread, profile));
+      if (found) throw new ConvexError(errors.worktreeSetupNeedsCliUpdate(found.repoKey, WORKTREE_SETUP_MIN_CLI_VERSION, args.path));
+    }
 
     const { paths, entryId } = upsertWorktreePathEntry(profile.paths, {
       parentPathId: worktree.parentPathId,

@@ -6,7 +6,8 @@ import { internal } from "../_generated/api";
 import { listStoredRunChunksAfter, listStoredRunChunksBefore } from "./lib/cliMessageChunksRepo";
 import { paginateAssistantMessages } from "./lib/cliMessagesRepo";
 import { paginationOptsValidator, paginationResultValidator } from "convex/server";
-import { v } from "convex/values";
+import { v, type Infer } from "convex/values";
+import { findWorktreeSetupApproval, findWorktreeSetupForWorkspace } from "./lib/projectWorktreeSetupsRepo";
 import { getAuthenticatedAccess, getAuthenticatedUser, getOptionalAuthenticatedAccess, getOptionalAuthenticatedUser } from "../lib/access/auth";
 import {
   assertStoredAttachmentSize,
@@ -16,7 +17,7 @@ import {
 } from "./lib/messages/attachments";
 import { createUserMessage, normalizeMessageSelection } from "./lib/messages/normalize";
 import { enrichMessageSummaries } from "./lib/messageSummaries";
-import { serviceRunValidator, toServiceRun, cliExecutionWorkspaceValidator, cliMessageSummaryValidator, cliResumeHandleValidator, cliWorkspaceNoticeValidator, toExecutionWorkspace } from "./lib/validators";
+import { serviceRunValidator, toServiceRun, cliExecutionWorkspaceValidator, cliMessageSummaryValidator, cliResumeHandleValidator, cliWorkspaceNoticeValidator, toExecutionWorkspace, type CliExecutionWorkspace } from "./lib/validators";
 import { resolveTaskSummaries, taskSummaryValidator, type TaskSummary } from "../lib/contracts/taskSummaries";
 import { hasProjectAccess, requireAuthorizedProject } from "../lib/access/permissions";
 import {
@@ -1825,10 +1826,34 @@ const startRunResponseArgs = {
   apiKey: v.optional(v.string()),
 };
 
+// Absent when the run creates no worktree or the repo has no setup. Spec: cli-worktrees.md#worktree-setup-scripts.
+const worktreeSetupForRunValidator = v.union(
+  v.object({ status: v.literal("approved"), repoKey: v.string(), script: v.string(), revision: v.number() }),
+  v.object({ status: v.literal("unapproved"), repoKey: v.string() }),
+);
+
+/** Two indexed point reads, only while the run's worktree is still pending. */
+async function resolveWorktreeSetupForRun(
+  ctx: MutationCtx,
+  projectId: Id<"projects">,
+  userId: Id<"users">,
+  workspace: CliExecutionWorkspace,
+): Promise<Infer<typeof worktreeSetupForRunValidator> | undefined> {
+  if (workspace.worktree?.status !== "pending") return undefined;
+  const found = await findWorktreeSetupForWorkspace(ctx, projectId, workspace);
+  if (!found) return undefined;
+  const { repoKey, setup } = found;
+  const approval = await findWorktreeSetupApproval(ctx, userId, setup._id);
+  return approval?.revision === setup.revision
+    ? { status: "approved", repoKey, script: setup.script, revision: setup.revision }
+    : { status: "unapproved", repoKey };
+}
+
 const startRunResponseReturns = {
   assistantMessageId: v.id("cliMessages"),
   runId: v.string(),
   workspace: v.optional(cliExecutionWorkspaceValidator),
+  worktreeSetup: v.optional(worktreeSetupForRunValidator),
   resolvedCliModel: v.optional(v.string()),
   resolvedCliEffort: v.optional(v.string()),
 };
@@ -1964,10 +1989,13 @@ async function startRunResponseHandler(ctx: MutationCtx, args: StartRunResponseA
       lastActivityAt: now,
     });
 
+    const workspace = toExecutionWorkspace(chat, profile);
+    const worktreeSetup = await resolveWorktreeSetupForRun(ctx, chat.projectId, principal.userId, workspace);
     return {
       assistantMessageId,
       runId,
-      workspace: toExecutionWorkspace(chat, profile),
+      workspace,
+      ...(worktreeSetup ? { worktreeSetup } : {}),
       ...(resolvedCliModel !== undefined ? { resolvedCliModel } : {}),
       ...(resolvedCliEffort !== undefined ? { resolvedCliEffort } : {}),
     };

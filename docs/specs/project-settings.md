@@ -36,7 +36,9 @@ The primary project settings sections appear in this order:
 6. Workflows
 7. Lists
 8. Labels
-9. Customization
+9. Checks
+10. Worktrees
+11. Customization
 
 A "Usage" section follows the primary sections and renders the project usage
 dashboard inside the settings shell (it is no longer a link out to a separate
@@ -232,6 +234,34 @@ editor routes re-apply the section's dev gate (deep links redirect to General wh
 a workflow belonging to another project as not found. Data model and
 validation rules are in
 [workflow-data-schema.md](workflow-data-schema.md).
+
+## Worktrees
+
+The Worktrees section holds one bash setup script per repository. The CLI runs
+it in every worktree it creates for that repository, before the agent starts.
+How and when it runs, the approval rule, and the script environment are in
+[cli-worktrees.md](cli-worktrees.md#worktree-setup-scripts).
+
+- Members with `cli:thread` see the section. For viewers it is hidden and its
+  route blocked, like the other permission-gated sections.
+- One row per repository, shown as `owner/repo`: every repository that has a
+  script, plus the repositories of the caller's own CLI paths that have none
+  yet. A row with a script reads "Last edited by <name>, <time>"; one without
+  reads "No setup script".
+- Clicking a row opens the script in a monospace editor, with the three
+  environment variables listed under it and an example as placeholder text.
+  Save stays disabled while the script is empty or unchanged. Remove confirms
+  first and deletes the script.
+- A row whose current revision the caller has not approved adds "Not approved
+  by you". An admin who opens it can press Approve without editing: it saves
+  the unchanged text, which keeps the revision and records their approval.
+  Teammates without `project:update` get their own Approve button in OS-2573.
+- Only `project:update` holders (project admins) can save or remove. Everyone
+  else opens the editor read-only, under a notice that only project admins can
+  edit setup scripts.
+- With no repositories, the empty state says a repository appears once one of
+  the caller's CLIs connects a path with a Git origin.
+- While loading, the page shows skeleton rows in the same list frame.
 
 ## Danger Zone
 

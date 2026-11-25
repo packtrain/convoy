@@ -1,7 +1,8 @@
 import { describe, it, expect, vi, beforeEach, afterEach, afterAll } from "vitest";
 import { getFunctionName } from "convex/server";
+import { ConvexError } from "convex/values";
 import { api } from "../../convex/_generated/api.js";
-import { mkdtempSync, mkdirSync } from "node:fs";
+import { existsSync, mkdtempSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
@@ -417,6 +418,174 @@ describe("message-handler", () => {
     } finally {
       await handler.shutdown();
     }
+  });
+
+  describe("worktree setup scripts (OS-2572)", () => {
+    const BRANCH = "feat/setup";
+
+    async function pendingWorktreeChat(worktreeSetup: unknown, messages: UnprocessedUserMessage[] = [makeUserMessage()]) {
+      const root = mkdtempSync(join(tmpdir(), "convoy-worktree-setup-"));
+      attachmentCacheDirs.push(root);
+      const parent = join(root, "repo");
+      mkdirSync(parent);
+      await runGit(parent, ["init", "-b", "main"]);
+      await runGit(parent, ["-c", "user.name=Test", "-c", "user.email=test@example.com", "commit", "--allow-empty", "-m", "initial"]);
+      return { root, parent, worktreePath: join(root, "repo-worktrees", "feat-setup"), run: (arm?: () => void) => runChat(parent, worktreeSetup, messages, arm) };
+    }
+
+    let currentHandler: ReturnType<typeof createMessageHandler> | undefined;
+
+    async function runChat(parent: string, worktreeSetup: unknown, messages: UnprocessedUserMessage[], arm?: () => void) {
+      mockMutation.mockClear();
+      const chat = makePendingChat({ workingDirectory: parent, worktree: {
+        parentPathId: "parent", parentPath: parent, branch: BRANCH, status: "pending",
+      } });
+      let workspace = { pathId: chat.pathId, path: parent, worktree: chat.worktree };
+      setQueryResponses({ pendingRuns: [messages, []], continuationIds: [null] });
+      mockMutation.mockImplementation(async (fn, args) => {
+        const name = getFunctionName(fn);
+        if (name === "cli/messages:startRunResponse") return { assistantMessageId: "msg_assistant_1", runId: "run_1", workspace, worktreeSetup };
+        if (name === "cli/worktrees:resolveCreated") workspace = { ...workspace, path: args.path, worktree: { ...chat.worktree!, status: "created" } };
+        if ("leaseMs" in args) return true;
+        return null;
+      });
+      arm?.();
+      const query = mockQuery.getMockImplementation()!;
+      mockQuery.mockImplementation((fn, args) => getFunctionName(fn) === "cli/worktrees:getExecutionWorkspace"
+        ? workspace : Reflect.apply(query, undefined, [fn, args]));
+      const handler = createMessageHandler(() => mockRunner, mockClient, sessionId);
+      currentHandler = handler;
+      handler.enqueueChat(chat);
+      try {
+        await vi.waitFor(() => expect(handler.isProcessing()).toBe(false), { timeout: 10_000 });
+      } finally {
+        await handler.shutdown();
+      }
+      const calls = mockMutation.mock.calls.map(([fn, args]) => ({ name: getFunctionName(fn), args }));
+      const chunks: ContentChunk[] = calls.filter((call) => call.name === "cli/messages:appendRunContent").flatMap((call) => call.args.chunks);
+      return {
+        calls,
+        chunks,
+        output: chunks.filter((chunk) => chunk.type === "convoy_script_output").map((chunk) => chunk.data).join(""),
+        failure: calls.find((call) => call.name === "cli/messages:fail")?.args.errorMessage as string | undefined,
+      };
+    }
+
+    const approved = (script: string) => ({ status: "approved", repoKey: "packtrain/convoy", script, revision: 3 });
+
+    it("fails an unapproved setup before creating the worktree", async () => {
+      const repo = await pendingWorktreeChat({ status: "unapproved", repoKey: "packtrain/convoy" });
+      const result = await repo.run();
+      expect(result.failure).toBe("This project has a worktree setup script for packtrain/convoy that you haven't approved. Review it in Project settings → Worktrees, then retry.");
+      expect(existsSync(repo.worktreePath)).toBe(false);
+      expect(result.calls.some((call) => call.name === "cli/worktrees:resolveCreated")).toBe(false);
+      expect(mockRunner.execute).not.toHaveBeenCalled();
+    });
+
+    it("runs the approved script in the new worktree with the three env vars, then the agent", async () => {
+      const repo = await pendingWorktreeChat(approved('echo "parent=$CONVOY_PARENT_PATH wt=$CONVOY_WORKTREE_PATH branch=$CONVOY_BRANCH cwd=$PWD"; touch .mcp.json'));
+      const result = await repo.run();
+      expect(result.failure).toBeUndefined();
+      const parentRoot = (await runGit(repo.parent, ["rev-parse", "--show-toplevel"])).stdout.trim();
+      expect(result.output).toContain(`parent=${parentRoot} wt=${repo.worktreePath} branch=${BRANCH} cwd=${repo.worktreePath}`);
+      const notice = result.chunks.find((chunk) => chunk.type === "convoy_notice" && JSON.parse(chunk.data).code === "worktree-setup");
+      expect(JSON.parse(notice!.data).message).toBe("Running worktree setup for `packtrain/convoy`…");
+      expect(existsSync(join(repo.worktreePath, ".mcp.json"))).toBe(true);
+      const gitDir = (await runGit(repo.worktreePath, ["rev-parse", "--absolute-git-dir"])).stdout.trim();
+      expect(readFileSync(join(gitDir, "convoy-worktree-setup"), "utf8")).toBe("done 3\n");
+      expect((await runGit(repo.worktreePath, ["status", "--porcelain", "--ignored"])).stdout).not.toContain("convoy-worktree-setup");
+      expect(mockRunner.execute).toHaveBeenCalledWith(repo.worktreePath, expect.any(String), expect.anything());
+    });
+
+    it("leaves the worktree pending when the script fails, keeping its output", async () => {
+      const repo = await pendingWorktreeChat(approved("echo installing; exit 7"));
+      const result = await repo.run();
+      expect(result.failure).toBe("Worktree setup for packtrain/convoy exited with code 7. Retry runs it again in the same worktree.");
+      expect(result.output).toContain("installing");
+      expect(result.chunks.some((chunk) => chunk.type === "convoy_notice" && JSON.parse(chunk.data).code === "script-exit")).toBe(true);
+      expect(result.calls.some((call) => call.name === "cli/worktrees:resolveCreated")).toBe(false);
+      expect(mockRunner.execute).not.toHaveBeenCalled();
+      const gitDir = (await runGit(repo.worktreePath, ["rev-parse", "--absolute-git-dir"])).stdout.trim();
+      expect(readFileSync(join(gitDir, "convoy-worktree-setup"), "utf8")).toBe("pending\n");
+    });
+
+    it("runs again on retry after a failure, and never once the marker is written", async () => {
+      const repo = await pendingWorktreeChat(approved('echo run >> "$CONVOY_PARENT_PATH/../runs.txt"; test -f "$CONVOY_PARENT_PATH/../ok"'));
+      expect((await repo.run()).failure).toContain("exited with code 1");
+      writeFileSync(join(repo.root, "ok"), "");
+      expect((await repo.run()).failure).toBeUndefined();
+      const third = await repo.run();
+      expect(third.failure).toBeUndefined();
+      expect(third.chunks.some((chunk) => chunk.type === "convoy_notice" && JSON.parse(chunk.data).code === "worktree-setup")).toBe(false);
+      expect(readFileSync(join(repo.root, "runs.txt"), "utf8")).toBe("run\nrun\n");
+    });
+
+    it("a Stop during worktree creation keeps the script from starting", async () => {
+      const repo = await pendingWorktreeChat(approved('touch "$CONVOY_PARENT_PATH/../ran"'));
+      let stop: ((active: boolean) => void) | undefined;
+      vi.mocked(mockClient.subscribe).mockImplementation(((fn: unknown, _args: unknown, handlers: { onUpdate: (value: boolean) => void }) => {
+        if (getFunctionName(fn as Parameters<typeof getFunctionName>[0]) === "cli/threads/runControl:isClaimActiveForSession") stop = handlers.onUpdate;
+        return () => {};
+      }) as unknown as ConvoyClient["subscribe"]);
+      const result = await repo.run(() => {
+        const inner = mockMutation.getMockImplementation()!;
+        mockMutation.mockImplementation(async (fn, args) => {
+          if (getFunctionName(fn) === "cli/messages:appendRunContent" && args.chunks.some((chunk: ContentChunk) => chunk.data.includes("worktree-create"))) stop?.(false);
+          return Reflect.apply(inner, undefined, [fn, args]);
+        });
+      });
+      expect(existsSync(join(repo.root, "ran"))).toBe(false);
+      expect(result.calls.some((call) => call.name === "cli/worktrees:resolveCreated")).toBe(false);
+    });
+
+    it("never sets up a worktree that Convoy did not create, and says so", async () => {
+      const repo = await pendingWorktreeChat(approved('touch "$CONVOY_PARENT_PATH/../ran"'));
+      const external = join(repo.root, "made-by-hand");
+      await runGit(repo.parent, ["worktree", "add", "-b", BRANCH, external]);
+      const result = await repo.run();
+      expect(result.failure).toBeUndefined();
+      expect(existsSync(join(repo.root, "ran"))).toBe(false);
+      const notice = result.chunks.find((chunk) => chunk.type === "convoy_notice" && JSON.parse(chunk.data).code === "worktree-setup-skipped");
+      expect(JSON.parse(notice!.data).message).toContain("Convoy did not create it");
+      expect(mockRunner.execute).toHaveBeenCalledWith(external, expect.any(String), expect.anything());
+    });
+
+    function onSetupOutput(react: () => void) {
+      return () => {
+        const inner = mockMutation.getMockImplementation()!;
+        mockMutation.mockImplementation(async (fn, args) => {
+          if (getFunctionName(fn) === "cli/messages:appendRunContent" && args.chunks.some((chunk: ContentChunk) => chunk.type === "convoy_script_output")) react();
+          return Reflect.apply(inner, undefined, [fn, args]);
+        });
+      };
+    }
+
+    it("reports a CLI shutdown during setup as a shutdown, not a script failure", async () => {
+      const repo = await pendingWorktreeChat(approved("echo started; sleep 5"));
+      const result = await repo.run(onSetupOutput(() => void currentHandler?.shutdown()));
+      expect(result.failure).toBe("CLI stopped during response generation");
+    });
+
+    it("kills the script once its output can no longer reach the thread", async () => {
+      const repo = await pendingWorktreeChat(approved('echo a; sleep 0.3; echo b; sleep 3; touch "$CONVOY_PARENT_PATH/../ran"'));
+      const startedAt = Date.now();
+      const result = await repo.run(onSetupOutput(() => {
+        throw new ConvexError("Message not claimed by this session");
+      }));
+      expect(Date.now() - startedAt).toBeLessThan(3_000);
+      expect(existsSync(join(repo.root, "ran"))).toBe(false);
+      expect(result.calls.some((call) => call.name === "cli/worktrees:resolveCreated")).toBe(false);
+    });
+
+    it("sets up a Workflow Lane's worktree before its first Bash step", async () => {
+      const step = makeUserMessage({ scriptRequest: { script: "cat setup-done", timeoutMs: 10_000 } });
+      const repo = await pendingWorktreeChat(approved("echo from-setup > setup-done"), [step]);
+      const result = await repo.run();
+      expect(result.failure).toBeUndefined();
+      expect(result.output).toContain("from-setup");
+      const complete = result.calls.find((call) => call.name === "cli/messages:complete");
+      expect(complete?.args.scriptResult).toMatchObject({ exitCode: 0 });
+    });
   });
 
   it("defers recovery context for commands, delivers it once, and acknowledges completion", async () => {

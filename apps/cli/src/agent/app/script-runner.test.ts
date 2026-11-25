@@ -3,9 +3,9 @@ import { appendTail, createScriptRunner, SCRIPT_OUTPUT_CHUNK_TYPE } from "./scri
 import type { ContentChunk, RunnerExecutionResult } from "../runtimes/contracts.js";
 import { createFakeChildProcess } from "../sdk/__tests__/test-helpers.js";
 
-async function run(script: string, timeoutMs = 10_000): Promise<{ chunks: ContentChunk[]; result: RunnerExecutionResult }> {
+async function run(script: string, timeoutMs = 10_000, env?: Record<string, string>): Promise<{ chunks: ContentChunk[]; result: RunnerExecutionResult }> {
   const runner = createScriptRunner();
-  const execution = runner.execute(process.cwd(), script, { cliType: "claude-code", threadId: "t", scriptRequest: { script, timeoutMs } });
+  const execution = runner.execute(process.cwd(), script, { cliType: "claude-code", threadId: "t", scriptRequest: { script, timeoutMs, env } });
   const chunks: ContentChunk[] = [];
   while (true) {
     const next = await execution.next();
@@ -27,6 +27,11 @@ describe("script runner (OS-1886)", () => {
     expect(result.scriptResult).toMatchObject({ exitCode: 3, timedOut: false });
     expect(result.scriptResult?.outputTail).toContain("out\n");
     expect(result.continuationId).toBeUndefined();
+  });
+
+  it("adds the request's env vars to the CLI's own environment", async () => {
+    const { result } = await run('echo "$CONVOY_BRANCH:${PATH:+has-path}"', 10_000, { CONVOY_BRANCH: "feat/x" });
+    expect(result.scriptResult?.outputTail).toContain("feat/x:has-path\n");
   });
 
   it("kills the script at its timeout and says so", async () => {

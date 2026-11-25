@@ -12,6 +12,7 @@ import { WorkflowsSection } from "@/components/blocks/project/settings/workflows
 import { ListsSection } from "@/components/blocks/project/settings/lists-section";
 import { LabelsSection } from "@/components/blocks/project/settings/labels-section";
 import { ChecksSettingsSection } from "@/components/blocks/checks";
+import { WorktreeSetupsSettingsSection } from "@/components/blocks/worktree-setups";
 import {
   AutomationsSection,
   CustomizationSection,
@@ -135,6 +136,10 @@ export function ProjectSettingsPageContent({
     return (
       <ChecksSettingsSection projectId={projectId} canEdit={canEditProject} publishPullRequestChecks={project?.publishPullRequestChecks ?? true} />
     );
+  }
+
+  if (section === "worktrees") {
+    return <WorktreeSetupsSettingsSection projectId={projectId} canEdit={canEditProject} />;
   }
 
   if (section === "customization") {

@@ -59,18 +59,22 @@ The thread stores `worktree: { ...spec, status: "pending" }` with `pathId`
 pointing at the **parent** repo path. On claim, before the first run of the
 run, the CLI:
 
-1. Appends an `convoy_notice` chunk ("Creating worktree …") to the
+1. Fails the run if the repo has a setup script the user has not approved
+   (see [Worktree setup scripts](#worktree-setup-scripts)).
+2. Appends an `convoy_notice` chunk ("Creating worktree …") to the
    assistant message (bridge-level chunk type, normalized runtime-agnostically
    to a `runtime-notice` event).
-2. Creates the worktree (see semantics below).
-3. Calls `cli/worktrees.resolveCreated`, which upserts the worktree path
+3. Creates the worktree (see semantics below).
+4. Runs the repo's approved setup script in it, unless the worktree's marker
+   says it already ran.
+5. Calls `cli/worktrees.resolveCreated`, which upserts the worktree path
    entry, repoints the thread (`pathId`, `path` snapshot), and sets
    `worktree.status = "created"`. Idempotent.
-4. Executes the runtime with the worktree as `cwd`.
+6. Executes the runtime with the worktree as `cwd`.
 
-Failure at any step fails the assistant run with the git error through the
-existing retryable-failure path; `worktree.status` stays `pending` and retry
-re-attempts creation.
+Failure at any step fails the assistant run with the git or script error
+through the existing retryable-failure path; `worktree.status` stays `pending`
+and retry re-attempts creation.
 
 ## Creation Semantics (`createWorktree`, apps/cli/src/lib/git/worktrees.ts)
 
@@ -87,13 +91,8 @@ re-attempts creation.
   Known v1 limitation: the slash→dash mapping means `feat/x` and `feat-x`
   collide on the same directory — guarded (creation errors, no data loss) but
   the two branches can't both have default-located worktrees. Revisit with a
-  disambiguating suffix when the v2 configurable `worktrees_dir` lands.
+  disambiguating suffix.
 - Creation never touches the parent checkout's state.
-
-This function is the v2 seam: custom create commands (worktrunk) and
-post-create hooks (copy `.env`, install deps) plug in here via local CLI
-config (`~/.config/convoy/config.toml`). The server only ever sends intent
-(branch, base, parent path) — shell commands never cross the wire.
 
 ## Discovery
 
@@ -879,13 +878,171 @@ every row, header included, past a phone viewport. The right pane is the file tr
   `@/components/blocks/worktrees` is importable from outside, enforced by
   `no-restricted-imports` in `apps/web/eslint.config.mjs`.
 
-## V2 (Follow-Up, Not Implemented)
+## Worktree setup scripts
 
-Custom worktree commands and setup hooks in local CLI config: a
-`create_command` template (e.g. `wt switch --create {branch}`), `post_create`
-steps, `worktrees_dir` override, and an optional `remove_command`. Config is
-local-only by design (a compromised web account must not become a
-remote-command channel). See OS-1106's Plan artifact for the full sketch.
+Tickets: OS-1116 (epic), OS-2572 (this slice). A worktree the CLI creates has
+none of the parent's ignored files (`.mcp.json`, `.env.local`) and no
+installed dependencies. A project can hold one bash script per repo, and the
+CLI runs it in every worktree it creates for that repo, before the agent
+starts:
+
+```bash
+cp "$CONVOY_PARENT_PATH/.mcp.json" .
+cp "$CONVOY_PARENT_PATH/apps/web/.env.local" apps/web/
+pnpm i
+```
+
+### Data model
+
+- `projectWorktreeSetups`: `projectId`, `repoKey`, `script`, `revision`,
+  `createdBy`/`updatedBy`, `createdAt`/`updatedAt`, indexed
+  `by_projectId_and_repoKey`. One row per project and repo. `revision` goes up
+  by one each time the script text changes. Removing a setup deletes the row;
+  there is no soft delete.
+- `projectWorktreeSetupApprovals`: `userId`, `setupId`, `revision`,
+  `approvedAt`, indexed `by_userId_and_setupId`. One row per user and setup,
+  overwritten on re-approval. A user has approved a setup when
+  `approval.revision === setup.revision`. Removing a setup leaves its approval
+  rows behind. They never match again, because a recreated setup gets a new
+  `_id`.
+- At most 100 setups per project and 10,000 characters per script. `save`
+  trims the script and rejects an empty one; `remove` clears a setup.
+
+### Repo key
+
+`toRepoKey` (`apps/web/convex/cli/lib/normalize.ts`) turns a path's
+`gitRemoteUrl` into `owner/repo`. It takes the path of a URL or of an
+scp-like `host:path`, drops a trailing `/` and `.git`, keeps the last two
+segments, and lowercases them. The host is ignored, because SSH host aliases
+(two GitHub accounts on one machine) make it unmatchable:
+`git@github-personal:packtrain/convoy.git`, `git@github.com:packtrain/convoy.git`,
+`ssh://git@github.com/packtrain/convoy.git` and `https://github.com/packtrain/convoy`
+all give `packtrain/convoy`. A GitLab subgroup path keeps its last two
+segments (`acme/platform/api` gives `platform/api`). Azure DevOps HTTPS
+remotes (`dev.azure.com`, `*.visualstudio.com`) drop the `_git` segment in
+front of the repo, so `https://dev.azure.com/acme/Shop/_git/api`
+and `git@ssh.dev.azure.com:v3/acme/Shop/api` both give `shop/api`. No key, and
+so no setup, for:
+
+- fewer than two segments, a character outside `[\w.-]`, or a `.`/`..` segment;
+- a remote with no host: a local path, `file://`, or a Windows drive path
+  (`C:/repos/convoy`; git treats a one-letter `host:` as a drive).
+
+`save` accepts only the stored form (`isRepoKey`): two lowercase segments.
+
+A fork has its own key: `you/convoy` does not match `packtrain/convoy`, so a
+fork's worktrees run no script.
+
+### Functions (`apps/web/convex/cli/worktreeSetups.ts`)
+
+| Function | Permission | Notes |
+|---|---|---|
+| `list({ projectId })` | `cli:thread` | The project's setups, plus the repo keys of the caller's own profiles in this project that have none yet (`setup: null`). Sorted by repo key in code-unit order, like the index. Each setup carries `script`, `revision`, `updatedByName`, `updatedAt`, `approvedByMe`. Reads at most 100 setups, one approval point read per setup, the caller's profiles, and the editors' user rows. |
+| `save({ projectId, repoKey, script })` | `project:update` | Web session only, no `apiKey` argument. Inserts with `revision: 1` or bumps `revision` when the text changed, and writes the saver's approval in the same mutation. Saving unchanged text keeps the revision and approves it, which is how a second admin approves the first one's change. |
+| `remove({ setupId })` | `project:update` | Web session only. Deletes the row. |
+
+An API key never approves a script, including its owner's. An agent runs
+with the user's API key. If a save through the key counted as approval, the
+agent could write a script, start a worktree thread, and have the CLI run the
+script outside the agent's permission mode and sandbox. For the same reason
+there is no MCP tool. Slice 3 (OS-2574) adds `convoy worktree-setups`
+commands; they wait for slice 2's Approve button (OS-2573), because a save
+from the CLI approves for nobody and the saver would have to approve it in
+the web anyway.
+
+### Run start
+
+`cli/messages.startRunResponse` returns `worktreeSetup` next to `workspace`
+when the workspace's worktree is `pending`:
+
+- `{ status: "approved", repoKey, script, revision }` when the caller
+  approved the current revision.
+- `{ status: "unapproved", repoKey }` otherwise.
+- Absent when the repo has no key or no setup.
+
+Cost: two indexed point reads (setup, then approval), only on runs whose
+worktree is still pending. Other runs read nothing new.
+
+### CLI (`apps/cli/src/agent/app/worktree-setup.ts`)
+
+The pending-worktree block of the thread processor:
+
+- `unapproved`: fails the run before creating the worktree, with "This
+  project has a worktree setup script for `<repoKey>` that you haven't
+  approved. Review it in Project settings → Worktrees, then retry." The check
+  runs before the CLI knows whether a reused worktree already ran its setup,
+  so a second thread on a set-up branch also fails after someone changes the
+  script. Accepted: approving fixes both.
+- `approved`: `prepareWorktree` creates the worktree, appends a
+  `convoy_notice` chunk (`code: "worktree-setup"`, "Running worktree setup for
+  `<repoKey>`…"), runs the script through `createScriptRunner`, and streams
+  its output as `convoy_script_output` chunks, then the runner's `script-exit`
+  notice.
+- The script runs as `bash -c` with the new worktree's root as cwd and the
+  CLI's own environment plus `CONVOY_PARENT_PATH` (root of the checkout the
+  worktree came from, `git rev-parse --show-toplevel` there, since a
+  registered path may be a subdirectory), `CONVOY_WORKTREE_PATH` (root of the
+  new worktree) and `CONVOY_BRANCH`.
+- The timeout is a fixed 30 minutes. Stop, a lost claim, and a dead output
+  stream (an append the server rejects) abort one latched signal per run. The
+  CLI checks it before creating the worktree, while waiting behind another
+  Lane, and right before spawning the script, and a running script's process
+  group is killed, as for a Workflow Bash step. A CLI shutdown during setup
+  fails the run with "CLI stopped during response generation", like an agent
+  run.
+- A non-zero exit or a timeout fails the run ("Worktree setup for
+  `<repoKey>` exited with code N. Retry runs it again in the same
+  worktree."). `resolveCreated` runs only after the script succeeds, so the
+  thread's worktree stays `pending` and Retry reuses the worktree and runs the
+  script again. A script must be safe to run twice after a partial failure.
+- The marker `convoy-worktree-setup` sits in the worktree's git
+  administrative directory, next to `convoy-identity`, so it never enters the
+  working tree or a commit. The CLI writes `pending` when it creates the
+  worktree and `done <revision>` after the script succeeds. A reused worktree
+  runs the script only while its marker says `pending` (Retry after a failed
+  script). With `done` it skips the script, also when a later thread reaches it
+  through a pending spec with the same branch.
+- A reused worktree with no marker was not created by Convoy (`wt`, `git
+  worktree add`, or a CLI older than 0.178.0). It is never set up; the thread
+  gets a `worktree-setup-skipped` notice instead ("The worktree for `<branch>`
+  already existed and Convoy did not create it, so its setup script did not
+  run."). An existing worktree picked in the composer has no pending spec, so
+  it is never set up either.
+- Creation and setup for the same parent path and branch queue inside one CLI
+  process. Workflow Lanes share the run's worktree spec, so the first Lane
+  creates the worktree and runs the script, and the others wait, reuse the
+  worktree, and see `done`. A stopped caller stops waiting at once, but the
+  lock stays held until the work it queued settles, so the next caller still
+  waits. Two CLI processes on one machine can still race.
+
+The script runs with the CLI's own rights, like a Workflow Bash step. In
+isolated project mode that is inside the project's boundary. Under the legacy
+`isolated` flag it is not sandboxed.
+
+### A CLI older than 0.178.0
+
+It ignores `worktreeSetup` and would create the worktree with no setup. It
+does call `resolveCreated` right after, so that mutation refuses a pending
+worktree whose repo has a setup when the session's `appVersion` is below
+`WORKTREE_SETUP_MIN_CLI_VERSION` (`apps/web/lib/worktrees/cli-version.ts`):
+"This project has a worktree setup script for `<repoKey>`. Update
+@useconvoy/cli to 0.178.0 or later, remove the worktree at `<path>`, then
+retry." The run fails through the retryable path and the thread's worktree
+stays `pending`. The older CLI wrote no marker, so an updated CLI would treat
+the leftover worktree as made outside Convoy and skip the script. Removing it
+first lets Retry create a fresh one and set it up. The extra setup read
+happens only for older CLIs.
+
+### Not built yet
+
+- Teammates approving a script in the web (OS-2573). Until then a script runs
+  only for whoever saved its current revision.
+- `convoy worktree-setups list | get | set | delete` (OS-2574).
+- A notice when a repo has no setup but another repo key would match, such as
+  a fork of a repo that has one. The epic asks for it; today a fork's thread
+  runs no script and says nothing.
+- A script that runs before a worktree is removed, an Approve card in the
+  thread, a diff between approved and current script, and version history.
 
 ## QA Checklist
 
@@ -903,3 +1060,10 @@ remote-command channel). See OS-1106's Plan artifact for the full sketch.
 - Selecting a worktree, then switching the working directory, resets the
   selection to the current checkout.
 - Non-git paths show no base-ref selector.
+- With a saved setup script for the repo, "New worktree" shows "Running
+  worktree setup for `<repo>`…", the script's output, then the agent. The
+  script's files (`.mcp.json`) exist in the worktree.
+- A teammate who has not saved the current revision gets a failed run naming
+  the repo and Project settings → Worktrees; no worktree is created.
+- A failing script fails the run; Retry runs it again in the same worktree.
+  After one success, a second thread on the same branch skips it.

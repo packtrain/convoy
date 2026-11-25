@@ -107,6 +107,7 @@ export const PROJECT_SETTINGS_SECTIONS = [
   "lists",
   "labels",
   "checks",
+  "worktrees",
   "customization",
   "templates",
   "recurring",

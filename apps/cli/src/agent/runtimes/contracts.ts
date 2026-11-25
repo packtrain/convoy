@@ -113,6 +113,8 @@ export interface RunnerExecutionOptions {
 export interface ScriptRequest {
   script: string;
   timeoutMs: number;
+  /** Added to the CLI's own environment. */
+  env?: Record<string, string>;
 }
 
 /** How a script run ended; the CLI reports it with `complete` for the run engine. */

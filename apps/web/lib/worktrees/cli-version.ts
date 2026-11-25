@@ -10,6 +10,8 @@ export const WORKTREE_DOWNLOAD_MIN_CLI_VERSION = "0.83.0";
 export const WORKTREE_REVERT_ALL_MIN_CLI_VERSION = "0.125.0";
 /** First @useconvoy/cli that answers `gitLog` and `commitPatch` (OS-2534). */
 export const WORKTREE_HISTORY_MIN_CLI_VERSION = "0.171.0";
+/** First @useconvoy/cli that runs a project's worktree setup script (OS-2572). */
+export const WORKTREE_SETUP_MIN_CLI_VERSION = "0.178.0";
 
 /** First @useconvoy/cli that walks `gitLog` in the branch scope (OS-2595). */
 export const WORKTREE_BRANCH_HISTORY_MIN_CLI_VERSION = "0.176.0";
@@ -35,6 +37,10 @@ export function supportsWorktreeRevertAll(appVersion: string | undefined): boole
 
 export function supportsWorktreeHistory(appVersion: string | undefined): boolean {
   return atLeast(appVersion, WORKTREE_HISTORY_MIN_CLI_VERSION);
+}
+
+export function supportsWorktreeSetup(appVersion: string | undefined): boolean {
+  return atLeast(appVersion, WORKTREE_SETUP_MIN_CLI_VERSION);
 }
 
 export function supportsBranchHistory(appVersion: string | undefined): boolean {
