@@ -349,6 +349,45 @@ export const readDiff = action({
   },
 });
 
+const commitDiffValidator = v.object({
+  sha: v.string(),
+  /** The whole message; the Overview's commit list has the first line only. */
+  message: v.string(),
+  htmlUrl: v.string(),
+  partial: v.boolean(),
+  files: v.array(diffFileValidator),
+});
+
+/** One commit's message and changed files, for the Commits tab. A commit never changes, so the client reads it once. */
+export const readCommit = action({
+  args: { projectId: v.id("projects"), repositoryId: v.string(), number: v.number(), sha: v.string() },
+  returns: commitDiffValidator,
+  handler: async (ctx, { sha, ...args }): Promise<Infer<typeof commitDiffValidator>> => {
+    const { result } = await readLive(
+      ctx,
+      args,
+      async (token, context) =>
+        record(
+          await githubFetch(`${repoPath(context)}/commits/${encodeURIComponent(sha)}?per_page=${DIFF_MAX_FILES}`, { token }).catch((error: unknown) => {
+            // GitHub answers an unknown SHA with 422.
+            if (error instanceof GithubError && error.status === 422) throw new ConvexError(errors.COMMIT_NOT_FOUND);
+            throw error;
+          })
+        ),
+      errors.COMMIT_NOT_FOUND
+    );
+    const { files, omitted } = normalizeDiffFiles(asList(result.files));
+    return {
+      sha: str(result.sha),
+      message: str(record(result.commit).message),
+      htmlUrl: str(result.html_url),
+      // ponytail: GitHub pages a commit's files without a total; exactly 100 files also reads as partial.
+      partial: omitted || files.length >= DIFF_MAX_FILES,
+      files,
+    };
+  },
+});
+
 /** One consistent revision: the PR is read before and after its files, retried once on a push. */
 async function readRevision(
   token: string,

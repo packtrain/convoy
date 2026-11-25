@@ -129,7 +129,7 @@ export function isProjectSettingsSection(
 }
 
 /** The PR reader's tabs; the first is the default and stays out of the URL. */
-export const PULL_REQUEST_TABS = ["overview", "guide", "diff"] as const;
+export const PULL_REQUEST_TABS = ["overview", "guide", "commits", "diff"] as const;
 
 export type PullRequestTab = (typeof PULL_REQUEST_TABS)[number];
 

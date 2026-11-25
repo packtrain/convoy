@@ -361,6 +361,42 @@ describe("reading a whole file", () => {
   });
 });
 
+describe("reading one commit", () => {
+  test("the full message and changed files; an unknown SHA is not found", async () => {
+    const { project, asUser, repositoryId, github } = await connectedProject();
+    github.state.commits.set("1:c1", {
+      message: "feat: one\n\nThe body.",
+      files: [{ filename: "src/b.ts", previous_filename: "src/a.ts", status: "renamed", additions: 2, deletions: 0, patch: "@@ -1 +1,3 @@\n a\n+b\n+c" }],
+    });
+    const read = (sha: string) => asUser.action(api.integrations.github.pullRequests.readCommit, { projectId: project._id, repositoryId, number: 1, sha });
+    expect(await read("c1")).toEqual({
+      sha: "c1",
+      message: "feat: one\n\nThe body.",
+      htmlUrl: "https://github.com/commit/c1",
+      partial: false,
+      files: [{ path: "src/b.ts", previousPath: "src/a.ts", status: "renamed", additions: 2, deletions: 0, patch: "@@ -1 +1,3 @@\n a\n+b\n+c" }],
+    });
+    await expect(read("missing")).rejects.toThrow(errors.COMMIT_NOT_FOUND);
+  });
+
+  test("a commit with the file limit or more reads as partial", async () => {
+    const { project, asUser, repositoryId, github } = await connectedProject();
+    const files = Array.from({ length: 100 }, (_, index) => ({ filename: `f${index}.ts`, status: "added", additions: 1, deletions: 0, patch: "@@ -0,0 +1 @@\n+x" }));
+    github.state.commits.set("1:big", { message: "big", files });
+    const commit = await asUser.action(api.integrations.github.pullRequests.readCommit, { projectId: project._id, repositoryId, number: 1, sha: "big" });
+    expect(commit.partial).toBe(true);
+  });
+
+  test("another project cannot read it", async () => {
+    const { ctx, org, user, repositoryId, asUser, github } = await connectedProject();
+    github.state.commits.set("1:c1", { message: "secret", files: [] });
+    const other = await ctx.project(org._id, user._id);
+    await expect(
+      asUser.action(api.integrations.github.pullRequests.readCommit, { projectId: other._id, repositoryId, number: 1, sha: "c1" })
+    ).rejects.toThrow(errors.NOT_CONNECTED);
+  });
+});
+
 describe("attached pull requests", () => {
   test("getAttached matches the project's connected repository by name, case-insensitively", async () => {
     const { project, asUser } = await connectedProject([fakePullRequest(1, { title: "Fix billing" })]);

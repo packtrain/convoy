@@ -10,7 +10,7 @@ import { Checkbox } from "@/components/ui/checkbox";
 import { toSectionFile, toUnifiedPatch, type PullRequestDiffFile } from "./github-patch";
 
 /** Why a file has no diff here; GitHub doesn't say which, so name every cause. */
-function NoTextDiff({ file, htmlUrl }: { file: PullRequestDiffFile; htmlUrl: string }) {
+function NoTextDiff({ file, filesUrl }: { file: PullRequestDiffFile; filesUrl: string }) {
   const renamedOnly = file.status === "renamed" && file.additions + file.deletions === 0;
   return (
     <p className="px-4 py-2 text-xs text-muted-foreground">
@@ -21,7 +21,7 @@ function NoTextDiff({ file, htmlUrl }: { file: PullRequestDiffFile; htmlUrl: str
       ) : (
         <>
           GitHub sent no text diff for this file: it may be binary, too large, or over this view&apos;s limit.{" "}
-          <a href={`${htmlUrl}/files`} target="_blank" rel="noreferrer" className="underline">
+          <a href={filesUrl} target="_blank" rel="noreferrer" className="underline">
             Open on GitHub
           </a>
         </>
@@ -42,10 +42,10 @@ export type FileLineComments<T> = {
 /** Pierre tints the row under a selection; the comment editor there keeps the page's background. */
 const EDITOR_ROW_CSS = "[data-line-annotation][data-selected-line] [data-annotation-content] { background-color: unset; }";
 
-/** One changed file as a collapsible section with its Reviewed mark; the Diff and Guide tabs share it. */
+/** One changed file as a collapsible section with its Reviewed mark; the Diff, Guide, and Commits tabs share it. */
 export function PullRequestFileSection<T>({
   file,
-  htmlUrl,
+  filesUrl,
   options,
   collapsed,
   onToggle,
@@ -56,13 +56,15 @@ export function PullRequestFileSection<T>({
   lineComments,
 }: {
   file: PullRequestDiffFile;
-  htmlUrl: string;
+  /** GitHub's page with every file, linked when a file has no text diff. */
+  filesUrl: string;
   options: ReturnType<typeof usePatchDiffOptions>;
   collapsed: boolean;
   onToggle: (path: string) => void;
   registerSection: (path: string, element: HTMLElement | null) => void;
-  reviewed: boolean;
-  onReviewedChange: (reviewed: boolean) => void;
+  /** The checkbox is left out without `onReviewedChange`, as in the Commits tab. */
+  reviewed?: boolean;
+  onReviewedChange?: (reviewed: boolean) => void;
   /** Opens the whole file; the button is left out without it. */
   onOpen?: () => void;
   /** The Diff tab's inline comments; the Guide tab has none. */
@@ -95,10 +97,12 @@ export function PullRequestFileSection<T>({
       registerSection={registerSection}
       actions={
         <>
-          <label className="ml-2 flex cursor-pointer items-center gap-1.5 text-xs text-muted-foreground">
-            <Checkbox aria-label={`Reviewed ${file.path}`} checked={reviewed} onCheckedChange={(checked) => onReviewedChange(checked === true)} />
-            Reviewed
-          </label>
+          {onReviewedChange ? (
+            <label className="ml-2 flex cursor-pointer items-center gap-1.5 text-xs text-muted-foreground">
+              <Checkbox aria-label={`Reviewed ${file.path}`} checked={reviewed} onCheckedChange={(checked) => onReviewedChange(checked === true)} />
+              Reviewed
+            </label>
+          ) : null}
           {onOpen ? (
             <Button
               variant="ghost"
@@ -128,7 +132,7 @@ export function PullRequestFileSection<T>({
           selectedLines={lineComments?.selectedLines}
         />
       ) : (
-        <NoTextDiff file={file} htmlUrl={htmlUrl} />
+        <NoTextDiff file={file} filesUrl={filesUrl} />
       )}
     </PatchFileSection>
   );

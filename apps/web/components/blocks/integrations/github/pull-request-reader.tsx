@@ -18,6 +18,7 @@ import { getErrorMessage } from "@/lib/errors";
 import { AppLink, PULL_REQUEST_TABS, useNavigation, type PullRequestTab, type RouteTarget } from "@/lib/navigation";
 import type { DiffState } from "./github-patch";
 import { PullRequestChanges, PullRequestChangesSkeleton } from "./pull-request-changes";
+import { CommitsSkeleton, PullRequestCommitsTab, usePullRequestCommits } from "./pull-request-commits";
 import { GuideMenu, GuideSkeleton, PullRequestGuideTab, usePullRequestGuides } from "./pull-request-guide";
 import { useGithubCommenting } from "./pull-request-comments";
 import { ReviewButton, usePullRequestReview } from "./pull-request-review";
@@ -83,6 +84,7 @@ export function PullRequestReader({
   const readable = Boolean(result);
   const stored = result?.pullRequest ?? null;
   const marks = useReviewedMarks(repositoryId, number);
+  const commits = usePullRequestCommits(args, readable);
   const navigation = useNavigation();
   const [tab, setTab] = useState<PullRequestTab>(defaultTab);
   // Fix's draft for Overview's thread composer.
@@ -325,6 +327,7 @@ export function PullRequestReader({
           <TabsList variant="underline" className="w-auto border-b-0" aria-label="Pull request content">
             <TabsTrigger value="overview">Overview</TabsTrigger>
             <TabsTrigger value="guide">Guide</TabsTrigger>
+            <TabsTrigger value="commits">Commits</TabsTrigger>
             <TabsTrigger value="diff">Diff</TabsTrigger>
           </TabsList>
           {tab === "guide" && guides.shown ? (
@@ -381,6 +384,9 @@ export function PullRequestReader({
             projectAlias={projectAlias}
           />
         </TabsContent>
+        <TabsContent value="commits" className="flex min-h-0 flex-1 flex-col gap-0">
+          <PullRequestCommitsTab state={overviewState} commits={commits} onRetry={load} pullRequestUrl={githubUrl} />
+        </TabsContent>
         <TabsContent value="diff" className="flex min-h-0 flex-1 flex-col gap-0">
           {diffState.kind === "loading" ? <PullRequestChangesSkeleton /> : null}
           {diffState.kind === "error" ? (
@@ -423,6 +429,11 @@ const TAB_SKELETONS: Record<PullRequestTab, ReactNode> = {
       <GuideSkeleton />
     </div>
   ),
+  commits: (
+    <div className="flex min-h-0 flex-1 flex-col">
+      <CommitsSkeleton />
+    </div>
+  ),
   diff: (
     <div className="flex min-h-0 flex-1 flex-col">
       <PullRequestChangesSkeleton />
@@ -452,6 +463,7 @@ export function PullRequestReaderSkeleton({ tab = "overview", backHref }: { tab?
       <div className="flex h-[41px] shrink-0 items-center gap-6 border-b px-4">
         <Skeleton className="h-4 w-16" />
         <Skeleton className="h-4 w-12" />
+        <Skeleton className="h-4 w-16" />
         <Skeleton className="h-4 w-10" />
       </div>
       {TAB_SKELETONS[tab]}

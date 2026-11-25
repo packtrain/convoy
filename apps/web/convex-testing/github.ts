@@ -79,6 +79,7 @@ const REQUIRED_PERMISSIONS: [RegExp, string][] = [
   [/\/commits\/[^/]+\/check-runs$/, "checks"],
   [/\/commits\/[^/]+\/status$/, "statuses"],
   [/\/(compare|contents)\//, "contents"],
+  [/\/commits\/[^/]+$/, "contents"],
   [/\/pulls/, "pull_requests"],
 ];
 
@@ -142,6 +143,8 @@ export function createFakeGithub() {
     contents: new Map<string, string>(),
     /** Changed files of a compare by `<base>...<head>`, for a revision the PR has moved past. */
     compares: new Map<string, FakePullRequest["files"]>(),
+    /** Single-commit reads by `<repositoryId>:<sha>`. */
+    commits: new Map<string, { message: string; files: FakePullRequest["files"] }>(),
     /** Status codes to answer instead, consumed per matching request. */
     failures: [] as { match: RegExp; status: number; headers?: Record<string, string>; message?: string }[],
     /** The GitHub person each OAuth code authorizes, for Connect GitHub; GOOD_CODE stays the setup admin. */
@@ -603,6 +606,14 @@ export function createFakeGithub() {
       if (compared) return json(200, { behind_by: 0, files: compared });
       const pr = pullForSha(Number(match[1]), match[3]);
       return pr ? json(200, { behind_by: pr.behindBy ?? 0, files: pr.files }) : json(404, {});
+    }
+    match = /^\/repositories\/(\d+)\/commits\/([^/]+)$/.exec(path);
+    if (match) {
+      const sha = decodeURIComponent(match[2]);
+      const commit = state.commits.get(`${match[1]}:${sha}`);
+      return commit
+        ? json(200, { sha, html_url: `https://github.com/commit/${sha}`, commit: { message: commit.message }, files: commit.files })
+        : json(422, { message: `No commit found for SHA: ${sha}` });
     }
     match = /^\/repositories\/(\d+)\/contents\/(.+)$/.exec(path);
     if (match) {

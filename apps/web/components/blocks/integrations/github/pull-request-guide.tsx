@@ -644,7 +644,7 @@ function GuideSteps({
                       <PullRequestFileSection
                         key={path}
                         file={file}
-                        htmlUrl={diff.htmlUrl}
+                        filesUrl={`${diff.htmlUrl}/files`}
                         options={options}
                         collapsed={isCollapsed(file)}
                         onToggle={() => flip(path, !toggled.has(path))}

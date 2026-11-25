@@ -21,6 +21,7 @@ export const errors = {
   PULL_REQUEST_NOT_FOUND: "GitHub has no pull request with this number in the connected repository",
   PULL_REQUEST_CHANGED: "The pull request changed while loading. Refresh to load the new revision.",
   FILE_NOT_FOUND: "GitHub has no file at this path in this revision",
+  COMMIT_NOT_FOUND: "GitHub has no commit with this SHA in the connected repository",
   ACCESS_REMOVED: "GitHub access to this repository was removed",
   CHECK_RUN_REFUSED: "GitHub refused the check run. The Convoy GitHub App needs Checks: write on this repository.",
   CURSOR_INVALID: "Invalid repository list cursor",

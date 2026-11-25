@@ -40,3 +40,5 @@ export function toUnifiedPatch(file: PullRequestDiffFile): string | null {
 function headerPath(path: string): string {
   return path.replace(/[\u0000-\u001f\u007f]/g, "_");
 }
+
+export type PullRequestCommit = FunctionReturnType<typeof api.integrations.github.pullRequests.readCommit>;

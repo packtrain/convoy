@@ -35,6 +35,7 @@ const discardUpload = vi.fn();
 const readOverview = vi.fn();
 const readMergeability = vi.fn();
 const readFile = vi.fn();
+const readCommit = vi.fn();
 const push = vi.fn();
 
 const name = (fn: Parameters<typeof getFunctionName>[0]) => getFunctionName(fn);
@@ -72,6 +73,7 @@ vi.mock("convex/react", () => ({
       [name(api.integrations.github.pullRequests.readOverview)]: readOverview,
       [name(api.integrations.github.pullRequests.readMergeability)]: readMergeability,
       [name(api.integrations.github.pullRequests.readFile)]: readFile,
+      [name(api.integrations.github.pullRequests.readCommit)]: readCommit,
       [name(api.integrations.github.accounts.readRepositoryPermission)]: readPermission,
       [name(api.integrations.github.accounts.disconnect)]: vi.fn(),
       [name(api.integrations.github.comments.create)]: createComment,
@@ -292,6 +294,93 @@ describe("PullRequestReader tabs", () => {
     openTab("Overview");
     expect(onTabChange).toHaveBeenCalledWith("overview");
     expect(screen.getByRole("tab", { name: "Overview" }).getAttribute("aria-selected")).toBe("true");
+  });
+});
+
+describe("PullRequestReader commits (OS-2562)", () => {
+  const older = { sha: "a11ce00000", message: "Add search index", author: "maya", committedAt: Date.now() - 60_000, url: "https://github.com/commit/a11ce00000" };
+  const newer = { sha: "b0b0000000", message: "Add search box", author: "octocat", committedAt: Date.now(), url: "https://github.com/commit/b0b0000000" };
+  const commitFiles = (sha: string) => ({
+    sha,
+    message: sha === newer.sha ? "Add search box\n\nWires the box to the index." : "Add search index",
+    htmlUrl: `https://github.com/commit/${sha}`,
+    partial: false,
+    files: [{ path: `src/${sha}.ts`, status: "added", additions: 1, deletions: 0, patch: `@@ -0,0 +1 @@\n+${sha}()` }],
+  });
+
+  test("lists commits newest first and shows the open commit's message and files; a switch of tabs keeps what was read", async () => {
+    readOverview.mockResolvedValue({ ...overview, commitCount: 2, commits: [older, newer] });
+    readCommit.mockImplementation(({ sha }: { sha: string }) => Promise.resolve(commitFiles(sha)));
+    render(reader({ defaultTab: "commits" }));
+    const list = await screen.findByRole("listbox", { name: "Commits" });
+    expect(within(list).getAllByRole("option").map((row) => row.dataset.sha)).toEqual([newer.sha, older.sha]);
+    // The list's bar lines up with the commit's files bar.
+    expect(screen.getByRole("heading", { name: "2 commits" }).parentElement!.className).toMatch(/h-\[41px\]/);
+    expect(await screen.findByText(/\+b0b0000000\(\)/)).toBeTruthy();
+    expect(screen.getByText("Wires the box to the index.")).toBeTruthy();
+    // A commit's files have no Reviewed mark: marks belong to the whole PR's diff.
+    expect(screen.queryByRole("checkbox", { name: /Reviewed/ })).toBeNull();
+
+    fireEvent.click(within(list).getByRole("option", { name: /Add search index/ }));
+    expect(await screen.findByText(/\+a11ce00000\(\)/)).toBeTruthy();
+    expect(within(list).getByRole("option", { name: /Add search index/ }).getAttribute("aria-selected")).toBe("true");
+    openTab("Overview");
+    openTab("Commits");
+    expect(await screen.findByText(/\+a11ce00000\(\)/)).toBeTruthy();
+    expect(readCommit.mock.calls.map(([args]) => args)).toEqual([
+      { projectId: "project_1", repositoryId: "repo_1", number: 7, sha: newer.sha },
+      { projectId: "project_1", repositoryId: "repo_1", number: 7, sha: older.sha },
+    ]);
+  });
+
+  test("a failed read says why and Retry reads it again", async () => {
+    readCommit.mockRejectedValueOnce(new Error("GitHub could not be reached")).mockImplementation(({ sha }: { sha: string }) => Promise.resolve(commitFiles(sha)));
+    render(reader({ defaultTab: "commits" }));
+    expect(await screen.findByText("GitHub could not be reached")).toBeTruthy();
+    fireEvent.click(screen.getByRole("button", { name: "Retry" }));
+    expect(await screen.findByText(/\+c0ffee1234\(\)/)).toBeTruthy();
+  });
+
+  test("losing access drops read commits and ignores a read still in flight; regained access reads again", async () => {
+    let finish: (value: unknown) => void = () => {};
+    readCommit.mockReturnValueOnce(new Promise((resolve) => (finish = resolve))).mockImplementation(({ sha }: { sha: string }) => Promise.resolve(commitFiles(sha)));
+    const view = render(reader({ defaultTab: "commits" }));
+    await waitFor(() => expect(readCommit).toHaveBeenCalledTimes(1));
+    stored = null;
+    view.rerender(reader({ defaultTab: "commits" }));
+    // The read that was in flight lands after access was lost.
+    await act(async () => finish(commitFiles("c0ffee1234")));
+    stored = { pullRequest };
+    view.rerender(reader({ defaultTab: "commits" }));
+    expect(await screen.findByText(/\+c0ffee1234\(\)/)).toBeTruthy();
+    expect(readCommit).toHaveBeenCalledTimes(2);
+    // A completed read is dropped too.
+    stored = null;
+    view.rerender(reader({ defaultTab: "commits" }));
+    stored = { pullRequest };
+    view.rerender(reader({ defaultTab: "commits" }));
+    await waitFor(() => expect(readCommit).toHaveBeenCalledTimes(3));
+  });
+
+  test("in a narrow pane the list fills the pane's height, so a long history scrolls inside it", async () => {
+    const rect = vi.spyOn(HTMLElement.prototype, "getBoundingClientRect").mockReturnValue({ width: 400 } as DOMRect);
+    try {
+      render(reader({ defaultTab: "commits" }));
+      const list = await screen.findByRole("listbox", { name: "Commits" });
+      // The column fills the pane; under its bar, the rows scroll in what's left.
+      expect(list.parentElement!.className).toMatch(/\bflex-1\b.*\boverflow-y-auto\b/);
+      expect(list.parentElement!.parentElement!.className).toMatch(/\bh-full\b/);
+      expect(readCommit).not.toHaveBeenCalled();
+    } finally {
+      rect.mockRestore();
+    }
+  });
+
+  test("while the overview loads, the tab keeps its rows and the commit's toolbar, header, and files", () => {
+    readOverview.mockReturnValue(new Promise(() => {}));
+    render(reader({ defaultTab: "commits" }));
+    expect(screen.getByLabelText("Loading commits")).toBeTruthy();
+    expect(screen.getByLabelText("Loading commit")).toBeTruthy();
   });
 });
 

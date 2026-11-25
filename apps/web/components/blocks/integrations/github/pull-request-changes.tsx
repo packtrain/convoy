@@ -204,7 +204,7 @@ export function PullRequestChanges({
               <PullRequestFileSection
                 key={file.path}
                 file={file}
-                htmlUrl={diff.htmlUrl}
+                filesUrl={`${diff.htmlUrl}/files`}
                 options={options}
                 collapsed={isCollapsed(file.path)}
                 onToggle={toggle}

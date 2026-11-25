@@ -168,9 +168,9 @@ a promise that arbitrary old GitHub PR patches can be fetched later.
 Label oversized, truncated, binary, or unavailable content accurately and
 provide a GitHub link. Do not render a missing patch as an empty change.
 
-The reader has Overview, Guide, and Diff tabs, laid out as in the
+The reader has Overview, Guide, Commits, and Diff tabs, laid out as in the
 playground prototype. On the PR page, the open tab is in the URL
-(`?tab=guide` or `?tab=diff`; Overview has none), so a refresh or a shared
+(`?tab=guide`, `?tab=commits`, or `?tab=diff`; Overview has none), so a refresh or a shared
 link opens it, and the page loads with that tab's skeleton. Picking a tab replaces the URL rather than adding a history
 entry. The thread sidebar's reader keeps its tab in memory, as its URL is the
 thread's. Overview shows the description, the check cards, a folded Commits card, Activity, and properties: Status, referenced Tasks, Stack, Reviewers, Assignees, Labels, Milestone, and Branch. Changed
@@ -891,7 +891,7 @@ separate Convex component or generic plugin framework is required.
 | `integrations/github/setup.ts` | The connect flow: `beginSetup`, the OAuth callback (`completeSetup` action, `claimSetup` and `authorizeSetup` mutations), repository selection (`listSetupRepositories`, `saveRepositories` action, `applyRepositories` mutation), cancel, and expiry |
 | `integrations/github/sync.ts` | Background sync: the repository lease, job claim, recovery, and commit, the sync worker, webhook fan-out, and the reconciliation cron |
 | `integrations/github/checkRuns.ts` | Publishing a Pull request check result as a GitHub check run (`publish` internal action) and recording why it failed |
-| `integrations/github/pullRequests.ts` | Stored PR reads (`list`, `get`, `stack`, `referencedTasks`) and the live `readDiff`, `readOverview`, and `readFile` actions |
+| `integrations/github/pullRequests.ts` | Stored PR reads (`list`, `get`, `stack`, `referencedTasks`) and the live `readDiff`, `readOverview`, `readFile`, and `readCommit` actions |
 | `integrations/github/lib/github.ts` | GitHub REST client and credentials: App JWT, installation tokens, setup token encryption, and the OAuth exchange |
 | `integrations/github/lib/parsers.ts` | Narrowing GitHub JSON into normalized PR and diff metadata |
 | `integrations/github/lib/lifecycle.ts` | Starting a reconciliation pass and disconnecting a link, shared by connect, disconnect, and the cron |
@@ -1219,7 +1219,7 @@ compact), and the reader's header, tab row, and Overview.
 - **Header** (`h-14`): state icon, the title truncated with a tooltip, the
   Archived badge, the Stack button, the Merge status popover (open PRs
   only), Review ([Reviews](#reviews)), the state actions, and Open on GitHub.
-- **Tab row**: Overview, Guide, and Diff, with the displayed revision
+- **Tab row**: Overview, Guide, Commits, and Diff, with the displayed revision
   ("main → 8a3e7d1", the held diff's head) on the right. Guide shows an
   empty state until slice 5. New changes available sits under the tab row;
   Refresh reloads the diff and the Overview together.
@@ -1292,6 +1292,28 @@ compact), and the reader's header, tab row, and Overview.
   base SHA for a deleted file. Files over 1 MiB read as too large, and a NUL
   byte reads as binary. `readFile` reads any path at any ref in a connected
   repository, the same scope a project member already has through diffs.
+- **Commits tab** (OS-2562), laid out like the worktree History tab's List
+  layout: the Overview's commits newest first on the left, the open commit
+  on the right, the newest until one is picked. The list's top bar ("2
+  commits") sits level with the commit pane's bar. Arrow keys and `j`/`k` move
+  through the list. Below 600px the list and the commit take turns, with
+  "All commits" to go back. The commit pane has a bar with "2 files +3 -1",
+  collapse-all, split/unified, and wrap, then the whole message, author,
+  date, and the short SHA linking to GitHub, then the files as the Diff
+  tab's sections without Reviewed checkboxes, which belong to the PR's
+  diff. The list comes from `readOverview`, so it waits for it and shows
+  its first 100 commits; past that a note says the newest ones aren't shown
+  and links the PR's commits on GitHub. Each commit's files come from
+  `readCommit`, the commits API at that SHA with `per_page=100`: read once
+  per SHA when the commit opens and held by the reader for the session, so
+  switching tabs or commits reads nothing again. A commit never changes, so
+  Refresh doesn't drop them; losing access does, with any read still in
+  flight, as it drops the held diff. A commit with 100 files or more, or past the
+  1 MiB patch budget, reads as partial and links the commit on GitHub; for a
+  merge commit GitHub diffs against the first parent. An unknown SHA (422)
+  fails with the commit-not-found message. `readCommit` reads any commit in
+  a connected repository, the scope `readFile` already has. No CLI command:
+  agents read commits with `git` or `gh` in their checkout.
 - **Reviewed marks** live in local storage under
   `convoy:github:reviewed:<repositoryId>:<number>`, mapping each path to the
   file's blob SHA from GitHub's files response. A revision that changes the
@@ -1997,6 +2019,7 @@ Defined in `apps/web/convex/integrations/github/errors.ts`; tests assert on them
 | GitHub rate limit | GitHub is limiting requests from Convoy. Try again in a few minutes. |
 | Unknown PR number | GitHub has no pull request with this number in the connected repository |
 | Whole file missing at that revision | GitHub has no file at this path in this revision |
+| Commit missing in the connected repository | GitHub has no commit with this SHA in the connected repository |
 | PR pushed during every read | The pull request changed while loading. Refresh to load the new revision. |
 | Connect state tampered with, or finished by another member | This GitHub connection request is no longer valid. Connect GitHub again. |
 | Connect state older than 10 minutes | This GitHub connection request expired. Connect GitHub again. |
