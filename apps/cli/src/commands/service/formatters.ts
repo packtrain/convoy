@@ -99,3 +99,16 @@ export function launchAgentPlist(label: string, programArguments: string[], envi
     `</dict>`, `</plist>`, "",
   ].join("\n");
 }
+
+const systemdQuote = (value: string) => `"${value.replace(/[\\"]/g, "\\$&").replace(/\n/g, "\\n").replace(/%/g, "%%")}"`;
+/** A systemd user unit started with the user manager; only the CLI gets SIGTERM, so the service stops its own workers. Spec: docs/specs/cli-shared-environments.md#start-at-boot-on-linux */
+export function systemdUserUnit(programArguments: string[], environment: Record<string, string>): string {
+  return [
+    "[Unit]", "Description=Convoy project service", "",
+    "[Service]",
+    `ExecStart=${programArguments.map(value => systemdQuote(value).replace(/\$/g, "$$$$")).join(" ")}`,
+    ...Object.entries(environment).map(([name, value]) => `Environment=${systemdQuote(`${name}=${value}`)}`),
+    "KillMode=mixed",
+    "", "[Install]", "WantedBy=default.target", "",
+  ].join("\n");
+}

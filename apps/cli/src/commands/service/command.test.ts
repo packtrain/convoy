@@ -2,15 +2,17 @@ import { EventEmitter } from "node:events";
 import { PassThrough } from "node:stream";
 import { afterEach, expect, it, vi } from "vitest";
 
-const mocks = vi.hoisted(() => ({ spawn: vi.fn(), request: vi.fn(), mode: vi.fn(() => "isolated"), choose: vi.fn(async () => "shared") }));
+const mocks = vi.hoisted(() => ({ spawn: vi.fn(), spawnSync: vi.fn(() => ({ status: 0, stderr: "" })), writeJob: vi.fn(), removeJob: vi.fn(() => true), systemdRunning: vi.fn(() => true), lingering: vi.fn(() => ({ linger: false, user: "ec2-user" })), request: vi.fn(), mode: vi.fn(() => "isolated"), choose: vi.fn(async () => "shared") }));
 vi.mock("../environment/resolution.js", async (original) => ({ ...await original<typeof import("../environment/resolution.js")>(), recordEnvironmentMode: mocks.mode, chooseEnvironmentMode: mocks.choose }));
-vi.mock("node:child_process", () => ({ spawn: mocks.spawn }));
+vi.mock("node:child_process", () => ({ spawn: mocks.spawn, spawnSync: mocks.spawnSync }));
 vi.mock("../project/launcher.js", async (original) => ({ ...await original<typeof import("../project/launcher.js")>(), isProjectEnvironment: () => true }));
 vi.mock("./client.js", () => ({ serviceEndpoint: () => "/test", serviceRequest: mocks.request }));
-vi.mock("./paths.js", () => ({ servicePaths: () => ({ directory: "/private", socket: "/private/control.sock", lock: "/private/lock" }), privateFile: () => {} }));
+vi.mock("./paths.js", () => ({ servicePaths: () => ({ directory: "/private", socket: "/private/control.sock", lock: "/private/lock" }), privateFile: () => {},
+  LAUNCH_AGENT_LABEL: "build.convoy.service", SYSTEMD_UNIT: "convoy.service", loginJobPath: () => "/home/u/.config/systemd/user/convoy.service",
+  writeLoginJob: mocks.writeJob, removeLoginJob: mocks.removeJob, systemdRunning: mocks.systemdRunning, lingering: mocks.lingering }));
 import { serviceCommand, startService } from "./command.js";
 
-afterEach(() => { vi.restoreAllMocks(); mocks.spawn.mockReset(); mocks.request.mockReset(); process.exitCode = undefined; });
+afterEach(() => { vi.restoreAllMocks(); mocks.spawn.mockReset(); for (const mock of [mocks.spawnSync, mocks.writeJob, mocks.removeJob, mocks.systemdRunning, mocks.lingering]) mock.mockClear(); mocks.request.mockReset(); process.exitCode = undefined; });
 function child() {
   return Object.assign(new EventEmitter(), {
     stdout: new PassThrough(), stderr: new PassThrough(), kill: vi.fn(), unref: vi.fn(),
@@ -18,6 +20,65 @@ function child() {
 }
 it("exposes the shipped service management commands", () => {
   expect(serviceCommand.commands.map((command) => command.name())).toEqual(["start", "mode", "status", "pause", "reload", "stop", "enable", "disable", "logs", "bridge", "outcome", "runs"]);
+});
+function onPlatform(value: NodeJS.Platform) { const platform = Object.getOwnPropertyDescriptor(process, "platform")!; Object.defineProperty(process, "platform", { value }); return () => Object.defineProperty(process, "platform", platform); }
+const onLinux = () => onPlatform("linux");
+it("enables a systemd user unit on Linux and prints the linger command without running it (OS-2466)", async () => {
+  const restore = onLinux(), log = vi.spyOn(console, "log").mockImplementation(() => {});
+  try {
+    await serviceCommand.parseAsync(["enable"], { from: "user" });
+    expect(mocks.writeJob.mock.calls[0][0]).toContain("WantedBy=default.target");
+    expect(mocks.spawnSync).toHaveBeenCalledWith("systemctl", ["--user", "enable", "convoy.service"], expect.anything());
+    expect(mocks.spawnSync.mock.calls.flat().join(" ")).not.toContain("loginctl");
+    expect(log.mock.calls[0][0]).toContain("sudo loginctl enable-linger ec2-user");
+    expect(log.mock.calls[0][0]).toContain("stops when you log out");
+    await serviceCommand.parseAsync(["disable"], { from: "user" });
+    expect(mocks.spawnSync).toHaveBeenLastCalledWith("systemctl", ["--user", "disable", "convoy.service"], expect.anything());
+    expect(mocks.removeJob).toHaveBeenCalled();
+    expect(log.mock.calls[1][0]).toBe("The service no longer starts at boot or login. A running service keeps running.");
+  } finally { restore(); }
+});
+it("refuses to enable on Linux without systemd", async () => {
+  const restore = onLinux(), error = vi.spyOn(console, "error").mockImplementation(() => {});
+  mocks.systemdRunning.mockReturnValueOnce(false);
+  try {
+    await serviceCommand.parseAsync(["enable"], { from: "user" });
+    expect(error.mock.calls[0][0]).toContain("no systemd");
+    expect(mocks.writeJob).not.toHaveBeenCalled();
+    expect(mocks.lingering).not.toHaveBeenCalled();
+    expect(process.exitCode).toBe(1);
+  } finally { restore(); }
+});
+it("says the service starts at boot when lingering is on", async () => {
+  const restore = onLinux(), log = vi.spyOn(console, "log").mockImplementation(() => {});
+  mocks.lingering.mockReturnValueOnce({ linger: true, user: "ec2-user" });
+  try {
+    await serviceCommand.parseAsync(["enable"], { from: "user" });
+    expect(log.mock.calls[0][0]).toMatch(/^The service starts at boot \(/);
+    expect(log.mock.calls[0][0]).not.toContain("loginctl");
+  } finally { restore(); }
+});
+it("removes the unit and points at a real login when systemctl --user enable fails", async () => {
+  const restore = onLinux(), error = vi.spyOn(console, "error").mockImplementation(() => {});
+  mocks.spawnSync.mockReturnValueOnce({ status: 1, stderr: "Failed to connect to bus\n" });
+  try {
+    await serviceCommand.parseAsync(["enable"], { from: "user" });
+    expect(error.mock.calls[0][0]).toContain("Failed to connect to bus");
+    expect(error.mock.calls[0][0]).toContain("not su or sudo");
+    expect(mocks.removeJob).toHaveBeenCalled();
+    expect(process.exitCode).toBe(1);
+  } finally { restore(); }
+});
+it("enables the LaunchAgent on macOS without systemctl", async () => {
+  const restore = onPlatform("darwin"), log = vi.spyOn(console, "log").mockImplementation(() => {});
+  try {
+    await serviceCommand.parseAsync(["enable"], { from: "user" });
+    expect(mocks.writeJob.mock.calls[0][0]).toContain("<key>RunAtLoad</key>");
+    expect(log.mock.calls[0][0]).toMatch(/^The service starts at each login \(/);
+    await serviceCommand.parseAsync(["disable"], { from: "user" });
+    expect(log.mock.calls[1][0]).toBe("The service no longer starts at login. A running service keeps running.");
+    expect(mocks.spawnSync).not.toHaveBeenCalled();
+  } finally { restore(); }
 });
 it("settles the mode before starting, and prints it from service mode", async () => {
   const log = vi.spyOn(console, "log").mockImplementation(() => {});

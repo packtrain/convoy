@@ -147,8 +147,28 @@ LaunchAgent without stopping a running service.
 
 After updating the CLI or switching Node versions, the next `convoy service
 start` updates the LaunchAgent. Running `convoy service enable` again does the
-same without starting the service. On Linux, start the service from your own
-init system.
+same without starting the service.
+
+## Start at boot on Linux
+
+On a Linux VM with systemd, the same command writes a systemd user unit,
+`~/.config/systemd/user/convoy.service`, and enables it:
+
+```bash
+convoy service enable
+sudo loginctl enable-linger $USER
+```
+
+systemd starts your user services at boot only when lingering is on for your
+account. Turning it on needs root, so enable prints the `loginctl` command and
+leaves running it to you. Without lingering, the service starts only when you
+log in with no other session open, and it stops, along with its runs, when you
+log out. With lingering, an enrolled VM shows online after a reboot without
+anyone logging in. Read the service's startup output with `journalctl --user -u
+convoy`. `convoy service disable` removes the unit.
+
+Enable refuses a machine without systemd, such as a dev container, and a managed
+Docker environment, which restarts with Docker.
 
 ## Add and remove projects while running
 

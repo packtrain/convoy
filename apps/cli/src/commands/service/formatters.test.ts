@@ -1,5 +1,5 @@
 import { afterEach, expect, it, vi } from "vitest";
-import { launchAgentPlist, printRunResult, printServiceEvent } from "./formatters.js";
+import { launchAgentPlist, printRunResult, printServiceEvent, systemdUserUnit } from "./formatters.js";
 afterEach(() => vi.restoreAllMocks());
 it("prints plain run rows with identifiers and pagination guidance", () => {
   const out = vi.spyOn(console, "log").mockImplementation(() => {});
@@ -62,4 +62,12 @@ it("renders a login job that runs once at load with escaped paths", () => {
   expect(plist).toContain("<key>PATH</key>\n    <string>/opt/homebrew/bin:/usr/bin</string>");
   expect(plist).toContain("<key>RunAtLoad</key>\n  <true/>");
   expect(plist).not.toContain("KeepAlive");
+});
+it("renders a systemd user unit with quoted, specifier-safe arguments", () => {
+  const unit = systemdUserUnit(["/n o/node", "/a\"b/50%$x/convoy", "service", "start"], { PATH: "/home/u/bin:/usr/bin", CODEX_HOME: "/c%d" });
+  expect(unit).toContain('ExecStart="/n o/node" "/a\\"b/50%%$$x/convoy" "service" "start"\n');
+  expect(unit).toContain('Environment="PATH=/home/u/bin:/usr/bin"\nEnvironment="CODEX_HOME=/c%%d"\n');
+  expect(unit).toContain("[Install]\nWantedBy=default.target\n");
+  expect(unit).not.toContain("Restart");
+  expect(unit).toContain("KillMode=mixed\n");
 });

@@ -1,7 +1,7 @@
 import { constants, existsSync, linkSync, lstatSync, mkdirSync, openSync, closeSync, readFileSync, realpathSync, unlinkSync, writeFileSync } from "node:fs";
 import { spawnSync } from "node:child_process";
 import { randomBytes } from "node:crypto";
-import { homedir } from "node:os";
+import { homedir, userInfo } from "node:os";
 import { dirname, join } from "node:path";
 
 export function servicePaths(home = homedir(), create = true) {
@@ -57,11 +57,14 @@ export function leasePath(identity: string, home = homedir(), create = true): st
 }
 
 export const LAUNCH_AGENT_LABEL = "build.convoy.service";
-export const launchAgentPath = (home = homedir()) => join(home, "Library", "LaunchAgents", `${LAUNCH_AGENT_LABEL}.plist`);
+export const SYSTEMD_UNIT = "convoy.service";
+/** The LaunchAgent on macOS, the systemd user unit on Linux. */
+export const loginJobPath = (home = homedir(), platform = process.platform) => platform === "linux"
+  ? join(home, ".config", "systemd", "user", SYSTEMD_UNIT)
+  : join(home, "Library", "LaunchAgents", `${LAUNCH_AGENT_LABEL}.plist`);
 
 /** Writes the login job when its content differs; with `refresh`, only one that already exists. */
-export function writeLaunchAgent(content: string, refresh = false, home = homedir()): boolean {
-  const file = launchAgentPath(home);
+export function writeLoginJob(content: string, refresh = false, file = loginJobPath()): boolean {
   const current = existsSync(file) ? readFileSync(file, "utf8") : undefined;
   if (current === content || (refresh && current === undefined)) return false;
   mkdirSync(dirname(file), { recursive: true });
@@ -69,9 +72,16 @@ export function writeLaunchAgent(content: string, refresh = false, home = homedi
   return true;
 }
 
-export function removeLaunchAgent(home = homedir()): boolean {
-  if (!existsSync(launchAgentPath(home))) return false;
-  unlinkSync(launchAgentPath(home));
+export const systemdRunning = () => existsSync("/run/systemd/system");
+/** Whether systemd starts this user's manager at boot. `userInfo` throws for a uid without a passwd entry. */
+export function lingering() {
+  const user = process.env.USER || userInfo().username;
+  return { linger: existsSync(join("/var/lib/systemd/linger", user)), user };
+}
+
+export function removeLoginJob(file = loginJobPath()): boolean {
+  if (!existsSync(file)) return false;
+  unlinkSync(file);
   return true;
 }
 

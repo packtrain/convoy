@@ -56,9 +56,10 @@ for `enroll` it is optional.
 
 The first slice enrolls shared environments, so `enroll --env` builds on
 [shared Docker environments](cli-shared-environments.md#shared-managed-docker-environments)
-(OS-2251), which land first. On a Mac the service doesn't come back after a
-reboot until OS-2255 adds launchd support, so OS-2255 ships before user
-environments reach users.
+(OS-2251), which land first. After a reboot, `convoy service enable` brings
+the service back: at login on a Mac (OS-2255), and at boot on a Linux VM with
+lingering on (OS-2466; see
+[start at boot on Linux](cli-shared-environments.md#start-at-boot-on-linux)).
 
 Enrollment runs the browser device-code flow of
 [browser login](cli-browser-login.md) with `purpose: "environment"` on the

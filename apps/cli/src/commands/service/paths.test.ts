@@ -3,7 +3,7 @@ import { spawnSync } from "node:child_process";
 import { existsSync, readFileSync, statSync, chmodSync, mkdirSync, mkdtempSync, rmSync, symlinkSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { tmpdir } from "node:os";
-import { acquireLock, launchAgentPath, leasePath, removeLaunchAgent, servicePaths, privateFile, writeLaunchAgent } from "./paths.js";
+import { acquireLock, leasePath, loginJobPath, removeLoginJob, servicePaths, privateFile, writeLoginJob } from "./paths.js";
 
 const homes: string[] = [];
 afterEach(() => { for (const home of homes.splice(0)) rmSync(home, { recursive: true, force: true }); });
@@ -69,15 +69,16 @@ describe("CLI lock", () => {
     expect(statSync(join(dir, ".convoy/service/leases")).mode & 0o777).toBe(0o700);
   });
 });
-it("writes the login job, refreshes only an existing one and removes it", () => {
-  const dir = home(), file = launchAgentPath(dir);
-  expect(writeLaunchAgent("a", true, dir)).toBe(false);
+it.each(["darwin", "linux"] as const)("writes the %s login job, refreshes only an existing one and removes it", (platform) => {
+  const dir = home(), file = loginJobPath(dir, platform);
+  expect(file).toBe(join(dir, platform === "linux" ? ".config/systemd/user/convoy.service" : "Library/LaunchAgents/build.convoy.service.plist"));
+  expect(writeLoginJob("a", true, file)).toBe(false);
   expect(existsSync(file)).toBe(false);
-  expect(writeLaunchAgent("a", false, dir)).toBe(true);
+  expect(writeLoginJob("a", false, file)).toBe(true);
   expect(statSync(file).mode & 0o777).toBe(0o644);
-  expect(writeLaunchAgent("a", true, dir)).toBe(false);
-  expect(writeLaunchAgent("b", true, dir)).toBe(true);
+  expect(writeLoginJob("a", true, file)).toBe(false);
+  expect(writeLoginJob("b", true, file)).toBe(true);
   expect(readFileSync(file, "utf8")).toBe("b");
-  expect(removeLaunchAgent(dir)).toBe(true);
-  expect(removeLaunchAgent(dir)).toBe(false);
+  expect(removeLoginJob(file)).toBe(true);
+  expect(removeLoginJob(file)).toBe(false);
 });

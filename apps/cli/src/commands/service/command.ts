@@ -2,14 +2,14 @@ import { targetEnvironment, targetCommands } from "../environment/index.js";
 import { addServiceClients } from "./attach.js";
 import { ServiceUnavailableError } from "./errors.js";
 import { startupFailureSchema } from "./validators.js";
-import { spawn } from "node:child_process";
+import { spawn, spawnSync } from "node:child_process";
 import { fileURLToPath } from "node:url";
 import { Command, Option } from "commander";
 import { isProjectEnvironment, SHARED_RUNTIME_ENV } from "../project/launcher.js";
 import { serviceRequest, serviceEndpoint } from "./client.js";
 import { ServiceLogs } from "./logs.js";
-import { LAUNCH_AGENT_LABEL, launchAgentPath, removeLaunchAgent, servicePaths, writeLaunchAgent } from "./paths.js";
-import { launchAgentPlist } from "./formatters.js";
+import { LAUNCH_AGENT_LABEL, loginJobPath, removeLoginJob, servicePaths, SYSTEMD_UNIT, systemdRunning, lingering, writeLoginJob } from "./paths.js";
+import { launchAgentPlist, systemdUserUnit } from "./formatters.js";
 import { chooseEnvironmentMode, recordEnvironmentMode } from "../environment/resolution.js";
 import type { EnvironmentMode } from "../environment/validators.js";
 
@@ -29,9 +29,7 @@ export async function startService(background: boolean, quiet = false): Promise<
     throw new Error("This environment is isolated, but the project launcher registry /etc/convoy-projects.json is missing. Reinstall the launcher; isolated projects never run unsandboxed.");
   }
   servicePaths();
-  if (process.platform === "darwin") {
-    try { writeLaunchAgent(launchAgent(), true); } catch { /* a stale login job never blocks a start */ }
-  }
+  try { writeLoginJob(loginJob(), true); } catch { /* a stale login job never blocks a start */ }
   const extension = import.meta.url.endsWith(".ts") ? "ts" : "js";
   const entrypoint = fileURLToPath(new URL(`./service-entrypoint.${extension}`, import.meta.url));
   const child = spawn(process.execPath, [...process.execArgv, entrypoint], {
@@ -79,16 +77,21 @@ export async function startService(background: boolean, quiet = false): Promise<
   }
 }
 
-/** The login job runs this CLI with the caller's PATH, since launchd starts with a minimal one. */
-function launchAgent(): string {
+/** The login job runs this CLI with the caller's PATH, since launchd and systemd start with a minimal one. */
+function loginJob(): string {
   const environment = Object.fromEntries(["PATH", ...SHARED_RUNTIME_ENV].flatMap(name => process.env[name] ? [[name, process.env[name]!]] : []));
-  return launchAgentPlist(LAUNCH_AGENT_LABEL, [process.execPath, ...process.execArgv, process.argv[1], "service", "start"], environment);
+  const command = [process.execPath, ...process.execArgv, process.argv[1], "service", "start"];
+  return process.platform === "linux" ? systemdUserUnit(command, environment) : launchAgentPlist(LAUNCH_AGENT_LABEL, command, environment);
 }
 
-function requireLaunchd(): void {
+function requireLoginJobs(): void {
   if (targetEnvironment()) throw new Error("A managed Docker environment restarts with Docker. Rebuild one created before CLI 0.141.0.");
-  if (process.platform !== "darwin") throw new Error("Starting at login is macOS only. On Linux, start convoy service start -b from your init system.");
+  if (process.platform === "linux") {
+    if (!systemdRunning()) throw new Error("This machine has no systemd, so nothing can start the service at boot. Run convoy service start -b from its own init.");
+  } else if (process.platform !== "darwin") throw new Error("Starting at login needs macOS or Linux.");
 }
+
+const systemctl = (action: "enable" | "disable") => spawnSync("systemctl", ["--user", action, SYSTEMD_UNIT], { encoding: "utf8" });
 
 function configureStart(command: Command): Command {
   return command
@@ -142,16 +145,28 @@ serviceCommand.command("stop").action(() => report(async () => {
   await serviceRequest(serviceEndpoint(), { op: "stop" });
   console.log("Service stopped. Project data retained.");
 }));
-serviceCommand.command("enable").description("Start the service at each macOS login")
+// Spec: docs/specs/cli-shared-environments.md#start-at-boot-on-linux
+serviceCommand.command("enable").description("Start the service at each macOS login or Linux boot")
   .action(() => report(async () => {
-    requireLaunchd();
-    writeLaunchAgent(launchAgent());
-    console.log(`The service starts at each login (${launchAgentPath()}). It is not started now; run convoy service start -b.`);
+    requireLoginJobs();
+    writeLoginJob(loginJob());
+    const notStarted = "It is not started now; run convoy service start -b.";
+    if (process.platform !== "linux") { console.log(`The service starts at each login (${loginJobPath()}). ${notStarted}`); return; }
+    const enabled = systemctl("enable");
+    if (enabled.status !== 0) {
+      removeLoginJob();
+      throw new Error(`systemctl --user enable ${SYSTEMD_UNIT} failed: ${(enabled.stderr || enabled.error?.message || "").trim()}. Run convoy service enable from an SSH or console login, not su or sudo.`);
+    }
+    const { linger, user } = lingering();
+    console.log(linger ? `The service starts at boot (${loginJobPath()}). ${notStarted}`
+      : `Lingering is off, so the service starts only when you log in with no other session open, and stops when you log out (${loginJobPath()}). To start it at boot, run: sudo loginctl enable-linger ${user}. ${notStarted}`);
   }));
-serviceCommand.command("disable").description("Stop starting the service at login")
+serviceCommand.command("disable").description("Stop starting the service at login or boot")
   .action(() => report(async () => {
-    requireLaunchd();
-    console.log(removeLaunchAgent() ? "The service no longer starts at login. A running service keeps running." : "The service was not set to start at login.");
+    requireLoginJobs();
+    if (process.platform === "linux") systemctl("disable"); // best effort: systemd ignores a wants link to a deleted unit
+    const when = process.platform === "linux" ? "at boot or login" : "at login";
+    console.log(removeLoginJob() ? `The service no longer starts ${when}. A running service keeps running.` : `The service was not set to start ${when}.`);
   }));
 serviceCommand.command("logs").option("--follow", "Follow operational events; Ctrl+C detaches")
   .option("--profile <key>", "Filter by profile").option("--json", "Print NDJSON")

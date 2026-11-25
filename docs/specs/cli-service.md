@@ -18,8 +18,9 @@ An empty snapshot is valid. Bound the snapshot to 128 identities, profile keys t
 
 Since CLI 0.127.0 a shared environment runs registered projects without the
 launcher, on macOS and Linux; see [shared environments](cli-shared-environments.md).
-On macOS, `service enable` starts it at each login; see
-[start at login](cli-shared-environments.md#start-at-login-on-macos).
+`service enable` starts it at each login on macOS and at boot on Linux; see
+[start at login](cli-shared-environments.md#start-at-login-on-macos) and
+[start at boot](cli-shared-environments.md#start-at-boot-on-linux).
 
 The service is unprivileged. It invokes the existing launcher separately for each
 worker, sends that profile's credentials only over its private stdin pipe and

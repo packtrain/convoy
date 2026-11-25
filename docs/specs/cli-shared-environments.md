@@ -265,10 +265,37 @@ environment differ from its own. After a CLI update or a Node version switch,
 the next start or TUI Start keeps the login job pointing at the current binary.
 Run `convoy service enable` again to refresh it without starting the service.
 
-Linux has no equivalent in v1. A systemd user unit only runs after logout on a
-VM when lingering is enabled, which needs root, and the devcontainer has no
-systemd. Enable refuses managed Docker environments, which
+Enable refuses managed Docker environments, which
 [restart with Docker](cli-environments.md#restart-after-a-reboot-cli-01410).
+
+### Start at boot on Linux
+
+On Linux (CLI 0.174.0, OS-2466) `convoy service enable` writes a systemd user
+unit, `~/.config/systemd/user/convoy.service`, mode 0644, and runs `systemctl
+--user enable convoy.service`. The unit holds the same command and environment
+as the LaunchAgent, `WantedBy=default.target`, and no `Restart=`, for the same
+reason the LaunchAgent has no `KeepAlive`. It sets `KillMode=mixed`: the default
+`control-group` sends SIGTERM to every worker at once on `systemctl --user stop`
+or shutdown, which skips the service's ordered stop. With `mixed` only the CLI
+gets SIGTERM, and systemd sends SIGKILL to what is left after `TimeoutStopSec`.
+Enable starts nothing now. If `systemctl --user enable` fails, typically for a
+missing user bus under `su` or `sudo`, enable deletes the file and says to run it
+from an SSH or console login. `convoy service disable` runs `systemctl --user
+disable` and deletes the file; a running service keeps running.
+
+The user manager starts at boot only when lingering is on for the account.
+Turning it on needs root, so enable never does it. It reads
+`/var/lib/systemd/linger/<user>` (the user from `$USER`). When that file is
+missing, the user manager starts only at a login with no other session open and
+stops at the last logout, taking the service and its runs with it. Enable says
+so and prints `sudo loginctl enable-linger <user>`. With lingering on, an enrolled
+VM comes back online after a reboot without anyone logging in.
+
+Enable refuses a machine without a running systemd (`/run/systemd/system`
+missing), such as a devcontainer. `service start` refreshes an existing unit as
+it does the LaunchAgent; systemd reads the new file at the next boot or `systemctl
+--user daemon-reload`. Journald keeps the start command's output: `journalctl
+--user -u convoy`.
 
 ## Credentials
 
