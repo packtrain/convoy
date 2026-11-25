@@ -1,6 +1,6 @@
 "use client";
 
-import { useRef, useState, type ReactNode } from "react";
+import { useEffect, useRef, useState, type ReactNode } from "react";
 import { formatDistanceToNow } from "date-fns";
 import {
   Check,
@@ -477,6 +477,12 @@ export function PullRequestOverviewSkeleton() {
 }
 
 /** Overview: description and cards in the main column, properties beside it (docs/specs/github-integration.md → PR reader). */
+/** The draft behind the Conflicts card's Fix and Merge status's Resolve locally. */
+export function resolveConflictsPrompt(pr: PullRequestView, layers: PullRequestSummary[]) {
+  const below = layerBelow(layers, pr.number);
+  return `Rebase #${pr.number} on ${below ? `#${below.number}` : pr.baseRef}, resolve the conflicts, and push.`;
+}
+
 export function PullRequestOverviewTab({
   pr,
   summary,
@@ -491,6 +497,8 @@ export function PullRequestOverviewTab({
   pullRequest,
   repositoryId,
   commenting,
+  seed,
+  onSeed,
   onAssigneesChange,
   onRequestedReviewersChange,
 }: {
@@ -508,6 +516,9 @@ export function PullRequestOverviewTab({
   pullRequest: AttachedPullRequest | null;
   repositoryId: string;
   commenting: GithubCommenting;
+  /** The reader holds Fix's one-shot draft, so the header can set it from another tab. */
+  seed: string | undefined;
+  onSeed: (text: string | undefined) => void;
   onAssigneesChange: (assignees: PullRequestOverview["assignees"]) => void;
   onRequestedReviewersChange: (requested: string[]) => void;
 }) {
@@ -517,7 +528,6 @@ export function PullRequestOverviewTab({
   // Threads first, as in the task sidebar; "Add comment..." swaps in the GitHub comment.
   const [mode, setMode] = useState<TimelineComposerMode>("thread");
   const [focusKey, setFocusKey] = useState(0);
-  const [seed, setSeed] = useState<string>();
   const reveal = () => {
     setMode("thread");
     composerRef.current?.scrollIntoView({ behavior: "smooth", block: "center" });
@@ -546,7 +556,7 @@ export function PullRequestOverviewTab({
                 projectAlias={projectAlias}
                 pullRequest={pullRequest}
                 seed={seed}
-                onSeeded={() => setSeed(undefined)}
+                onSeeded={() => onSeed(undefined)}
                 focusRequestKey={focusKey}
                 composerContainerClassName="p-0"
                 composerTextareaClassName="min-h-[88px] p-3"
@@ -556,10 +566,12 @@ export function PullRequestOverviewTab({
         </div>
       )
     : undefined;
-  const fix = (text: string) => {
-    setSeed(text);
-    reveal();
-  };
+  const fix = onSeed;
+  // A new draft, from Fix here or the header, brings up the thread composer.
+  if (seed !== undefined && mode !== "thread") setMode("thread");
+  useEffect(() => {
+    if (seed !== undefined) composerRef.current?.scrollIntoView({ behavior: "smooth", block: "center" });
+  }, [seed]);
   const reviewers = overview ? reviewerStates(overview, pr.author) : state.kind === "loading" ? undefined : [];
   const below = layerBelow(layers, pr.number);
   const baseName = below ? `#${below.number}` : pr.baseRef;
@@ -706,7 +718,7 @@ export function PullRequestOverviewTab({
                     <span className="truncate text-xs text-muted-foreground">Resolve them before this can merge.</span>
                   </div>
                   {canFix ? (
-                    <Button size="xs" variant="ghost" className="ml-auto shrink-0" onClick={() => fix(`Rebase #${pr.number} on ${baseName}, resolve the conflicts, and push.`)}>
+                    <Button size="xs" variant="ghost" className="ml-auto shrink-0" onClick={() => fix(resolveConflictsPrompt(pr, layers))}>
                       Fix
                     </Button>
                   ) : null}

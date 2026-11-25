@@ -776,6 +776,29 @@ describe("PullRequestReader threads (OS-2193)", () => {
     expect(seeded).toEqual(["Fix the failed WEB-12 task checks:\n- All tests pass: 2 failing"]);
   });
 
+  test("Merge status's Resolve locally opens Overview and drafts the conflicts Fix", async () => {
+    readOverview.mockResolvedValue({ ...overview, mergeable: "conflicting" });
+    render(
+      <PullRequestReader
+        projectId={"project_1" as Id<"projects">}
+        repositoryId="repo_1"
+        number={7}
+        status={status as never}
+        hrefFor={(repositoryId, number) => appRoute.projectPullRequest("org", "WEB", repositoryId, number)}
+        organizationSlug="org"
+        projectAlias="WEB"
+        defaultTab="diff"
+      />
+    );
+    await waitFor(() => expect((screen.getByRole("button", { name: "Merge status" }) as HTMLButtonElement).disabled).toBe(false));
+    fireEvent.click(screen.getByRole("button", { name: "Merge status" }));
+    const popover = await screen.findByRole("dialog", { name: "Merge status" });
+    fireEvent.click(within(popover).getByRole("button", { name: "Resolve locally" }));
+
+    expect(await screen.findByLabelText("Thread composer")).toBeTruthy();
+    expect(seeded).toEqual(["Rebase #7 on main, resolve the conflicts, and push."]);
+  });
+
   test("Fix seeds the draft once: switching the sort does not re-apply it", async () => {
     render(connected());
     fireEvent.click(await screen.findByRole("button", { name: "Fix" }));

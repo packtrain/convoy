@@ -177,7 +177,9 @@ thread's. Overview shows the description, the check cards, a folded Commits card
 files live only in the Diff tab. The header's
 Merge status popover shows reviews, checks, behind-base, mergeability
 (including GitHub's `UNKNOWN` while it recomputes), and conflicts with a
-Resolve on GitHub link, since resolving conflicts has no API. A conflicting
+Resolve on GitHub link, since resolving conflicts has no API. Where the
+Conflicts card has Fix, the conflicts row also has Resolve locally, which
+opens Overview and drafts the same thread. A conflicting
 PR also gets a Conflicts card above the check cards, with Fix (a drafted
 "rebase and resolve" thread) and Resolve on GitHub, and the PR list marks it.
 

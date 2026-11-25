@@ -80,6 +80,7 @@ export function MergeStatus({
   projectId,
   repositoryId,
   commenting,
+  onResolveLocally,
   onBranchUpdated,
 }: {
   overview: PullRequestOverview | null;
@@ -89,6 +90,8 @@ export function MergeStatus({
   projectId: Id<"projects">;
   repositoryId: string;
   commenting: GithubCommenting;
+  /** Drafts the conflicts Fix thread; absent when the repository isn't connected here. */
+  onResolveLocally?: () => void;
   onBranchUpdated: () => void;
 }) {
   const [open, setOpen] = useState(false);
@@ -150,12 +153,26 @@ export function MergeStatus({
             <StatusRow tone="pending" title="Checking mergeability…" body={`GitHub is checking the latest commit for conflicts with ${overview.baseRef}.`} />
           ) : overview.mergeable === "conflicting" ? (
             <StatusRow tone="blocked" title="This branch has conflicts that must be resolved" body="Resolve them on GitHub or locally, then push.">
-              <Button variant="outline" size="sm" className="mt-3" asChild>
-                <a href={`${overview.htmlUrl}/conflicts`} target="_blank" rel="noreferrer">
-                  Resolve on GitHub
-                  <ArrowUpRight />
-                </a>
-              </Button>
+              <div className="mt-3 flex gap-2">
+                {onResolveLocally ? (
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => {
+                      setOpen(false);
+                      onResolveLocally();
+                    }}
+                  >
+                    Resolve locally
+                  </Button>
+                ) : null}
+                <Button variant="outline" size="sm" asChild>
+                  <a href={`${overview.htmlUrl}/conflicts`} target="_blank" rel="noreferrer">
+                    Resolve on GitHub
+                    <ArrowUpRight />
+                  </a>
+                </Button>
+              </div>
             </StatusRow>
           ) : rebaseBlocked ? (
             <StatusRow

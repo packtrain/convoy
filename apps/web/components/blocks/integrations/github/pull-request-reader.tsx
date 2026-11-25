@@ -22,7 +22,7 @@ import { GuideMenu, GuideSkeleton, PullRequestGuideTab, usePullRequestGuides } f
 import { useGithubCommenting } from "./pull-request-comments";
 import { ReviewButton, usePullRequestReview } from "./pull-request-review";
 import { MergeStatus } from "./pull-request-merge-status";
-import { PullRequestOverviewSkeleton, PullRequestOverviewTab, type OverviewState } from "./pull-request-overview";
+import { PullRequestOverviewSkeleton, PullRequestOverviewTab, resolveConflictsPrompt, type OverviewState } from "./pull-request-overview";
 import { StackBadge, useStackLayers } from "./pull-request-stack";
 import { PullRequestStateActions } from "./pull-request-state-actions";
 import { PullRequestStateIcon } from "./pull-request-state-icon";
@@ -85,6 +85,8 @@ export function PullRequestReader({
   const marks = useReviewedMarks(repositoryId, number);
   const navigation = useNavigation();
   const [tab, setTab] = useState<PullRequestTab>(defaultTab);
+  // Fix's draft for Overview's thread composer.
+  const [seed, setSeed] = useState<string>();
   const showTab = (next: PullRequestTab) => {
     setTab(next);
     onTabChange?.(next);
@@ -273,6 +275,14 @@ export function PullRequestReader({
             repositoryId={repositoryId}
             commenting={commenting}
             // GitHub rewrites the head; until Refresh, the held Overview stops claiming it is behind or mergeable.
+            onResolveLocally={
+              attached
+                ? () => {
+                    setSeed(resolveConflictsPrompt(pr, layers));
+                    showTab("overview");
+                  }
+                : undefined
+            }
             onBranchUpdated={() => updateOverview((overview) => ({ ...overview, behindBy: 0, mergeBlock: null, mergeable: "unknown" }))}
           />
         ) : null}
@@ -353,6 +363,8 @@ export function PullRequestReader({
             pullRequest={attached}
             repositoryId={repositoryId}
             commenting={commenting}
+            seed={seed}
+            onSeed={setSeed}
             onAssigneesChange={(assignees) => updateOverview((overview) => ({ ...overview, assignees }))}
             onRequestedReviewersChange={(requestedReviewers) => updateOverview((overview) => ({ ...overview, requestedReviewers }))}
           />
