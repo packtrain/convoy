@@ -6,7 +6,7 @@ sends a message into the thread and the agent starts a new run. An agent
 can open a PR, watch it, and keep fixing it until it is ready, without an
 engineer relaying what CI said.
 
-Tracking: OS-2173. Status: slices 1–3 built (OS-2541, OS-2542, OS-2543); slices 4–5 planned.
+Tracking: OS-2173. Status: slices 1–4 built (OS-2541, OS-2542, OS-2543, OS-2544); slice 5 planned.
 
 The design follows t3code's `watch_pull_request`
 (`reference/t3code/apps/server/src/orchestration-v2/pullRequestWatch.ts`),
@@ -184,7 +184,9 @@ Events are refresh signals, as in
 never takes PR state from a payload. It reads the PR itself.
 
 - `parseGithubEvent` routes these events in addition to `pull_request`:
-  - `check_suite` and `check_run` with action `completed`
+  - `check_suite` and `check_run`, any action. A finished check is news,
+    and a started one (`created`, `requested`, `rerequested`) moves the
+    thread into Running (slice 4)
   - `status`
   - `pull_request_review` with action `submitted`, and
     `pull_request_review_comment` and `issue_comment` on a PR with action
@@ -206,7 +208,8 @@ never takes PR state from a payload. It reads the PR itself.
   scheduled. A CI run sends dozens of events in that window, and they become
   one read and at most one message.
 - `pull_request` events keep their sync and also schedule an evaluation. A
-  `synchronize` (push) starts the new head, and `closed` ends the watch.
+  `synchronize` (push) starts the new head and sets the watching threads'
+  `pullRequestChecksRunning` at once (slice 4), and `closed` ends the watch.
 - A cron every minute evaluates each watch not evaluated in the last
   8 minutes (slice 2). It catches webhooks GitHub never delivered, and
   conflicts caused by a push to the base branch, which sends no event for the
@@ -271,10 +274,47 @@ that as the starting state without sending a message.
 ## Watch status (slice 4)
 
 A watched thread whose PR still has checks running counts as Running on
-Watch Tower and in the thread list ([Watch Tower](watch-tower.md)), so it
-does not look finished while CI decides. When the checks finish, the
-thread's own state decides its bucket again. That needs a flag on
-`cliThreads`, written only when it flips, for the bucket queries to read.
+Watch Tower ([Watch Tower](watch-tower.md)), so it does not look finished
+while CI decides. In the thread list and on Watch Tower's board cards its
+status reads Working. When the checks finish, the thread's own state
+decides its bucket again.
+
+- `cliThreads.pullRequestChecksRunning` (`true` or absent) holds it. Watch
+  start and each evaluation write it, and only when it flips: every
+  thread list subscribes to the row. It feeds the bucket rule
+  (`deriveThreadWatchStatus`) and ships as a boolean on thread list,
+  Watch Tower, and group tab (`getGroup`) items, where
+  `getThreadDisplayStatus` reads it. So a group tab, the active one
+  included, shows Working too, and a group whose child waits on checks is
+  `running`.
+- A push sets it as soon as the `synchronize` event arrives, before any
+  check exists, so a thread whose agent pushed and ended its turn stays in
+  Running. The evaluation 45 seconds later reads the new head and clears
+  it when the head has no running checks. A check that starts on its own,
+  such as a rerun, reaches Running through that check's `created` or
+  `rerequested` event, so the thread shows its own state until that
+  evaluation, up to 45 seconds.
+- An evaluation that had an event during its read only sets the flag. Its
+  read may predate a push that set it, so the follow-up evaluation decides
+  a clear.
+- It counts only for a settled thread that is not Done: a live run, a
+  failure or question still needing attention, and the Done mark keep
+  their own bucket.
+- A check counts as running while it is queued or in progress on the
+  head, as the evaluation reads it. Convoy's own Pull request checks are
+  left out, as in "What wakes the agent": the agent's reports settle them.
+- Every way a watch ends clears it (`endWatch`; the Done mark clears it in
+  its own write, and optimistically on the client). `unwatch-pr` clears
+  it even with no watch left.
+- A check that never finishes, such as a commit status left `pending`,
+  keeps the thread in Running until the watch ends.
+- Watch Tower's Running section has no checkboxes or bulk actions, and
+  that stays so for these rows: the thread leaves it when its checks
+  finish, and the thread's own "..." menu still marks it read or done. The
+  row's glyph is the Working spinner, which hides the unread dot until
+  then, as for a live run.
+- No CLI command: `watch-pr` already prints the running checks, and this
+  is a display rule (AGENTS.md rule 19).
 
 ## Not planned here
 
@@ -300,7 +340,8 @@ thread's own state decides its bucket again. That needs a flag on
    idle-watch cron, the merged or closed message, and the read-failure limit.
 3. **Comments and reviews** from accounts other than the watch's account,
    the review and comment events, and the 10-wake limit.
-4. **Watch status.** Running while the watched PR's checks run.
+4. **Watch status.** Running while the watched PR's checks run. Built
+   (OS-2544).
 5. **The owner's own comments.** Let a comment the owner wrote on GitHub
    wake the agent while comments the agent posts with the same account
    still do not. That needs a way to tell them apart. Not designed yet.

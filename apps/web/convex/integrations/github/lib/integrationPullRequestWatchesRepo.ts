@@ -66,20 +66,22 @@ export async function deleteWatch(ctx: MutationCtx, watchId: Id<"integrationPull
   await ctx.db.delete("integrationPullRequestWatches", watchId);
 }
 
-/** Ends a thread's watch: Done, deleted, or unwatched. */
+/** Ends a thread's watch on Done or delete; the caller clears `pullRequestChecksRunning` (`endWatch` does both). */
 export async function deleteWatchForThread(ctx: MutationCtx, threadId: Id<"cliThreads">): Promise<void> {
   const watch = await getWatchByThreadId(ctx, threadId);
   if (watch) await deleteWatch(ctx, watch._id);
 }
 
-/** Ends a project's watches in one repository when its link goes. */
-export async function deleteWatchesForProjectRepository(
-  ctx: MutationCtx,
+/** A project's watches in one repository, to end when its link goes. */
+export async function listWatchesForProjectRepository(
+  ctx: Ctx,
   projectId: Id<"projects">,
   repositoryId: Id<"integrationRepositories">
-): Promise<void> {
+): Promise<Watch[]> {
+  const watches: Watch[] = [];
   // ponytail: scans the repository's watches across its projects; few threads watch at once.
   for await (const watch of ctx.db.query("integrationPullRequestWatches").withIndex("by_repositoryId_and_number", (q) => q.eq("repositoryId", repositoryId))) {
-    if (watch.projectId === projectId) await deleteWatch(ctx, watch._id);
+    if (watch.projectId === projectId) watches.push(watch);
   }
+  return watches;
 }

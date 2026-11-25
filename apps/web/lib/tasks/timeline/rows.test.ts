@@ -53,6 +53,7 @@ function ownThread(id: string, overrides: Partial<OwnTimelineThread> = {}): OwnT
     createdAt: 1_000,
     lastActivityAt: 9_000,
     requiresAttention: false,
+    pullRequestChecksRunning: false,
     hasUnread: false,
     isDone: false,
     ...overrides,

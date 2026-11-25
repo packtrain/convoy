@@ -95,7 +95,8 @@ Thread groups share their persistence mechanic with Workflow runs: both are
   their unconditional terminal recompute.
 - `aggregateStatus` precedence (OS-1476 failed group-status attempt): any child failed →
   `failed`; else any child `waiting_input` (or, for runs, held) →
-  `needs_attention`; else any child streaming or pending → `running`; else
+  `needs_attention`; else any child streaming or pending, or settled while
+  its watched PR's checks run ([Pull request watch](pull-request-watch.md#watch-status-slice-4)) → `running`; else
   `idle` (run containers mirror `workflowRun.status` instead). One label per
   row, so a failure masks a Group child's waiting state until acknowledged.
   Derived from the children's watch-status buckets, so it matches per-thread

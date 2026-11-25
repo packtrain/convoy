@@ -50,6 +50,7 @@ describe("ThreadListItem", () => {
           cliType: "codex",
           hasUnread: false,
           requiresAttention: true,
+          pullRequestChecksRunning: false,
           lastActivityAt: Date.now(),
         }}
         isActive={false}
@@ -73,6 +74,7 @@ describe("ThreadListItem", () => {
           cliType: "codex",
           hasUnread: false,
           requiresAttention: false,
+          pullRequestChecksRunning: false,
           lastActivityAt: Date.now(),
         }}
         isActive={false}
@@ -93,6 +95,7 @@ describe("ThreadListItem", () => {
       status: "completed" as const,
       hasUnread: true,
       requiresAttention: false,
+      pullRequestChecksRunning: false,
       highlight: "unread",
       colorClassName: "bg-info",
     },
@@ -101,6 +104,7 @@ describe("ThreadListItem", () => {
       status: "streaming" as const,
       hasUnread: true,
       requiresAttention: false,
+      pullRequestChecksRunning: false,
       highlight: "in-progress",
       colorClassName: "bg-info",
     },
@@ -109,6 +113,7 @@ describe("ThreadListItem", () => {
       status: "waiting_input" as const,
       hasUnread: true,
       requiresAttention: true,
+      pullRequestChecksRunning: false,
       highlight: "waiting-input",
       colorClassName: "bg-warning",
     },
@@ -117,6 +122,7 @@ describe("ThreadListItem", () => {
       status: "failed" as const,
       hasUnread: true,
       requiresAttention: true,
+      pullRequestChecksRunning: false,
       highlight: "failed",
       colorClassName: "bg-destructive",
     },
@@ -130,6 +136,7 @@ describe("ThreadListItem", () => {
           cliType: "codex",
           hasUnread,
           requiresAttention,
+          pullRequestChecksRunning: false,
           lastActivityAt: Date.now(),
         }}
         isActive={false}
@@ -155,6 +162,7 @@ describe("ThreadListItem", () => {
           cliType: "codex",
           hasUnread: true,
           requiresAttention: false,
+          pullRequestChecksRunning: false,
           lastActivityAt: Date.now(),
         }}
         isActive={false}
@@ -178,6 +186,7 @@ describe("ThreadListItem", () => {
           cliType: "codex",
           hasUnread: false,
           requiresAttention: false,
+          pullRequestChecksRunning: false,
           lastActivityAt: Date.now(),
         }}
         isActive
@@ -210,6 +219,7 @@ describe("ThreadListItem", () => {
           cliType: "codex",
           hasUnread: false,
           requiresAttention: true,
+          pullRequestChecksRunning: false,
           lastActivityAt: Date.now(),
         }}
         isActive
@@ -245,6 +255,7 @@ describe("ThreadListItem", () => {
           cliType: "codex",
           hasUnread: false,
           requiresAttention: false,
+          pullRequestChecksRunning: false,
           lastActivityAt: Date.now(),
         }}
         isActive={false}
@@ -272,6 +283,7 @@ describe("ThreadListItem", () => {
           cliType: "codex",
           hasUnread: false,
           requiresAttention: false,
+          pullRequestChecksRunning: false,
           lastActivityAt: Date.now(),
         }}
         isActive={false}
@@ -296,6 +308,7 @@ describe("ThreadListItem", () => {
           cliType: "codex",
           hasUnread: false,
           requiresAttention: false,
+          pullRequestChecksRunning: false,
           lastActivityAt: Date.now(),
         }}
         isActive={false}
@@ -322,6 +335,7 @@ describe("ThreadListItem", () => {
           cliType: "codex",
           hasUnread: false,
           requiresAttention: false,
+          pullRequestChecksRunning: false,
           lastActivityAt: Date.now(),
         }}
         isActive={false}
@@ -347,6 +361,7 @@ describe("ThreadListItem", () => {
           cliType: "codex",
           hasUnread: false,
           requiresAttention: false,
+          pullRequestChecksRunning: false,
           lastActivityAt: Date.now(),
         }}
         isActive={false}
@@ -371,6 +386,7 @@ describe("ThreadListItem", () => {
           cliType: "codex",
           hasUnread: false,
           requiresAttention: false,
+          pullRequestChecksRunning: false,
           lastActivityAt: Date.now(),
         }}
         isActive={false}
@@ -409,6 +425,7 @@ describe("ThreadListItem", () => {
           },
           hasUnread: false,
           requiresAttention: false,
+          pullRequestChecksRunning: false,
           lastActivityAt,
         }}
         isActive={false}
@@ -467,6 +484,7 @@ describe("ThreadListItem", () => {
       cliType: "codex" as const,
       hasUnread: false,
       requiresAttention: false,
+      pullRequestChecksRunning: false,
       lastActivityAt: Date.now(),
     };
 
@@ -509,6 +527,7 @@ describe("ThreadListItem", () => {
       cliType: "codex" as const,
       hasUnread: false,
       requiresAttention: false,
+      pullRequestChecksRunning: false,
       lastActivityAt: Date.now(),
     };
     for (const compactLayout of [true, false]) {
@@ -541,6 +560,7 @@ describe("ThreadListItem", () => {
       cliType: "codex" as const,
       hasUnread: false,
       requiresAttention: false,
+      pullRequestChecksRunning: false,
       lastActivityAt: Date.now(),
     };
     render(<ThreadListItem chat={chat} isActive={false} compactLayout organizationSlug="contoso" projectAlias="OS" showActions={false} />);
@@ -556,6 +576,7 @@ describe("ThreadListItem", () => {
       cliType: "claude-code" as const,
       hasUnread: false,
       requiresAttention: false,
+      pullRequestChecksRunning: false,
       lastActivityAt: Date.now(),
       kind: "group" as const,
       workflowRunId: "run_1" as ThreadRowChat["workflowRunId"],
@@ -601,6 +622,7 @@ describe("ThreadListItem", () => {
           cliType: "claude-code",
           hasUnread: false,
           requiresAttention: false,
+          pullRequestChecksRunning: false,
           lastActivityAt: Date.now(),
           kind: "group",
           workflowRunId: "run_1" as ThreadRowChat["workflowRunId"],
@@ -629,6 +651,7 @@ describe("ThreadListItem", () => {
           cliType: "claude-code",
           hasUnread: false,
           requiresAttention: false,
+          pullRequestChecksRunning: false,
           lastActivityAt: Date.now(),
           parentThreadId: "thread_1" as Id<"cliThreads">,
           workflowRunId: "run_1" as ThreadRowChat["workflowRunId"],
@@ -655,6 +678,7 @@ describe("ThreadListItem", () => {
           cliType: "codex",
           hasUnread: false,
           requiresAttention: false,
+          pullRequestChecksRunning: false,
           lastActivityAt: Date.now(),
         }}
         isActive={false}
@@ -679,6 +703,7 @@ describe("ThreadListItem", () => {
           cliType: "codex",
           hasUnread: false,
           requiresAttention: false,
+          pullRequestChecksRunning: false,
           lastActivityAt: Date.now(),
         }}
         isActive={false}
@@ -713,6 +738,7 @@ describe("ThreadListItem", () => {
           },
           hasUnread: false,
           requiresAttention: false,
+          pullRequestChecksRunning: false,
           lastActivityAt: Date.now(),
         }}
         isActive={false}
@@ -738,6 +764,7 @@ describe("ThreadListItem", () => {
       cliType: "codex" as const,
       hasUnread: false,
       requiresAttention: false,
+      pullRequestChecksRunning: false,
       lastActivityAt: Date.now(),
     };
     const { rerender } = render(
@@ -770,6 +797,7 @@ describe("ThreadListItem", () => {
           cliType: "codex",
           hasUnread: false,
           requiresAttention: false,
+          pullRequestChecksRunning: false,
           lastActivityAt: Date.now(),
         }}
         isActive={false}
@@ -794,6 +822,7 @@ describe("ThreadListItem", () => {
           agent: { name: "Reviewer", color: "#22c55e", isDeleted: false },
           hasUnread: false,
           requiresAttention: false,
+          pullRequestChecksRunning: false,
           lastActivityAt: Date.now(),
         }}
         isActive={false}
@@ -821,6 +850,7 @@ describe("ThreadListItem", () => {
           agent: { name: "Reviewer", color: "#22c55e", isDeleted: false },
           hasUnread: false,
           requiresAttention: false,
+          pullRequestChecksRunning: false,
           lastActivityAt: Date.now(),
         }}
         isActive={false}
@@ -848,6 +878,7 @@ describe("ThreadListItem", () => {
           agent: { name: "Reviewer", color: "#22c55e", isDeleted: false },
           hasUnread: false,
           requiresAttention: false,
+          pullRequestChecksRunning: false,
           lastActivityAt: Date.now(),
         }}
         isActive={false}
@@ -877,6 +908,7 @@ describe("ThreadListItem", () => {
           agent: { name: "Reviewer", color: "#22c55e", isDeleted: false },
           hasUnread: false,
           requiresAttention: false,
+          pullRequestChecksRunning: false,
           lastActivityAt: Date.now(),
         }}
         isActive={false}
@@ -911,6 +943,7 @@ describe("ThreadListItem", () => {
           cliType: "codex",
           hasUnread: false,
           requiresAttention: false,
+          pullRequestChecksRunning: false,
           lastActivityAt: Date.now(),
         }}
         isActive={false}
@@ -948,6 +981,7 @@ describe("ThreadListItem", () => {
           agent: { name: "Reviewer", color: "#22c55e", isDeleted: false },
           hasUnread: false,
           requiresAttention: false,
+          pullRequestChecksRunning: false,
           lastActivityAt: Date.now(),
         }}
         isActive={false}
@@ -978,6 +1012,7 @@ describe("ThreadListItem", () => {
           cliType: "codex",
           hasUnread: false,
           requiresAttention: false,
+          pullRequestChecksRunning: false,
           isDone: false,
           lastActivityAt: Date.now(),
         }}
@@ -1006,6 +1041,7 @@ describe("ThreadListItem", () => {
           cliType: "codex",
           hasUnread: false,
           requiresAttention: false,
+          pullRequestChecksRunning: false,
           lastActivityAt: Date.now(),
         }}
         isActive={false}
@@ -1037,6 +1073,7 @@ describe("ThreadListItem", () => {
           cliType: "codex",
           hasUnread: false,
           requiresAttention: false,
+          pullRequestChecksRunning: false,
           lastActivityAt: Date.now(),
         }}
         isActive={false}
@@ -1062,6 +1099,7 @@ describe("ThreadListItem", () => {
           cliType: "codex",
           hasUnread: false,
           requiresAttention: false,
+          pullRequestChecksRunning: false,
           lastActivityAt: Date.now(),
         }}
         isActive={false}
@@ -1088,6 +1126,7 @@ describe("ThreadListItem", () => {
           cliType: "codex",
           hasUnread: false,
           requiresAttention: false,
+          pullRequestChecksRunning: false,
           lastActivityAt: Date.now(),
         }}
         isActive={false}
@@ -1115,6 +1154,7 @@ describe("ThreadListItem", () => {
           cliType: "codex",
           hasUnread: false,
           requiresAttention: false,
+          pullRequestChecksRunning: false,
           lastActivityAt: Date.now(),
         }}
         isActive={false}
@@ -1142,6 +1182,7 @@ describe("ThreadListItem", () => {
           agent: { name: "Deleted agent", color: "#94a3b8", isDeleted: true },
           hasUnread: false,
           requiresAttention: false,
+          pullRequestChecksRunning: false,
           lastActivityAt: Date.now(),
         }}
         isActive={false}
@@ -1166,6 +1207,7 @@ describe("ThreadListItem", () => {
           cliType: "codex",
           hasUnread: false,
           requiresAttention: false,
+          pullRequestChecksRunning: false,
           isDone: false,
           lastActivityAt: Date.now(),
         }}
@@ -1210,6 +1252,7 @@ describe("ThreadListItem", () => {
           cliType: "codex",
           hasUnread: false,
           requiresAttention: false,
+          pullRequestChecksRunning: false,
           isDone: false,
           lastActivityAt: Date.now(),
         }}
@@ -1237,6 +1280,7 @@ describe("ThreadListItem", () => {
           cliType: "codex",
           hasUnread: false,
           requiresAttention: false,
+          pullRequestChecksRunning: false,
           isDone: true,
           lastActivityAt: Date.now(),
         }}
@@ -1280,6 +1324,7 @@ describe("ThreadListItem", () => {
           cliType: "codex",
           hasUnread: false,
           requiresAttention: false,
+          pullRequestChecksRunning: false,
           isDone: true,
           lastActivityAt: Date.now(),
         }}
@@ -1324,6 +1369,7 @@ describe("ThreadListItem", () => {
     cliType: "codex" as const,
     hasUnread: false,
     requiresAttention: false,
+    pullRequestChecksRunning: false,
     lastActivityAt: Date.now(),
   };
 
@@ -1445,6 +1491,7 @@ describe("ThreadListItem", () => {
           cliType: "codex",
           hasUnread: false,
           requiresAttention: false,
+          pullRequestChecksRunning: false,
           lastActivityAt: Date.now(),
         }}
         isActive={false}
@@ -1474,6 +1521,7 @@ describe("ThreadListItem", () => {
           cliType: "codex",
           hasUnread: false,
           requiresAttention: false,
+          pullRequestChecksRunning: false,
           lastActivityAt: Date.now(),
         }}
         isActive={false}
@@ -1500,6 +1548,7 @@ describe("ThreadListItem", () => {
           cliType: "codex",
           hasUnread: false,
           requiresAttention: false,
+          pullRequestChecksRunning: false,
           lastActivityAt: Date.now(),
         }}
         isActive={false}
@@ -1529,6 +1578,7 @@ describe("ThreadListItem", () => {
             cliType: "codex",
             hasUnread: false,
             requiresAttention: false,
+            pullRequestChecksRunning: false,
             lastActivityAt: Date.now(),
             ...chat,
           }}
@@ -1569,6 +1619,7 @@ describe("ThreadListItem", () => {
             cliType: "codex",
             hasUnread: false,
             requiresAttention: false,
+            pullRequestChecksRunning: false,
             lastActivityAt: Date.now(),
             ...chat,
           }}
@@ -1683,6 +1734,7 @@ describe("ThreadListItem", () => {
             cliType: "codex",
             hasUnread: false,
             requiresAttention: false,
+            pullRequestChecksRunning: false,
             lastActivityAt: Date.now(),
             ...chat,
           }}
@@ -1708,6 +1760,7 @@ describe("ThreadListItem", () => {
         cliType: "codex" as const,
         hasUnread: false,
         requiresAttention: false,
+        pullRequestChecksRunning: false,
         lastActivityAt: 1_000,
       };
       // Every other prop must keep its identity across the rerender, or the

@@ -104,12 +104,13 @@ const cliGroupChildValidator = v.object({
   // `doneAt` rides along as the sort key — `isDone` alone can't order them.
   isDone: v.boolean(),
   doneAt: v.optional(v.number()),
-  // The tab's status indicator (OS-1618). All three fields, not a pre-derived status,
+  // The tab's status indicator (OS-1618). All four fields, not a pre-derived status,
   // because the client folds them through the same `getThreadDisplayStatus` the list
   // uses — a tab must not become a fourth place that decides what "working" means.
   status: cliThreadStatusValidator,
   hasPendingInteraction: v.boolean(),
   requiresAttention: v.boolean(),
+  pullRequestChecksRunning: v.boolean(),
   // Derived here, not from `readAt` on the client, so that rule lives in one place.
   // For a settled tab it is the only thing the indicator can show.
   hasUnread: v.boolean(),
@@ -140,6 +141,7 @@ function toGroupChild(child: Doc<"cliThreads">): CliGroupChild {
     status: child.status,
     hasPendingInteraction: child.hasPendingInteraction ?? false,
     requiresAttention: requiresThreadAttention(child),
+    pullRequestChecksRunning: child.pullRequestChecksRunning === true,
     hasUnread: hasUnreadThreadActivity(child),
   };
 }

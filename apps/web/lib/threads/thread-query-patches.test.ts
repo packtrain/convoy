@@ -22,6 +22,7 @@ function makeLocalStore(values: {
     _id: Id<"cliThreads">;
     title: string;
     hasUnread: boolean;
+    pullRequestChecksRunning?: boolean;
     parentThreadId?: Id<"cliThreads">;
     containerChildCount?: number;
   };
@@ -31,6 +32,7 @@ function makeLocalStore(values: {
       title: string;
       lastActivityAt: number;
       hasUnread?: boolean;
+      pullRequestChecksRunning?: boolean;
     }>;
     totalRowCount: number;
   };
@@ -66,6 +68,19 @@ const group = {
 };
 
 describe("patchThreadQueries", () => {
+  test("Done clears running checks on both queries: it ends the watch", () => {
+    const { localStore, writes } = makeLocalStore({
+      detail: { ...detail, pullRequestChecksRunning: true },
+      group: { ...group, children: [{ ...group.children[0], pullRequestChecksRunning: true }, group.children[1]] },
+    });
+
+    patchThreadQueries(localStore, target, { isDone: true, doneAt: 42 });
+
+    const [detailWrite, groupWrite] = writes();
+    expect(detailWrite.value).toHaveProperty("pullRequestChecksRunning", false);
+    expect((groupWrite.value as typeof group).children[0]).toHaveProperty("pullRequestChecksRunning", false);
+  });
+
   test("patches the detail query and the matching group child", () => {
     const { localStore, writes } = makeLocalStore({ detail, group });
 
@@ -109,14 +124,14 @@ describe("patchThreadQueries", () => {
         name: "cli/threads/core:get",
         args: { threadId: "thread-1" },
         // `doneAt` is group-only — the detail item derives `isDone` server-side.
-        value: { ...detail, isDone: true },
+        value: { ...detail, isDone: true, pullRequestChecksRunning: false },
       },
       {
         name: "cli/threads/groups:getGroup",
         args: { containerId },
         value: {
           ...group,
-          children: [{ ...group.children[0], isDone: true, doneAt: 42 }, group.children[1]],
+          children: [{ ...group.children[0], isDone: true, doneAt: 42, pullRequestChecksRunning: false }, group.children[1]],
         },
       },
     ]);

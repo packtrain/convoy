@@ -23,6 +23,7 @@ type WatchStatusInputs = Pick<
   | "kind"
   | "childCount"
   | "childWatchStatus"
+  | "pullRequestChecksRunning"
 >;
 
 /** Absent `kind` = plain chat thread; set = group/workflowRun container (OS-1364). */
@@ -127,7 +128,11 @@ export function deriveThreadWatchStatus(thread: WatchStatusInputs): CliThreadWat
   }
   // Read state deliberately doesn't move a finished thread out of
   // needs_review — only the explicit done mark does (OS-1382).
-  return isThreadDone(thread) ? "done" : "needs_review";
+  if (isThreadDone(thread)) {
+    return "done";
+  }
+  // Not finished while its watched PR's checks still run (docs/specs/pull-request-watch.md).
+  return thread.pullRequestChecksRunning === true ? "running" : "needs_review";
 }
 
 /**

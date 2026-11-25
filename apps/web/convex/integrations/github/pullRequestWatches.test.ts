@@ -5,7 +5,7 @@ import { connectedProject, drain, fakePullRequest, fakeUserId, linkGithubAccount
 import { parseGithubEvent } from "./httpHandlers";
 import { WATCH_IDLE_CRON_MINUTES } from "./lib/constants";
 
-// Pull request watch, slices 1 to 3 (docs/specs/pull-request-watch.md).
+// Pull request watch, slices 1 to 4 (docs/specs/pull-request-watch.md).
 
 beforeEach(async () => {
   vi.useFakeTimers();
@@ -72,7 +72,11 @@ describe("parseGithubEvent", () => {
       provider: "github",
       github: { kind: "checks", installationId: 77, repositoryId: 1, headSha: "abc", numbers: [4] },
     });
-    expect(parseGithubEvent("check_run", { ...base, action: "created", check_run: { head_sha: "abc", pull_requests: [] } })).toBeNull();
+    // A check that starts, as on a rerun, is news too: the thread counts as Running while it runs (slice 4).
+    expect(parseGithubEvent("check_run", { ...base, action: "created", check_run: { head_sha: "abc", pull_requests: [] } })).toEqual({
+      provider: "github",
+      github: { kind: "checks", installationId: 77, repositoryId: 1, headSha: "abc", numbers: [] },
+    });
     expect(parseGithubEvent("status", { ...base, sha: "abc", state: "failure" })).toEqual({
       provider: "github",
       github: { kind: "checks", installationId: 77, repositoryId: 1, headSha: "abc", numbers: [] },
@@ -923,5 +927,165 @@ describe("round 1 review regressions (slice 3): who wakes the agent", () => {
     expect(message).toContain('maintainer commented: "Agreed"');
     expect(message).not.toContain("stranger");
     expect(message).not.toContain("drive-by");
+  });
+});
+
+describe("watch status (slice 4)", () => {
+  const passing = (id: number, name: string) => ({ id, name, status: "completed", conclusion: "success" });
+
+  /** A finished thread of the owner's watching PR #1, whose `test` check still runs. */
+  async function watchingSettled(status: "completed" | "failed" = "completed") {
+    const setup = await setupWatch();
+    const thread = await setup.ctx.cliThread(setup.user._id, setup.project._id, setup.profile._id, { status, pathId: "repo" });
+    await setup.watch("acme/repo-1#1", thread._id);
+    const bucket = async () => (await setup.t.run((run) => run.db.get("cliThreads", thread._id)))?.statusProjection?.watchTowerStatus;
+    return { ...setup, settled: thread._id, bucket };
+  }
+
+  test("a finished thread counts as Running while the watched PR's checks run; the flag clears when they finish", async () => {
+    const { github, t, bucket, settled } = await watchingSettled();
+    expect(await bucket()).toBe("running");
+    const flag = async () => (await t.run((run) => run.db.get("cliThreads", settled)))?.pullRequestChecksRunning;
+    expect(await flag()).toBe(true);
+    // Still running: no write. Finished: the flag clears, and the thread is Running only for the message that wakes it.
+    await checkRunCompleted(t, "head-1");
+    await drain(t);
+    expect(await flag()).toBe(true);
+    pull(github, 1).checkRuns = [failing(1, "lint"), passing(2, "test")];
+    await checkRunCompleted(t, "head-1");
+    await drain(t);
+    expect(await flag()).toBeUndefined();
+    expect((await t.run((run) => run.db.get("cliThreads", settled)))?.status).toBe("pending");
+  });
+
+  test("a thread that needs attention keeps its bucket while checks run", async () => {
+    const { bucket } = await watchingSettled("failed");
+    expect(await bucket()).toBe("failed");
+  });
+
+  test("unwatching puts the thread back", async () => {
+    const { asUser, settled, bucket } = await watchingSettled();
+    await asUser.mutation(api.integrations.github.pullRequestWatches.unwatch, { threadId: settled });
+    expect(await bucket()).toBe("needs_review");
+  });
+
+  test("Done ends the watch, so not done later is Needs review, not Running", async () => {
+    const { asUser, settled, bucket } = await watchingSettled();
+    await asUser.mutation(api.cli.threads.core.markDone, { threadId: settled });
+    expect(await bucket()).toBe("done");
+    await asUser.mutation(api.cli.threads.core.markNotDone, { threadId: settled });
+    expect(await bucket()).toBe("needs_review");
+  });
+
+  test("a merge or a disconnect puts the thread back", async () => {
+    const { github, t, bucket, asUser, project, repositoryLinkId, watch, ctx, user, profile } = await watchingSettled();
+    Object.assign(pull(github, 1), { state: "closed", merged: true, mergedBy: { id: fakeUserId("octocat"), login: "octocat" } });
+    await signedWebhook(t, "pull_request", { installation: { id: 77 }, repository: { id: 1 }, pull_request: { number: 1 } });
+    await drain(t);
+    expect(await bucket()).toBe("needs_review");
+
+    const second = await ctx.cliThread(user._id, project._id, profile._id, { status: "completed", pathId: "repo" });
+    Object.assign(pull(github, 1), { state: "open", merged: false });
+    await watch("acme/repo-1#1", second._id);
+    const secondBucket = async () => (await t.run((run) => run.db.get("cliThreads", second._id)))?.statusProjection?.watchTowerStatus;
+    expect(await secondBucket()).toBe("running");
+    await asUser.mutation(api.integrations.github.core.disconnect, { projectId: project._id, repositoryLinkId });
+    expect(await secondBucket()).toBe("needs_review");
+  });
+
+  /** A finished thread watching PR #1, whose checks all passed. */
+  async function watchingFinished() {
+    const setup = await setupWatch();
+    pull(setup.github, 1).checkRuns = [passing(1, "lint")];
+    const thread = await setup.ctx.cliThread(setup.user._id, setup.project._id, setup.profile._id, { status: "completed", pathId: "repo" });
+    await setup.watch("acme/repo-1#1", thread._id);
+    const read = () => setup.t.run((run) => run.db.get("cliThreads", thread._id));
+    return { ...setup, settled: thread._id, read };
+  }
+
+  test("a check that starts after the watch did, as on a rerun, puts the thread in Running", async () => {
+    const { github, t, read } = await watchingFinished();
+    expect((await read())?.statusProjection?.watchTowerStatus).toBe("needs_review");
+    pull(github, 1).checkRuns = [{ id: 3, name: "lint", status: "queued", conclusion: null }];
+    await signedWebhook(t, "check_run", { action: "created", installation: { id: 77 }, repository: { id: 1 }, check_run: { head_sha: "head-1", pull_requests: [] } });
+    await drain(t);
+    expect((await read())?.pullRequestChecksRunning).toBe(true);
+    expect((await read())?.statusProjection?.watchTowerStatus).toBe("running");
+  });
+
+  test("a push puts the thread in Running at once; the evaluation keeps it only while the new head's checks run", async () => {
+    const { github, t, read } = await watchingFinished();
+    const push = async (headSha: string) => {
+      await signedWebhook(t, "pull_request", { action: "synchronize", installation: { id: 77 }, repository: { id: 1 }, pull_request: { number: 1 } });
+      Object.assign(pull(github, 1), { headSha });
+      await drain(t, 2_000);
+    };
+    Object.assign(pull(github, 1), { checkRuns: [{ id: 4, name: "test", status: "queued", conclusion: null }] });
+    await push("head-1b");
+    expect((await read())?.statusProjection?.watchTowerStatus).toBe("running");
+    await drain(t);
+    expect((await read())?.pullRequestChecksRunning).toBe(true);
+    // A head with no checks at all: Running only until the evaluation reads it.
+    pull(github, 1).checkRuns = [];
+    await push("head-1c");
+    expect((await read())?.pullRequestChecksRunning).toBe(true);
+    await drain(t);
+    expect((await read())?.pullRequestChecksRunning).toBeUndefined();
+  });
+
+  test("a watched thread in a group: its tab carries the flag, and the group's bucket follows it", async () => {
+    const { asUser, ctx, user, project, profile, t, watch } = await setupWatch();
+    const source = await ctx.cliThread(user._id, project._id, profile._id, { status: "completed", pathId: "repo" });
+    const { containerId, threadId: added } = await asUser.mutation(api.cli.threads.groups.addThreadToGroup, {
+      sourceThreadId: source._id,
+      profileId: profile._id,
+      pathId: "repo",
+      cliType: "codex",
+      content: "Side task",
+    });
+    await asUser.mutation(api.cli.threads.core.remove, { threadId: added });
+    const groupBucket = async () => (await t.run((run) => run.db.get("cliThreads", containerId)))?.statusProjection?.watchTowerStatus;
+    expect(await groupBucket()).toBe("needs_review");
+    await watch("acme/repo-1#1", source._id);
+    expect(await groupBucket()).toBe("running");
+    const group = await asUser.query(api.cli.threads.groups.getGroup, { containerId });
+    expect(group?.children.find((child) => child._id === source._id)?.pullRequestChecksRunning).toBe(true);
+    await asUser.mutation(api.integrations.github.pullRequestWatches.unwatch, { threadId: source._id });
+    expect(await groupBucket()).toBe("needs_review");
+  });
+
+  test("unwatch clears a flag left without a watch", async () => {
+    const { asUser, ctx, user, project, profile, t } = await setupWatch();
+    const stuck = await ctx.cliThread(user._id, project._id, profile._id, { status: "completed", pathId: "repo", pullRequestChecksRunning: true });
+    await asUser.mutation(api.integrations.github.pullRequestWatches.unwatch, { threadId: stuck._id });
+    expect((await t.run((run) => run.db.get("cliThreads", stuck._id)))?.statusProjection?.watchTowerStatus).toBe("needs_review");
+  });
+
+  test("a thread with an older Done mark is refused too", async () => {
+    const { ctx, user, project, profile, watch } = await setupWatch();
+    const now = Date.now();
+    const legacy = await ctx.cliThread(user._id, project._id, profile._id, { status: "completed", pathId: "repo", doneAt: now, lastActivityAt: now });
+    await expect(watch("acme/repo-1#1", legacy._id)).rejects.toThrow("This thread is done.");
+  });
+
+  test("a push during a read of the old head keeps Running: the follow-up read decides", async () => {
+    const { github, t, read, watchRow, settled } = await watchingFinished();
+    const row = (await watchRow(settled))!;
+    const evaluateAt = Date.now() - 1;
+    await t.run((run) => run.db.patch("integrationPullRequestWatches", row._id, { evaluateAt }));
+    const token = { watchId: row._id, evaluateAt };
+    const target = await t.mutation(internal.integrations.github.pullRequestWatches.beginEvaluation, token);
+    Object.assign(pull(github, 1), { headSha: "head-1b", checkRuns: [{ id: 2, name: "test", status: "in_progress", conclusion: null }] });
+    await signedWebhook(t, "pull_request", { action: "synchronize", installation: { id: 77 }, repository: { id: 1 }, pull_request: { number: 1 } });
+    await drain(t, 1_000);
+    expect((await watchRow(settled))?.eventDuringRead).toBe(true);
+    await t.mutation(internal.integrations.github.pullRequestWatches.applyEvaluation, {
+      ...token,
+      generation: target!.generation,
+      read: { state: "open", headSha: "head-1", baseRef: "main", mergeable: "clean", checks: [{ key: "lint", name: "lint", state: "success", url: null }], authorId: null, comments: [] },
+    });
+    expect((await read())?.statusProjection?.watchTowerStatus).toBe("running");
+    await drain(t);
+    expect((await read())?.pullRequestChecksRunning).toBe(true);
   });
 });

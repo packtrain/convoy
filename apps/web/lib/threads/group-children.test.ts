@@ -14,6 +14,7 @@ function child(id: string, lastActivityAt: number, isDone = false): ThreadGroupC
     status: "completed",
     hasPendingInteraction: false,
     requiresAttention: false,
+    pullRequestChecksRunning: false,
     hasUnread: false,
   };
 }

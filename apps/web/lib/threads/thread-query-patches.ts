@@ -35,7 +35,10 @@ export function patchThreadQueries(
   target: ThreadPatchTarget,
   patch: ThreadItemPatch
 ): void {
-  const { doneAt, ...detailPatch } = patch;
+  const { doneAt, ...rest } = patch;
+  // Done ends the Pull request watch on the server, so its checks no longer show the thread as working.
+  const ended = patch.isDone === true ? { pullRequestChecksRunning: false } : {};
+  const detailPatch = { ...rest, ...ended };
   const detail = localStore.getQuery(api.cli.threads.core.get, { threadId: target.threadId });
   // The cache is keyed by the same id, so this only guards a mismatched
   // cached doc — cheap insurance against writing a patch onto the wrong row.
@@ -48,7 +51,7 @@ export function patchThreadQueries(
   // it, so patching one without the other would sort against a stale key.
   const childPatch: Partial<ThreadGroupChild> = {
     ...(patch.title !== undefined ? { title: patch.title } : {}),
-    ...(patch.isDone !== undefined ? { isDone: patch.isDone, doneAt } : {}),
+    ...(patch.isDone !== undefined ? { isDone: patch.isDone, doneAt, ...ended } : {}),
     // Children carry `hasUnread` and `requiresAttention` since OS-1618, so mark-read/unread and
     // attention acknowledgement land here too: the first drives the tab's unread dot, the second
     // is what `getThreadDisplayStatus` reads to decide whether a failed tab still shows a red

@@ -5,7 +5,8 @@ import { WATCH_EVALUATION_DELAY_MS, WATCH_EVALUATION_STALE_MS } from "./constant
 import { getStalestOpenPullRequest } from "./integrationPullRequestsRepo";
 import { getRepositoryById, updateRepositorySync } from "./integrationRepositoriesRepo";
 import { deactivateRepositoryLink, getActiveRepositoryLinkForRepository } from "./integrationRepositoryLinksRepo";
-import { deleteWatchesForProjectRepository, patchWatch } from "./integrationPullRequestWatchesRepo";
+import { getThreadById, setThreadPullRequestChecksRunning } from "../../../cli/threads/lib/cliThreadsRepo";
+import { deleteWatch, listWatchesForProjectRepository, patchWatch } from "./integrationPullRequestWatchesRepo";
 
 /** A reconciliation pass reads PRs updated since this far before its start time, for clock skew between GitHub and Convoy. */
 export const RECONCILE_MARGIN_MS = 5 * 60_000;
@@ -36,7 +37,7 @@ export async function startReconcile(
 /** Hide the link's content, obsolete its jobs, and schedule the retention purge. */
 export async function disconnectLink(ctx: MutationCtx, link: Doc<"integrationRepositoryLinks">, error?: string) {
   const { generation, deleteAfter } = await deactivateRepositoryLink(ctx, link, error);
-  await deleteWatchesForProjectRepository(ctx, link.projectId, link.repositoryId);
+  for (const watch of await listWatchesForProjectRepository(ctx, link.projectId, link.repositoryId)) await endWatch(ctx, watch);
   await ctx.scheduler.runAt(deleteAfter, internal.integrations.github.core.purge, { repositoryLinkId: link._id, generation });
   // An unfinished import dies with this link's generation; another project's link resumes it.
   const repository = await getRepositoryById(ctx, link.repositoryId);
@@ -48,6 +49,21 @@ export async function disconnectLink(ctx: MutationCtx, link: Doc<"integrationRep
       generation: heir.generation,
       target: { kind: "import", page: repository.importPage },
     });
+  }
+}
+
+/** Ends a watch; its thread no longer counts as Running for the PR's checks. */
+export async function endWatch(ctx: MutationCtx, watch: Doc<"integrationPullRequestWatches">): Promise<void> {
+  await deleteWatch(ctx, watch._id);
+  const thread = await getThreadById(ctx, watch.threadId);
+  if (thread) await setThreadPullRequestChecksRunning(ctx, thread, false);
+}
+
+/** A push: the new head's checks are about to run, so the threads count as Running until an evaluation reads them. */
+export async function markWatchesPushed(ctx: MutationCtx, watches: Doc<"integrationPullRequestWatches">[]): Promise<void> {
+  for (const watch of watches) {
+    const thread = await getThreadById(ctx, watch.threadId);
+    if (thread) await setThreadPullRequestChecksRunning(ctx, thread, true);
   }
 }
 

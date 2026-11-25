@@ -290,7 +290,7 @@ export const cliThreadStatusValidator = v.union(
 // state at the cliThreadsRepo write seams. Never write it directly — always via
 // deriveThreadWatchStatus (convex/cli/lib/watchStatus.ts).
 export const cliThreadWatchStatusValidator = v.union(
-  v.literal("running"), // streaming or pending
+  v.literal("running"), // streaming or pending, or settled while its watched PR's checks run
   v.literal("waiting_input"), // waiting_input with unacknowledged attention
   v.literal("failed"), // failed with unacknowledged attention
   v.literal("needs_review"), // finished (or attention acknowledged) and unread
