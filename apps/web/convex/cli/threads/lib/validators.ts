@@ -103,6 +103,8 @@ export const cliThreadItemValidator = v.object({
   requiresAttention: v.boolean(),
   // Explicitly marked done after the latest activity (OS-1382).
   isDone: v.boolean(),
+  // The watched PR's checks still run, so a settled row shows as working (docs/specs/pull-request-watch.md).
+  pullRequestChecksRunning: v.boolean(),
   associatedTask: v.optional(taskSummaryValidator),
   attachedPullRequest: v.optional(attachedPullRequestValidator),
   // Resolved Project agent binding display (OS-1138); deleted agents fail
@@ -123,6 +125,7 @@ export const watchTowerThreadItemValidator = v.object({
   hasUnread: v.boolean(),
   requiresAttention: v.boolean(),
   isDone: v.boolean(),
+  pullRequestChecksRunning: cliThreadItemValidator.fields.pullRequestChecksRunning,
   kind: cliThreadItemValidator.fields.kind,
   workflowRunId: cliThreadItemValidator.fields.workflowRunId,
   childCount: cliThreadItemValidator.fields.childCount,
@@ -167,6 +170,7 @@ export function toWatchTowerThreadItem(
     hasUnread: ownItem?.hasUnread ?? false,
     requiresAttention: section === "failed" || section === "waiting_input",
     isDone: thread.kind === undefined ? ownItem?.isDone ?? section === "done" : section === "done",
+    pullRequestChecksRunning: thread.pullRequestChecksRunning === true,
     kind: thread.kind,
     workflowRunId: thread.workflowRunId,
     childCount: thread.childCount,
@@ -248,6 +252,7 @@ export function toThreadItem(
     hasUnread: extra.hasUnread,
     requiresAttention: extra.requiresAttention,
     isDone: extra.isDone,
+    pullRequestChecksRunning: chat.pullRequestChecksRunning === true,
     ...(extra.associatedTask ? { associatedTask: extra.associatedTask } : {}),
     ...(extra.agent ? { agent: extra.agent } : {}),
     ...(extra.workflow ? { workflow: extra.workflow } : {}),

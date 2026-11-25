@@ -14,7 +14,7 @@ import {
   toAttachedPullRequest,
 } from "../../lib/contracts/github";
 import { ensure } from "../../lib/shared/ensure";
-import { getThreadById, setThreadAttachedPullRequest } from "../../cli/threads/lib/cliThreadsRepo";
+import { getThreadById, setThreadAttachedPullRequest, setThreadPullRequestChecksRunning } from "../../cli/threads/lib/cliThreadsRepo";
 import { errors } from "./errors";
 import {
   MAX_SYNC_ATTEMPTS,
@@ -36,14 +36,12 @@ import {
   requireConfig,
   toUserError,
 } from "./lib/github";
-import { scheduleWatchEvaluation } from "./lib/lifecycle";
+import { endWatch, scheduleWatchEvaluation } from "./lib/lifecycle";
 import { normalizeChecks, normalizeComment, normalizeMergeability, normalizePullRequest, normalizeReview, normalizeReviewComment, record, userId } from "./lib/parsers";
 import { findRepositoryLinkForProjectAndRepository, listActiveRepositoryLinksForProject } from "./lib/integrationRepositoryLinksRepo";
 import { findLinkedRepository, getRepositoryById } from "./lib/integrationRepositoriesRepo";
 import { findLinkedAccount } from "./lib/integrationLinkedAccountsRepo";
 import {
-  deleteWatch,
-  deleteWatchForThread,
   getWatchById,
   getWatchByThreadId,
   insertWatch,
@@ -251,7 +249,7 @@ async function requireWatchTarget(ctx: QueryCtx | MutationCtx, args: { threadId:
   // A watch's run would land between a workflow's steps, unseen by its engine.
   ensure(thread.workflowRunId === undefined).isTrue(errors.WATCH_WORKFLOW_THREAD);
   // The Done mark ends a watch (`patchThreadDone`), so it refuses one too.
-  ensure(thread.isMarkedDone === true).isFalse(errors.WATCH_THREAD_DONE);
+  ensure(thread.statusProjection?.isDone === true).isFalse(errors.WATCH_THREAD_DONE);
   const requested = args.pullRequest === undefined ? null : await ensure(parseAttachedPullRequest(args.pullRequest)).notNull(errors.PULL_REQUEST_URL_INVALID);
   const attached = thread.attachedPullRequest ?? null;
   if (requested && attached && requested.ref !== attached.ref) {
@@ -285,6 +283,7 @@ export const start = internalMutation({
     passedReported: v.boolean(),
     finishOwed: v.boolean(),
     conflicts: v.boolean(),
+    checksRunning: v.boolean(),
   },
   returns: v.object({ alreadyWatching: v.boolean() }),
   handler: async (ctx, args) => {
@@ -312,6 +311,7 @@ export const start = internalMutation({
       conflicts: args.conflicts || undefined,
       evaluatedAt: now,
     });
+    await setThreadPullRequestChecksRunning(ctx, thread, args.checksRunning);
     return { alreadyWatching: false };
   },
 });
@@ -365,6 +365,7 @@ export const watch = action({
       passedReported: read.passed !== undefined,
       finishOwed: failing.length > 0 && running.length > 0,
       conflicts: read.mergeable === "conflicting",
+      checksRunning: running.length > 0,
     });
     const line = ({ name, url }: { name: string; url: string | null }) => ({ name, url });
     return {
@@ -386,7 +387,10 @@ export const unwatch = mutation({
   returns: v.null(),
   handler: async (ctx, args) => {
     const thread = await requireOwnThread(ctx, args.threadId, args.apiKey);
-    await deleteWatchForThread(ctx, thread._id);
+    const watch = await getWatchByThreadId(ctx, thread._id);
+    if (watch) await endWatch(ctx, watch);
+    // Also a flag no watch holds any more, so it can't keep the thread in Running.
+    await setThreadPullRequestChecksRunning(ctx, thread, false);
     return null;
   },
 });
@@ -433,7 +437,7 @@ function watchedPullRequest(repository: Doc<"integrationRepositories">, watch: D
 /** Sends the watch's last message and ends it. */
 async function endWithMessage(ctx: MutationCtx, watch: Doc<"integrationPullRequestWatches">, content: string) {
   await ctx.runMutation(internal.cli.messages.sendForPullRequestWatch, { threadId: watch.threadId, content });
-  await deleteWatch(ctx, watch._id);
+  await endWatch(ctx, watch);
 }
 
 const evaluationTokenArgs = { watchId: v.id("integrationPullRequestWatches"), evaluateAt: v.number() };
@@ -463,7 +467,7 @@ export const beginEvaluation = internalMutation({
     if (!watch) return null;
     const live = await liveWatch(ctx, watch);
     if (!live) {
-      await deleteWatch(ctx, watch._id);
+      await endWatch(ctx, watch);
       return null;
     }
     return {
@@ -488,7 +492,7 @@ export const settleFailedEvaluation = internalMutation({
     if (readFailures >= MAX_SYNC_ATTEMPTS) {
       const live = await liveWatch(ctx, watch);
       if (!live) {
-        await deleteWatch(ctx, watch._id);
+        await endWatch(ctx, watch);
         return null;
       }
       const pullRequest = watchedPullRequest(live.repository, watch);
@@ -606,7 +610,7 @@ export const applyEvaluation = internalMutation({
     if (!watch) return null;
     const live = await liveWatch(ctx, watch);
     if (!live || live.link.generation !== args.generation) {
-      await deleteWatch(ctx, watch._id);
+      await endWatch(ctx, watch);
       return null;
     }
     const pullRequest = watchedPullRequest(live.repository, watch);
@@ -617,7 +621,7 @@ export const applyEvaluation = internalMutation({
       if (byId === null || byId !== (await watchAccountId(ctx, live.repository, live.thread.userId, read.authorId))) {
         await endWithMessage(ctx, watch, endedMessage(pullRequest, read));
       } else {
-        await deleteWatch(ctx, watch._id);
+        await endWatch(ctx, watch);
       }
       return null;
     }
@@ -654,12 +658,14 @@ export const applyEvaluation = internalMutation({
       });
       // The owner lost the project, or the thread's profile is gone.
       if (sent === null || last) {
-        await deleteWatch(ctx, watch._id);
+        await endWatch(ctx, watch);
         return null;
       }
     }
     // GitHub computes mergeability on a read like this one, so read again soon, once.
     const recheck = read.mergeable === "unknown" && watch.mergeableRecheck !== true;
+    // A push during the read may have set it for a head this read missed; the follow-up read decides a clear.
+    if (running || !watch.eventDuringRead) await setThreadPullRequestChecksRunning(ctx, live.thread, running);
     await finishEvaluation(
       ctx,
       watch,

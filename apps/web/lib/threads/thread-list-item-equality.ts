@@ -76,6 +76,7 @@ const THREAD_FIELD_CHECKS: ThreadFieldChecks = {
   attachedPullRequest: field("attachedPullRequest", areFlatValuesEqual),
   status: field("status"),
   hasPendingInteraction: field("hasPendingInteraction"),
+  pullRequestChecksRunning: field("pullRequestChecksRunning"),
   queueHeldAt: field("queueHeldAt"),
   cliType: field("cliType"),
   agent: field("agent", areFlatValuesEqual),

@@ -434,7 +434,8 @@ unread/attention aggregates `hasUnreadChildren`/`hasAttentionChildren`
 (OS-1475), and `originBranch` (OS-1476) so the list renders without per-row
 child queries. `aggregateStatus` precedence (OS-1476 Group status): any child
 failed → `failed`; else any child `waiting_input` or held →
-`needs_attention`; else any child streaming or pending → `running`; else
+`needs_attention`; else any child streaming or pending, or settled while its
+watched PR's checks run → `running`; else
 `idle`. Run containers mirror `workflowRun.status` instead of the child fold
 (running → `running`, needs_attention → `needs_attention`, terminal →
 `idle`), written by the runs domain at its own seams; the child-fold recompute

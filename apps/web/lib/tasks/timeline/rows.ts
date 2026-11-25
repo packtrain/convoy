@@ -78,6 +78,7 @@ export interface OwnTimelineThread {
   lastActivityAt: number;
   hasPendingInteraction?: boolean;
   requiresAttention: boolean;
+  pullRequestChecksRunning: boolean;
   hasUnread: boolean;
   isDone: boolean;
   workflowRunId?: Id<"workflowRuns">;

@@ -19,7 +19,7 @@ import {
   paginateRepositoriesByProviderIdentity,
   updateRepositorySync,
 } from "./lib/integrationRepositoriesRepo";
-import { scheduleWatchEvaluations, startReconcile } from "./lib/lifecycle";
+import { markWatchesPushed, scheduleWatchEvaluations, startReconcile } from "./lib/lifecycle";
 import { listWatchesForHead, listWatchesForPullRequest } from "./lib/integrationPullRequestWatchesRepo";
 import { listPullRequestsAfterNumber, upsertPullRequest } from "./lib/integrationPullRequestsRepo";
 import {
@@ -453,7 +453,9 @@ export const fanOutWebhook = internalMutation({
           });
         }
         // A comment only moves the PR's update time, which the reconcile pass picks up, so it schedules no sync.
-        await scheduleWatchEvaluations(ctx, await listWatchesForPullRequest(ctx, repository._id, event.number));
+        const watches = await listWatchesForPullRequest(ctx, repository._id, event.number);
+        if (event.kind === "pullRequest" && event.pushed) await markWatchesPushed(ctx, watches);
+        await scheduleWatchEvaluations(ctx, watches);
       }
       next = result;
     } else {

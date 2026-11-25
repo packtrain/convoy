@@ -37,8 +37,9 @@ export function parseGithubEvent(eventName: string | null, payload: unknown): Ve
   if (eventName === "pull_request") {
     const repositoryId = field(field(payload, "repository"), "id");
     const number = field(field(payload, "pull_request"), "number");
+    const pushed = field(payload, "action") === "synchronize" ? { pushed: true as const } : {};
     return typeof repositoryId === "number" && typeof number === "number"
-      ? { provider: "github", github: { kind: "pullRequest", installationId, repositoryId, number } }
+      ? { provider: "github", github: { kind: "pullRequest", installationId, repositoryId, number, ...pushed } }
       : null;
   }
   if (eventName === "check_suite" || eventName === "check_run" || eventName === "status") {
@@ -53,12 +54,11 @@ export function parseGithubEvent(eventName: string | null, payload: unknown): Ve
   return null;
 }
 
-/** A finished check suite or run, or a commit status, for Pull request watches (docs/specs/pull-request-watch.md). */
+/** A check suite or run that started or finished, or a commit status, for Pull request watches (docs/specs/pull-request-watch.md). */
 function parseChecksEvent(eventName: string, payload: unknown, installationId: number): VerifiedEvent | null {
   const repositoryId = field(field(payload, "repository"), "id");
   const subject = eventName === "status" ? payload : field(payload, eventName);
   const headSha = eventName === "status" ? field(payload, "sha") : field(subject, "head_sha");
-  if (eventName !== "status" && field(payload, "action") !== "completed") return null;
   if (typeof repositoryId !== "number" || typeof headSha !== "string") return null;
   const pulls = field(subject, "pull_requests");
   // GitHub lists PRs from any repository with this head; only this repository's are its own.

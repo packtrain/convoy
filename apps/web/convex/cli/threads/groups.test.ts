@@ -1060,6 +1060,7 @@ describe("getGroup (OS-1477)", () => {
       status: "completed",
       hasPendingInteraction: false,
       requiresAttention: false,
+      pullRequestChecksRunning: false,
       // Never opened, so the tab's dot is what says there is output to read.
       hasUnread: true,
     });

@@ -4,6 +4,9 @@ export interface ThreadDisplayStatusInput {
   status: ThreadStatus;
   hasPendingInteraction?: boolean;
   requiresAttention: boolean;
+  /** The watched PR's checks still run: a settled thread shows as working (docs/specs/pull-request-watch.md). */
+  // Required, so a payload that leaves it out fails to compile instead of showing a settled thread.
+  pullRequestChecksRunning: boolean;
 }
 
 /**
@@ -19,6 +22,7 @@ export function getThreadDisplayStatus({
   status,
   hasPendingInteraction,
   requiresAttention,
+  pullRequestChecksRunning,
 }: ThreadDisplayStatusInput): ThreadStatus {
   // A run parked on an approval/question is the user's turn, not "running";
   // this mirrors deriveThreadWatchStatus in the Convex watch-status helper.
@@ -33,8 +37,8 @@ export function getThreadDisplayStatus({
     (status === "failed" || status === "waiting_input") &&
     !requiresAttention
   ) {
-    return "completed";
+    return pullRequestChecksRunning ? "streaming" : "completed";
   }
 
-  return status;
+  return status === "completed" && pullRequestChecksRunning ? "streaming" : status;
 }

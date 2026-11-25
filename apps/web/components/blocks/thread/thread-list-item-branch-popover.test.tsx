@@ -30,6 +30,7 @@ const chat: ThreadRowChat = {
   cliType: "codex",
   hasUnread: false,
   requiresAttention: false,
+  pullRequestChecksRunning: false,
   lastActivityAt: 1_700_000_000_000,
 };
 

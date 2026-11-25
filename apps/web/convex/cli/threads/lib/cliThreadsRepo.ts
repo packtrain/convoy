@@ -1180,6 +1180,12 @@ export async function setThreadAttachedPullRequest(ctx: MutationCtx, threadId: I
   await ctx.db.patch("cliThreads", threadId, { attachedPullRequest: pullRequest });
 }
 
+/** Whether the watched PR's checks still run; writes only a flip, since every thread list reads this row. */
+export async function setThreadPullRequestChecksRunning(ctx: MutationCtx, thread: Doc<"cliThreads">, running: boolean): Promise<void> {
+  if ((thread.pullRequestChecksRunning === true) === running) return;
+  await patchThreadWithStatusProjection(ctx, thread._id, { pullRequestChecksRunning: running ? true : undefined });
+}
+
 /** Set or clear a task-less thread's own Checklist (OS-2293). */
 /** A retried Guide moved to another thread; this one no longer writes it. */
 export async function clearThreadPullRequestGuide(ctx: MutationCtx, threadId: Id<"cliThreads">): Promise<void> {
@@ -1340,6 +1346,8 @@ async function patchThreadDone(
       doneAt: patch.now,
       isMarkedDone: true,
       readAt: patch.now,
+      // Done ends the watch below, so its checks no longer hold the thread in Running.
+      pullRequestChecksRunning: undefined,
       ...(patch.acknowledgeAttention ? { attentionAcknowledgedAt: patch.now } : {}),
     },
     opts

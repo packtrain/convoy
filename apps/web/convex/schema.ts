@@ -1040,6 +1040,9 @@ export default defineSchema({
     // Sticky done mark (OS-2176): only an explicit not-done or a user turn
     // clears it. Unset on legacy marks, which still expire on newer activity.
     isMarkedDone: v.optional(v.boolean()),
+    // The watched pull request's checks still run (docs/specs/pull-request-watch.md#watch-status-slice-4).
+    // Written only when it flips; a Watch Tower bucket input.
+    pullRequestChecksRunning: v.optional(v.literal(true)),
     createdAt: v.number(),
     lastActivityAt: v.number(),
     isDeleted: v.boolean(),

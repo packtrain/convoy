@@ -72,7 +72,9 @@ attention. Design playground: `apps/web/app/playground/watch-tower/`.
      (`pending` + `processingState: idle`, i.e. no CLI connected or it hasn't
      picked the thread up) renders a muted "Waiting for agent" indicator
      instead of the Running spinner — client-side rendering only, same
-     bucket.
+     bucket. A settled, not-done thread whose watched pull request still
+     has checks running (`pullRequestChecksRunning`) is Running too, unless
+     it needs attention ([Pull request watch → Watch status](pull-request-watch.md#watch-status-slice-4)).
   2. **Waiting for your input** — status `waiting_input`, unacknowledged; or
      a running thread parked on a pending approval/question
      (`hasPendingInteraction`, see `docs/specs/cli-interactive-approvals.md`)
@@ -325,7 +327,8 @@ visibility does not grant transcript access or permission to control a run.
   bucket rule, attention rule, unread rule, and done rule) recomputes the
   whole `statusProjection` object inside `cliThreadsRepo` on every write that
   touches an input field (`status`, `readAt`, `attentionAcknowledgedAt`,
-  `doneAt`, `lastActivityAt`, `hasPendingInteraction`, `queueHeldAt`) via
+  `doneAt`, `lastActivityAt`, `hasPendingInteraction`, `queueHeldAt`,
+  `pullRequestChecksRunning`) via
   `patchThreadWithStatusProjection`. Any new repo write helper touching those
   fields must go through that helper — a bare `ctx.db.patch` desyncs the
   projection silently.

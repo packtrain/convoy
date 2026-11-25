@@ -98,6 +98,8 @@ export interface ThreadListItemData {
   agent?: ThreadAgentChipAgent;
   hasUnread: boolean;
   requiresAttention: boolean;
+  /** The watched PR's checks still run, so a settled row shows as working (docs/specs/pull-request-watch.md). */
+  pullRequestChecksRunning: boolean;
   /** Explicitly marked done after the latest activity (OS-1382); absent on surfaces without the enriched field. */
   isDone?: boolean;
   lastActivityAt: number;

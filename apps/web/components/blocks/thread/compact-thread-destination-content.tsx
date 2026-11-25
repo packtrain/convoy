@@ -11,6 +11,7 @@ type CompactThreadDestination = Pick<
   | "status"
   | "hasPendingInteraction"
   | "requiresAttention"
+  | "pullRequestChecksRunning"
   | "cliType"
   | "lastActivityAt"
   | "hasUnread"
