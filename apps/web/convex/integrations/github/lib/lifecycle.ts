@@ -55,11 +55,10 @@ export async function disconnectLink(ctx: MutationCtx, link: Doc<"integrationRep
 export async function scheduleWatchEvaluation(
   ctx: MutationCtx,
   watchId: Id<"integrationPullRequestWatches">,
-  at: number,
-  attempt?: number
+  at: number
 ): Promise<void> {
   await patchWatch(ctx, watchId, { evaluateAt: at, eventDuringRead: undefined });
-  await ctx.scheduler.runAt(at, internal.integrations.github.pullRequestWatches.evaluate, { watchId, evaluateAt: at, attempt });
+  await ctx.scheduler.runAt(at, internal.integrations.github.pullRequestWatches.evaluate, { watchId, evaluateAt: at });
 }
 
 /**

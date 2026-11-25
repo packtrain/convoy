@@ -23,6 +23,10 @@ export const WATCH_EVALUATION_DELAY_MS = 45_000;
 export const WATCH_EVALUATION_STALE_MS = 5 * 60_000;
 /** Watches one PR takes, so an event reaches every one in a transaction. */
 export const WATCHES_PER_PULL_REQUEST_MAX = 50;
+/** How often the cron looks for idle watches: missed webhooks, base-branch pushes. */
+export const WATCH_IDLE_CRON_MINUTES = 1;
+/** A watch is idle after this long with no finished evaluation. With the cron's minute and a mergeability recheck, news is read within 10 minutes. */
+export const WATCH_IDLE_MS = 8 * 60_000;
 
 export type GithubAppConfig = {
   appId: string;

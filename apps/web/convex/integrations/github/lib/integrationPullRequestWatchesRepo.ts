@@ -40,6 +40,14 @@ export async function listWatchesForHead(ctx: Ctx, repositoryId: Id<"integration
   return watches;
 }
 
+/** The watches no evaluation finished since `before`, oldest first: the cron's page. */
+export async function paginateWatchesEvaluatedBefore(ctx: Ctx, before: number, paginationOpts: { numItems: number; cursor: string | null }) {
+  return ctx.db
+    .query("integrationPullRequestWatches")
+    .withIndex("by_evaluatedAt", (q) => q.lt("evaluatedAt", before))
+    .paginate(paginationOpts);
+}
+
 export async function insertWatch(ctx: MutationCtx, watch: Omit<Watch, "_id" | "_creationTime">): Promise<Id<"integrationPullRequestWatches">> {
   return ctx.db.insert("integrationPullRequestWatches", watch);
 }
@@ -47,7 +55,9 @@ export async function insertWatch(ctx: MutationCtx, watch: Omit<Watch, "_id" | "
 export async function patchWatch(
   ctx: MutationCtx,
   watchId: Id<"integrationPullRequestWatches">,
-  patch: Partial<Pick<Watch, "headSha" | "failedChecks" | "evaluateAt" | "eventDuringRead" | "evaluatedAt">>
+  patch: Partial<
+    Pick<Watch, "headSha" | "failedChecks" | "passedReported" | "finishOwed" | "conflicts" | "evaluateAt" | "eventDuringRead" | "evaluatedAt" | "readFailures" | "mergeableRecheck">
+  >
 ): Promise<void> {
   await ctx.db.patch("integrationPullRequestWatches", watchId, patch);
 }
