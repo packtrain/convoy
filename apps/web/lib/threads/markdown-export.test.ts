@@ -118,6 +118,15 @@ describe("buildThreadMarkdown", () => {
     expect(markdown).toContain("Attachments: `screenshot.png` (214 KB)");
   });
 
+  test("labels a Pull request watch's message GitHub", () => {
+    const markdown = build({
+      envelopes: [envelope({ _id: "u1", role: "user", sentBy: { kind: "pullRequestWatch" } })],
+      userTextById: new Map([["u1", "Checks failed"]]),
+    });
+
+    expect(markdown).toContain("**GitHub** · 2026-08-14 15:30");
+  });
+
   test("lists an agent reply's attachments, including an attachment-only reply (OS-2091)", () => {
     const markdown = build({
       envelopes: [

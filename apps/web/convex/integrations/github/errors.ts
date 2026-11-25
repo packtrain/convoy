@@ -53,4 +53,13 @@ export const errors = {
   GUIDE_FAILURE_NOTE_REQUIRED: "Say why the guide could not be written.",
   GUIDE_PROMPT_TOO_LONG: "The Guide prompt is too long: at most 8,000 characters.",
   GUIDE_SUBMIT_INCOMPLETE: 'A guide needs "headSha" and "steps"; to report a failure, send a note instead.',
+  WATCH_THREAD_NOT_FOUND: "Thread not found",
+  WATCH_PULL_REQUEST_REQUIRED: "This thread has no attached pull request. Pass the pull request to watch.",
+  WATCH_NOT_CONNECTED: "Convoy can only watch pull requests in a repository connected to this project.",
+  WATCH_THREAD_DONE: "This thread is done. Convoy doesn't watch pull requests for a done thread.",
+  WATCH_WORKFLOW_THREAD: "Convoy doesn't watch pull requests from a workflow thread. Watch it from a thread outside the workflow.",
+  WATCH_LIMIT: "This pull request already has 50 watches. Stop one before starting another.",
+  WATCH_CONTAINER: "A thread group can't watch a pull request. Watch it from a thread in the group.",
+  watchOtherPullRequest: (name: string) => `This thread is attached to ${name}. Watch that pull request or start a new thread.`,
+  watchPullRequestEnded: (number: number, state: "closed" | "merged") => `Pull request #${number} is already ${state}.`,
 } as const;

@@ -8,9 +8,10 @@ person typed, in thread detail (OS-1631).
 - `apps/web/components/blocks/thread/message-sent-by-badge.tsx`
 - `apps/web/components/blocks/thread/thread-view/thread-message-list.tsx`
 
-The data is pre-existing: `cliMessages.sentBy` is written only by MCP
-`send_thread_message` and already reaches the client on
-`listEnvelopesByThread`. See [mcp-server.md](mcp-server.md) for the write path
+The data is pre-existing: `cliMessages.sentBy` is written by MCP
+`send_thread_message` (`kind: "thread"`) and by a Pull request watch
+(`kind: "pullRequestWatch"`, [pull-request-watch.md](pull-request-watch.md)),
+and already reaches the client on `listEnvelopesByThread`. See [mcp-server.md](mcp-server.md) for the write path
 and its guards.
 
 ## The category is "not you", not "an agent"
@@ -21,9 +22,10 @@ thread's agent posted it.
 
 The bubble treatment is deliberately framed as **"someone other than the
 viewer"** rather than "an agent", because teammate-sent messages on a shared
-thread will join the same category. Only the `sentBy.kind === "thread"` case is
-implemented; a teammate case widens the predicate rather than reopening the
-visual decision.
+thread will join the same category. The `thread` and `pullRequestWatch` kinds
+are implemented; a teammate case widens the predicate rather than reopening the
+visual decision. A Pull request watch's message has the same background, and
+its badge is a GitHub icon with the word "GitHub", not a link.
 
 ## Bubble background
 

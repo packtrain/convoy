@@ -34,7 +34,8 @@ function parseMessageLimit(value: string | undefined): number | undefined {
 }
 
 function formatMessage(message: MessageSummary): string {
-  const who = message.sentBy?.kind === "thread" ? `${message.role} (from thread)` : message.role;
+  const who =
+    message.sentBy?.kind === "thread" ? `${message.role} (from thread)` : message.sentBy?.kind === "pullRequestWatch" ? `${message.role} (from GitHub)` : message.role;
   const flags = [message.status, message.truncated ? "truncated" : undefined]
     .filter(Boolean)
     .join(" ");

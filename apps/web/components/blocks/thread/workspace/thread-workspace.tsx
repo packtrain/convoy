@@ -12,6 +12,7 @@ import {
 } from "react";
 import { useMutation, useQuery } from "convex/react";
 import {
+  Eye,
   FileDiff,
   FileText,
   GitPullRequest,
@@ -81,7 +82,7 @@ import { DoneThreadMenu, ThreadTabStrip } from "@/components/blocks/thread/threa
 import { WorkflowRunContainerView } from "@/components/blocks/workflows/workflow-run-container-view";
 import { WorkflowRunPanel } from "@/components/blocks/workflows/workflow-run-panel";
 import { EvidencePanel } from "@/components/blocks/evidence";
-import { AttachedPullRequestReader } from "@/components/blocks/integrations";
+import { AttachedPullRequestReader, usePullRequestWatch } from "@/components/blocks/integrations";
 import { WorkflowRunRail } from "@/components/blocks/workflows/workflow-run-rail";
 import type { ThreadTaskPaneRenderer } from "./thread-task-pane";
 import { buildTimelineRuns } from "@/lib/threads/run-timeline";
@@ -1453,6 +1454,8 @@ function ThreadWorkspaceBody({
   }, [chat, group, threadId]);
 
   const attachedPullRequest = chat?.attachedPullRequest;
+  // Only the owner sees a watch.
+  const pullRequestWatched = usePullRequestWatch(threadId, !readOnly && Boolean(attachedPullRequest));
   // Not URL-backed like the task tab, so it is a plain panel pick (OS-2405).
   const openPullRequestTab = () => {
     setActivePanel("pullRequest");
@@ -1634,7 +1637,8 @@ function ThreadWorkspaceBody({
           {
             id: "pullRequest" as const,
             label: `#${attachedPullRequest.number}`,
-            icon: <GitPullRequest className="size-4" />,
+            // The eye while Convoy watches the PR (docs/specs/pull-request-watch.md).
+            icon: pullRequestWatched ? <Eye className="size-4" /> : <GitPullRequest className="size-4" />,
           },
         ]
       : []),
@@ -1801,9 +1805,11 @@ function ThreadWorkspaceBody({
       <div className={cn("flex h-full min-h-0 flex-col", resolvedPanel !== "pullRequest" && "hidden")}>
         <AttachedPullRequestReader
           projectId={projectId}
+          threadId={threadId}
           pullRequest={attachedPullRequest}
           organizationSlug={params.organizationSlug}
           projectAlias={params.projectAlias}
+          canWatch={!readOnly}
         />
       </div>
     ) : null;

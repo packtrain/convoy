@@ -15,6 +15,7 @@ import { getProjectAgentById } from "../../../agents/lib/projectAgentsRepo";
 import { PINNED_THREADS_MAX, TASK_THREADS_MAX } from "../../../../lib/threads/constants";
 import { syncAgentThreadWorkById } from "./agentThreadWork";
 import { deleteCheckResultsOwnedByThread, moveThreadCheckResultsToTask } from "../../../checks/lib/checkResultsRepo";
+import { deleteWatchForThread } from "../../../integrations/github/lib/integrationPullRequestWatchesRepo";
 import { settleGuideRun } from "../../../integrations/github/lib/integrationPullRequestGuidesRepo";
 import { mergeLastUsedCli, type CliMessageSelection } from "../../lib/lastUsedCli";
 import { CLI_RUNTIME_LABELS } from "../../lib/runtimes/registry";
@@ -1343,6 +1344,8 @@ async function patchThreadDone(
     },
     opts
   );
+  // A message would undo Done, so Done ends the Pull request watch.
+  await deleteWatchForThread(ctx, threadId);
 }
 
 /**
@@ -1454,6 +1457,7 @@ export async function softDeleteThread(ctx: MutationCtx, threadId: Id<"cliThread
   const thread = await ctx.db.get("cliThreads", threadId);
   await ctx.db.patch("cliThreads", threadId, { isDeleted: true, deletedAt: now });
   await deleteCheckResultsOwnedByThread(ctx, threadId);
+  await deleteWatchForThread(ctx, threadId);
   await syncAgentThreadWorkById(ctx, threadId);
   if (!opts.inCascade) {
     await syncContainerDenorms(ctx, thread?.parentThreadId);

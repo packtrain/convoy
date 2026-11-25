@@ -519,18 +519,18 @@ export const cliMessageAttachmentMetadataValidator = v.object({
 export type CliMessageAttachmentMetadata = Infer<typeof cliMessageAttachmentMetadataValidator>;
 
 /**
- * Who sent a user message, when it was not a human (OS-1162) — set only by MCP
- * `send_thread_message`, naming the thread whose agent posted it. Absence keeps its
- * pre-existing meaning, so no backfill. `kind` is a union of one so a future
- * non-thread sender can widen it.
+ * Who sent a user message, when it was not a human (OS-1162): another thread's agent
+ * through MCP `send_thread_message`, or a Pull request watch (docs/specs/pull-request-watch.md).
+ * Absence means a human sent it.
  *
  * Not named `origin*`: on `cliThreads` that prefix already means "the container's
  * oldest live child".
  */
-export const cliMessageSentByValidator = v.object({
+export const cliMessageThreadSenderValidator = v.object({
   kind: v.literal("thread"),
   threadId: v.id("cliThreads"),
 });
+export const cliMessageSentByValidator = v.union(cliMessageThreadSenderValidator, v.object({ kind: v.literal("pullRequestWatch") }));
 export type CliMessageSentBy = Infer<typeof cliMessageSentByValidator>;
 
 // Normalized event for CLI message chunks (provider-agnostic semantic event)

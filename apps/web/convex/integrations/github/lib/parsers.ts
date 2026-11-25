@@ -271,6 +271,34 @@ export function normalizeMergeability(pr: Record<string, unknown>): Mergeability
   };
 }
 
+/** A head's check runs and commit statuses as one list. `appId` marks Convoy's own runs. */
+export function normalizeChecks(appId: string, checkRuns: unknown, status: unknown): PullRequestOverview["checks"] {
+  const runs = list(record(checkRuns).check_runs ?? []).map((value) => {
+    const run = record(value);
+    const output = typeof run.output === "object" && run.output !== null ? (run.output as Record<string, unknown>) : {};
+    return {
+      id: `run:${num(run.id)}`,
+      name: str(run.name),
+      state: checkRunState(run),
+      summary: text(output.title) || text(run.conclusion) || text(run.status),
+      url: text(run.html_url) || text(run.details_url) || null,
+      fromConvoy: String(record(run.app ?? {}).id) === appId,
+    };
+  });
+  const statuses = list(record(status).statuses ?? []).map((value) => {
+    const entry = record(value);
+    return {
+      id: `status:${num(entry.id)}`,
+      name: str(entry.context),
+      state: statusState(str(entry.state)),
+      summary: text(entry.description),
+      url: text(entry.target_url) || null,
+      fromConvoy: false,
+    };
+  });
+  return [...runs, ...statuses];
+}
+
 /** GitHub's PR, commits, reviews, comments, check runs, combined status, and compare, narrowed for the Overview. `appId` marks Convoy's own runs. */
 export function normalizeOverview(appId: string, raw: {
   pr: unknown;
@@ -285,29 +313,6 @@ export function normalizeOverview(appId: string, raw: {
   node: unknown;
 }): PullRequestOverview {
   const pr = record(raw.pr);
-  const checkRuns = list(record(raw.checkRuns).check_runs ?? []).map((value) => {
-    const run = record(value);
-    const output = typeof run.output === "object" && run.output !== null ? (run.output as Record<string, unknown>) : {};
-    return {
-      id: `run:${num(run.id)}`,
-      name: str(run.name),
-      state: checkRunState(run),
-      summary: text(output.title) || text(run.conclusion) || text(run.status),
-      url: text(run.html_url) || text(run.details_url) || null,
-      fromConvoy: String(record(run.app ?? {}).id) === appId,
-    };
-  });
-  const statuses = list(record(raw.status).statuses ?? []).map((value) => {
-    const status = record(value);
-    return {
-      id: `status:${num(status.id)}`,
-      name: str(status.context),
-      state: statusState(str(status.state)),
-      summary: text(status.description),
-      url: text(status.target_url) || null,
-      fromConvoy: false,
-    };
-  });
   return {
     headSha: str(record(pr.head).sha),
     baseRef: str(record(pr.base).ref),
@@ -328,7 +333,7 @@ export function normalizeOverview(appId: string, raw: {
         url: text(commit.html_url),
       };
     }),
-    checks: [...checkRuns, ...statuses],
+    checks: normalizeChecks(appId, raw.checkRuns, raw.status),
     // A pending review is the reviewer's unsubmitted draft; GitHub never shows it to others.
     reviews: list(raw.reviews).flatMap((value) => normalizeReview(value) ?? []),
     requestedReviewers: requestedReviewers(pr).users,

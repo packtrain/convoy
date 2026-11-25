@@ -61,6 +61,8 @@ Commands covered:
 - `convoy threads attach <threadId> [file...] --message-id <id> --session-id <id> [--inline] [--caption <text> ...] [--check <key> ...]`
 - `convoy threads attach-task <threadId> <task>`
 - `convoy threads attach-pr <threadId> <pullRequest>`
+- `convoy threads watch-pr <threadId> [<pullRequest>]`
+- `convoy threads unwatch-pr <threadId>`
 - `convoy threads submit-guide <threadId> <file|->` or `--failed --note <why>`
 - `convoy threads read-guide <threadId> [--base]`
 - `convoy threads checks <threadId>`
@@ -843,6 +845,16 @@ in the message link format (`cli-thread-message-links.md`). JSON output is
 `{ threadId, pullRequest, url }`. Errors
 (another PR attached, container, not a PR) exit nonzero without a success
 message. Rules: `github-integration.md` → Pull requests in threads.
+
+### `threads watch-pr` and `threads unwatch-pr`
+
+`convoy threads watch-pr <threadId> [<pullRequest>] [--json]` calls the
+`api.integrations.github.pullRequestWatches.watch` action, which attaches the
+PR when the thread has none and starts the watch. It prints the head, the
+failing and running checks, and conflicts; JSON output is the action's result.
+`convoy threads unwatch-pr <threadId> [--json]` calls
+`api.integrations.github.pullRequestWatches.unwatch`; JSON output is
+`{ threadId }`. Rules: `pull-request-watch.md`.
 
 ### `threads submit-guide`
 

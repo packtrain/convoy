@@ -16,6 +16,14 @@ export function syncRetryDelayMs(attempt: number): number {
   return 30_000 * 2 ** (attempt - 1);
 }
 
+// Pull request watch (docs/specs/pull-request-watch.md).
+/** Check events in this window become one evaluation: one read and at most one message. */
+export const WATCH_EVALUATION_DELAY_MS = 45_000;
+/** An evaluation still unfinished this long after its time died; the next event replaces it. */
+export const WATCH_EVALUATION_STALE_MS = 5 * 60_000;
+/** Watches one PR takes, so an event reaches every one in a transaction. */
+export const WATCHES_PER_PULL_REQUEST_MAX = 50;
+
 export type GithubAppConfig = {
   appId: string;
   slug: string;

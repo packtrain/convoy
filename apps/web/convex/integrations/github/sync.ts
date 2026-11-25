@@ -19,7 +19,8 @@ import {
   paginateRepositoriesByProviderIdentity,
   updateRepositorySync,
 } from "./lib/integrationRepositoriesRepo";
-import { startReconcile } from "./lib/lifecycle";
+import { scheduleWatchEvaluations, startReconcile } from "./lib/lifecycle";
+import { listWatchesForHead, listWatchesForPullRequest } from "./lib/integrationPullRequestWatchesRepo";
 import { listPullRequestsAfterNumber, upsertPullRequest } from "./lib/integrationPullRequestsRepo";
 import {
   syncContextValidator,
@@ -426,7 +427,7 @@ export const fanOutWebhook = internalMutation({
     const event = args.event.github;
     const paginationOpts = { numItems: PAGE_SIZE, cursor: args.cursor ?? null };
     let next: { isDone: boolean; continueCursor: string };
-    if (event.kind === "pullRequest") {
+    if (event.kind === "pullRequest" || event.kind === "checks") {
       const result = await paginateRepositoriesByProviderIdentity(
         ctx,
         { provider: "github", host: GITHUB_HOST, providerRepositoryId: event.repositoryId },
@@ -434,13 +435,21 @@ export const fanOutWebhook = internalMutation({
       );
       for (const repository of result.page) {
         const link = await getActiveRepositoryLinkForRepository(ctx, repository._id);
-        if (link && link.github.installationId === event.installationId) {
+        if (!link || link.github.installationId !== event.installationId) {
+          continue;
+        }
+        if (event.kind === "pullRequest") {
           await ctx.scheduler.runAfter(0, internal.integrations.github.sync.syncRepository, {
             repositoryId: repository._id,
             repositoryLinkId: link._id,
             generation: link.generation,
             target: { kind: "pullRequest", number: event.number },
           });
+          await scheduleWatchEvaluations(ctx, await listWatchesForPullRequest(ctx, repository._id, event.number));
+        } else {
+          // A fork's PR is found by its head alone; GitHub lists no PRs for it.
+          const byNumber = await Promise.all(event.numbers.map((number) => listWatchesForPullRequest(ctx, repository._id, number)));
+          await scheduleWatchEvaluations(ctx, [...byNumber.flat(), ...(await listWatchesForHead(ctx, repository._id, event.headSha))]);
         }
       }
       next = result;
