@@ -6,7 +6,7 @@ import { afterEach, beforeEach, describe, expect, test, vi } from "vitest";
 import { act, cleanup, fireEvent, render, renderHook, screen } from "@testing-library/react";
 import type { Id } from "@/convex/_generated/dataModel";
 import type { WorktreeOpState } from "@/lib/worktrees/hooks/use-worktree-op";
-import { useWorktreeHistory } from "@/lib/worktrees/hooks/use-worktree-history";
+import { clearHistoryCacheForTests, useWorktreeHistory } from "@/lib/worktrees/hooks/use-worktree-history";
 import { HistoryLayoutToggle, WorktreeHistoryView } from "./worktree-history";
 
 interface OpArgs {
@@ -60,6 +60,9 @@ const PATCH = (path: string) => ({ body: "", patch: `diff --git a/${path} b/${pa
 function done(result: unknown): WorktreeOpState {
   return { resultJson: JSON.stringify(result), error: null, loading: false, refresh: () => {} };
 }
+
+// The history cache is per tab; each test starts with an empty one.
+beforeEach(() => clearHistoryCacheForTests());
 
 const selections = vi.hoisted(() => [] as { hash: string | null; mode: string }[]);
 
@@ -1189,5 +1192,123 @@ describe("WorktreeHistoryView, Graph sidebar (OS-2536 feedback)", () => {
     expect(list.textContent).toBe("");
     expect(list.getAttribute("aria-pressed")).toBe("false");
     expect(screen.getByRole("button", { name: "Graph" }).getAttribute("aria-pressed")).toBe("true");
+  });
+});
+
+describe("useWorktreeHistory, cache across a remount (OS-2534 review)", () => {
+  const IDLE: WorktreeOpState = { resultJson: undefined, error: null, loading: false, refresh: () => {} };
+  const PENDING: WorktreeOpState = { ...IDLE, loading: true };
+  const NEWER = { commits: [commit("d", "newest", [hash("a")]), ...PAGE_1.commits] };
+
+  function mount() {
+    const firstRender: number[] = [];
+    const hook = renderHook(() => {
+      const history = useWorktreeHistory("profile_1" as Id<"cliProfiles">, "path_1", true);
+      firstRender.push(history.commits.length);
+      return history;
+    });
+    return { ...hook, firstRows: () => firstRender[0] };
+  }
+
+  beforeEach(() => {
+    ops.calls = [];
+    // Like the real op: a disabled op sends nothing and has no result.
+    ops.answer = (args) => (args.enabled ? done(args.cursor ? PAGE_2 : PAGE_1) : IDLE);
+  });
+
+  afterEach(() => {
+    cleanup();
+    vi.useRealTimers();
+  });
+
+  test("a remount within 60 s shows the rows at once and sends no gitLog", () => {
+    mount().unmount();
+    ops.calls = [];
+
+    const { result, firstRows } = mount();
+
+    expect(firstRows()).toBe(2);
+    expect(result.current.initialLoading).toBe(false);
+    expect(ops.calls.filter((call) => call.kind === "gitLog" && call.enabled)).toEqual([]);
+
+    act(() => result.current.loadMore());
+    expect(ops.calls.at(-1)).toMatchObject({ kind: "gitLog", cursor: PAGE_1.nextCursor, enabled: true });
+    expect(result.current.commits).toHaveLength(3);
+  });
+
+  test("a remount after 60 s shows the rows, fetches the first page behind them, and caches the result", () => {
+    vi.useFakeTimers({ toFake: ["Date"] });
+    mount().unmount();
+    vi.setSystemTime(Date.now() + 61_000);
+    ops.calls = [];
+    ops.answer = (args) => (args.enabled ? PENDING : IDLE);
+
+    const second = mount();
+
+    expect(second.firstRows()).toBe(2);
+    expect(second.result.current.refreshing).toBe(true);
+    expect(ops.calls.every((call) => call.kind === "gitLog" && call.cursor === undefined && call.enabled)).toBe(true);
+
+    ops.answer = (args) => (args.enabled ? done(NEWER) : IDLE);
+    second.rerender();
+    expect(second.result.current.commits.map((row) => row.subject)).toEqual(["newest", "second", "first"]);
+    second.unmount();
+    ops.calls = [];
+
+    const third = mount();
+    expect(third.firstRows()).toBe(3);
+    expect(ops.calls.filter((call) => call.enabled)).toEqual([]);
+  });
+
+  test("a failed Refresh keeps the cache's age, so the next remount fetches (CR round 1 #2)", () => {
+    vi.useFakeTimers({ toFake: ["Date"] });
+    const first = mount();
+    vi.setSystemTime(Date.now() + 61_000);
+    // useWorktreeOp keeps the last good result across a failed refresh.
+    ops.answer = (args) => (args.enabled ? { ...done(PAGE_1), error: "fatal: bad revision" } : IDLE);
+    act(() => first.result.current.refresh());
+    first.unmount();
+    ops.calls = [];
+    ops.answer = (args) => (args.enabled ? PENDING : IDLE);
+
+    mount();
+
+    expect(ops.calls.some((call) => call.kind === "gitLog" && call.enabled)).toBe(true);
+  });
+
+  test("a new run key while mounted renews nothing until its fetch succeeds (CR round 2 #1)", () => {
+    vi.useFakeTimers({ toFake: ["Date"] });
+    const at = (refreshKey: string) =>
+      renderHook((props: { refreshKey: string }) => useWorktreeHistory("profile_1" as Id<"cliProfiles">, "path_1", true, props.refreshKey), {
+        initialProps: { refreshKey },
+      });
+    const first = at("run-a");
+    vi.setSystemTime(Date.now() + 61_000);
+    first.rerender({ refreshKey: "run-b" });
+    ops.answer = (args) => (args.enabled ? { ...done(PAGE_1), error: "fatal: bad revision" } : IDLE);
+    act(() => first.result.current.refresh());
+    first.unmount();
+    ops.calls = [];
+    ops.answer = (args) => (args.enabled ? PENDING : IDLE);
+
+    at("run-b");
+
+    expect(ops.calls.some((call) => call.kind === "gitLog" && call.enabled)).toBe(true);
+  });
+
+  test("freshness counts from when History is enabled, not from the mount (CR round 1 #3)", () => {
+    vi.useFakeTimers({ toFake: ["Date"] });
+    mount().unmount();
+    let enabled = false;
+    const hook = renderHook(() => useWorktreeHistory("profile_1" as Id<"cliProfiles">, "path_1", enabled));
+    vi.setSystemTime(Date.now() + 61_000);
+    ops.calls = [];
+    ops.answer = (args) => (args.enabled ? PENDING : IDLE);
+
+    enabled = true;
+    hook.rerender();
+
+    expect(hook.result.current.commits).toHaveLength(2);
+    expect(ops.calls.some((call) => call.kind === "gitLog" && call.enabled)).toBe(true);
   });
 });

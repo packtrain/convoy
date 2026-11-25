@@ -2,9 +2,10 @@
  * @vitest-environment jsdom
  */
 import { useState } from "react";
-import { afterEach, describe, expect, test, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, test, vi } from "vitest";
 import { cleanup, fireEvent, render, screen } from "@testing-library/react";
 import type { Id } from "@/convex/_generated/dataModel";
+import { clearHistoryCacheForTests } from "@/lib/worktrees/hooks/use-worktree-history";
 import { WorktreeChangesPanel } from "./worktree-changes-panel";
 
 const state = vi.hoisted(() => ({
@@ -76,6 +77,9 @@ function panel(refreshKey: string | undefined, onMentionFile?: (path: string) =>
   return <Panel refreshKey={refreshKey} onMentionFile={onMentionFile} view={view} />;
 }
 
+// The history cache is per tab; each test starts with an empty one.
+beforeEach(() => clearHistoryCacheForTests());
+
 describe("WorktreeChangesPanel", () => {
   afterEach(() => {
     cleanup();
@@ -116,6 +120,17 @@ describe("WorktreeChangesPanel", () => {
 
     view.rerender(panel("refs/run-2/post", undefined, "history"));
     expect(state.refresh).toHaveBeenCalled();
+  });
+
+  test("History remounted after a new run fetches despite a fresh cache (OS-2534 CR round 1 #1)", () => {
+    render(panel("refs/run-1/post", undefined, "history")).unmount();
+    state.kinds = [];
+    render(panel("refs/run-1/post", undefined, "history")).unmount();
+    expect(state.kinds).not.toContain("gitLog");
+
+    render(panel("refs/run-2/post", undefined, "history"));
+
+    expect(state.kinds).toContain("gitLog");
   });
 
   test("History opens a commit in place and goes back to the list (OS-2535)", () => {

@@ -5,6 +5,7 @@ import { afterEach, beforeEach, describe, expect, test, vi } from "vitest";
 import { act, cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import type { Id } from "@/convex/_generated/dataModel";
 import { appRoute } from "@/lib/navigation/routes";
+import { clearHistoryCacheForTests } from "@/lib/worktrees/hooks/use-worktree-history";
 import { WorktreeChangesView } from "./worktree-changes-view";
 
 const state = vi.hoisted(() => ({
@@ -110,6 +111,9 @@ function onlineWithOneFile() {
   state.profile = { paths: [{ id: "path_1", path: "/tmp/x" }], isOnline: true, appVersion: "0.83.0" };
   state.changes = { resultJson: ONE_FILE_PATCH, loading: false, error: null, refresh: vi.fn() };
 }
+
+// The history cache is per tab; each test starts with an empty one.
+beforeEach(() => clearHistoryCacheForTests());
 
 describe("WorktreeChangesView", () => {
   beforeEach(() => {
