@@ -658,6 +658,7 @@ export function ThreadView({
         attachmentFileNames: message.attachments?.map(
           (attachment) => attachment.fileName
         ),
+        fromGithub: message.sentBy?.kind === "pullRequestWatch",
       }));
   }, [envelopes, isCliOffline, isQueueHeld, isThreadStreaming, userTextById]);
 

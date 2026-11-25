@@ -13,6 +13,7 @@ import { UserMessageText } from "@/components/blocks/thread/message-parts/compon
 import { Spinner } from "@/components/custom/spinner";
 import { Button } from "@/components/ui/button";
 import { HoverCard, HoverCardContent, HoverCardTrigger } from "@/components/ui/hover-card";
+import { MessageFromGithubBadge } from "@/components/blocks/thread/message-sent-by-badge";
 import type { Id } from "@/convex/_generated/dataModel";
 import { SlashCommandDisplayText } from "@/lib/slash-commands/display";
 import { cn } from "@/lib/utils";
@@ -27,6 +28,8 @@ export interface QueuedStripMessage {
   queueFirst?: boolean;
   /** File names of the message's attachments — fallback label + count badge (OS-1877). */
   attachmentFileNames?: string[];
+  /** Sent by a Pull request watch: the row keeps the GitHub badge it shows once processed. */
+  fromGithub?: boolean;
 }
 
 interface QueuedMessagesStripProps {
@@ -76,6 +79,7 @@ export function QueuedMessagesStrip({
             className="flex min-w-0 max-w-full items-center gap-2 px-3 py-1.5"
           >
             <ListEnd className="size-4 shrink-0 text-muted-foreground" />
+            {message.fromGithub && <MessageFromGithubBadge />}
             {message.text !== "" && fileNames.length > 0 && (
               <span
                 className="flex shrink-0 items-center gap-0.5 text-xs text-muted-foreground"

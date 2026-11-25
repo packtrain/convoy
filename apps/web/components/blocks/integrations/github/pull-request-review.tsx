@@ -5,7 +5,7 @@ import { useAction } from "convex/react";
 import type { FunctionArgs, FunctionReturnType } from "convex/server";
 import type { DiffLineAnnotation, SelectedLineRange, SelectionSide } from "@pierre/diffs";
 import { formatDistanceToNow } from "date-fns";
-import { ChevronRight, Pencil, SquareArrowOutUpRight, Trash2, X } from "lucide-react";
+import { ChevronRight, MessageSquare, Pencil, SquareArrowOutUpRight, Trash2, X } from "lucide-react";
 import { Spinner } from "@/components/custom/spinner";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Badge } from "@/components/ui/badge";
@@ -191,10 +191,12 @@ export function ReviewButton({ review, onJump }: { review: PullRequestReview; on
       size="sm"
       className="gap-1.5"
       disabled={review.blocker !== null && !review.connect}
-      title={review.connect ? undefined : (review.blocker ?? (count ? pendingLabel(count) : undefined))}
+      title={review.connect ? "Submit review" : (review.blocker ?? (count ? pendingLabel(count) : "Submit review"))}
       onClick={review.connect ?? undefined}
     >
-      Submit review
+      {/* Icon only in a narrow header, like Merge status. */}
+      <MessageSquare className="hidden @max-lg/pr-header:block" />
+      <span className="@max-lg/pr-header:sr-only">Submit review</span>
       {count ? (
         <>
           <Badge aria-hidden className="h-4 px-1.5 text-[10px] tabular-nums">

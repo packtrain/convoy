@@ -2,12 +2,13 @@
 
 import { useState } from "react";
 import { useAction, useMutation, useQuery } from "convex/react";
-import { Eye, EyeOff } from "lucide-react";
+import { Eye, Loader2 } from "lucide-react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { api } from "@/convex/_generated/api";
 import type { Id } from "@/convex/_generated/dataModel";
 import { showConvexErrorToast } from "@/lib/errors";
+import { cn } from "@/lib/utils";
 
 // Pull request watch in the thread sidebar (docs/specs/pull-request-watch.md).
 
@@ -17,18 +18,30 @@ export function usePullRequestWatch(threadId: Id<"cliThreads">, hasPullRequest: 
   return watch === undefined ? undefined : watch !== null;
 }
 
-/** The owner's eye in the Attached pull request tab: shows the watch and toggles it. */
-export function PullRequestWatchButton({ threadId }: { threadId: Id<"cliThreads"> }) {
+/** The owner's eye in the Attached pull request tab: shows the watch and toggles it. `disabledReason` blocks starting one. */
+export function PullRequestWatchButton({ threadId, disabledReason }: { threadId: Id<"cliThreads">; disabledReason?: string }) {
   const watching = usePullRequestWatch(threadId, true);
   const watch = useAction(api.integrations.github.pullRequestWatches.watch);
   const unwatch = useMutation(api.integrations.github.pullRequestWatches.unwatch);
-  const [busy, setBusy] = useState(false);
+  // The state a toggle asked for: busy until the watch query shows it, so the old state doesn't flash back.
+  // Scoped to its thread: the workspace keeps this button mounted across threads that share a PR.
+  const [target, setTarget] = useState<{ threadId: Id<"cliThreads">; watching: boolean } | null>(null);
+  const pending = target?.threadId === threadId ? target : null;
+  if (pending && pending.watching === watching) setTarget(null);
   if (watching === undefined) return null;
+  const busy = pending !== null;
+  const blockedReason = watching ? undefined : disabledReason;
   const label = watching
-    ? "Watching: Convoy messages this thread when checks fail. Click to stop"
-    : "Watch: message this thread when checks fail";
+    ? "Watching pull request: Convoy messages this thread about checks, conflicts, reviews, and merges. Click to stop"
+    : "Watch pull request: message this thread about checks, conflicts, reviews, and merges";
   const toggle = () => {
-    setBusy(true);
+    if (busy) return;
+    // A tap shows the reason too: touch has no tooltip.
+    if (blockedReason) {
+      toast.info(blockedReason);
+      return;
+    }
+    setTarget({ threadId, watching: !watching });
     const request = watching
       ? unwatch({ threadId })
       : watch({ threadId }).then(({ failingChecks }) => {
@@ -38,9 +51,10 @@ export function PullRequestWatchButton({ threadId }: { threadId: Id<"cliThreads"
             toast.info(`Watching. ${failingChecks.length} ${failingChecks.length === 1 ? "check already fails" : "checks already fail"}, and Convoy reports only new failures: ${names}`);
           }
         });
-    void request
-      .catch((error: unknown) => showConvexErrorToast(error, watching ? "Could not stop watching" : "Could not watch the pull request"))
-      .finally(() => setBusy(false));
+    void request.catch((error: unknown) => {
+      setTarget((current) => (current?.threadId === threadId ? null : current));
+      showConvexErrorToast(error, watching ? "Could not stop watching" : "Could not watch the pull request");
+    });
   };
   return (
     <Button
@@ -48,12 +62,18 @@ export function PullRequestWatchButton({ threadId }: { threadId: Id<"cliThreads"
       size="icon-sm"
       aria-label={label}
       aria-pressed={watching}
-      title={label}
-      disabled={busy}
+      // aria-disabled, not disabled: a disabled button drops keyboard focus.
+      aria-disabled={busy || blockedReason !== undefined}
+      aria-busy={busy}
+      aria-description={blockedReason}
+      title={blockedReason ?? label}
       onClick={toggle}
-      className={watching ? "text-foreground" : "text-muted-foreground"}
+      className={cn(
+        "aria-disabled:cursor-default aria-disabled:opacity-50 aria-pressed:bg-accent",
+        watching ? "text-foreground" : "text-muted-foreground"
+      )}
     >
-      {watching ? <Eye /> : <EyeOff />}
+      {busy ? <Loader2 className="animate-spin" /> : <Eye />}
     </Button>
   );
 }

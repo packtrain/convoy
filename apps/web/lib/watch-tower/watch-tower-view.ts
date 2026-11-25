@@ -26,9 +26,9 @@ export const WATCH_TOWER_SECTIONS: ReadonlyArray<Readonly<{
   {
     status: "running",
     title: "Running",
-    description: "Agents currently working.",
+    description: "Agents working, and PR checks running.",
     teamTitle: "Running",
-    teamDescription: "Agents currently working.",
+    teamDescription: "Agents working, and PR checks running.",
   },
   {
     status: "waiting_input",

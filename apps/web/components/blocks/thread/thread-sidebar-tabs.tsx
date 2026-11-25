@@ -56,6 +56,8 @@ export type ThreadChangesView =
 export interface ThreadTab<Id extends string = string> {
   id: Id;
   label: string;
+  /** Accessible name and tooltip when the icon carries meaning the label lacks ("Watched #7"). */
+  ariaLabel?: string;
   icon?: ReactNode;
   /**
    * Rendered inside the tab, before its label, as a sibling of the tab button
@@ -204,7 +206,8 @@ export function ThreadTabNode<Id extends string>({
           "flex min-w-0 flex-1 items-center gap-1.5 self-stretch",
           tab.disabled ? "cursor-not-allowed" : "cursor-pointer"
         )}
-        title={tab.disabled ? (tab.disabledReason ?? tab.label) : tab.label}
+        aria-label={tab.ariaLabel}
+        title={tab.disabled ? (tab.disabledReason ?? tab.label) : (tab.ariaLabel ?? tab.label)}
       >
         {tab.icon ? (
           <span data-slot="thread-tab-icon" className="flex shrink-0 items-center">

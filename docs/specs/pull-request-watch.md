@@ -45,6 +45,17 @@ GitHub App's webhooks instead.
   from the eye is `watch-pr` without `<pullRequest>`; a failure shows as a
   toast. When checks already fail, a toast names them and says the watch
   reports only new failures, since the agent is not told about them.
+- The eye's label names what the watch reports: checks, conflicts, reviews,
+  and merges. It keeps keyboard focus while a request runs (`aria-disabled`,
+  a spinner in its place until the watch shows the new state). On a Done
+  thread it is disabled and keeps its name; the reason, "Mark this thread
+  not done to watch its pull request", is its description and tooltip, and
+  a tap shows it as a toast, since touch has no tooltip. A workflow lane
+  thread has no eye, since the server refuses it. The watched tab's
+  accessible name and tooltip read "Watched #482".
+- In a narrow reader header (the thread sidebar, a phone), Merge status and
+  Submit review collapse to icons, so the title, the eye, Refresh, and Open
+  on GitHub stay in view.
 - The `convoy` skill tells agents: after opening a PR for the thread's work,
   run `convoy threads watch-pr "$CONVOY_THREAD_ID" <url>` and end the turn.
   The user can also ask for it ("babysit the PR").
@@ -151,7 +162,8 @@ Look into each item and act on it as your task requires. The watch stays on, so 
 - `cliMessages.sentBy` gets a second kind, `{ kind: "pullRequestWatch" }`.
   The bubble uses the foreign background
   ([agent-sent messages](cli-thread-agent-sent-messages.md)) and the badge
-  reads "GitHub".
+  reads "GitHub", in the history and in the queued strip above the composer
+  while the message waits for the CLI.
 
 ## When a watch ends
 

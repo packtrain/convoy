@@ -42,7 +42,7 @@ export function MessageSentByBadge({
 export function MessageFromGithubBadge() {
   return (
     <span
-      className="flex items-center gap-1 text-xs text-muted-foreground"
+      className="flex shrink-0 items-center gap-1 text-xs text-muted-foreground"
       title="Sent by Convoy's watch on this thread's pull request"
     >
       <Github className="size-3.5" />

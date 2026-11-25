@@ -18,6 +18,7 @@ export function AttachedPullRequestReader({
   organizationSlug,
   projectAlias,
   canWatch,
+  watchDisabledReason,
 }: {
   projectId: Id<"projects">;
   threadId: Id<"cliThreads">;
@@ -26,6 +27,8 @@ export function AttachedPullRequestReader({
   projectAlias: string;
   /** Only the thread owner sees and toggles the Pull request watch. */
   canWatch: boolean;
+  /** Why the owner can't start a watch now, e.g. the thread is Done. */
+  watchDisabledReason?: string;
 }) {
   const status = useIntegrationStatus(projectId);
   if (status === undefined) return <PullRequestReaderSkeleton />;
@@ -62,7 +65,7 @@ export function AttachedPullRequestReader({
       titleHref={appRoute.projectPullRequest(organizationSlug, projectAlias, connection.repositoryId, pullRequest.number)}
       organizationSlug={organizationSlug}
       projectAlias={projectAlias}
-      headerAction={canWatch ? <PullRequestWatchButton threadId={threadId} /> : undefined}
+      headerAction={canWatch ? <PullRequestWatchButton threadId={threadId} disabledReason={watchDisabledReason} /> : undefined}
     />
   );
 }
