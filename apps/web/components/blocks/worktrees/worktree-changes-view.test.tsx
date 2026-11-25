@@ -89,7 +89,12 @@ vi.mock("@/components/blocks/thread/thread-mobile-back-button", () => ({
 }));
 
 vi.mock("@/components/blocks/thread/thread-workspace-split-pane", () => ({
-  ThreadWorkspaceSplitPane: ({ children }: { children: React.ReactNode }) => <div>{children}</div>,
+  ThreadWorkspaceSplitPane: ({ children, sidebarHeader }: { children: React.ReactNode; sidebarHeader?: React.ReactNode }) => (
+    <div data-testid="split-pane">
+      {sidebarHeader}
+      {children}
+    </div>
+  ),
 }));
 
 const ONE_FILE_PATCH = JSON.stringify({
@@ -350,6 +355,17 @@ describe("WorktreeChangesView", () => {
     // An implicit grid column is auto-sized: the longest diff line would set the width
     // of every row, header included, and the phone viewport clips them.
     expect(container.querySelector("main")?.className).toContain("grid-cols-[minmax(0,1fr)]");
+  });
+
+  test("the header spans the file tree; its Files header sits level with the toolbar", () => {
+    onlineWithOneFile();
+    mobile.value = false;
+    render(<WorktreeChangesView profileId={"profile_1" as Id<"cliProfiles">} pathId="path_1" />);
+
+    const split = screen.getByTestId("split-pane");
+    expect(split.contains(screen.getByRole("banner"))).toBe(false);
+    expect(split.contains(screen.getByRole("group", { name: "Worktree view" }))).toBe(true);
+    expect(split.contains(screen.getByRole("button", { name: "Close files" }))).toBe(true);
   });
 
   test("the header menu removes a clean worktree, then leaves its view (OS-2459)", async () => {

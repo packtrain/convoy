@@ -3,12 +3,13 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useAction } from "convex/react";
 import { File as FileView } from "@pierre/diffs/react";
-import { ArrowUpRight, X } from "lucide-react";
+import { ArrowUpRight } from "lucide-react";
 import { api } from "@/convex/_generated/api";
 import type { Id } from "@/convex/_generated/dataModel";
 import { ThreadWorkspaceSplitPane } from "@/components/blocks/thread/thread-workspace-split-pane";
 import { ChangesViewToggles } from "@/components/custom/diff/changes-view-toggles";
 import { FileTabStrip } from "@/components/custom/diff/file-tab-strip";
+import { FileTreeHeader } from "@/components/custom/diff/file-tree-pane";
 import { usePatchDiffOptions } from "@/components/custom/diff/patch-file-sections";
 import { WorktreeFileTree } from "@/components/custom/diff/worktree-file-tree";
 import { Button } from "@/components/ui/button";
@@ -134,14 +135,7 @@ export function PullRequestChanges({
       onCloseSidebar={() => setTreeOpen(false)}
       sidebarTitle="Files"
       sidebarSide={treeSide}
-      sidebarHeader={
-        <div className="flex h-[41px] items-center justify-between border-b px-3 text-xs font-medium">
-          Files
-          <Button variant="ghost" size="icon-sm" aria-label="Close files" onClick={() => setTreeOpen(false)}>
-            <X />
-          </Button>
-        </div>
-      }
+      sidebarHeader={<FileTreeHeader onClose={() => setTreeOpen(false)} />}
       sidebarContent={
         <WorktreeFileTree
           files={summaries}

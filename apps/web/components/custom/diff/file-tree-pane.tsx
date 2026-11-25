@@ -1,6 +1,8 @@
 "use client";
 
 import type { ReactNode, RefObject } from "react";
+import { X } from "lucide-react";
+import { Button } from "@/components/ui/button";
 import { SidebarResizeHandle } from "@/components/custom/sidebar-resize-handle";
 import { getLeftAnchoredWidth, useResizePanel } from "@/hooks/ui/use-resize-panel";
 import { useFileTreeSide } from "@/lib/threads/changes-view-prefs";
@@ -34,10 +36,25 @@ export function FileTreePane({
       />
       <aside
         aria-label="Changed files"
-        className={cn("h-full overflow-auto border-border", left ? "border-r" : "border-l")}
+        className={cn("flex h-full flex-col border-border", left ? "border-r" : "border-l")}
       >
-        {children}
+        <FileTreeHeader />
+        <div className="min-h-0 flex-1 overflow-auto">{children}</div>
       </aside>
+    </div>
+  );
+}
+
+/** The "Files" row atop every changed-files tree; 41px and bg-card to match the changes toolbar. */
+export function FileTreeHeader({ onClose }: { onClose?: () => void }) {
+  return (
+    <div className="flex h-[41px] shrink-0 items-center justify-between border-b border-border bg-card px-3 text-xs font-medium">
+      Files
+      {onClose && (
+        <Button variant="ghost" size="icon-sm" className="cursor-pointer" aria-label="Close files" onClick={onClose}>
+          <X />
+        </Button>
+      )}
     </div>
   );
 }

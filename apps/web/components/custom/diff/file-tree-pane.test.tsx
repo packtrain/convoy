@@ -41,3 +41,15 @@ test("on the right by default, the handle grows it to the left", () => {
   fireEvent.keyDown(handle, { key: "ArrowLeft" });
   expect(Number(handle.getAttribute("aria-valuenow"))).toBeGreaterThan(before);
 });
+
+test("the pane opens with the same Files header as the other file trees", () => {
+  render(<Host />);
+  const aside = screen.getByRole("complementary", { name: "Changed files" });
+  expect(aside.firstElementChild?.textContent).toBe("Files");
+});
+
+test("the Files header shares the changes toolbar's bg-card, since they sit on one line", () => {
+  render(<Host />);
+  const aside = screen.getByRole("complementary", { name: "Changed files" });
+  expect(aside.firstElementChild?.className).toContain("bg-card");
+});
