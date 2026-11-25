@@ -289,8 +289,9 @@ A review thread has only the first. An agent's fix branch may have both,
 even for the same PR: the badge reports what the branch opened, and the
 sidebar tab is the PR the member attached, so both stay. The attached PR's
 live state shows on its pill (the tab shows its number) and never changes the
-thread: merging does not mark it Done. Making that configurable, and waking the agent on PR events, belongs
-with OS-2173. A sidebar PRs tab with drag and drop onto the composer is not
+thread: merging does not mark it Done. Making that configurable belongs
+with OS-2173. Waking the agent on PR events is
+[Pull request watch](pull-request-watch.md). A sidebar PRs tab with drag and drop onto the composer is not
 planned until it shows a need the "+" picker doesn't cover.
 
 ## GitHub accounts and permissions
