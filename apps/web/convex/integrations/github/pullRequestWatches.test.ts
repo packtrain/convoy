@@ -1,10 +1,11 @@
 /// <reference types="vite/client" />
 import { afterEach, beforeEach, describe, expect, test, vi } from "vitest";
 import { api, internal } from "../../_generated/api";
-import { connectedProject, drain, fakePullRequest, signedWebhook, stubGithubAppEnv, type FakeGithub } from "../../../convex-testing/github";
+import { connectedProject, drain, fakePullRequest, fakeUserId, linkGithubAccount, signedWebhook, stubGithubAppEnv, type FakeGithub } from "../../../convex-testing/github";
 import { parseGithubEvent } from "./httpHandlers";
+import { WATCH_IDLE_CRON_MINUTES } from "./lib/constants";
 
-// Pull request watch, slice 1 (docs/specs/pull-request-watch.md).
+// Pull request watch, slices 1 and 2 (docs/specs/pull-request-watch.md).
 
 beforeEach(async () => {
   vi.useFakeTimers();
@@ -138,8 +139,9 @@ describe("waking the agent on failed checks", () => {
     expect(reads() - before).toBe(1);
     const [message] = await watchMessages();
     expect(message).toContain("Update on pull request #1 (https://github.com/acme/repo-1/pull/1), which Convoy is watching for this thread:");
-    expect(message).toContain("- Checks failed on head-1:\n  - test https://github.com/runs/2\n");
-    expect(message).not.toContain("lint");
+    // Every check finished too, so one list carries every failure.
+    expect(message).toContain("- Every check finished on head-1, and these still fail:\n  - lint https://github.com/runs/1\n  - test https://github.com/runs/2\n");
+    expect(message).not.toContain("Checks failed");
     // The same state again reports nothing.
     await checkRunCompleted(t, "head-1");
     await drain(t);
@@ -192,9 +194,10 @@ describe("when a watch ends", () => {
     expect(await watchRow(second)).toBeNull();
   });
 
-  test("merging ends it without a message", async () => {
+  test("the watch's account merging ends it without a message", async () => {
     const { github, t, watchRow, watchMessages } = await watching();
-    Object.assign(pull(github, 1), { state: "closed", merged: true });
+    // No Linked GitHub account, so the watch's account is the PR's author.
+    Object.assign(pull(github, 1), { state: "closed", merged: true, mergedBy: { id: fakeUserId("octocat"), login: "octocat" } });
     await signedWebhook(t, "pull_request", { installation: { id: 77 }, repository: { id: 1 }, pull_request: { number: 1 } });
     await drain(t);
     expect(await watchRow()).toBeNull();
@@ -291,7 +294,10 @@ describe("round 1 review regressions", () => {
     expect((await watchRow())?.evaluateAt).toBe(evaluateAt);
     // The read finishes with what it saw before the event, then the follow-up reads the news.
     const generation = await t.run(async (run) => (await run.db.query("integrationRepositoryLinks").first())!.generation);
-    const checks = [{ key: "lint", name: "lint", state: "failure" as const, url: null }];
+    const checks = [
+      { key: "lint", name: "lint", state: "failure" as const, url: null },
+      { key: "test", name: "test", state: "pending" as const, url: null },
+    ];
     const read = { state: "open" as const, headSha: "head-1", baseRef: "main", mergeable: "clean" as const, checks };
     await t.mutation(internal.integrations.github.pullRequestWatches.applyEvaluation, { watchId: row._id, evaluateAt, generation, read });
     pull(github, 1).checkRuns = [failing(1, "lint"), failing(2, "test")];
@@ -371,5 +377,330 @@ describe("round 1 review regressions", () => {
     await checkRunCompleted(t, "head-1");
     await drain(t);
     expect(await watchMessages()).toHaveLength(1);
+  });
+});
+
+const passing = (id: number, name: string) => ({ id, name, status: "completed", conclusion: "success" });
+
+describe("passed checks, finished checks, and conflicts", () => {
+  test("checks passing on the head are reported once", async () => {
+    const { watch, watchMessages, github, t } = await setupWatch();
+    await watch("acme/repo-1#1");
+    pull(github, 1).checkRuns = [passing(1, "lint"), passing(2, "test")];
+    await checkRunCompleted(t, "head-1");
+    await drain(t);
+    const [message] = await watchMessages();
+    expect(message).toContain("- Every check passed on head-1.\n");
+    expect(message).not.toContain("still fail");
+    await checkRunCompleted(t, "head-1");
+    await drain(t);
+    expect(await watchMessages()).toHaveLength(1);
+  });
+
+  test("required checks decide, from branch protection and rulesets; a required check not reported yet holds it", async () => {
+    const { watch, watchMessages, github, t } = await setupWatch();
+    github.state.requiredChecks = { protection: ["test"], rulesets: ["build"] };
+    await watch("acme/repo-1#1");
+    // `lint` was failing at the start; `build` hasn't reported yet.
+    pull(github, 1).checkRuns = [failing(1, "lint"), passing(2, "test"), { id: 3, name: "docs", status: "in_progress", conclusion: null }];
+    await checkRunCompleted(t, "head-1");
+    await drain(t);
+    expect(await watchMessages()).toEqual([]);
+    pull(github, 1).checkRuns!.push(passing(4, "build"));
+    await checkRunCompleted(t, "head-1");
+    await drain(t);
+    const [message] = await watchMessages();
+    expect(message).toContain("- Every required check passed on head-1.");
+  });
+
+  test("checks that pass at the start are not news", async () => {
+    const { watch, watchMessages, github, t } = await setupWatch();
+    pull(github, 1).checkRuns = [passing(1, "lint")];
+    await watch("acme/repo-1#1");
+    await checkRunCompleted(t, "head-1");
+    await drain(t);
+    expect(await watchMessages()).toEqual([]);
+  });
+
+  test("checks finishing after a failure, with some still failing, are reported once", async () => {
+    const { watch, watchMessages, github, t } = await setupWatch();
+    // At the start `lint` fails and `test` runs.
+    await watch("acme/repo-1#1");
+    pull(github, 1).checkRuns = [failing(1, "lint"), passing(2, "test")];
+    await checkRunCompleted(t, "head-1");
+    await drain(t);
+    const [message] = await watchMessages();
+    expect(message).toContain("- Every check finished on head-1, and these still fail:\n  - lint https://github.com/runs/1\n");
+    await checkRunCompleted(t, "head-1");
+    await drain(t);
+    expect(await watchMessages()).toHaveLength(1);
+  });
+
+  test("a new conflict is reported once, and again after it was resolved", async () => {
+    const { watch, watchMessages, github, t } = await setupWatch();
+    await watch("acme/repo-1#1");
+    pull(github, 1).mergeable = false;
+    await checkRunCompleted(t, "head-1");
+    await drain(t);
+    expect((await watchMessages())[0]).toContain("- The branch now conflicts with main.");
+    // GitHub still computing changes nothing.
+    pull(github, 1).mergeable = null;
+    await checkRunCompleted(t, "head-1");
+    await drain(t);
+    expect(await watchMessages()).toHaveLength(1);
+    pull(github, 1).mergeable = true;
+    await checkRunCompleted(t, "head-1");
+    await drain(t);
+    pull(github, 1).mergeable = false;
+    await checkRunCompleted(t, "head-1");
+    await drain(t);
+    expect(await watchMessages()).toHaveLength(2);
+  });
+
+  test("the cron evaluates a watch no event reached in 10 minutes", async () => {
+    const { watch, watchMessages, github, t } = await setupWatch();
+    await watch("acme/repo-1#1");
+    // A push to the base branch sends no event for the PR.
+    pull(github, 1).mergeable = false;
+    await t.mutation(internal.integrations.github.pullRequestWatches.evaluateIdle, {});
+    await drain(t);
+    expect(await watchMessages()).toEqual([]);
+    vi.advanceTimersByTime(10 * 60_000);
+    await t.mutation(internal.integrations.github.pullRequestWatches.evaluateIdle, {});
+    await drain(t);
+    expect((await watchMessages())[0]).toContain("- The branch now conflicts with main.");
+  });
+});
+
+describe("the final message", () => {
+  async function watching() {
+    const setup = await setupWatch();
+    await setup.watch("acme/repo-1#1");
+    return setup;
+  }
+  const prEvent = (t: Awaited<ReturnType<typeof setupWatch>>["t"]) =>
+    signedWebhook(t, "pull_request", { installation: { id: 77 }, repository: { id: 1 }, pull_request: { number: 1 } });
+
+  test("someone else merging sends one last message and ends the watch", async () => {
+    const { github, t, watchRow, watchMessages } = await watching();
+    Object.assign(pull(github, 1), { state: "closed", merged: true, mergedBy: { id: 42, login: "maintainer" }, mergeCommitSha: "9f8e7d6c5b" });
+    await prEvent(t);
+    await drain(t);
+    expect(await watchMessages()).toEqual([
+      "Pull request #1 (https://github.com/acme/repo-1/pull/1) was merged into main as 9f8e7d6, so Convoy stopped watching it.",
+    ]);
+    expect(await watchRow()).toBeNull();
+  });
+
+  test("someone else closing sends one last message; the watch's account is the owner's Linked GitHub account", async () => {
+    const { github, t, asUser, org, watchRow, watchMessages } = await watching();
+    await linkGithubAccount(asUser, github, org._id, { id: 77_001, login: "maya" });
+    // The PR's author closed it, but the watch's account is now maya.
+    Object.assign(pull(github, 1), { state: "closed", closedBy: { id: fakeUserId("octocat"), login: "octocat" } });
+    await prEvent(t);
+    await drain(t);
+    const [message] = await watchMessages();
+    expect(message).toContain("Pull request #1 (https://github.com/acme/repo-1/pull/1) was closed without merging, so Convoy stopped watching it.");
+    expect(await watchRow()).toBeNull();
+  });
+
+  test("the owner's Linked GitHub account closing it sends nothing", async () => {
+    const { github, t, asUser, org, watchRow, watchMessages } = await watching();
+    await linkGithubAccount(asUser, github, org._id, { id: 77_001, login: "maya" });
+    Object.assign(pull(github, 1), { state: "closed", closedBy: { id: 77_001, login: "maya" } });
+    await prEvent(t);
+    await drain(t);
+    expect(await watchMessages()).toEqual([]);
+    expect(await watchRow()).toBeNull();
+  });
+
+  test("5 failed reads in a row end the watch with a message; a success in between resets the count", async () => {
+    const { github, t, watchRow, watchMessages } = await watching();
+    const fail = (times: number) => {
+      for (let index = 0; index < times; index++) github.state.failures.push({ match: /GET \/repositories\/1\/pulls\/1$/, status: 502 });
+    };
+    fail(4);
+    await checkRunCompleted(t, "head-1");
+    await drain(t, 600_000);
+    expect(await watchRow()).not.toBeNull();
+    expect((await watchRow())?.readFailures).toBeUndefined();
+    fail(5);
+    await checkRunCompleted(t, "head-1");
+    await drain(t, 600_000);
+    expect(await watchRow()).toBeNull();
+    const [message] = await watchMessages();
+    expect(message).toContain("Convoy stopped watching pull request #1 (https://github.com/acme/repo-1/pull/1): it could not read it from GitHub 5 times in a row.");
+  });
+});
+
+describe("round 1 review regressions (slice 2)", () => {
+  const prEvent = (t: Awaited<ReturnType<typeof setupWatch>>["t"]) =>
+    signedWebhook(t, "pull_request", { installation: { id: 77 }, repository: { id: 1 }, pull_request: { number: 1 } });
+
+  test("who closed it is read with a token that has Issues access; a failed read of it still sends the message", async () => {
+    const { watch, github, t, watchRow, watchMessages } = await setupWatch();
+    await watch("acme/repo-1#1");
+    Object.assign(pull(github, 1), { state: "closed", closedBy: { id: 42, login: "maintainer" } });
+    github.state.failures.push({ match: /GET \/repositories\/1\/issues\/1$/, status: 500 });
+    await prEvent(t);
+    await drain(t);
+    expect(await watchMessages()).toEqual([expect.stringContaining("was closed without merging, so Convoy stopped watching it.")]);
+    expect(await watchRow()).toBeNull();
+  });
+
+  test("a close by a deleted account sends the message", async () => {
+    const { watch, github, t, watchMessages } = await setupWatch();
+    await watch("acme/repo-1#1");
+    Object.assign(pull(github, 1), { state: "closed" });
+    await prEvent(t);
+    await drain(t);
+    expect(await watchMessages()).toEqual([expect.stringContaining("was closed without merging")]);
+  });
+
+  test("the cron reaches an idle watch on every run, not every other", async () => {
+    const { watch, github, t } = await setupWatch();
+    await watch("acme/repo-1#1");
+    const reads = () => github.state.requests.filter((request) => request === "GET /repositories/1/pulls/1").length;
+    const counts = [];
+    for (let run = 0; run < 3; run++) {
+      // An evaluation's read takes a moment.
+      vi.advanceTimersByTime(10 * 60_000 - 3000);
+      const before = reads();
+      await t.mutation(internal.integrations.github.pullRequestWatches.evaluateIdle, {});
+      await drain(t, 3000);
+      counts.push(reads() - before);
+    }
+    expect(counts).toEqual([1, 1, 1]);
+  });
+
+  test("the cron skips a watch whose evaluation is on its way, and pages past 100 watches", async () => {
+    const { watch, watchRow, createThread, t } = await setupWatch();
+    await watch("acme/repo-1#1");
+    const row = (await watchRow())!;
+    vi.advanceTimersByTime(10 * 60_000);
+    const scheduledAt = Date.now() + 30_000;
+    await t.run((run) => run.db.patch("integrationPullRequestWatches", row._id, { evaluateAt: scheduledAt }));
+    const extra = await createThread();
+    await t.run(async (run) => {
+      for (let index = 0; index < 101; index++) {
+        await run.db.insert("integrationPullRequestWatches", { ...row, _id: undefined, _creationTime: undefined, threadId: extra, evaluatedAt: 0 } as never);
+      }
+    });
+    await t.mutation(internal.integrations.github.pullRequestWatches.evaluateIdle, {});
+    await drain(t, 5000);
+    expect((await watchRow())?.evaluateAt).toBe(scheduledAt);
+    const rows = await t.run((run) => run.db.query("integrationPullRequestWatches").withIndex("by_threadId", (q) => q.eq("threadId", extra)).collect());
+    expect(rows.filter((candidate) => candidate.evaluateAt === undefined && candidate.evaluatedAt === 0)).toEqual([]);
+  });
+
+  test("a mergeability GitHub is still computing is read again soon", async () => {
+    const { watch, watchMessages, github, t } = await setupWatch();
+    await watch("acme/repo-1#1");
+    pull(github, 1).mergeable = null;
+    vi.advanceTimersByTime(10 * 60_000);
+    await t.mutation(internal.integrations.github.pullRequestWatches.evaluateIdle, {});
+    await drain(t, 2000);
+    // The first read started GitHub's job; it has the answer by the next read.
+    pull(github, 1).mergeable = false;
+    await drain(t, 60_000);
+    expect((await watchMessages())[0]).toContain("- The branch now conflicts with main.");
+  });
+
+  test("a mergeability that stays unknown is read again once, not in a loop", async () => {
+    const { watch, github, t } = await setupWatch();
+    await watch("acme/repo-1#1");
+    pull(github, 1).mergeable = null;
+    const reads = () => github.state.requests.filter((request) => request === "GET /repositories/1/pulls/1").length;
+    const before = reads();
+    await checkRunCompleted(t, "head-1");
+    await drain(t, 5 * 60_000);
+    expect(reads() - before).toBe(2);
+  });
+
+  test("a failed required-checks read holds only Checks passed; failures are still reported", async () => {
+    const { watch, watchMessages, watchRow, github, t } = await setupWatch();
+    await watch("acme/repo-1#1");
+    pull(github, 1).checkRuns = [passing(1, "lint"), failing(2, "test"), { id: 3, name: "docs", status: "in_progress", conclusion: null }];
+    for (let index = 0; index < 5; index++) github.state.failures.push({ match: /\/rules\/branches\//, status: 403 });
+    await checkRunCompleted(t, "head-1");
+    await drain(t);
+    const [message] = await watchMessages();
+    expect(message).toContain("- Checks failed on head-1:\n  - test");
+    expect((await watchRow())?.passedReported).toBeUndefined();
+  });
+
+  test("a required check passes only when every check with its name passed", async () => {
+    const { watch, watchMessages, github, t } = await setupWatch();
+    github.state.requiredChecks = { protection: ["test"], rulesets: [] };
+    await watch("acme/repo-1#1");
+    Object.assign(pull(github, 1), { checkRuns: [passing(1, "lint"), passing(2, "test")], statuses: [{ id: 5, context: "test", state: "pending", description: "" }] });
+    await checkRunCompleted(t, "head-1");
+    await drain(t);
+    expect(await watchMessages()).toEqual([]);
+    pull(github, 1).statuses = [{ id: 5, context: "test", state: "failure", description: "" }];
+    await checkRunCompleted(t, "head-1");
+    await drain(t);
+    expect((await watchMessages()).join("\n")).not.toContain("passed");
+    pull(github, 1).statuses = [{ id: 5, context: "test", state: "success", description: "" }];
+    await checkRunCompleted(t, "head-1");
+    await drain(t);
+    expect((await watchMessages()).at(-1)).toContain("- Every required check passed on head-1.");
+  });
+
+  test("a rerun of a failed check keeps Checks finished owed", async () => {
+    const { watch, watchMessages, github, t } = await setupWatch();
+    // `lint` fails while `test` runs.
+    await watch("acme/repo-1#1");
+    pull(github, 1).checkRuns = [{ id: 1, name: "lint", status: "in_progress", conclusion: null }, { id: 2, name: "test", status: "in_progress", conclusion: null }];
+    await checkRunCompleted(t, "head-1");
+    await drain(t);
+    pull(github, 1).checkRuns = [failing(1, "lint"), passing(2, "test")];
+    await checkRunCompleted(t, "head-1");
+    await drain(t);
+    expect(await watchMessages()).toEqual([expect.stringContaining("- Every check finished on head-1, and these still fail:\n  - lint")]);
+  });
+
+  test("a rate limit delays the read and does not count toward the 5 failures", async () => {
+    const { watch, watchMessages, watchRow, github, t } = await setupWatch();
+    await watch("acme/repo-1#1");
+    pull(github, 1).checkRuns = [failing(1, "lint"), failing(2, "test")];
+    for (let index = 0; index < 6; index++) {
+      github.state.failures.push({ match: /GET \/repositories\/1\/pulls\/1$/, status: 429, headers: { "retry-after": "1" } });
+    }
+    await checkRunCompleted(t, "head-1");
+    await drain(t, 300_000);
+    expect(await watchMessages()).toEqual([expect.stringContaining("  - test")]);
+    expect((await watchRow())?.readFailures).toBeUndefined();
+  });
+});
+
+describe("round 2 review regressions", () => {
+  /** The cron's runs for `ms`, the first `offset` from now. */
+  async function cronRuns(t: Awaited<ReturnType<typeof setupWatch>>["t"], ms: number, offset: number) {
+    const interval = WATCH_IDLE_CRON_MINUTES * 60_000;
+    await drain(t, offset);
+    for (let elapsed = offset; elapsed < ms; elapsed += interval) {
+      await t.mutation(internal.integrations.github.pullRequestWatches.evaluateIdle, {});
+      await drain(t, Math.min(interval, ms - elapsed));
+    }
+  }
+
+  test("a conflict after a watch starts between cron runs is reported within 10 minutes", async () => {
+    const { watch, watchMessages, github, t } = await setupWatch();
+    await watch("acme/repo-1#1");
+    pull(github, 1).mergeable = false;
+    await cronRuns(t, 10 * 60_000, 20_000);
+    expect((await watchMessages())[0]).toContain("- The branch now conflicts with main.");
+  });
+
+  test("a conflict after a webhook evaluation between cron runs is reported within 10 minutes", async () => {
+    const { watch, watchMessages, github, t } = await setupWatch();
+    await watch("acme/repo-1#1");
+    await drain(t, 3 * 60_000);
+    await checkRunCompleted(t, "head-1");
+    await drain(t);
+    pull(github, 1).mergeable = false;
+    await cronRuns(t, 10 * 60_000, 20_000);
+    expect((await watchMessages())[0]).toContain("- The branch now conflicts with main.");
   });
 });

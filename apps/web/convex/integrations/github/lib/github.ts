@@ -1,7 +1,7 @@
 import { ConvexError } from "convex/values";
 import { errors } from "../errors";
 import { GITHUB_API_URL, GITHUB_WEB_URL, githubCallbackUrl, readGithubAppConfig, type GithubAppConfig } from "./constants";
-import { list, record, str } from "./parsers";
+import { list, normalizeRequiredChecks, record, str } from "./parsers";
 import type { SyncContext } from "./validators";
 
 // GitHub REST client and credentials: App JWT, installation tokens, token encryption, and user-to-server tokens.
@@ -131,6 +131,11 @@ export async function mintRepositoryToken(config: GithubAppConfig, installationI
   return mintToken(config, installationId, providerRepositoryIds, READ_PERMISSIONS);
 }
 
+/** A token that can only read the repository's issues: who closed a watched PR is only on its issue. */
+export async function mintIssueReadToken(config: GithubAppConfig, installationId: number, providerRepositoryId: number) {
+  return mintToken(config, installationId, [providerRepositoryId], { issues: "read", metadata: "read" });
+}
+
 /** A token that can only publish check runs on one repository (Pull request checks, OS-2401). */
 export async function mintCheckRunToken(config: GithubAppConfig, installationId: number, providerRepositoryId: number) {
   return mintToken(config, installationId, [providerRepositoryId], { checks: "write", metadata: "read" });
@@ -244,4 +249,14 @@ export async function fetchHeadChecks(token: string, context: SyncContext, headS
   };
   const [checkRuns, status] = await Promise.all([readAll("check-runs", "check_runs"), readAll("status", "statuses")]);
   return { checkRuns, status };
+}
+
+/** The checks `baseRef` requires before a merge: branch protection (Contents read) and rulesets (Metadata read). */
+export async function fetchRequiredChecks(token: string, context: SyncContext, baseRef: string): Promise<string[]> {
+  const branch = encodeURIComponent(baseRef);
+  const [protection, rules] = await Promise.all([
+    githubFetch(`${repoPath(context)}/branches/${branch}`, { token }),
+    githubFetch(`${repoPath(context)}/rules/branches/${branch}?per_page=100`, { token }),
+  ]);
+  return normalizeRequiredChecks(protection, rules);
 }

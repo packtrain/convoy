@@ -66,6 +66,10 @@ export type FakePullRequest = {
   mergeableState?: string;
   /** A fork's repository id; the head lives in the base repository by default. */
   headRepositoryId?: number;
+  /** Who merged or closed it: `merged_by` on the PR, `closed_by` on its issue. */
+  mergedBy?: FakeGithubUser;
+  closedBy?: FakeGithubUser;
+  mergeCommitSha?: string;
 };
 
 export type FakeGithubUser = { id: number; login: string };
@@ -81,6 +85,9 @@ const REQUIRED_PERMISSIONS: [RegExp, string][] = [
   [/\/(compare|contents)\//, "contents"],
   [/\/commits\/[^/]+$/, "contents"],
   [/\/pulls/, "pull_requests"],
+  [/\/issues\/\d+$/, "issues"],
+  [/\/repositories\/\d+\/branches\//, "contents"],
+  [/\/rules\/branches\//, "metadata"],
 ];
 
 const githubUser = (login: string) => ({ login, avatar_url: `https://avatars.githubusercontent.com/${login}` });
@@ -173,6 +180,8 @@ export function createFakeGithub() {
     /** Called between the two PR reads of a diff, to simulate a push mid-read. */
     onFilesRead: null as (() => void) | null,
     requests: [] as string[],
+    /** Required checks on every base branch: branch protection's contexts and rulesets' checks. */
+    requiredChecks: { protection: [] as string[], rulesets: [] as string[] },
     /** Every `/search/issues` query, and items GitHub adds to every answer (another repository's, say). */
     searches: [] as string[],
     extraSearchItems: [] as unknown[],
@@ -264,6 +273,8 @@ export function createFakeGithub() {
     return {
       ...json,
       head: { ...json.head, repo: { id: pr.headRepositoryId ?? repositoryId } },
+      merged_by: pr.mergedBy ?? null,
+      merge_commit_sha: pr.mergeCommitSha ?? null,
       mergeable: pr.mergeable === undefined ? true : pr.mergeable,
       mergeable_state: pr.mergeableState ?? "clean",
       rebaseable: pr.rebaseable === undefined ? true : pr.rebaseable,
@@ -648,6 +659,21 @@ export function createFakeGithub() {
       const page = Number(url.searchParams.get("page"));
       const all = [...items, ...state.extraSearchItems];
       return json(200, { total_count: all.length, incomplete_results: state.searchIncomplete, items: all.slice((page - 1) * perPage, page * perPage) });
+    }
+    match = /^\/repositories\/(\d+)\/branches\/(.+)$/.exec(path);
+    if (match) {
+      const contexts = state.requiredChecks.protection;
+      return json(200, { name: decodeURIComponent(match[2]), protected: contexts.length > 0, protection: { required_status_checks: { contexts, checks: contexts.map((context) => ({ context, app_id: null })) } } });
+    }
+    match = /^\/repositories\/(\d+)\/rules\/branches\/(.+)$/.exec(path);
+    if (match) {
+      const checks = state.requiredChecks.rulesets.map((context) => ({ context }));
+      return json(200, checks.length > 0 ? [{ type: "required_status_checks", parameters: { required_status_checks: checks } }] : []);
+    }
+    match = /^\/repositories\/(\d+)\/issues\/(\d+)$/.exec(path);
+    if (match && method === "GET") {
+      const pr = state.pulls.get(Number(match[1]))?.find((candidate) => candidate.number === Number(match![2]));
+      return pr ? json(200, { number: pr.number, state: pr.state, closed_by: pr.closedBy ?? null }) : json(404, {});
     }
     match = /^\/repositories\/(\d+)\/pulls(?:\/(\d+)(\/files)?)?$/.exec(path);
     if (match) {

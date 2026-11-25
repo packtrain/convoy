@@ -124,7 +124,7 @@ export function normalizeDiffFiles(rawFiles: unknown[]) {
 // --- Overview ---
 
 const login = (user: unknown) => (typeof user === "object" && user !== null && typeof (user as { login?: unknown }).login === "string" ? (user as { login: string }).login : "ghost");
-const userId = (user: unknown) => (typeof user === "object" && user !== null && typeof (user as { id?: unknown }).id === "number" ? (user as { id: number }).id : undefined);
+export const userId = (user: unknown) => (typeof user === "object" && user !== null && typeof (user as { id?: unknown }).id === "number" ? (user as { id: number }).id : undefined);
 const text = (value: unknown) => (typeof value === "string" ? value : "");
 const avatarUrl = (user: unknown) => text(record(user ?? {}).avatar_url) || null;
 
@@ -269,6 +269,17 @@ export function normalizeMergeability(pr: Record<string, unknown>): Mergeability
     mergeBlock: pr.mergeable_state === "blocked" || pr.mergeable_state === "behind" ? pr.mergeable_state : null,
     rebaseConflicts: pr.rebaseable === false,
   };
+}
+
+/** The check names a base branch requires: branch protection's and every ruleset's. */
+export function normalizeRequiredChecks(branch: unknown, rules: unknown): string[] {
+  const protection = record(record(record(branch).protection ?? {}).required_status_checks ?? {});
+  const fromProtection = [...list(protection.contexts ?? []).map(str), ...list(protection.checks ?? []).map((check) => str(record(check).context))];
+  const fromRulesets = list(rules ?? [])
+    .map(record)
+    .filter((rule) => rule.type === "required_status_checks")
+    .flatMap((rule) => list(record(rule.parameters).required_status_checks ?? []).map((check) => str(record(check).context)));
+  return [...new Set([...fromProtection, ...fromRulesets])];
 }
 
 /** A head's check runs and commit statuses as one list. `appId` marks Convoy's own runs. */
