@@ -1585,6 +1585,12 @@ export default defineSchema({
     mergeableRecheck: v.optional(v.literal(true)),
     // Failed reads in a row; the fifth ends the watch. A rate limit doesn't count.
     readFailures: v.optional(v.number()),
+    // Comments and reviews up to this time were read; absent until the first read.
+    seenThrough: v.optional(v.number()),
+    // Comments and reviews read after `seenThrough`, so the next read's overlap reports none twice.
+    seenIds: v.optional(v.array(v.string())),
+    // Messages in a row with only comments; the tenth ends the watch.
+    commentOnlyWakes: v.optional(v.number()),
   })
     .index("by_threadId", ["threadId"])
     .index("by_repositoryId_and_number", ["repositoryId", "number"])

@@ -35,10 +35,11 @@ export type FakePullRequest = {
   rebaseable?: boolean | null;
   /** Overview data; the defaults are empty. */
   commits?: { sha: string; message: string; login: string | null; name: string; date: string }[];
-  reviews?: { id: number; login: string; state: string; submitted_at: string; body?: string }[];
+  reviews?: { id: number; login: string; state: string; submitted_at: string; body?: string; association?: string }[];
   requestedReviewers?: string[];
   requestedTeams?: string[];
-  comments?: { id: number; login: string; userId?: number; body: string; created_at: string }[];
+  /** `association` is GitHub's `author_association`, COLLABORATOR by default. */
+  comments?: { id: number; login: string; userId?: number; body: string; created_at: string; updated_at?: string; association?: string }[];
   assignees?: string[];
   /** The PR's author; octocat by default. */
   author?: FakeGithubUser;
@@ -53,7 +54,10 @@ export type FakePullRequest = {
     start_line?: number;
     original_line?: number;
     side?: "LEFT" | "RIGHT";
+    /** When the reviewer drafted it; `updated_at` is when its review was submitted, or when it was edited. */
     created_at: string;
+    updated_at?: string;
+    association?: string;
     diff_hunk?: string;
     pull_request_review_id?: number;
   }[];
@@ -90,7 +94,9 @@ const REQUIRED_PERMISSIONS: [RegExp, string][] = [
   [/\/rules\/branches\//, "metadata"],
 ];
 
-const githubUser = (login: string) => ({ login, avatar_url: `https://avatars.githubusercontent.com/${login}` });
+const githubUser = (login: string) => ({ login, avatar_url: `https://avatars.githubusercontent.com/${login}`, type: login.endsWith("[bot]") ? "Bot" : "User" });
+/** How GitHub relates a comment's author to the repository. */
+const association = (item: { association?: string }) => ({ author_association: item.association ?? "COLLABORATOR" });
 
 /** A stable GitHub user ID for a fake login. */
 export const fakeUserId = (login: string) => [...login].reduce((id, char) => (id * 31 + char.charCodeAt(0)) % 1_000_000, 7);
@@ -285,7 +291,18 @@ export function createFakeGithub() {
     };
   }
 
-  function overviewJson(pr: FakePullRequest, part: string, direction: string | null) {
+  /** A list as GitHub serves it: `since` keeps what was updated then or later, and `page` and `per_page` cut it. */
+  function listPage<T extends object>(items: T[], url: URL): T[] {
+    const since = url.searchParams.get("since");
+    const time = (item: { created_at?: string; updated_at?: string }) => Date.parse(item.updated_at ?? item.created_at ?? "");
+    const kept = since ? items.filter((item) => time(item) >= Date.parse(since)) : items;
+    const perPage = Number(url.searchParams.get("per_page") ?? 30);
+    const page = Number(url.searchParams.get("page") ?? 1);
+    return kept.slice((page - 1) * perPage, page * perPage);
+  }
+
+  function overviewJson(pr: FakePullRequest, part: string, url: URL) {
+    const direction = url.searchParams.get("direction");
     if (part === "/commits") {
       return (pr.commits ?? []).map((commit) => ({
         sha: commit.sha,
@@ -295,10 +312,10 @@ export function createFakeGithub() {
       }));
     }
     if (part === "/comments") {
-      const comments = (pr.reviewComments ?? []).map((comment) => ({ ...comment, user: githubUser(comment.login), html_url: `https://github.com/rc/${comment.id}` }));
-      return direction === "desc" ? comments.reverse() : comments;
+      const comments = (pr.reviewComments ?? []).map((comment) => ({ ...comment, ...association(comment), user: { ...githubUser(comment.login), id: fakeUserId(comment.login) }, html_url: `https://github.com/rc/${comment.id}` }));
+      return listPage(direction === "desc" ? comments.reverse() : comments, url);
     }
-    return (pr.reviews ?? []).map((review) => ({ id: review.id, user: githubUser(review.login), state: review.state, submitted_at: review.submitted_at, body: review.body ?? "" }));
+    return listPage((pr.reviews ?? []), url).map((review) => ({ ...association(review), id: review.id, user: { ...githubUser(review.login), id: fakeUserId(review.login) }, html_url: `https://github.com/r/${review.id}`, state: review.state, submitted_at: review.submitted_at, body: review.body ?? "" }));
   }
 
   function pullForSha(repositoryId: number, sha: string) {
@@ -582,14 +599,14 @@ export function createFakeGithub() {
     if (match) {
       const [, repositoryId, number, part] = match;
       const pr = state.pulls.get(Number(repositoryId))?.find((candidate) => candidate.number === Number(number));
-      return pr ? json(200, overviewJson(pr, part, url.searchParams.get("direction"))) : json(404, {});
+      return pr ? json(200, overviewJson(pr, part, url)) : json(404, {});
     }
     match = /^\/repositories\/(\d+)\/issues\/(\d+)\/comments$/.exec(path);
     if (match) {
       const [, repositoryId, number] = match;
       const pr = state.pulls.get(Number(repositoryId))?.find((candidate) => candidate.number === Number(number));
       return pr
-        ? json(200, (pr.comments ?? []).map((comment) => ({ ...comment, user: { ...githubUser(comment.login), id: comment.userId }, html_url: `https://github.com/c/${comment.id}` })))
+        ? json(200, listPage(pr.comments ?? [], url).map((comment) => ({ ...comment, ...association(comment), user: { ...githubUser(comment.login), id: comment.userId }, html_url: `https://github.com/c/${comment.id}` })))
         : json(404, {});
     }
     match = /^\/repositories\/(\d+)\/check-runs$/.exec(path);

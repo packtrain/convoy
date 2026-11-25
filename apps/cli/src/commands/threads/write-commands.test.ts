@@ -762,7 +762,7 @@ describe("threads write commands", () => {
       action.mockResolvedValueOnce({ ...started, failingChecks: [], runningChecks: [] });
       await invoke(watchPullRequestCommand, ["thr_1", undefined]);
       expect(action).toHaveBeenCalledWith(api.integrations.github.pullRequestWatches.watch, { threadId: "thr_1" });
-      expect(console.log).toHaveBeenCalledWith("Convoy messages this thread when checks fail. End your turn now.");
+      expect(console.log).toHaveBeenCalledWith("Convoy messages this thread when checks fail or pass, the branch conflicts, or someone else comments or reviews. End your turn now.");
     });
   });
 

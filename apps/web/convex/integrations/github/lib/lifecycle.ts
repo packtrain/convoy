@@ -51,14 +51,15 @@ export async function disconnectLink(ctx: MutationCtx, link: Doc<"integrationRep
   }
 }
 
-/** Schedule the watch's one evaluation at `at`; `at` is its token, so an earlier one still running is dropped. */
+/** Schedule the watch's one evaluation at `at`; `at` is its token, so an earlier one still running is dropped. `idle` is the cron's. */
 export async function scheduleWatchEvaluation(
   ctx: MutationCtx,
   watchId: Id<"integrationPullRequestWatches">,
-  at: number
+  at: number,
+  idle?: true
 ): Promise<void> {
   await patchWatch(ctx, watchId, { evaluateAt: at, eventDuringRead: undefined });
-  await ctx.scheduler.runAt(at, internal.integrations.github.pullRequestWatches.evaluate, { watchId, evaluateAt: at });
+  await ctx.scheduler.runAt(at, internal.integrations.github.pullRequestWatches.evaluate, { watchId, evaluateAt: at, idle });
 }
 
 /**

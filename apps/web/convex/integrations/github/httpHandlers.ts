@@ -44,6 +44,9 @@ export function parseGithubEvent(eventName: string | null, payload: unknown): Ve
   if (eventName === "check_suite" || eventName === "check_run" || eventName === "status") {
     return parseChecksEvent(eventName, payload, installationId);
   }
+  if (eventName === "pull_request_review" || eventName === "pull_request_review_comment" || eventName === "issue_comment") {
+    return parseCommentsEvent(eventName, payload, installationId);
+  }
   if (eventName === "installation" || eventName === "installation_repositories") {
     return { provider: "github", github: { kind: "accessChanged", installationId } };
   }
@@ -64,6 +67,19 @@ function parseChecksEvent(eventName: string, payload: unknown, installationId: n
     .map((pull) => field(pull, "number"))
     .filter((number): number is number => typeof number === "number");
   return { provider: "github", github: { kind: "checks", installationId, repositoryId, headSha, numbers } };
+}
+
+/** A new review, review comment, or comment on a PR, for Pull request watches; edits and deletes are no news. */
+function parseCommentsEvent(eventName: string, payload: unknown, installationId: number): VerifiedEvent | null {
+  const repositoryId = field(field(payload, "repository"), "id");
+  if (field(payload, "action") !== (eventName === "pull_request_review" ? "submitted" : "created")) return null;
+  // An issue_comment's issue is a PR only when it has `pull_request`.
+  const subject = eventName === "issue_comment" ? field(payload, "issue") : field(payload, "pull_request");
+  if (eventName === "issue_comment" && field(subject, "pull_request") === undefined) return null;
+  const number = field(subject, "number");
+  return typeof repositoryId === "number" && typeof number === "number"
+    ? { provider: "github", github: { kind: "comments", installationId, repositoryId, number } }
+    : null;
 }
 
 export async function handleGithubWebhook(ctx: ActionCtx, request: Request): Promise<Response> {

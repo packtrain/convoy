@@ -232,23 +232,40 @@ export function repoPath(context: SyncContext): string {
 
 
 const CHECKS_PAGE_SIZE = 100;
-// ponytail: 10 pages, 1,000 check runs and 1,000 statuses; page further when a repository outgrows that.
+// ponytail: 10 pages, 1,000 check runs, statuses, comments, or reviews; reviews come oldest first, so past 1,000 the newest are cut. Read them from the last page when a PR outgrows that.
 const CHECKS_PAGES_MAX = 10;
+
+/** Up to CHECKS_PAGES_MAX pages of `path`, each page's items picked by `items`. */
+async function readPages(token: string, path: string, items: (page: unknown) => unknown[]): Promise<unknown[]> {
+  const all: unknown[] = [];
+  for (let page = 1; page <= CHECKS_PAGES_MAX; page++) {
+    const batch = items(await githubFetch(`${path}${path.includes("?") ? "&" : "?"}per_page=${CHECKS_PAGE_SIZE}&page=${page}`, { token }));
+    all.push(...batch);
+    if (batch.length < CHECKS_PAGE_SIZE) break;
+  }
+  return all;
+}
 
 /** Every check run and commit status on `headSha`, as GitHub's own responses would hold them unpaged. */
 export async function fetchHeadChecks(token: string, context: SyncContext, headSha: string): Promise<{ checkRuns: unknown; status: unknown }> {
   const base = `${repoPath(context)}/commits/${headSha}`;
-  const readAll = async (path: string, key: string) => {
-    const items: unknown[] = [];
-    for (let page = 1; page <= CHECKS_PAGES_MAX; page++) {
-      const batch = list(record(await githubFetch(`${base}/${path}?per_page=${CHECKS_PAGE_SIZE}&page=${page}`, { token }))[key] ?? []);
-      items.push(...batch);
-      if (batch.length < CHECKS_PAGE_SIZE) break;
-    }
-    return { [key]: items };
-  };
+  const readAll = async (path: string, key: string) => ({ [key]: await readPages(token, `${base}/${path}`, (page) => list(record(page)[key] ?? [])) });
   const [checkRuns, status] = await Promise.all([readAll("check-runs", "check_runs"), readAll("status", "statuses")]);
   return { checkRuns, status };
+}
+
+/**
+ * PR `number`'s comments and review comments changed since `since`, and all its reviews: GitHub filters reviews by nothing.
+ * Reviews are read last, so every review comment read has its review.
+ */
+export async function fetchPullRequestComments(token: string, context: SyncContext, number: number, since: number) {
+  const base = repoPath(context);
+  const after = encodeURIComponent(new Date(since).toISOString());
+  const [comments, reviewComments] = await Promise.all([
+    readPages(token, `${base}/issues/${number}/comments?since=${after}`, list),
+    readPages(token, `${base}/pulls/${number}/comments?since=${after}&sort=created&direction=asc`, list),
+  ]);
+  return { comments, reviewComments, reviews: await readPages(token, `${base}/pulls/${number}/reviews`, list) };
 }
 
 /** The checks `baseRef` requires before a merge: branch protection (Contents read) and rulesets (Metadata read). */

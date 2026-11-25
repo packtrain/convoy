@@ -56,7 +56,7 @@ export async function patchWatch(
   ctx: MutationCtx,
   watchId: Id<"integrationPullRequestWatches">,
   patch: Partial<
-    Pick<Watch, "headSha" | "failedChecks" | "passedReported" | "finishOwed" | "conflicts" | "evaluateAt" | "eventDuringRead" | "evaluatedAt" | "readFailures" | "mergeableRecheck">
+    Pick<Watch, "headSha" | "failedChecks" | "passedReported" | "finishOwed" | "conflicts" | "evaluateAt" | "eventDuringRead" | "evaluatedAt" | "readFailures" | "mergeableRecheck" | "seenThrough" | "seenIds" | "commentOnlyWakes">
   >
 ): Promise<void> {
   await ctx.db.patch("integrationPullRequestWatches", watchId, patch);

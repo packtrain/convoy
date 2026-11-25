@@ -945,8 +945,12 @@ convoy threads watch-pr "$CONVOY_THREAD_ID" https://github.com/contoso/convoy/pu
 convoy threads watch-pr <threadId> --json
 ```
 
-Watches the thread's pull request: when a check fails on its head, Convoy
-sends a message into the thread and the agent starts a new run. A push starts
+Watches the thread's pull request: when a check fails on its head, its checks
+pass or finish, the branch starts to conflict, or someone else comments or
+reviews, Convoy sends a message into the thread and the agent starts a new run.
+Comments from the thread owner's Linked GitHub account (or the PR's author,
+without one) are the agent's own and never wake it, and neither do comments
+from outside the repository's collaborators and installed Apps. A push starts
 over, so a check that fails again on a new commit is reported again.
 `<pullRequest>` takes the forms `attach-pr` takes and is attached first when
 the thread has none; without it, the attached PR is watched. The PR must be
@@ -954,7 +958,8 @@ open and in a repository connected to the project, and the thread must not be
 Done or a workflow's thread. A PR takes at most 50 watches. The command prints the checks already failing or running and whether
 the branch conflicts: the watch reports only what changes after it starts.
 Watching again changes nothing. The watch ends when the PR merges or closes,
-the thread is marked Done or deleted, or the repository is disconnected.
+the thread is marked Done or deleted, the repository is disconnected, or after
+10 messages in a row with only comments.
 
 ### `convoy threads unwatch-pr <threadId>`
 
