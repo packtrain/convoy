@@ -130,6 +130,8 @@ export const errors = {
   WORKTREE_REMOVE_IN_USE: "A thread is currently running in this worktree",
   WORKTREE_SETUP_NOT_FOUND: "Worktree setup not found",
   WORKTREE_SETUP_REPO_KEY_INVALID: "Repository must be owner/repo, in lowercase",
+  WORKTREE_SETUP_REVISION_CHANGED: "The script changed. Review the new version.",
+  WORKTREE_SETUP_APPROVE_WEB_ONLY: "Approve setup scripts in the web app",
   WORKTREE_SETUP_SCRIPT_REQUIRED: "The setup script is empty. Remove the setup instead.",
   worktreeSetupScriptTooLong: (max: number) => `The setup script can be at most ${max.toLocaleString("en-US")} characters`,
   worktreeSetupLimitReached: (max: number) => `A project can have up to ${max} worktree setups`,

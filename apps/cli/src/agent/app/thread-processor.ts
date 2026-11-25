@@ -14,7 +14,7 @@ import {
   type RunnerExecutionResult,
 } from "../runtimes/contracts.js";
 import { createScriptRunner } from "./script-runner.js";
-import { prepareWorktree, unapprovedWorktreeSetupMessage } from "./worktree-setup.js";
+import { prepareWorktree, unapprovedWorktreeSetupMessage, unapprovedWorktreeSetupNotice } from "./worktree-setup.js";
 import { withRunAttachmentInstructions } from "../runtimes/agent-instructions.js";
 import type { InteractionRouter } from "./interaction-router.js";
 import { getDebugLevel } from "../runtimes/debug.js";
@@ -556,6 +556,11 @@ export function createMessageHandler(
             const spec = pendingWorktree;
             const setup = started.worktreeSetup;
             if (setup?.status === "unapproved") {
+              await client.mutation(api.cli.messages.appendRunContent, {
+                messageId: started.assistantMessageId,
+                sessionId: typedSessionId,
+                chunks: [unapprovedWorktreeSetupNotice(setup.repoKey)],
+              });
               throw new Error(unapprovedWorktreeSetupMessage(setup.repoKey));
             }
             await resolveExecutionWorkspace(workingDirectory);

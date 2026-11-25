@@ -22,6 +22,11 @@ export function unapprovedWorktreeSetupMessage(repoKey: string): string {
   return `This project has a worktree setup script for ${repoKey} that you haven't approved. Review it in Project settings → Worktrees, then retry.`;
 }
 
+/** The web renders this code with a "Review script" link; the run's failure text is the fallback. */
+export function unapprovedWorktreeSetupNotice(repoKey: string): ContentChunk {
+  return notice("worktree-setup-unapproved", `The setup script for \`${repoKey}\` needs your approval.`);
+}
+
 export interface PrepareWorktreeInput {
   /** The registered path the worktree is created from; may be a repo subdirectory. */
   parentPath: string;
