@@ -737,8 +737,9 @@ every row, header included, past a phone viewport. The right pane is the file tr
     nothing to open, download or revert). The patch is `useCommitPatch`'s,
     fetched once. A file click puts the commit's whole diff in the table's
     place, every file in patch order, scrolled to that file (expanded first if
-    collapsed), under a "← Back to graph" row with the subject; the sidebar
-    stays and marks the file. Back or Escape shows the table again with the
+    collapsed), under a "← Back to graph" row with the subject and a "Close
+    diff" X level with the sidebar's; the sidebar stays and marks the file.
+    Back, the X or Escape shows the table again with the
     row still selected and focused; the table stays mounted but hidden
     meanwhile, so it keeps its scroll position. The diff scroller takes
     focus on a click, so Escape works after a click into the diff's text.
