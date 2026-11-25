@@ -79,6 +79,10 @@ const eslintConfig = defineConfig([
               message: "Import the checks module through @/components/blocks/checks.",
             },
             {
+              group: ["@/components/blocks/worktree-setups/*"],
+              message: "Import the worktree setups module through @/components/blocks/worktree-setups.",
+            },
+            {
               group: ["@/components/blocks/integrations/*"],
               message: "Import the integrations module through @/components/blocks/integrations.",
             },

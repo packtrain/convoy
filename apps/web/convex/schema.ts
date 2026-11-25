@@ -524,6 +524,27 @@ export default defineSchema({
     updatedAt: v.number(),
   }).index("by_projectId_and_normalizedName", ["projectId", "normalizedName"]),
 
+  // One setup script per project and repo (docs/specs/cli-worktrees.md#worktree-setup-scripts).
+  // Clearing the script deletes the row.
+  projectWorktreeSetups: defineTable({
+    projectId: v.id("projects"),
+    repoKey: v.string(), // "packtrain/convoy": owner/repo of the remote, lowercased, host ignored
+    script: v.string(), // bash, length-capped in the save mutation
+    revision: v.number(), // +1 every time `script` changes
+    createdBy: v.id("users"),
+    updatedBy: v.id("users"),
+    createdAt: v.number(),
+    updatedAt: v.number(),
+  }).index("by_projectId_and_repoKey", ["projectId", "repoKey"]),
+
+  // "This user approved this revision." One row per user and setup, overwritten on re-approval.
+  projectWorktreeSetupApprovals: defineTable({
+    userId: v.id("users"),
+    setupId: v.id("projectWorktreeSetups"),
+    revision: v.number(),
+    approvedAt: v.number(),
+  }).index("by_userId_and_setupId", ["userId", "setupId"]),
+
   // One answer to one Check from one run (docs/specs/task-checks.md). The newest
   // result per `checkKey` is current; older ones are history. Never edited.
   checkResults: defineTable({

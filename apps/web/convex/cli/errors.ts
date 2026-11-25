@@ -128,4 +128,12 @@ export const errors = {
   SEARCH_FILES_QUERY_MISSING: "File search requires a query",
   WORKTREE_REMOVE_NOT_WORKTREE: "Only worktree paths can be removed",
   WORKTREE_REMOVE_IN_USE: "A thread is currently running in this worktree",
+  WORKTREE_SETUP_NOT_FOUND: "Worktree setup not found",
+  WORKTREE_SETUP_REPO_KEY_INVALID: "Repository must be owner/repo, in lowercase",
+  WORKTREE_SETUP_SCRIPT_REQUIRED: "The setup script is empty. Remove the setup instead.",
+  worktreeSetupScriptTooLong: (max: number) => `The setup script can be at most ${max.toLocaleString("en-US")} characters`,
+  worktreeSetupLimitReached: (max: number) => `A project can have up to ${max} worktree setups`,
+  // The worktree exists without Convoy's marker by now, so an updated CLI would not set it up.
+  worktreeSetupNeedsCliUpdate: (repoKey: string, minVersion: string, path: string) =>
+    `This project has a worktree setup script for ${repoKey}. Update @useconvoy/cli to ${minVersion} or later, remove the worktree at ${path}, then retry.`,
 } as const;

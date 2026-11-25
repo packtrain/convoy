@@ -121,6 +121,7 @@ describe("getProjectSettingsNavItems", () => {
       "lists",
       "labels",
       "checks",
+      "worktrees",
       "customization",
       "pull-requests",
       "integrations",

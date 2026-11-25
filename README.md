@@ -71,7 +71,7 @@ welcome.
 | Task assignment to agents | Start work automatically when a task is assigned to a project agent. | Available |
 | Workflow editor | Define agent stages, checks and human approval gates. | Available |
 | Shared and isolated environments | Run every project under your own account and logins, or opt in to a Linux account and sandbox per project. | Available |
-| Git worktree isolation | Give agent threads separate working copies and branches. | Available |
+| Git worktree isolation | Give agent threads separate working copies and branches, optionally set up by a per-repo setup script. | Available |
 | Thread concurrency limits | Cap simultaneous agent threads per profile. | Available |
 | Quick thread | Press Shift+N on any page to start a thread in the background; Cmd/Ctrl+Enter starts it and opens it. | Available |
 | Watch Tower | Track your threads across projects, or view team activity inside a project. | Available |

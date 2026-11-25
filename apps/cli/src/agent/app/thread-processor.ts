@@ -14,6 +14,7 @@ import {
   type RunnerExecutionResult,
 } from "../runtimes/contracts.js";
 import { createScriptRunner } from "./script-runner.js";
+import { prepareWorktree, unapprovedWorktreeSetupMessage } from "./worktree-setup.js";
 import { withRunAttachmentInstructions } from "../runtimes/agent-instructions.js";
 import type { InteractionRouter } from "./interaction-router.js";
 import { getDebugLevel } from "../runtimes/debug.js";
@@ -479,6 +480,12 @@ export function createMessageHandler(
         let claimLost = false;
         let claimHeartbeatError: Error | null = null;
         let claimPollError: Error | null = null;
+        // Latched: a Stop that lands before the worktree setup script spawns still stops it.
+        const runAbort = new AbortController();
+        const abortRun = () => {
+          runRunner.abort();
+          runAbort.abort();
+        };
         let claimHeartbeatTimer: NodeJS.Timeout | null = null;
         let unsubscribeClaim: (() => void) | null = null;
         let flushBuffer: ChunkFlushBuffer | null = null;
@@ -493,7 +500,7 @@ export function createMessageHandler(
               if (!claimHeartbeatError) {
                 claimHeartbeatError = error instanceof Error ? error : new Error(String(error));
               }
-              runRunner.abort();
+              abortRun();
             });
           }, CLAIM_HEARTBEAT_MS);
           claimHeartbeatTimer.unref?.();
@@ -511,14 +518,14 @@ export function createMessageHandler(
                   return;
                 }
                 claimPollError = new Error("Chat claim no longer active");
-                runRunner.abort();
+                abortRun();
               },
               onError: (error) => {
                 if (claimPollError) {
                   return;
                 }
                 claimPollError = error instanceof Error ? error : new Error(String(error));
-                runRunner.abort();
+                abortRun();
               },
             }
           );
@@ -533,8 +540,24 @@ export function createMessageHandler(
           }
           let createdWorktreeThisRun = false;
 
+          // One factory for the setup output and the run, so both stream under the runtime's policy.
+          const newFlushBuffer = () => createChunkFlushBuffer({
+            policy: getChunkStreamPolicy(chat.cliType),
+            secrets: client.secrets,
+            send: (chunks) =>
+              client.mutation(api.cli.messages.appendRunContent, {
+                messageId: started.assistantMessageId,
+                sessionId: typedSessionId,
+                chunks,
+              }),
+          });
+
           if (pendingWorktree) {
             const spec = pendingWorktree;
+            const setup = started.worktreeSetup;
+            if (setup?.status === "unapproved") {
+              throw new Error(unapprovedWorktreeSetupMessage(setup.repoKey));
+            }
             await resolveExecutionWorkspace(workingDirectory);
             await client.mutation(api.cli.messages.appendRunContent, {
               messageId: started.assistantMessageId,
@@ -552,13 +575,40 @@ export function createMessageHandler(
             });
 
             // Idempotent: an existing worktree on this branch (from a prior
-            // failed attempt) is reused instead of erroring.
-            const created = await createWorktree({
+            // failed attempt) is reused instead of erroring. The setup script
+            // runs before `resolveCreated`, so a failure leaves the worktree pending.
+            const setupFlush = newFlushBuffer();
+            flushBuffer = setupFlush;
+            const setupRunner = newScriptRunner();
+            // CLI shutdown aborts `activeRunners`; route it to the latched abort.
+            activeRunners.set(chat._id as string, { ...setupRunner, abort: abortRun });
+            const prepared = await prepareWorktree({
               parentPath: workingDirectory,
               branch: spec.branch,
-              baseRef: spec.baseRef,
-              startFromOrigin: spec.startFromOrigin,
-            });
+              create: () => createWorktree({
+                parentPath: workingDirectory,
+                branch: spec.branch,
+                baseRef: spec.baseRef,
+                startFromOrigin: spec.startFromOrigin,
+              }),
+              setup: setup?.status === "approved" ? setup : undefined,
+              signal: runAbort.signal,
+              threadId: chat._id as string,
+              cliType: chat.cliType,
+              runner: setupRunner,
+              emit: (chunk) => {
+                setupFlush.enqueue(chunk);
+                if (setupFlush.failure) abortRun();
+              },
+            }).then((result) => ({ result }), (error: unknown) => ({ error }));
+            activeRunners.set(chat._id as string, runRunner);
+            // Drain first: the failure path stops the buffer, which would drop the script's last output.
+            await setupFlush.drain();
+            if (shuttingDown) throw new RunnerExecutionError(CLI_SHUTDOWN_REASON);
+            if (claimHeartbeatError) throw claimHeartbeatError;
+            if (claimPollError) throw claimPollError;
+            if ("error" in prepared) throw prepared.error;
+            const created = prepared.result;
             await client.mutation(api.cli.worktrees.resolveCreated, {
               threadId: chat._id,
               sessionId: typedSessionId,
@@ -802,16 +852,7 @@ export function createMessageHandler(
 
           // One in-flight append per message; deltas buffer while a send is in
           // flight and consecutive deltas coalesce per flush window (OS-991).
-          flushBuffer = createChunkFlushBuffer({
-            policy: getChunkStreamPolicy(chat.cliType),
-            secrets: client.secrets,
-            send: (chunks) =>
-              client.mutation(api.cli.messages.appendRunContent, {
-                messageId: started.assistantMessageId,
-                sessionId: typedSessionId,
-                chunks,
-              }),
-          });
+          flushBuffer = newFlushBuffer();
 
           let runResult: RunnerExecutionResult = {};
           let endedByShutdown = false;
@@ -952,7 +993,7 @@ export function createMessageHandler(
 
           console.error(chalk.red(`[Failed] chat ${shortId}: ${errorMessage}`));
           emitConnectEvent({ event: "thread", phase: "failed", threadId: chat._id as string, error: errorMessage });
-          runRunner.abort();
+          abortRun();
 
           try {
             await client.mutation(api.cli.messages.fail, {
