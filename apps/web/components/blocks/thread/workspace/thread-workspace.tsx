@@ -1638,6 +1638,7 @@ function ThreadWorkspaceBody({
             id: "pullRequest" as const,
             label: `#${attachedPullRequest.number}`,
             // The eye while Convoy watches the PR (docs/specs/pull-request-watch.md).
+            ariaLabel: pullRequestWatched ? `Watched #${attachedPullRequest.number}` : undefined,
             icon: pullRequestWatched ? <Eye className="size-4" /> : <GitPullRequest className="size-4" />,
           },
         ]
@@ -1809,7 +1810,9 @@ function ThreadWorkspaceBody({
           pullRequest={attachedPullRequest}
           organizationSlug={params.organizationSlug}
           projectAlias={params.projectAlias}
-          canWatch={!readOnly}
+          // The server refuses workflow lane threads, and Done ones until marked not done.
+          canWatch={!readOnly && shellChat?.workflowRunId === undefined}
+          watchDisabledReason={shellChat?.isDone ? "Mark this thread not done to watch its pull request" : undefined}
         />
       </div>
     ) : null;

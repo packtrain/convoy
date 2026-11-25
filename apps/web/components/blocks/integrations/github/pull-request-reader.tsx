@@ -265,7 +265,7 @@ export function PullRequestReader({
 
   return (
     <div className="flex min-h-0 min-w-0 flex-1 flex-col">
-      <header className="flex h-14 shrink-0 items-center gap-3 border-b px-4">
+      <header className="@container/pr-header flex h-14 shrink-0 items-center gap-3 border-b px-4">
         {backHref ? <MobileBackButton href={backHref} /> : null}
         <PullRequestStateIcon pr={pr} />
         <h1 className="min-w-0 flex-1 truncate text-sm font-medium" title={pr.title}>

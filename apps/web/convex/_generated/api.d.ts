@@ -174,6 +174,7 @@ import type * as integrations_github_lib_integrationCommentFilesRepo from "../in
 import type * as integrations_github_lib_integrationGuidePromptsRepo from "../integrations/github/lib/integrationGuidePromptsRepo.js";
 import type * as integrations_github_lib_integrationLinkedAccountsRepo from "../integrations/github/lib/integrationLinkedAccountsRepo.js";
 import type * as integrations_github_lib_integrationPullRequestGuidesRepo from "../integrations/github/lib/integrationPullRequestGuidesRepo.js";
+import type * as integrations_github_lib_integrationPullRequestWatchesRepo from "../integrations/github/lib/integrationPullRequestWatchesRepo.js";
 import type * as integrations_github_lib_integrationPullRequestsRepo from "../integrations/github/lib/integrationPullRequestsRepo.js";
 import type * as integrations_github_lib_integrationRepositoriesRepo from "../integrations/github/lib/integrationRepositoriesRepo.js";
 import type * as integrations_github_lib_integrationRepositoryLinksRepo from "../integrations/github/lib/integrationRepositoryLinksRepo.js";
@@ -184,8 +185,8 @@ import type * as integrations_github_lib_parsers from "../integrations/github/li
 import type * as integrations_github_lib_permissions from "../integrations/github/lib/permissions.js";
 import type * as integrations_github_lib_validators from "../integrations/github/lib/validators.js";
 import type * as integrations_github_merges from "../integrations/github/merges.js";
-import type * as integrations_github_pullRequests from "../integrations/github/pullRequests.js";
 import type * as integrations_github_pullRequestWatches from "../integrations/github/pullRequestWatches.js";
+import type * as integrations_github_pullRequests from "../integrations/github/pullRequests.js";
 import type * as integrations_github_reviews from "../integrations/github/reviews.js";
 import type * as integrations_github_setup from "../integrations/github/setup.js";
 import type * as integrations_github_states from "../integrations/github/states.js";
@@ -564,6 +565,7 @@ declare const fullApi: ApiFromModules<{
   "integrations/github/lib/integrationGuidePromptsRepo": typeof integrations_github_lib_integrationGuidePromptsRepo;
   "integrations/github/lib/integrationLinkedAccountsRepo": typeof integrations_github_lib_integrationLinkedAccountsRepo;
   "integrations/github/lib/integrationPullRequestGuidesRepo": typeof integrations_github_lib_integrationPullRequestGuidesRepo;
+  "integrations/github/lib/integrationPullRequestWatchesRepo": typeof integrations_github_lib_integrationPullRequestWatchesRepo;
   "integrations/github/lib/integrationPullRequestsRepo": typeof integrations_github_lib_integrationPullRequestsRepo;
   "integrations/github/lib/integrationRepositoriesRepo": typeof integrations_github_lib_integrationRepositoriesRepo;
   "integrations/github/lib/integrationRepositoryLinksRepo": typeof integrations_github_lib_integrationRepositoryLinksRepo;

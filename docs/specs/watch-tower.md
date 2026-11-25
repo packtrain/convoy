@@ -75,6 +75,8 @@ attention. Design playground: `apps/web/app/playground/watch-tower/`.
      bucket. A settled, not-done thread whose watched pull request still
      has checks running (`pullRequestChecksRunning`) is Running too, unless
      it needs attention ([Pull request watch → Watch status](pull-request-watch.md#watch-status-slice-4)).
+     The section's caption says so, short enough for a phone: "Agents
+     working, and PR checks running."
   2. **Waiting for your input** — status `waiting_input`, unacknowledged; or
      a running thread parked on a pending approval/question
      (`hasPendingInteraction`, see `docs/specs/cli-interactive-approvals.md`)

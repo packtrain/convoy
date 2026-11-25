@@ -188,11 +188,13 @@ vi.mock("sonner", () => ({
 }));
 
 const pullRequestReaderMounts = vi.fn();
+const pullRequestReaderProps = vi.fn();
 vi.mock("@/components/blocks/integrations", async (importOriginal) => {
   const { useEffect } = await import("react");
   return {
     ...(await importOriginal<object>()),
-    AttachedPullRequestReader: () => {
+    AttachedPullRequestReader: (props: { canWatch: boolean; watchDisabledReason?: string }) => {
+      pullRequestReaderProps(props);
       useEffect(() => pullRequestReaderMounts(), []);
       return <p>Pull request reader</p>;
     },
@@ -784,6 +786,9 @@ describe("ThreadWorkspace", () => {
         }
         if (functionName === "projects/members:getMyRole") {
           return "member";
+        }
+        if (functionName === "integrations/github/pullRequestWatches:getForThread") {
+          return null;
         }
         return defaultUseQueryResult;
       }
@@ -1644,6 +1649,42 @@ describe("ThreadWorkspace", () => {
 
     expect(within(sidebar).getByText("Pull request reader")).toBeDefined();
     expect(pullRequestReaderMounts).toHaveBeenCalledTimes(1);
+  });
+
+  test.each([
+    ["a workflow lane thread has no eye, since the server refuses it", { workflowRunId: "run_1" }, { canWatch: false, watchDisabledReason: undefined }],
+    ["a Done thread's eye says how to watch", { isDone: true }, { canWatch: true, watchDisabledReason: "Mark this thread not done to watch its pull request" }],
+    ["an open thread's eye is live", {}, { canWatch: true, watchDisabledReason: undefined }],
+  ])("%s (OS-2541)", (_name, patch, expected) => {
+    const { thread } = useCliThreadMock.getMockImplementation()?.() ?? useCliThreadMock();
+    useCliThreadMock.mockReturnValue({
+      isLoading: false,
+      thread: { ...thread, ...patch, attachedPullRequest: { owner: "acme", name: "web", number: 7, ref: "acme/web#7" } },
+    });
+    const priorQueryImpl = useQueryMock.getMockImplementation()!;
+    useQueryMock.mockImplementation((query: Parameters<typeof getFunctionName>[0], args: unknown) =>
+      getFunctionName(query) === "workflows/runs/core:get" ? null : priorQueryImpl(query, args)
+    );
+    pullRequestReaderProps.mockClear();
+    render(<ThreadWorkspaceHarness handedOverPanel="pullRequest" />);
+    expect(pullRequestReaderProps).toHaveBeenLastCalledWith(expect.objectContaining(expected));
+  });
+
+  test("a watched pull request's tab says so to screen readers, not only with the eye (OS-2541)", () => {
+    const { thread } = useCliThreadMock.getMockImplementation()?.() ?? useCliThreadMock();
+    useCliThreadMock.mockReturnValue({
+      isLoading: false,
+      thread: { ...thread, attachedPullRequest: { owner: "acme", name: "web", number: 7, ref: "acme/web#7" } },
+    });
+    const priorQueryImpl = useQueryMock.getMockImplementation()!;
+    useQueryMock.mockImplementation((query: Parameters<typeof getFunctionName>[0], args: unknown) =>
+      args !== "skip" && getFunctionName(query) === "integrations/github/pullRequestWatches:getForThread"
+        ? { startedAt: 1 }
+        : priorQueryImpl(query, args)
+    );
+    render(<ThreadWorkspaceHarness handedOverPanel="pullRequest" />);
+    const sidebar = screen.getByTestId("thread-detail-sidebar");
+    expect(within(sidebar).getByRole("tab", { name: "Watched #7" })).toBeDefined();
   });
 
   test("the header's pull request ref opens the sidebar on the pull request tab (OS-2405)", () => {

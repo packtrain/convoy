@@ -108,9 +108,10 @@ export function MergeStatus({
   return (
     <Popover open={open} onOpenChange={setOpen}>
       <PopoverTrigger asChild>
-        <Button variant="outline" size="sm" className="gap-1.5" disabled={!overview}>
+        <Button variant="outline" size="sm" className="gap-1.5" disabled={!overview} title="Merge status">
           <Icon className={tone ? TONES[tone].className : "animate-spin"} />
-          Merge status
+          {/* Icon only in a narrow header (the thread sidebar), so Refresh and Open on GitHub stay in view. */}
+          <span className="@max-lg/pr-header:sr-only">Merge status</span>
         </Button>
       </PopoverTrigger>
       {overview && rollup && target && plan ? (

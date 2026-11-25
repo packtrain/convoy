@@ -258,4 +258,17 @@ describe("QueuedMessagesStrip", () => {
       vi.useRealTimers();
     }
   });
+
+  test("a queued Pull request watch message keeps its GitHub badge (OS-2541)", () => {
+    render(
+      <QueuedMessagesStrip
+        messages={[{ _id: "watch-message" as Id<"cliMessages">, text: "Update on pull request #1", steerRequested: false, fromGithub: true }]}
+        canSteer={false}
+        onSteer={vi.fn()}
+        onEdit={vi.fn()}
+        onDelete={vi.fn()}
+      />
+    );
+    expect(screen.getByTitle("Sent by Convoy's watch on this thread's pull request").textContent).toBe("GitHub");
+  });
 });
