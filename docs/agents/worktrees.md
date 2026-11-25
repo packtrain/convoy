@@ -7,14 +7,18 @@ Full details: [`docs/specs/worktree-preview-deployments.md`](../specs/worktree-p
 **Never start the dev server or any app server in the primary checkout.** The app
 is normally already running there.
 
-**In a linked worktree you may — and should, for end-to-end verification — run
-`pnpm web:dev`.** It serves an isolated instance at
+**In a linked worktree you may run `pnpm web:dev`** when the task needs end-to-end
+verification or the user asks for it. It serves an isolated instance at
 `https://<branch-slug>.app.convoy.localhost`, backed by that worktree's own
 Convex preview deployment. Agent browser login works on that host too (see
 [ui-verification.md](ui-verification.md)). Unless `apps/web/.env.local` sets
 `NEXT_PUBLIC_AUTH_MODE=clerk` before setup, the preview runs Convex Auth and setup
 creates the agent user with the copied organizations
 ([spec](../specs/worktree-preview-deployments.md#convex-auth-mode)).
+
+Stop the server when you're done with it. While any background job runs, the
+thread queues incoming messages, so a server left running blocks the user and
+other agents from reaching you. Never leave one up while you wait on replies.
 
 ## Creating a worktree
 
@@ -62,7 +66,7 @@ counts):
 ```bash
 cp /workspace/apps/web/.env.local apps/web/ && pnpm i --prefer-offline
 pnpm worktree:setup          # preview deployment + dev data; prints the App URL
-pnpm worktree:dev            # run in the background
+pnpm worktree:dev            # run in the background; stop it when done
 ```
 
 Log in with the POST flow from [ui-verification.md](ui-verification.md),

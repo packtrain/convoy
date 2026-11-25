@@ -50,7 +50,11 @@ These apply to every task, no exceptions.
    edits. Ask before touching them.
 5. **Never start a dev server or app server in the primary checkout** — it is
    normally already running. `pnpm web:dev` is allowed *only* inside a linked
-   git worktree. See [Worktrees](docs/agents/worktrees.md).
+   git worktree. See [Worktrees](docs/agents/worktrees.md). Even there, start
+   one only when the task needs it (UI verification, say) or the user asks.
+   While a background job runs, the thread queues every incoming message, so
+   neither the user nor other agents can reach you. Stop the server as soon as
+   you're done with it, and always before you wait on replies.
 6. **Always use the `mcp__convoy__*` (prod) tools.** `convoy-dev` points at
    the dev environment — use `mcp__convoy-dev__*` only when the user
    explicitly asks for it, for testing. Never for real work.
