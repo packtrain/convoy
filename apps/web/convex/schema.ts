@@ -1560,6 +1560,27 @@ export default defineSchema({
     .index("by_projectId_and_repositoryId_and_number_and_createdAt", ["projectId", "repositoryId", "number", "createdAt"])
     .index("by_threadId", ["threadId"]),
 
+  // A thread's watch on its Attached pull request (docs/specs/pull-request-watch.md). Apart from
+  // `cliThreads`, which every thread list subscribes to, since each evaluation writes it.
+  integrationPullRequestWatches: defineTable({
+    threadId: v.id("cliThreads"),
+    projectId: v.id("projects"),
+    repositoryId: v.id("integrationRepositories"),
+    number: v.number(),
+    startedAt: v.number(),
+    // What was reported for the PR's current head: a push starts over.
+    headSha: v.string(),
+    failedChecks: v.array(v.string()),
+    // The time of the one evaluation scheduled or under way, and its token: a burst of events schedules one.
+    evaluateAt: v.optional(v.number()),
+    // An event came while that evaluation read GitHub, so another follows it.
+    eventDuringRead: v.optional(v.literal(true)),
+    evaluatedAt: v.number(),
+  })
+    .index("by_threadId", ["threadId"])
+    .index("by_repositoryId_and_number", ["repositoryId", "number"])
+    .index("by_repositoryId_and_headSha", ["repositoryId", "headSha"]),
+
   // A ready Guide's steps, up to 800 KB, apart from its row so the Guide menu never reads them.
   integrationPullRequestGuideSteps: defineTable({
     guideId: v.id("integrationPullRequestGuides"),

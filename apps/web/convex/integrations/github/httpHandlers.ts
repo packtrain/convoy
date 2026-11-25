@@ -41,10 +41,29 @@ export function parseGithubEvent(eventName: string | null, payload: unknown): Ve
       ? { provider: "github", github: { kind: "pullRequest", installationId, repositoryId, number } }
       : null;
   }
+  if (eventName === "check_suite" || eventName === "check_run" || eventName === "status") {
+    return parseChecksEvent(eventName, payload, installationId);
+  }
   if (eventName === "installation" || eventName === "installation_repositories") {
     return { provider: "github", github: { kind: "accessChanged", installationId } };
   }
   return null;
+}
+
+/** A finished check suite or run, or a commit status, for Pull request watches (docs/specs/pull-request-watch.md). */
+function parseChecksEvent(eventName: string, payload: unknown, installationId: number): VerifiedEvent | null {
+  const repositoryId = field(field(payload, "repository"), "id");
+  const subject = eventName === "status" ? payload : field(payload, eventName);
+  const headSha = eventName === "status" ? field(payload, "sha") : field(subject, "head_sha");
+  if (eventName !== "status" && field(payload, "action") !== "completed") return null;
+  if (typeof repositoryId !== "number" || typeof headSha !== "string") return null;
+  const pulls = field(subject, "pull_requests");
+  // GitHub lists PRs from any repository with this head; only this repository's are its own.
+  const numbers = (Array.isArray(pulls) ? pulls : [])
+    .filter((pull) => field(field(field(pull, "base"), "repo"), "id") === repositoryId)
+    .map((pull) => field(pull, "number"))
+    .filter((number): number is number => typeof number === "number");
+  return { provider: "github", github: { kind: "checks", installationId, repositoryId, headSha, numbers } };
 }
 
 export async function handleGithubWebhook(ctx: ActionCtx, request: Request): Promise<Response> {

@@ -38,6 +38,8 @@ import { sendThreadMessageCommand } from "./send.js";
 import { attachToResponseCommand } from "./attach.js";
 import { attachTaskToThreadCommand } from "./attach-task.js";
 import { attachPullRequestToThreadCommand } from "./attach-pr.js";
+import { watchPullRequestCommand } from "./watch-pr.js";
+import { unwatchPullRequestCommand } from "./unwatch-pr.js";
 import { listThreadChecksCommand } from "./checks.js";
 import { submitGuideCommand } from "./submit-guide.js";
 import { readGuideCommand } from "./read-guide.js";
@@ -731,6 +733,45 @@ describe("threads write commands", () => {
       expect(mutation).toHaveBeenCalledWith(api.cli.threads.core.attachPullRequest, { threadId: "thr_1", pullRequest: "contoso/convoy#482" });
       expect(console.log).toHaveBeenCalledWith(chalk.green("✓") + " Pull request attached to thread");
       expect(console.log).toHaveBeenCalledWith(`  Link it in messages as [PR title](${url} "state=open")`);
+    });
+  });
+
+  describe("threads watch-pr", () => {
+    const started = {
+      pullRequest: "contoso/convoy#482",
+      url: "https://github.com/contoso/convoy/pull/482",
+      alreadyWatching: false,
+      headSha: "1a2b3c4d5e",
+      baseRef: "main",
+      conflicts: false,
+      failingChecks: [{ name: "test", url: "https://github.com/runs/1" }],
+      runningChecks: [{ name: "build", url: null }],
+    };
+
+    it("starts the watch and prints what already fails", async () => {
+      action.mockResolvedValueOnce(started);
+      await invoke(watchPullRequestCommand, ["thr_1", "contoso/convoy#482"]);
+      expect(action).toHaveBeenCalledWith(api.integrations.github.pullRequestWatches.watch, { threadId: "thr_1", pullRequest: "contoso/convoy#482" });
+      expect(console.log).toHaveBeenCalledWith(chalk.green("✓") + ` Watching contoso/convoy#482 ${chalk.dim(started.url)}`);
+      expect(console.log).toHaveBeenCalledWith(`  - test ${chalk.dim("https://github.com/runs/1")}`);
+      expect(console.log).toHaveBeenCalledWith("  - build");
+      expect(console.log).toHaveBeenCalledWith("Convoy reports only what changes from now on: fix what already fails, then end your turn.");
+    });
+
+    it("watches the attached PR when none is named", async () => {
+      action.mockResolvedValueOnce({ ...started, failingChecks: [], runningChecks: [] });
+      await invoke(watchPullRequestCommand, ["thr_1", undefined]);
+      expect(action).toHaveBeenCalledWith(api.integrations.github.pullRequestWatches.watch, { threadId: "thr_1" });
+      expect(console.log).toHaveBeenCalledWith("Convoy messages this thread when checks fail. End your turn now.");
+    });
+  });
+
+  describe("threads unwatch-pr", () => {
+    it("stops the watch", async () => {
+      mutation.mockResolvedValueOnce(null);
+      await invoke(unwatchPullRequestCommand, ["thr_1"]);
+      expect(mutation).toHaveBeenCalledWith(api.integrations.github.pullRequestWatches.unwatch, { threadId: "thr_1" });
+      expect(console.log).toHaveBeenCalledWith(chalk.green("✓") + " Stopped watching the pull request");
     });
   });
 

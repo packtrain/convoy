@@ -60,6 +60,7 @@ export function PullRequestReader({
   onTabChange,
   backHref,
   titleHref,
+  headerAction,
 }: {
   projectId: Id<"projects">;
   repositoryId: string;
@@ -77,6 +78,8 @@ export function PullRequestReader({
   backHref?: RouteTarget;
   /** Makes the header title a link, e.g. from the thread sidebar to the full reader page. */
   titleHref?: RouteTarget;
+  /** Before Refresh: the thread sidebar's watch toggle. */
+  headerAction?: ReactNode;
 }) {
   const args = { projectId, repositoryId, number };
   const result = useQuery(api.integrations.github.pullRequests.get, args);
@@ -305,6 +308,7 @@ export function PullRequestReader({
           }}
         />
         <PullRequestStateActions projectId={projectId} repositoryId={repositoryId} pr={pr} commenting={commenting} />
+        {headerAction}
         <Button
           variant="ghost"
           size="icon-sm"

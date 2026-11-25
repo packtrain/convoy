@@ -23,7 +23,7 @@ const connection = (state: "active" | "disconnected") => ({
   repository: { owner: "acme", name: "web", htmlUrl: "https://github.com/acme/web" },
 });
 const tab = () => (
-  <AttachedPullRequestReader projectId={"project_1" as Id<"projects">} pullRequest={pullRequest} organizationSlug="org" projectAlias="WEB" />
+  <AttachedPullRequestReader projectId={"project_1" as Id<"projects">} threadId={"thread_1" as Id<"cliThreads">} pullRequest={pullRequest} organizationSlug="org" projectAlias="WEB" canWatch />
 );
 
 afterEach(cleanup);

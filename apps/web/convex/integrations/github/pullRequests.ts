@@ -10,7 +10,7 @@ import { taskSummaryValidator, toTaskSummary, type TaskSummary } from "../../lib
 import { getActiveProjectByAlias, getProjectById } from "../../projects/lib/projectsRepo";
 import { findTaskByRefNumber } from "../../tasks/lib/tasksRepo";
 import { errors } from "./errors";
-import { GithubError, githubFetch, githubGraphql, isAccessLoss, mintRepositoryToken, repoPath, requireConfig, toUserError } from "./lib/github";
+import { fetchHeadChecks, GithubError, githubFetch, githubGraphql, isAccessLoss, mintRepositoryToken, repoPath, requireConfig, toUserError } from "./lib/github";
 import { PAGE_SIZE } from "./lib/constants";
 import {
   DIFF_MAX_FILES,
@@ -484,7 +484,7 @@ async function pullRequestNode(token: string, pullRequestId: string): Promise<un
   }
 }
 
-// ponytail: first 100 commits, reviews, comments, review threads, and checks; page them when PRs outgrow that.
+// ponytail: first 100 commits, reviews, comments, and review threads; page them when PRs outgrow that.
 // A push or base change before or during the read would mix revisions, so the PR must stay at the diff's revision.
 async function readOverviewFrom(
   token: string,
@@ -501,18 +501,17 @@ async function readOverviewFrom(
     return pr;
   };
   const pr = await readPr();
-  const [commits, reviews, comments, reviewComments, checkRuns, status, compare, node] = await Promise.all([
+  const [commits, reviews, comments, reviewComments, checks, compare, node] = await Promise.all([
     githubFetch(`${base}/pulls/${number}/commits?per_page=100`, auth),
     githubFetch(`${base}/pulls/${number}/reviews?per_page=100`, auth),
     githubFetch(`${base}/issues/${number}/comments?per_page=100`, auth),
     githubFetch(`${base}/pulls/${number}/comments?per_page=100`, auth),
-    githubFetch(`${base}/commits/${headSha}/check-runs?per_page=100`, auth),
-    githubFetch(`${base}/commits/${headSha}/status?per_page=100`, auth),
+    fetchHeadChecks(token, context, headSha),
     compareOrNull(`${base}/compare/${baseSha}...${headSha}?per_page=1`, auth),
     pullRequestNode(token, str(pr.node_id)),
   ]);
   await readPr();
-  return normalizeOverview(appId, { pr, commits, reviews, comments, reviewComments, checkRuns, status, compare, node });
+  return normalizeOverview(appId, { pr, commits, reviews, comments, reviewComments, ...checks, compare, node });
 }
 
 /** Contents API limit for base64 bodies; larger files come back without content. */

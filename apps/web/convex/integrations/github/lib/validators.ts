@@ -55,7 +55,15 @@ export const verifiedEventValidator = v.object({
       repositoryId: v.number(),
       number: v.number(),
     }),
-    v.object({ kind: v.literal("accessChanged"), installationId: v.number() })
+    v.object({ kind: v.literal("accessChanged"), installationId: v.number() }),
+    // A check finished or a status changed on `headSha`; `numbers` lists the PRs GitHub matched, empty for a fork.
+    v.object({
+      kind: v.literal("checks"),
+      installationId: v.number(),
+      repositoryId: v.number(),
+      headSha: v.string(),
+      numbers: v.array(v.number()),
+    })
   ),
 });
 export type VerifiedEvent = Infer<typeof verifiedEventValidator>;

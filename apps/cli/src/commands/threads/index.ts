@@ -8,6 +8,8 @@ import { markThreadDoneCommand } from "./done.js";
 import { attachToResponseCommand } from "./attach.js";
 import { attachTaskToThreadCommand } from "./attach-task.js";
 import { attachPullRequestToThreadCommand } from "./attach-pr.js";
+import { watchPullRequestCommand } from "./watch-pr.js";
+import { unwatchPullRequestCommand } from "./unwatch-pr.js";
 import { listThreadChecksCommand } from "./checks.js";
 import { readGuideCommand } from "./read-guide.js";
 import { submitGuideCommand } from "./submit-guide.js";
@@ -22,6 +24,8 @@ export const threadsCommand = new Command("threads")
   .addCommand(markThreadDoneCommand)
   .addCommand(attachTaskToThreadCommand)
   .addCommand(attachPullRequestToThreadCommand)
+  .addCommand(watchPullRequestCommand)
+  .addCommand(unwatchPullRequestCommand)
   .addCommand(attachToResponseCommand)
   .addCommand(listThreadChecksCommand)
   .addCommand(submitGuideCommand)

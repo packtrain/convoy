@@ -88,7 +88,8 @@ Committed on `main` as `adfa1f173` …
 - The `>` note appears only when `hasOlderEnvelopes` is true or a fork's
   ancestor walk ended early (see Forks).
 - Author is `You`, `Another agent` (a message another thread's agent sent —
-  `sentBy`, OS-1631), or the CLI label for an assistant turn.
+  `sentBy`, OS-1631), `GitHub` (a Pull request watch's message), or the CLI
+  label for an assistant turn.
 - Timestamps are UTC in `YYYY-MM-DD HH:mm` form. Local time would be friendlier
   but makes the document depend on the exporting machine's zone.
 - Body text is the message's text parts, joined with a blank line, verbatim — it

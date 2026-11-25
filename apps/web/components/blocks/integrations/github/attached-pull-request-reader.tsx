@@ -8,18 +8,24 @@ import { Button } from "@/components/ui/button";
 import { appRoute } from "@/lib/navigation";
 import { PullRequestReader, PullRequestReaderSkeleton } from "./pull-request-reader";
 import { useIntegrationStatus } from "./use-integration-status";
+import { PullRequestWatchButton } from "./pull-request-watch";
 
 /** The thread sidebar's Attached pull request tab: the PR reader when its repository is connected here, a GitHub link otherwise. */
 export function AttachedPullRequestReader({
   projectId,
+  threadId,
   pullRequest,
   organizationSlug,
   projectAlias,
+  canWatch,
 }: {
   projectId: Id<"projects">;
+  threadId: Id<"cliThreads">;
   pullRequest: AttachedPullRequest;
   organizationSlug: string;
   projectAlias: string;
+  /** Only the thread owner sees and toggles the Pull request watch. */
+  canWatch: boolean;
 }) {
   const status = useIntegrationStatus(projectId);
   if (status === undefined) return <PullRequestReaderSkeleton />;
@@ -56,6 +62,7 @@ export function AttachedPullRequestReader({
       titleHref={appRoute.projectPullRequest(organizationSlug, projectAlias, connection.repositoryId, pullRequest.number)}
       organizationSlug={organizationSlug}
       projectAlias={projectAlias}
+      headerAction={canWatch ? <PullRequestWatchButton threadId={threadId} /> : undefined}
     />
   );
 }

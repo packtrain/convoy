@@ -648,6 +648,17 @@ describe("ThreadMessageList assistant timestamp (OS-1480)", () => {
       ).toBeNull();
     });
 
+    test("labels a Pull request watch's message GitHub, on the foreign tint", () => {
+      const { container } = renderList({
+        visibleMessages: [createUserMessage({ sentBy: { kind: "pullRequestWatch" } })],
+        latestThreadMessageId: USER_MESSAGE_ID,
+      });
+
+      expect(screen.getByText("GitHub")).toBeTruthy();
+      expect(container.querySelector(".group-\\[\\.is-user\\]\\:bg-thread-message-foreign")).not.toBeNull();
+      expect(screen.queryByLabelText(SENT_BY_LABEL)).toBeNull();
+    });
+
     // The slugs are optional props, and a badge with no route is worse than none.
     test("omits the badge when the route is unknown", () => {
       renderList({

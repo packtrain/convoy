@@ -225,3 +225,23 @@ export function repoPath(context: SyncContext): string {
   return `/repositories/${context.providerRepositoryId}`;
 }
 
+
+const CHECKS_PAGE_SIZE = 100;
+// ponytail: 10 pages, 1,000 check runs and 1,000 statuses; page further when a repository outgrows that.
+const CHECKS_PAGES_MAX = 10;
+
+/** Every check run and commit status on `headSha`, as GitHub's own responses would hold them unpaged. */
+export async function fetchHeadChecks(token: string, context: SyncContext, headSha: string): Promise<{ checkRuns: unknown; status: unknown }> {
+  const base = `${repoPath(context)}/commits/${headSha}`;
+  const readAll = async (path: string, key: string) => {
+    const items: unknown[] = [];
+    for (let page = 1; page <= CHECKS_PAGES_MAX; page++) {
+      const batch = list(record(await githubFetch(`${base}/${path}?per_page=${CHECKS_PAGE_SIZE}&page=${page}`, { token }))[key] ?? []);
+      items.push(...batch);
+      if (batch.length < CHECKS_PAGE_SIZE) break;
+    }
+    return { [key]: items };
+  };
+  const [checkRuns, status] = await Promise.all([readAll("check-runs", "check_runs"), readAll("status", "statuses")]);
+  return { checkRuns, status };
+}

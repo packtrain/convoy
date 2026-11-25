@@ -50,6 +50,7 @@ import {
   cliMessageAttachmentMetadataValidator,
   cliMessageAttachmentSummaryValidator,
   cliMessageSentByValidator,
+  cliMessageThreadSenderValidator,
   cliRunDiffSummaryPreviewValidator,
   cliRunDiffSummaryValidator,
   cliScriptRequestValidator,
@@ -482,7 +483,8 @@ export const send = mutation({
      * in-progress run. Ignored when the run cannot consume it — the message
      * just queues, the standard fallback. */
     steer: v.optional(v.boolean()),
-    sentBy: v.optional(cliMessageSentByValidator),
+    /** Only another thread; a Pull request watch sends through `sendForPullRequestWatch`. */
+    sentBy: v.optional(cliMessageThreadSenderValidator),
     apiKey: v.optional(v.string()),
   },
   returns: v.id("cliMessages"),
@@ -719,33 +721,84 @@ export const sendForWorkflowStep = internalMutation({
       scriptRequest: args.scriptRequest,
       timestamp: now,
     });
-    const userMessageId = await insertCliMessage(ctx, userMessage);
-    const nextChunkOrder = await insertMessageChunkRows(ctx, {
-      message: {
-        _id: userMessageId,
-        threadId: userMessage.threadId,
-        profileId: userMessage.profileId,
-        role: userMessage.role,
-        cliType: userMessage.cliType,
-      },
-      chunks: [{ type: "text", data: trimmedContent, timestamp: now, createdAt: now }],
-      startChunkOrder: userMessage.nextChunkOrder ?? 0,
-    });
-    if (nextChunkOrder !== (userMessage.nextChunkOrder ?? 0)) {
-      await setMessageChunkOrder(ctx, userMessageId, nextChunkOrder);
+    return queueInternalMessage(ctx, thread, userMessage, trimmedContent, now);
+  },
+});
+
+/** The internal senders' tail: store the text message, then mark the thread pending. */
+async function queueInternalMessage(
+  ctx: MutationCtx,
+  thread: Doc<"cliThreads">,
+  userMessage: ReturnType<typeof createUserMessage>,
+  content: string,
+  now: number
+): Promise<Id<"cliMessages">> {
+  const userMessageId = await insertCliMessage(ctx, userMessage);
+  const nextChunkOrder = await insertMessageChunkRows(ctx, {
+    message: {
+      _id: userMessageId,
+      threadId: userMessage.threadId,
+      profileId: userMessage.profileId,
+      role: userMessage.role,
+      cliType: userMessage.cliType,
+    },
+    chunks: [{ type: "text", data: content, timestamp: now, createdAt: now }],
+    startChunkOrder: userMessage.nextChunkOrder ?? 0,
+  });
+  if (nextChunkOrder !== (userMessage.nextChunkOrder ?? 0)) {
+    await setMessageChunkOrder(ctx, userMessageId, nextChunkOrder);
+  }
+  // Same composer-pill denorm as `send` (OS-1454): a later step may dispatch
+  // with a different mode/model than the one the thread started with.
+  await setThreadLastUsedCliSelection(ctx, thread, {
+    cliModel: userMessage.cliModel,
+    cliEffort: userMessage.cliEffort,
+    cliMode: userMessage.cliMode,
+  });
+  await markThreadPending(ctx, thread._id, {
+    now,
+    flipToPending: thread.processingState === "idle",
+  });
+  return userMessageId;
+}
+
+/**
+ * A Pull request watch's message (docs/specs/pull-request-watch.md), sent as the
+ * thread owner on the thread's last-used selection. Null, and nothing sent, once
+ * the owner lost the project or the thread can't run, which ends the watch.
+ */
+export const sendForPullRequestWatch = internalMutation({
+  args: { threadId: v.id("cliThreads"), content: v.string() },
+  returns: v.union(v.id("cliMessages"), v.null()),
+  handler: async (ctx, args) => {
+    const thread = await getThreadById(ctx, args.threadId);
+    const profile = thread && !thread.isDeleted ? await getCliProfileById(ctx, thread.profileId) : null;
+    if (
+      !thread ||
+      !profile ||
+      profile.isDeleted ||
+      !(await hasProjectAccess(ctx, { userId: thread.userId, apiKeyScope: null }, thread.projectId, ProjectPermission.CLI_THREAD))
+    ) {
+      return null;
     }
-    // Same composer-pill denorm as `send` (OS-1454): a later step may dispatch
-    // with a different mode/model than the one the thread started with.
-    await setThreadLastUsedCliSelection(ctx, thread, {
-      cliModel: userMessage.cliModel,
-      cliEffort: userMessage.cliEffort,
-      cliMode: userMessage.cliMode,
+    const now = Date.now();
+    const content = args.content.trim();
+    ensure(content.length).gte(1, errors.MESSAGE_CONTENT_REQUIRED);
+    const remembered = thread.metadata?.cli;
+    const userMessage = createUserMessage({
+      threadId: thread._id,
+      profileId: thread.profileId,
+      cliType: thread.cliType,
+      cliMode: remembered?.lastUsedMode,
+      cliModel: remembered?.lastUsedModel,
+      cliEffort: remembered?.lastUsedEffort,
+      taskId: thread.associatedTaskId,
+      pullRequest: thread.attachedPullRequest,
+      content,
+      sentBy: { kind: "pullRequestWatch" },
+      timestamp: now,
     });
-    await markThreadPending(ctx, args.threadId, {
-      now,
-      flipToPending: thread.processingState === "idle",
-    });
-    return userMessageId;
+    return queueInternalMessage(ctx, thread, userMessage, content, now);
   },
 });
 

@@ -1,6 +1,6 @@
 "use client";
 
-import { CornerDownLeft } from "lucide-react";
+import { CornerDownLeft, Github } from "lucide-react";
 import type { Id } from "@/convex/_generated/dataModel";
 import { AppLink } from "@/lib/navigation/app-link";
 import { appRoute } from "@/lib/navigation/routes";
@@ -35,5 +35,18 @@ export function MessageSentByBadge({
     >
       <CornerDownLeft className="size-3.5" />
     </AppLink>
+  );
+}
+
+/** A Pull request watch sent this message (docs/specs/pull-request-watch.md). */
+export function MessageFromGithubBadge() {
+  return (
+    <span
+      className="flex items-center gap-1 text-xs text-muted-foreground"
+      title="Sent by Convoy's watch on this thread's pull request"
+    >
+      <Github className="size-3.5" />
+      GitHub
+    </span>
   );
 }

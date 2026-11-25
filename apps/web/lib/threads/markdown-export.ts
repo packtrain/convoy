@@ -11,8 +11,8 @@ export interface ThreadExportEnvelope {
   createdAt: number;
   status?: string;
   errorMessage?: string;
-  /** Another thread's agent posted this message (OS-1631). */
-  sentBy?: { kind: "thread"; threadId: string };
+  /** Another thread's agent (OS-1631) or a Pull request watch posted this message. */
+  sentBy?: { kind: "thread"; threadId: string } | { kind: "pullRequestWatch" };
   attachments?: Array<{ fileName: string; fileSize: number }>;
 }
 
@@ -45,6 +45,9 @@ function authorLabel(
     return cliLabel ?? AGENT_FALLBACK_LABEL;
   }
 
+  if (envelope.sentBy?.kind === "pullRequestWatch") {
+    return "GitHub";
+  }
   return envelope.sentBy ? "Another agent" : "You";
 }
 

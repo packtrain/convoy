@@ -32,7 +32,7 @@ import { useThreadChecks } from "@/components/blocks/checks";
 import { AssistantCliMessage } from "@/components/blocks/thread/assistant-cli-thread-message";
 import { UserAskUserQuestionResponse } from "@/components/blocks/thread/message-parts/components/user-ask-user-question-response";
 import { UserMessageFooter } from "@/components/blocks/thread/message-parts/components/user-message-footer";
-import { MessageSentByBadge } from "@/components/blocks/thread/message-sent-by-badge";
+import { MessageFromGithubBadge, MessageSentByBadge } from "@/components/blocks/thread/message-sent-by-badge";
 import { UserMessageText } from "@/components/blocks/thread/message-parts/components/user-message-text";
 import { ResponseAttachments } from "@/components/blocks/thread/response-attachments";
 import { ThreadTaskPillLink } from "@/components/blocks/thread/thread-task-link";
@@ -475,6 +475,7 @@ export const ThreadMessageList = memo(function ThreadMessageList({
           message.role === "user" && message.sentBy?.kind === "thread"
             ? message.sentBy.threadId
             : undefined;
+        const sentByPullRequestWatch = message.role === "user" && message.sentBy?.kind === "pullRequestWatch";
         const isStreaming = message.status === "streaming";
         const isFailed = message.status === "failed";
         const isPending = message.status === "pending";
@@ -702,7 +703,7 @@ export const ThreadMessageList = memo(function ThreadMessageList({
                                   // "Not you" (OS-1631): `bg-secondary` is "what I said",
                                   // so an agent's message must not wear it. Teammate
                                   // messages will join this category.
-                                  sentByThreadId &&
+                                  (sentByThreadId || sentByPullRequestWatch) &&
                                     "group-[.is-user]:bg-thread-message-foreign",
                                   // A workflow script the CLI runs, in the bash card's exec accent (OS-1886).
                                   message.scriptRequest &&
@@ -754,6 +755,7 @@ export const ThreadMessageList = memo(function ThreadMessageList({
                           />
                           {/* Rightmost: the arrow points back down-left into its
                               own bubble, so it reads as a terminal accent. */}
+                          {sentByPullRequestWatch && <MessageFromGithubBadge />}
                           {sentByThreadId && organizationSlug && projectAlias && (
                             <MessageSentByBadge
                               threadId={sentByThreadId}

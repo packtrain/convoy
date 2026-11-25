@@ -592,12 +592,21 @@ export function createFakeGithub() {
     match = /^\/repositories\/(\d+)\/commits\/([^/]+)\/(check-runs|status)$/.exec(path);
     if (match) {
       const pr = pullForSha(Number(match[1]), match[2]);
-      if (match[3] === "status") return json(200, { statuses: pr?.statuses ?? [] });
+      // Paged like GitHub: at most `per_page` (100) a page, with the total.
+      const perPage = Math.min(Number(url.searchParams.get("per_page") ?? 30), 100);
+      const page = Number(url.searchParams.get("page") ?? 1);
+      const slice = <T,>(items: T[]) => items.slice((page - 1) * perPage, page * perPage);
+      if (match[3] === "status") {
+        const statuses = pr?.statuses ?? [];
+        return json(200, { total_count: statuses.length, statuses: slice(statuses) });
+      }
       const created = state.createdCheckRuns
         .filter((run) => run.repositoryId === Number(match![1]) && run.head_sha === match![2])
         .map((run) => ({ id: run.id, name: run.name, status: "completed", conclusion: run.conclusion, title: run.output.title, app: run.app }));
+      const runs = [...(pr?.checkRuns ?? []), ...created];
       return json(200, {
-        check_runs: [...(pr?.checkRuns ?? []), ...created].map((run) => ({ ...run, output: { title: run.title ?? null }, html_url: `https://github.com/runs/${run.id}` })),
+        total_count: runs.length,
+        check_runs: slice(runs).map((run) => ({ ...run, output: { title: run.title ?? null }, html_url: `https://github.com/runs/${run.id}` })),
       });
     }
     match = /^\/repositories\/(\d+)\/compare\/([^.]+)\.\.\.(.+)$/.exec(path);
