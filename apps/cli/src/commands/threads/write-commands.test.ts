@@ -137,6 +137,66 @@ describe("threads write commands", () => {
       expect(vi.mocked(console.log).mock.calls.flat().join("\n")).toContain("thr_new");
     });
 
+    it("passes --cli-model and --cli-effort and prints the stored selection (OS-2569)", async () => {
+      query
+        .mockResolvedValueOnce([
+          { _id: "proj_web_1", name: "Web", alias: "WEB", organizationId: "org_acme", organizationName: "Acme", organizationSlug: "acme", role: { name: "org-owner", permissions: ["*"] } },
+        ])
+        .mockResolvedValueOnce({ ...threadRow, threadId: "thr_new", cliModel: "opus-5-5", cliEffort: "high" });
+      mutation.mockResolvedValueOnce("thr_new");
+      createThreadCommand.setOptionValue("profileId", "prof_1");
+      createThreadCommand.setOptionValue("pathId", "path_1");
+      createThreadCommand.setOptionValue("cliType", "claude-code");
+      createThreadCommand.setOptionValue("cliModel", "opus-5-5");
+      createThreadCommand.setOptionValue("cliEffort", "high");
+      createThreadCommand.setOptionValue("content", "Review the invoice rounding");
+
+      await invoke(createThreadCommand, []);
+
+      expect(mutation).toHaveBeenCalledWith(api.cli.threads.core.create, expect.objectContaining({
+        cliModel: "opus-5-5",
+        cliEffort: "high",
+      }));
+      expect(query).toHaveBeenLastCalledWith(api.cli.threads.summaries.getSummary, { threadId: "thr_new" });
+      expect(vi.mocked(console.log).mock.calls.flat().join("\n")).toContain("Model: opus-5-5 (effort: high)");
+    });
+
+    it("passes --cli-model and --cli-effort to a Group child, not inherited from --source", async () => {
+      query
+        .mockResolvedValueOnce({ ...threadRow, cliModel: "opus-5-5", cliEffort: "high" })
+        .mockResolvedValueOnce({ ...threadRow, threadId: "thr_new", cliModel: null, cliEffort: null });
+      mutation.mockResolvedValueOnce({ threadId: "thr_new", containerId: "thr_group" });
+      createThreadCommand.setOptionValue("source", "thr_1");
+      createThreadCommand.setOptionValue("cliType", "codex");
+      createThreadCommand.setOptionValue("cliModel", "gpt-6-astra");
+      createThreadCommand.setOptionValue("content", "Review my work");
+
+      await invoke(createThreadCommand, []);
+
+      const args = mutation.mock.calls[0]?.[1] as Record<string, unknown>;
+      expect(args).toMatchObject({ cliType: "codex", cliModel: "gpt-6-astra" });
+      expect(args).not.toHaveProperty("cliEffort");
+      // The server dropped or never got a selection: say so rather than echo the flag.
+      expect(vi.mocked(console.log).mock.calls.flat().join("\n")).toContain("Model: machine default (effort: machine default)");
+    });
+
+    it("still reports the created thread when the selection read fails", async () => {
+      vi.spyOn(console, "error").mockImplementation(() => undefined);
+      query.mockResolvedValueOnce(threadRow).mockRejectedValueOnce(new Error("network down"));
+      mutation.mockResolvedValueOnce({ threadId: "thr_new", containerId: "thr_group" });
+      createThreadCommand.setOptionValue("source", "thr_1");
+      createThreadCommand.setOptionValue("content", "Review my work");
+
+      await invoke(createThreadCommand, []);
+
+      // The thread is already queued: failing here would invite a duplicate retry.
+      const output = vi.mocked(console.log).mock.calls.flat().join("\n");
+      expect(output).toContain("thr_new");
+      expect(output).toContain("Model: unknown");
+      expect(output).not.toContain("machine default");
+      expect(vi.mocked(console.error).mock.calls.flat().join("\n")).toContain("network down");
+    });
+
     it("starts the thread in a new worktree of its path", async () => {
       query.mockResolvedValueOnce([
         { _id: "proj_web_1", name: "Web", alias: "WEB", organizationId: "org_acme", organizationName: "Acme", organizationSlug: "acme", role: { name: "org-owner", permissions: ["*"] } },
@@ -193,7 +253,7 @@ describe("threads write commands", () => {
       await invoke(createThreadCommand, []);
 
       // No project resolution: the source thread's own project is authoritative.
-      expect(query).toHaveBeenCalledTimes(1);
+      expect(queriedFunctions()).not.toContain("projects/core:listAccessible");
       expect(mutation).toHaveBeenCalledWith(api.cli.threads.groups.addThreadToGroup, {
         profileId: "prof_1",
         pathId: "path_1",

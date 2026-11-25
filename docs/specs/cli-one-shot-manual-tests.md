@@ -343,6 +343,10 @@ pnpm --filter @useconvoy/cli run dev -- threads create --source <containerId> --
 pnpm --filter @useconvoy/cli run dev -- threads create --profile-id <profileId> \
   --path-id <pathId> --cli-type claude-code --content "What is in this file?" --attach ./README.md
 
+# Expect "Model: opus-5-5 (effort: high)"; without the flags, "machine default".
+pnpm --filter @useconvoy/cli run dev -- threads create --source <threadId> \
+  --cli-model opus-5-5 --cli-effort high --content "Say hello and stop"
+
 # Expect an error naming the valid runtimes, with no mutation attempted.
 pnpm --filter @useconvoy/cli run dev -- threads create --profile-id <profileId> \
   --path-id <pathId> --cli-type claude --content "Hello"

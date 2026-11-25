@@ -621,11 +621,12 @@ status changes rather than being true last-activity.
 ### `threads create`
 
 - Usage: `convoy threads create --profile-id <id> --path-id <id> --cli-type <type>
+  [--cli-model <model>] [--cli-effort <effort>]
   --content <text> [--content-file <path>] [--title <title>] [--task <taskId>]
   [--source <threadId|containerId>] [--attach <file...>]
   [--worktree-branch <branch> [--base-ref <ref>] [--from-origin]]`.
 - Calls `api.cli.threads.core.create`, or `api.cli.threads.groups.addThreadToGroup` when
-  `--source` is given. Returns `{ threadId, containerId }` in JSON mode;
+  `--source` is given. Returns `{ threadId, containerId, cliModel, cliEffort }` in JSON mode;
   `containerId` is absent for a from-scratch create.
 - `--source` resolution mirrors the MCP `create_thread` tool exactly — a thread id
   spawns a sibling (which lazily creates a group), a container id resolves to a
@@ -645,6 +646,16 @@ status changes rather than being true last-activity.
   `--task acme/WEB-12` still names its own project, as everywhere else.
 - `--cli-type` is validated in the CLI against the same list as `cliTypeValidator`,
   so a typo names the valid runtimes instead of failing inside the mutation.
+- `--cli-model` and `--cli-effort` map to `cliModel` / `cliEffort`, the same
+  free-form strings MCP `create_thread` takes, on both the plain and `--source`
+  paths (OS-2569). Neither is inherited from `--source`; omitted, the thread runs
+  on the machine's default. Storage normalizes both per runtime and can drop an
+  unsupported value, so after the mutation the command reads `getSummary` and
+  prints the stored `Model: <model> (effort: <effort>)`, "machine default" for a
+  `null` field. JSON output adds `cliModel` and `cliEffort` (null when unset).
+  The thread is already queued when that read runs, so a failed read only warns
+  on stderr and prints `Model: unknown` (JSON omits both fields). The thread ID
+  still prints and the exit code stays 0, so a retry doesn't spawn a duplicate.
 - `--content` and `--content-file` are mutually exclusive, and either may be
   omitted entirely when `--attach` is given — an attachment can carry the message.
   The requirement is that content **or** an attachment is present, matching the

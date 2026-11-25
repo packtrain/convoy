@@ -83,3 +83,8 @@ Use `convoy threads create --source <containerId> --content "Investigate"` to
 add an independent thread to a populated workflow container. For an empty
 container, also pass `--profile-id`, `--path-id`, and `--cli-type`. Canceling
 the workflow leaves these threads running.
+
+`threads create` runs the new thread on the machine's default model unless you
+pass `--cli-model` and `--cli-effort`. `--source` does not carry them over, so a
+reviewer spawned beside your thread can use a different model. The command
+prints the stored model and effort.

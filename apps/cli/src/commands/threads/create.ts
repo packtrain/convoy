@@ -11,6 +11,7 @@ import { resolveOptionalStringInput } from "../../lib/text-input.js";
 import { withThreadAttachments } from "../../lib/thread-attachments.js";
 import { parseScopedTaskRef } from "../tasks/parsers.js";
 import { resolveTaskIdOrRef } from "../tasks/resolve.js";
+import type { ThreadRow } from "./formatters.js";
 import { CLI_TYPES, parseCliType } from "./parsers.js";
 import { resolveSpawnTarget } from "./spawn-target.js";
 
@@ -19,6 +20,8 @@ interface CreateThreadOptions extends OutputOptions {
   profileId?: string;
   pathId?: string;
   cliType?: string;
+  cliModel?: string;
+  cliEffort?: string;
   content?: string;
   contentFile?: string;
   title?: string;
@@ -37,6 +40,8 @@ export const createThreadCommand = addGlobalOptions(
       .option("--profile-id <profileId>", "CLI profile to run on (see `profiles list`)")
       .option("--path-id <pathId>", "Working path on that profile")
       .option("--cli-type <type>", `Runtime: ${CLI_TYPES.join(", ")}`)
+      .option("--cli-model <model>", "Model for the runtime (default: the machine's; never inherited from --source)")
+      .option("--cli-effort <effort>", "Reasoning effort (default: the machine's; never inherited from --source)")
       .option("--content <text>", "First message")
       .option("--content-file <path>", "Read the first message from a file")
       .option("--title <title>", "Thread title (derived from the message when omitted)")
@@ -108,6 +113,8 @@ export const createThreadCommand = addGlobalOptions(
         profileId: target.profileId,
         pathId: target.pathId,
         cliType: target.cliType,
+        ...(options.cliModel === undefined ? {} : { cliModel: options.cliModel }),
+        ...(options.cliEffort === undefined ? {} : { cliEffort: options.cliEffort }),
         content,
         ...(options.title === undefined ? {} : { title: options.title }),
         ...(taskId === undefined ? {} : { taskId }),
@@ -135,12 +142,26 @@ export const createThreadCommand = addGlobalOptions(
       return created;
     });
 
-    printOutput(outputMode, result, (value) => {
+    // Re-read: storage normalizes the selection per runtime and may drop it (OS-2569).
+    // The thread is already queued, so a failed read warns instead of failing the command.
+    let selection: { cliModel: string | null; cliEffort: string | null } | null = null;
+    try {
+      const summary: ThreadRow | null = await client.query(api.cli.threads.summaries.getSummary, { threadId: result.threadId });
+      selection = summary && { cliModel: summary.cliModel ?? null, cliEffort: summary.cliEffort ?? null };
+    } catch (error) {
+      console.error(chalk.yellow(`Warning: could not read the stored model: ${error instanceof Error ? error.message : String(error)}`));
+    }
+    const output = { ...result, ...selection };
+
+    printOutput(outputMode, output, (value) => {
       console.log(chalk.green("✓") + " Thread created");
       console.log(`  ID: ${value.threadId}`);
       if (value.containerId) {
         console.log(`  Group: ${value.containerId}`);
       }
+      console.log(selection
+        ? `  Model: ${selection.cliModel ?? "machine default"} (effort: ${selection.cliEffort ?? "machine default"})`
+        : "  Model: unknown");
       console.log();
     });
   });
