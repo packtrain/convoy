@@ -10,6 +10,19 @@ Defines rich-text editing behavior for the task description editor in the task d
 - While unfocused, external server updates sync back into the editor content.
 - While focused, external updates must not clobber the local draft.
 
+## Long Descriptions
+
+- In the task details sidebar, a description taller than 240px of content
+  is clipped to that height with a fade at the bottom and a `Show more`
+  pill (OS-2583). Short descriptions render in full with no pill.
+- Clicking `Show more` expands the description without focusing the
+  editor, so a mobile keyboard stays closed. Clicking into the text or
+  focusing the editor any other way also expands it.
+- Expansion is one-way: the description stays open until the sidebar
+  shows another task.
+- The create-task dialog and mobile create panel keep their own fixed
+  max-height with scrolling instead.
+
 ## Theme
 
 - The editor (`components/mdx-editor/editor.tsx`) follows the app's resolved

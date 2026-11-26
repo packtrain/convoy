@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useLayoutEffect, useRef, useState } from "react";
 import { EditorContent, EditorContext, useEditor, type JSONContent } from "@tiptap/react";
 import { useMutation } from "convex/react";
 import { toast } from "@/lib/toast";
@@ -70,6 +70,9 @@ import {
 
 import { cn } from "@/lib/utils";
 import { getErrorMessage } from "@/lib/errors";
+
+// Content height above which a collapsible description is clipped. See docs/specs/task-description-editor.md.
+const COLLAPSED_DESCRIPTION_HEIGHT_PX = 240;
 
 type ProseMirrorDoc = {
   type: "doc";
@@ -172,6 +175,8 @@ export function TaskDescriptionEditor(props: {
   editorContentClassName?: string;
   showToolbar?: boolean;
   borderless?: boolean;
+  /** Clip long content until the user clicks Show more or focuses the editor. */
+  collapsible?: boolean;
 }) {
   const {
     value,
@@ -185,6 +190,7 @@ export function TaskDescriptionEditor(props: {
     editorContentClassName,
     showToolbar = true,
     borderless = false,
+    collapsible = false,
   } = props;
 
   const generateUploadUrl = useMutation(api.tasks.attachments.generateTaskAttachmentUploadUrl);
@@ -203,6 +209,9 @@ export function TaskDescriptionEditor(props: {
   // Only used for editor initialization. External changes are handled via the sync effect below.
   const [initialContent] = useState<JSONContent>(() => parseDescriptionToDoc(value));
   const [isAlignOpen, setIsAlignOpen] = useState(false);
+  const contentRef = useRef<HTMLDivElement>(null);
+  const [isExpanded, setIsExpanded] = useState(!collapsible);
+  const [isOverflowing, setIsOverflowing] = useState(false);
 
   const flush = useCallback(() => {
     if (timerRef.current) {
@@ -435,6 +444,7 @@ export function TaskDescriptionEditor(props: {
     },
     onFocus: () => {
       isFocusedRef.current = true;
+      setIsExpanded(true);
     },
     onBlur: () => {
       isFocusedRef.current = false;
@@ -479,6 +489,18 @@ export function TaskDescriptionEditor(props: {
     isSettingContentRef.current = false;
   }, [editor, value]);
 
+  useLayoutEffect(() => {
+    const content = contentRef.current;
+    if (isExpanded || !content) return;
+    const measure = () =>
+      setIsOverflowing(content.scrollHeight > COLLAPSED_DESCRIPTION_HEIGHT_PX);
+    measure();
+    if (typeof ResizeObserver === "undefined") return;
+    const observer = new ResizeObserver(measure);
+    observer.observe(content);
+    return () => observer.disconnect();
+  }, [editor, isExpanded, value]);
+
   // Flush any pending save on unmount.
   useEffect(() => {
     return () => {
@@ -487,6 +509,8 @@ export function TaskDescriptionEditor(props: {
   }, [flush]);
 
   if (!editor) return null;
+
+  const isCollapsed = !isExpanded && isOverflowing;
 
   const alignOptions: TextAlignType[] = ["left", "center", "right", "justify"];
   const currentAlign: TextAlignType =
@@ -662,10 +686,14 @@ export function TaskDescriptionEditor(props: {
         ) : null}
 
         <div
+          ref={contentRef}
+          data-testid="description-content"
           className={cn(
-            "min-h-30.25 cursor-text",
-            showToolbar ? "border-t border-border" : "border-0"
+            "relative min-h-30.25 cursor-text",
+            showToolbar ? "border-t border-border" : "border-0",
+            isCollapsed && "overflow-hidden rounded-b-lg"
           )}
+          style={isCollapsed ? { maxHeight: `${COLLAPSED_DESCRIPTION_HEIGHT_PX}px` } : undefined}
           onMouseDown={(e) => {
             // ProseMirror only handles clicks that land inside its own DOM. The
             // surrounding padding / min-height area is part of the wrapper, so clicks
@@ -681,6 +709,19 @@ export function TaskDescriptionEditor(props: {
             editor={editor}
             className={cn("p-3", editorContentClassName)}
           />
+          {isCollapsed && (
+            <div className="pointer-events-none absolute inset-x-0 bottom-0 flex h-16 items-end justify-center bg-gradient-to-b from-transparent to-background pb-2">
+              <button
+                type="button"
+                className="pointer-events-auto cursor-pointer rounded-full border border-border bg-background/90 px-3 py-1 text-xs text-foreground shadow-xs hover:bg-accent"
+                // Expand without the wrapper's focus-at-end, so mobile keyboards stay closed.
+                onMouseDown={(e) => e.stopPropagation()}
+                onClick={() => setIsExpanded(true)}
+              >
+                Show more
+              </button>
+            </div>
+          )}
         </div>
       </EditorContext.Provider>
     </div>

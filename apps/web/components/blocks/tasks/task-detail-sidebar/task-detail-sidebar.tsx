@@ -622,6 +622,7 @@ export function TaskDetailSidebar({
                             value={task.description}
                             disabled={isReadOnly}
                             onSave={(description) => onUpdate(task._id, { description })}
+                            collapsible
                           />
                         ) : (
                           <TaskDescriptionEditorLoadingSkeleton />

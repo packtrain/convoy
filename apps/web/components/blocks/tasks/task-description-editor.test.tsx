@@ -3,7 +3,7 @@
  */
 
 import { afterEach, describe, expect, test, vi } from "vitest";
-import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { act, cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import type { ReactNode } from "react";
 import { TaskDescriptionEditor } from "@/components/blocks/tasks/task-description-editor";
 
@@ -27,6 +27,7 @@ const editorMocks = vi.hoisted(() => {
     focus,
     chain,
     doc,
+    options: null as null | { onFocus?: () => void },
     editor: {
       chain,
       can: vi.fn(() => ({
@@ -81,7 +82,10 @@ vi.mock("@tiptap/react", () => ({
     </div>
   ),
   useCurrentEditor: () => ({ editor: editorMocks.editor }),
-  useEditor: () => editorMocks.editor,
+  useEditor: (options: { onFocus?: () => void }) => {
+    editorMocks.options = options;
+    return editorMocks.editor;
+  },
   useEditorState: () => ({
     editor: editorMocks.editor,
     editorState: editorMocks.editor.state,
@@ -141,7 +145,12 @@ vi.mock("@/components/tiptap-ui/text-align-button", () => {
 afterEach(() => {
   cleanup();
   vi.clearAllMocks();
+  vi.restoreAllMocks();
 });
+
+function mockContentHeight(scrollHeight: number) {
+  vi.spyOn(HTMLElement.prototype, "scrollHeight", "get").mockReturnValue(scrollHeight);
+}
 
 describe("TaskDescriptionEditor", () => {
   test("keeps the toolbar in document flow at narrow widths", () => {
@@ -199,5 +208,50 @@ describe("TaskDescriptionEditor", () => {
     fireEvent.click(screen.getByRole("button", { name: "Copy as markdown" }));
 
     expect(toastMocks.error).toHaveBeenCalledWith("Clipboard is unavailable");
+  });
+
+  describe("collapsible", () => {
+    test("clips a long description until Show more is clicked, then stays open", () => {
+      mockContentHeight(1000);
+      render(<TaskDescriptionEditor value={null} onSave={vi.fn()} collapsible />);
+
+      const content = screen.getByTestId("description-content");
+      expect(content.style.maxHeight).toBe("240px");
+      expect(editorMocks.focus).not.toHaveBeenCalled();
+
+      fireEvent.mouseDown(screen.getByRole("button", { name: "Show more" }));
+      fireEvent.click(screen.getByRole("button", { name: "Show more" }));
+
+      expect(content.style.maxHeight).toBe("");
+      expect(screen.queryByRole("button", { name: "Show more" })).toBeNull();
+      expect(editorMocks.focus).not.toHaveBeenCalled();
+    });
+
+    test("expands when the editor gains focus", () => {
+      mockContentHeight(1000);
+      render(<TaskDescriptionEditor value={null} onSave={vi.fn()} collapsible />);
+      expect(screen.getByTestId("description-content").style.maxHeight).toBe("240px");
+
+      act(() => editorMocks.options?.onFocus?.());
+
+      expect(screen.getByTestId("description-content").style.maxHeight).toBe("");
+      expect(screen.queryByRole("button", { name: "Show more" })).toBeNull();
+    });
+
+    test("does not clip a short description", () => {
+      mockContentHeight(100);
+      render(<TaskDescriptionEditor value={null} onSave={vi.fn()} collapsible />);
+
+      expect(screen.getByTestId("description-content").style.maxHeight).toBe("");
+      expect(screen.queryByRole("button", { name: "Show more" })).toBeNull();
+    });
+
+    test("does not clip without the collapsible prop", () => {
+      mockContentHeight(1000);
+      render(<TaskDescriptionEditor value={null} onSave={vi.fn()} />);
+
+      expect(screen.getByTestId("description-content").style.maxHeight).toBe("");
+      expect(screen.queryByRole("button", { name: "Show more" })).toBeNull();
+    });
   });
 });
