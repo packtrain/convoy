@@ -1266,7 +1266,7 @@ compact), and the reader's header, tab row, and Overview.
   behind-by is unknown). Below the container width that fits the
   properties column (`@4xl`), the column hides and the header carries them
   instead: a Status badge ends the title row, the branch state ends the
-  author · base ← head row, and one row under it holds Tasks, Stack
+  author · base ← head · opened time row (relative, full date on hover), and one row under it holds Tasks, Stack
   (a popover with the stack map), Reviewers, Assignees, Labels, and
   Milestone, each only when it has a value. Threads stay out of that row,
   since Activity lists them. Fix buttons and the composer come

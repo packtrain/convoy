@@ -615,6 +615,10 @@ export function PullRequestOverviewTab({
           <span className="font-mono">{pr.baseRef}</span>
           <span>←</span>
           <span className="min-w-0 truncate font-mono">{pr.headRef}</span>
+          <span>·</span>
+          <time dateTime={new Date(pr.providerCreatedAt).toISOString()} title={new Date(pr.providerCreatedAt).toLocaleString()} className="shrink-0">
+            opened {ago(pr.providerCreatedAt)}
+          </time>
           {branchStatus ? <span className="flex min-w-0 items-center gap-1.5 [&_svg]:size-3.5 @4xl:hidden"><span>·</span>{branchStatus}</span> : null}
         </p>
         <section aria-label="Pull request summary" className="mt-3 flex flex-wrap items-center gap-x-4 gap-y-2 text-xs empty:hidden @4xl:hidden">
