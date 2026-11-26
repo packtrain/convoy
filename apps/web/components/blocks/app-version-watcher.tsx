@@ -31,10 +31,11 @@ async function fetchLatestBuildId(): Promise<string | null> {
   }
 }
 
+// pointer-events-auto: a Radix modal sets `pointer-events: none` on <body> (OS-2593).
 function AppUpdateBanner() {
   return (
     <DangerCallout
-      className="fixed inset-x-4 bottom-4 z-[60] mx-auto max-w-5xl shadow-lg backdrop-blur-sm"
+      className="pointer-events-auto fixed inset-x-4 bottom-4 z-[60] mx-auto max-w-5xl shadow-lg backdrop-blur-sm"
       title="Refresh required"
       description="You are using an older version of Convoy. Refresh to avoid errors."
       actions={

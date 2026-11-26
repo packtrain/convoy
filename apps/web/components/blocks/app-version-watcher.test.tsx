@@ -3,6 +3,7 @@
  */
 import { afterEach, describe, expect, test, vi } from "vitest";
 import { act, cleanup, render, screen } from "@testing-library/react";
+import { Dialog } from "radix-ui";
 import { AppVersionWatcher } from "./app-version-watcher";
 
 describe("AppVersionWatcher", () => {
@@ -82,5 +83,39 @@ describe("AppVersionWatcher", () => {
       headers: { Accept: "application/json" },
     });
     expect(screen.queryByRole("alert")).toBeNull();
+  });
+
+  test("keeps the refresh banner clickable while a modal sheet is open", async () => {
+    vi.useFakeTimers();
+    vi.stubEnv("NEXT_PUBLIC_APP_BUILD_ID", "current-build");
+    vi.stubEnv("NEXT_PUBLIC_APP_VERSION_POLL_INTERVAL_MS", "1000");
+    vi.stubGlobal(
+      "fetch",
+      vi.fn().mockResolvedValue({
+        ok: true,
+        json: async () => ({ frontend: { buildId: "next-build" } }),
+      })
+    );
+
+    render(
+      <>
+        <Dialog.Root open>
+          <Dialog.Portal>
+            <Dialog.Content aria-describedby={undefined}>
+              <Dialog.Title>Task</Dialog.Title>
+            </Dialog.Content>
+          </Dialog.Portal>
+        </Dialog.Root>
+        <AppVersionWatcher />
+      </>
+    );
+
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(1000);
+    });
+
+    // A Radix modal disables pointer events on <body>; the banner must opt back in.
+    expect(document.body.style.pointerEvents).toBe("none");
+    expect(screen.getByRole("alert", { hidden: true }).classList).toContain("pointer-events-auto");
   });
 });
