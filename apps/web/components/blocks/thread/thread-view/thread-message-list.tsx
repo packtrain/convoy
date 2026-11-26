@@ -37,6 +37,7 @@ import { UserMessageText } from "@/components/blocks/thread/message-parts/compon
 import { ResponseAttachments } from "@/components/blocks/thread/response-attachments";
 import { ThreadTaskPillLink } from "@/components/blocks/thread/thread-task-link";
 import { AttachedPullRequestPill } from "@/components/blocks/integrations";
+import { WorktreeSetupBlockedCallout } from "@/components/blocks/worktree-setups";
 import { BASH_ICON_CLASS, BASH_TITLE_CLASS } from "@/components/blocks/workflows/workflow-wait-card";
 import {
   DANGER_CALLOUT_ACTION_CLASS,
@@ -56,6 +57,7 @@ import type {
   AskUserQuestionResponsePayload,
 } from "@/lib/ai-tools/ask-user-question";
 import type { UseCliMessagesResult } from "@/lib/threads/hooks/use-cli-messages";
+import { unapprovedWorktreeSetupRepoKey } from "@/lib/cli-stream-ui/runtime-notices";
 import { isInlineSteeredMessage } from "@/lib/threads/message-rows";
 import type { PlanDecision } from "@/lib/threads/plan-decision";
 import { CLI_TYPE_MAP } from "@/lib/threads/types";
@@ -303,6 +305,8 @@ interface ThreadMessageListProps {
     messageId: Id<"cliMessages">
   ) => Promise<void> | void;
   onRetry?: (messageId: Id<"cliMessages">) => void;
+  /** Retries with no confirm, for "Approve and retry" on a run blocked by a setup script (OS-2584). */
+  onRetryWithoutConfirm?: (messageId: Id<"cliMessages">) => Promise<void>;
   /** Forks the thread at a completed reply (OS-1397). */
   onBranchFromHere?: (messageId: Id<"cliMessages">) => void;
   /** Forks into a tab beside the viewed thread (OS-2224). */
@@ -371,6 +375,7 @@ export const ThreadMessageList = memo(function ThreadMessageList({
   pendingProposedPlan,
   onContinueFailedSession,
   onRetry,
+  onRetryWithoutConfirm,
   onBranchFromHere,
   onBranchIntoTab,
   onHandoffToNewThread,
@@ -461,20 +466,10 @@ export const ThreadMessageList = memo(function ThreadMessageList({
             : null;
         const isLatestVisibleMessage = index === visibleMessages.length - 1;
         const isLatestThreadMessage = message._id === latestThreadMessageId;
-        const assistantRender =
+        const streamedRender =
           message.role === "assistant"
             ? renderStateByMessageId.get(message._id)
             : undefined;
-        const hasCheckResults = reportedMessageIds.has(message._id);
-        // An attachment- or check-only reply mounts the assistant renderer too, so its files keep one host (OS-2091, OS-2291).
-        const hasAssistantContent =
-          message.role === "assistant" &&
-          ((assistantRender
-            ? assistantRender.parts.length > 0 ||
-              Object.keys(assistantRender.metadata).length > 0
-            : false) ||
-            message.attachments.length > 0 ||
-            hasCheckResults);
         // Set only by MCP `send_thread_message` — absence means a human sent it.
         const sentByThreadId =
           message.role === "user" && message.sentBy?.kind === "thread"
@@ -497,6 +492,25 @@ export const ThreadMessageList = memo(function ThreadMessageList({
           isLatestThreadMessage &&
           !isThreadProcessing &&
           continuingFailedMessageId !== message._id;
+        // A run blocked on an unapproved setup script reads as one callout, not notice plus failure (OS-2584).
+        const blockedSetupRepoKey =
+          showFailedActions && projectId && onRetry && onRetryWithoutConfirm
+            ? (streamedRender?.parts.map(unapprovedWorktreeSetupRepoKey).find((key) => key !== null) ?? null)
+            : null;
+        const assistantRender =
+          blockedSetupRepoKey && streamedRender
+            ? { ...streamedRender, parts: streamedRender.parts.filter((part) => unapprovedWorktreeSetupRepoKey(part) === null) }
+            : streamedRender;
+        const hasCheckResults = reportedMessageIds.has(message._id);
+        // An attachment- or check-only reply mounts the assistant renderer too, so its files keep one host (OS-2091, OS-2291).
+        const hasAssistantContent =
+          message.role === "assistant" &&
+          ((assistantRender
+            ? assistantRender.parts.length > 0 ||
+              Object.keys(assistantRender.metadata).length > 0
+            : false) ||
+            message.attachments.length > 0 ||
+            hasCheckResults);
         const failure = splitFailureMessage(message.errorMessage);
 
         return (
@@ -586,7 +600,14 @@ export const ThreadMessageList = memo(function ThreadMessageList({
                           No output generated.
                         </div>
                       )}
-                    {showFailedActions && (
+                    {blockedSetupRepoKey && projectId && onRetry && onRetryWithoutConfirm ? (
+                      <WorktreeSetupBlockedCallout
+                        projectId={projectId}
+                        repoKey={blockedSetupRepoKey}
+                        onRetry={() => onRetry(message._id)}
+                        onApproveAndRetry={() => onRetryWithoutConfirm(message._id)}
+                      />
+                    ) : showFailedActions && (
                       <DangerCallout
                         title={failure.title}
                         description={failure.detail || undefined}

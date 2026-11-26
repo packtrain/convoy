@@ -1,5 +1,6 @@
 import type { DynamicToolUIPart } from "ai";
 import type {
+  CliUiPart,
   ComposerNotice,
   RuntimeNoticePart,
   TaskNoticeGroupPart,
@@ -364,4 +365,10 @@ export function summarizeTaskNoticeGroup(
       2
     ),
   };
+}
+
+/** The repo key of the CLI's `worktree-setup-unapproved` notice, backticked in its message (docs/specs/cli-worktrees.md#approval). */
+export function unapprovedWorktreeSetupRepoKey(part: CliUiPart): string | null {
+  if (part.type !== "runtime-notice" || part.code !== "worktree-setup-unapproved") return null;
+  return /`([^`]+)`/.exec(part.message)?.[1] ?? null;
 }

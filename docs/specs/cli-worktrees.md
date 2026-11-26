@@ -983,6 +983,30 @@ setup has moved on, it fails with "The script changed. Review the new
 version.", so nobody approves text they did not read. A script change bumps
 the revision, so every earlier approval stops matching. There is no revoke.
 
+#### Approve from the blocked thread (OS-2584)
+
+A run that failed on an unapproved script shows one red callout in place of
+the notice and the failure text: "Setup script needs your approval", naming
+the repo key, with "Review script" as the primary action and Retry beside it
+(for a script approved elsewhere since). It shows on the thread's latest
+message when that run failed with a `worktree-setup-unapproved` notice and the
+viewer can retry; the repo key comes from the notice's backticked text
+(`unapprovedWorktreeSetupRepoKey`, `lib/cli-stream-ui/runtime-notices.ts`).
+
+- "Review script" opens the settings editor (`ScriptDialog`) over the thread,
+  read-only even for admins, so the reader sees the exact text first. Its
+  `list` subscription runs only while reviewing; until it loads, the button is
+  disabled and `aria-busy`.
+- "Approve and retry" calls `approve` with the revision on screen, closes the
+  dialog, then retries the failed message with no second confirm. A rejected
+  approval keeps the dialog open and does not retry; a failed retry after a
+  good approval toasts "Approved, but the retry failed" with "Press Retry to
+  try again." (or the mapped server error) as its description.
+- Older failed runs, a read-only viewer of a shared thread, and a thread that
+  is processing again keep the notice with its "Review script" link to
+  Project settings → Worktrees.
+- No new CLI command or MCP tool: approval stays web only.
+
 ### Run start
 
 `cli/messages.startRunResponse` returns `worktreeSetup` next to `workspace`
@@ -1077,8 +1101,8 @@ happens only for older CLIs.
 - A notice when a repo has no setup but another repo key would match, such as
   a fork of a repo that has one. The epic asks for it; today a fork's thread
   runs no script and says nothing.
-- A script that runs before a worktree is removed, an Approve card in the
-  thread, a diff between approved and current script, and version history.
+- A script that runs before a worktree is removed, a diff between approved and
+  current script, and version history.
 
 ## QA Checklist
 

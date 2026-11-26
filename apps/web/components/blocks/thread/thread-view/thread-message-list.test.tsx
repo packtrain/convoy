@@ -10,8 +10,17 @@ import type { Id } from "@/convex/_generated/dataModel";
 import type { ComposerMessageState } from "@/lib/cli-stream-ui";
 
 vi.mock("@/components/blocks/thread/assistant-cli-thread-message", () => ({
-  AssistantCliMessage: ({ timestamp, cliModel, cliEffort, attachments }: { timestamp?: number; cliModel?: string; cliEffort?: string; attachments?: Array<{ fileName: string }> }) => (
-    <div data-testid="assistant-message" data-timestamp={timestamp} data-model={cliModel} data-effort={cliEffort} data-attachments={attachments?.map((attachment) => attachment.fileName).join(",")} />
+  AssistantCliMessage: ({ timestamp, cliModel, cliEffort, attachments, renderState }: { timestamp?: number; cliModel?: string; cliEffort?: string; attachments?: Array<{ fileName: string }>; renderState?: { parts: Array<{ type: string }> } }) => (
+    <div data-testid="assistant-message" data-timestamp={timestamp} data-model={cliModel} data-effort={cliEffort} data-attachments={attachments?.map((attachment) => attachment.fileName).join(",")} data-part-types={renderState?.parts.map((part) => part.type).join(",")} />
+  ),
+}));
+
+vi.mock("@/components/blocks/worktree-setups", () => ({
+  WorktreeSetupBlockedCallout: ({ repoKey, onRetry, onApproveAndRetry }: { repoKey: string; onRetry: () => void; onApproveAndRetry: () => Promise<void> }) => (
+    <div data-testid="setup-blocked" data-repo-key={repoKey}>
+      <button onClick={onRetry}>Blocked retry</button>
+      <button onClick={() => void onApproveAndRetry()}>Blocked approve</button>
+    </div>
   ),
 }));
 
@@ -271,6 +280,55 @@ describe("ThreadMessageList failed-run actions (OS-1575)", () => {
     expect(
       screen.getByText("The model hit the output limit after 4,096 tokens.")
     ).toBeDefined();
+  });
+});
+
+describe("ThreadMessageList blocked worktree setup (OS-2584)", () => {
+  const PROJECT_ID = "project-1" as Id<"projects">;
+  const blockedRender = (): ComposerMessageState => ({
+    ...createAssistantRenderState(),
+    parts: [
+      { type: "text", text: "Starting" },
+      { type: "runtime-notice", code: "worktree-setup-unapproved", title: "Worktree setup", message: "The setup script for `packtrain/convoy` needs your approval." },
+    ],
+  });
+  const blockedList = (overrides: Partial<ThreadMessageListProps> = {}) =>
+    renderList({
+      projectId: PROJECT_ID,
+      visibleMessages: [
+        createUserMessage(),
+        createAssistantMessage({ status: "failed", errorMessage: "This project has a worktree setup script for packtrain/convoy that you haven't approved." }),
+      ],
+      renderStateByMessageId: new Map([[ASSISTANT_MESSAGE_ID, blockedRender()]]),
+      onRetryWithoutConfirm: vi.fn().mockResolvedValue(undefined),
+      ...overrides,
+    });
+
+  test("shows one blocked state: the setup callout instead of the notice and the failure text", () => {
+    blockedList();
+
+    expect(screen.getByTestId("setup-blocked").dataset.repoKey).toBe("packtrain/convoy");
+    expect(screen.getByTestId("assistant-message").dataset.partTypes).toBe("text");
+    expect(screen.queryByText(/that you haven't approved/)).toBeNull();
+    expect(screen.queryByRole("button", { name: /Continue/ })).toBeNull();
+  });
+
+  test("Retry confirms as usual; Approve and retry retries the failed message at once", () => {
+    const { props } = blockedList();
+
+    fireEvent.click(screen.getByRole("button", { name: "Blocked retry" }));
+    fireEvent.click(screen.getByRole("button", { name: "Blocked approve" }));
+
+    expect(props.onRetry).toHaveBeenCalledWith(ASSISTANT_MESSAGE_ID);
+    expect(props.onRetryWithoutConfirm).toHaveBeenCalledWith(ASSISTANT_MESSAGE_ID);
+  });
+
+  test("a read-only viewer keeps the notice and the failure text", () => {
+    blockedList({ onRetry: undefined, onRetryWithoutConfirm: undefined });
+
+    expect(screen.queryByTestId("setup-blocked")).toBeNull();
+    expect(screen.getByTestId("assistant-message").dataset.partTypes).toBe("text,runtime-notice");
+    expect(screen.getByText(/that you haven't approved/)).toBeDefined();
   });
 });
 

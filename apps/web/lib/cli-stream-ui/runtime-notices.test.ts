@@ -5,6 +5,7 @@ import {
   getTaskNoticeTaskId,
   isTaskPatchNotice,
   summarizeTaskNoticeGroup,
+  unapprovedWorktreeSetupRepoKey,
 } from "./runtime-notices";
 
 function taskUpdatedNotice(patch: Record<string, unknown>): ComposerNotice {
@@ -241,5 +242,21 @@ describe("Codex terminal source precedence", () => {
       notice("completed"),
     ];
     expect(summarizeTaskNoticeGroup(createTaskNoticeGroupPart({ notices })).status).toBe(outcome);
+  });
+});
+
+describe("unapprovedWorktreeSetupRepoKey (OS-2584)", () => {
+  const notice = (code: string, message: string) => ({ type: "runtime-notice" as const, code, title: "Worktree setup", message });
+
+  test("reads the backticked repo key of the CLI's unapproved-setup notice", () => {
+    expect(
+      unapprovedWorktreeSetupRepoKey(notice("worktree-setup-unapproved", "The setup script for `packtrain/convoy` needs your approval."))
+    ).toBe("packtrain/convoy");
+  });
+
+  test("ignores other parts and a notice without a repo key", () => {
+    expect(unapprovedWorktreeSetupRepoKey(notice("worktree-setup", "Running worktree setup for `packtrain/convoy`…"))).toBeNull();
+    expect(unapprovedWorktreeSetupRepoKey(notice("worktree-setup-unapproved", "Needs your approval."))).toBeNull();
+    expect(unapprovedWorktreeSetupRepoKey({ type: "text", text: "`packtrain/convoy`" })).toBeNull();
   });
 });

@@ -297,6 +297,9 @@ How and when it runs, the approval rule, and the script environment are in
 - With no repositories, the empty state says a repository appears once one of
   the caller's CLIs connects a path with a Git origin.
 - While loading, the page shows skeleton rows in the same list frame.
+- The same editor opens read-only over a thread whose run is blocked on an
+  unapproved script, with "Approve and retry" in place of Approve
+  ([cli-worktrees.md](cli-worktrees.md#approve-from-the-blocked-thread-os-2584)).
 
 ## Danger Zone
 
