@@ -4,7 +4,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { useMutation, useQuery } from "convex/react";
 import { api } from "@/convex/_generated/api";
 import type { Id } from "@/convex/_generated/dataModel";
-import type { CliWorktreeOpKind } from "@/convex/lib/contracts/validators";
+import type { CliHistoryScope, CliWorktreeOpKind } from "@/convex/lib/contracts/validators";
 import { getErrorMessage } from "@/lib/errors";
 
 export interface WorktreeOpState {
@@ -46,10 +46,12 @@ export function useWorktreeOp(args: {
   postRef?: string;
   /** gitLog: the page to fetch. Part of the key, like `filePath`. */
   cursor?: string;
+  /** gitLog: the walk (OS-2595). Part of the key, like `filePath`. */
+  scope?: CliHistoryScope;
   enabled: boolean;
 }): WorktreeOpState {
-  const { profileId, pathId, kind, filePath, postRef, cursor, enabled } = args;
-  const key = `${profileId}:${pathId}:${kind}:${filePath ?? ""}:${postRef ?? ""}:${cursor ?? ""}`;
+  const { profileId, pathId, kind, filePath, postRef, cursor, scope, enabled } = args;
+  const key = `${profileId}:${pathId}:${kind}:${filePath ?? ""}:${postRef ?? ""}:${cursor ?? ""}:${scope ?? ""}`;
   const [generation, setGeneration] = useState(0);
   const [pending, setPending] = useState<Pending | null>(null);
   const [settled, setSettled] = useState<Settled | null>(null);
@@ -71,6 +73,7 @@ export function useWorktreeOp(args: {
       ...(filePath ? { filePath } : {}),
       ...(postRef ? { postRef } : {}),
       ...(cursor ? { cursor } : {}),
+      ...(scope ? { scope } : {}),
     })
       .then((opId) => setPending({ key, generation, opId }))
       .catch((requestError) => {
@@ -82,7 +85,7 @@ export function useWorktreeOp(args: {
           error: getErrorMessage(requestError, "Failed to reach the CLI"),
         }));
       });
-  }, [enabled, generation, key, profileId, pathId, kind, filePath, postRef, cursor, enqueueOp]);
+  }, [enabled, generation, key, profileId, pathId, kind, filePath, postRef, cursor, scope, enqueueOp]);
 
   // Settle during render (state adjusted from a changed input). A null row
   // means the op was pruned before the CLI answered.

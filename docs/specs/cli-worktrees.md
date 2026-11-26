@@ -232,7 +232,18 @@ side lives in `apps/cli/src/lib/git/history.ts`.
   page's tips, so commits made or fetched while the user pages don't shift or
   repeat rows. `enqueue` and the CLI both reject
   any other cursor shape. An unborn branch returns `{ commits: [] }`.
-  The web caches the loaded rows per browser tab (20 checkouts, oldest
+- `gitLog` with `scope: "branch"` (OS-2595, CLI 0.176.0) walks `HEAD --not
+  <origin default> <local default>`: only the commits no default branch has,
+  so main's commits merged into the branch are left out too. On the local
+  default branch itself only origin's copy is excluded, which leaves the
+  unpushed commits. The cursor carries the excluded tips with a `^` prefix
+  (`<HEAD>,^<tip>[,^<tip>]:<skip>`), so later pages need no scope. The first
+  page also has `fork = { ref, hash, behind }`: of the excluded branches, the
+  one HEAD has the fewest own commits against (local on a tie), named as git
+  abbreviates it (`main`, `origin/main`), its merge-base with HEAD, and how
+  many of its commits HEAD doesn't have. No default branch to exclude means
+  no `fork`. A CLI before 0.176.0 ignores the scope and walks everything.
+  The web caches the loaded rows per browser tab and scope (20 entries, oldest
   dropped). A History remount within 60 s of the first page, with no run
   finished since, shows them with no request; otherwise it shows them while
   the first page is fetched again. The age is checked when History can first
@@ -700,6 +711,19 @@ every row, header included, past a phone viewport. The right pane is the file tr
     like "All commits"; focus returns to the row. A
     parent click focuses that commit's row (its heading, in one-pane mode),
     once the row has loaded.
+  - Scope (OS-2595): a "This branch | All" switch opens the toolbar's right
+    group, left of the diff toggles (text buttons, `aria-pressed`, group
+    "History scope"). A worktree opens
+    on This branch, the main checkout on All, and a link with `commit=` on
+    All, since the commit may be on the default branch. The choice lasts
+    until the page is left, not stored: a worktree should open on its own
+    work every time. Switching drops `commit` from the URL and starts the list
+    over. This branch sends `gitLog` with `scope: "branch"`; after its last
+    page comes a row "Branched from <ref> at <short> · N newer commits on
+    <ref>" (the count only when N > 0) with a "Show full history" button that
+    switches to All. A branch with none of its own commits shows "No commits
+    on this branch yet." and that row. A CLI before 0.176.0 gets no switch and
+    the full history. The thread Changes tab's History keeps the full walk.
   - States: skeleton rows of the loaded row's height while the first page
     loads, "No commits on this branch yet.", "This checkout is no longer
     registered on the CLI." (nothing is fetched), the offline and update-prompt

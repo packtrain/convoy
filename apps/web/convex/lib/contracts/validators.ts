@@ -1034,6 +1034,9 @@ export const cliWorktreeOpKindValidator = v.union(
   v.literal("commitPatch")
 );
 export type CliWorktreeOpKind = Infer<typeof cliWorktreeOpKindValidator>;
+/** gitLog's `branch` scope: HEAD's commits no default branch has (OS-2595). */
+export const cliHistoryScopeValidator = v.literal("branch");
+export type CliHistoryScope = Infer<typeof cliHistoryScopeValidator>;
 
 export const cliWorktreeOpStatusValidator = v.union(v.literal("pending"), v.literal("done"), v.literal("failed"));
 export type CliWorktreeOpStatus = Infer<typeof cliWorktreeOpStatusValidator>;

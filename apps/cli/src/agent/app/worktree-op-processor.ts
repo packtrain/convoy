@@ -190,7 +190,7 @@ export function createWorktreeOpProcessor(client: ConvoyClient, sessionId: strin
 
   // Commit history (OS-2534): one page of `git log`, and one commit's patch in postRef.
   async function handleGitLog(op: PendingWorktreeOp): Promise<void> {
-    const page = await listCommits(op.path, op.cursor);
+    const page = await listCommits(op.path, op.cursor, { scope: op.scope });
     await completeOp(op._id, { resultJson: JSON.stringify(page) });
   }
 

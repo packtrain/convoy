@@ -7,7 +7,7 @@ import { hasProjectAccess, requireAuthorizedProject } from "../lib/access/permis
 import { ProjectPermission } from "../../lib/authz/permissions";
 import { ensure } from "../lib/shared/ensure";
 import { errors } from "./errors";
-import { cliWorktreeOpKindValidator, cliWorktreeOpStatusValidator } from "../lib/contracts/validators";
+import { cliHistoryScopeValidator, cliWorktreeOpKindValidator, cliWorktreeOpStatusValidator } from "../lib/contracts/validators";
 import { getCliProfileById } from "./lib/cliProfilesRepo";
 import { listActiveSessionsByProfile } from "./lib/cliSessionsRepo";
 import { getThreadByCheckpointRef, listThreadsClaimedBySession } from "./threads/lib/cliThreadsRepo";
@@ -30,7 +30,8 @@ const FILE_OP_TTL_MS = 10 * 60 * 1000;
 // Full object hashes only: the CLI hands them to git as revisions (OS-2534).
 const COMMIT_HASH = /^[0-9a-f]{40}([0-9a-f]{24})?$/;
 // `<tip>[,<tip>[,<tip>]]:<skip>`: HEAD, plus origin's and the local default branch when they differ (OS-2586).
-const HISTORY_CURSOR = /^[0-9a-f]{40}([0-9a-f]{24})?(,[0-9a-f]{40}([0-9a-f]{24})?){0,2}:\d+$/;
+// A `^` tip is excluded: the branch scope's default branches (OS-2595).
+const HISTORY_CURSOR = /^\^?[0-9a-f]{40}([0-9a-f]{24})?(,\^?[0-9a-f]{40}([0-9a-f]{24})?){0,2}:\d+$/;
 
 const worktreeOpItemValidator = v.object({
   _id: v.id("cliWorktreeOps"),
@@ -46,6 +47,7 @@ const worktreeOpItemValidator = v.object({
   postRef: v.optional(v.string()),
   query: v.optional(v.string()),
   cursor: v.optional(v.string()),
+  scope: v.optional(cliHistoryScopeValidator),
   status: cliWorktreeOpStatusValidator,
   error: v.optional(v.string()),
   resultJson: v.optional(v.string()),
@@ -69,6 +71,7 @@ function toWorktreeOpItem(doc: Doc<"cliWorktreeOps">) {
     postRef: doc.postRef,
     query: doc.query,
     cursor: doc.cursor,
+    scope: doc.scope,
     status: doc.status,
     error: doc.error,
     resultJson: doc.resultJson,
@@ -104,6 +107,7 @@ export const enqueue = mutation({
     postRef: v.optional(v.string()),
     query: v.optional(v.string()),
     cursor: v.optional(v.string()),
+    scope: v.optional(cliHistoryScopeValidator),
   },
   returns: v.id("cliWorktreeOps"),
   handler: async (ctx, args) => {
@@ -205,7 +209,7 @@ export const enqueue = mutation({
       ...(isFileOp ? { filePath: args.filePath, preRef: args.preRef, postRef: args.postRef } : {}),
       ...(args.kind === "revertWorkingTree" ? { filePaths: args.filePaths } : {}),
       ...(args.kind === "searchFiles" ? { query: args.query } : {}),
-      ...(args.kind === "gitLog" ? { cursor: args.cursor } : {}),
+      ...(args.kind === "gitLog" ? { cursor: args.cursor, scope: args.scope } : {}),
       ...(args.kind === "commitPatch" ? { postRef: args.postRef } : {}),
       status: "pending",
       createdAt: now,

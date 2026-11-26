@@ -24,13 +24,13 @@ import {
   writeChangesDiffStyle,
   writeChangesWordWrap,
 } from "@/lib/threads/changes-view-prefs";
-import { supportsWorktreeHistory } from "@/lib/worktrees/cli-version";
+import { supportsBranchHistory, supportsWorktreeHistory } from "@/lib/worktrees/cli-version";
 import { useWorktreeChanges } from "@/lib/worktrees/hooks/use-worktree-changes";
 import { useHistoryLayout, useWorktreeHistory } from "@/lib/worktrees/hooks/use-worktree-history";
 import { useWorktreeRemoval } from "@/lib/worktrees/hooks/use-worktree-removal";
 import { cn } from "@/lib/utils";
 import { ChangesSummary, RevertAllButton, WorktreeChangesBody, useSectionCollapse } from "./worktree-changes-body";
-import { HistoryLayoutToggle, WorktreeHistoryView } from "./worktree-history";
+import { HistoryLayoutToggle, type HistoryScope, HistoryScopeToggle, WorktreeHistoryView } from "./worktree-history";
 import { RemoveWorktreeDialog } from "./worktree-remove-dialog";
 import { RevertAllDialog, RevertFileDialog } from "./worktree-revert-dialogs";
 
@@ -62,10 +62,16 @@ function ChangesViewForCheckout({ profileId, pathId }: WorktreeChangesViewProps)
   // The list is fetched on first open and kept across tab switches.
   const [historyOpenedOnce, setHistoryOpened] = useState(false);
   const historyOpened = historyOpenedOnce || tab === "history";
+  // A worktree opens on its own commits, a main checkout on everything; a linked commit may be anywhere (OS-2595).
+  const [pickedScope, setScope] = useState<HistoryScope | null>(target?.commit != null ? "all" : null);
+  const canScope = supportsBranchHistory(state.profile?.appVersion);
+  const scope: HistoryScope = !canScope ? "all" : (pickedScope ?? (state.entry?.kind === "worktree" ? "branch" : "all"));
   const history = useWorktreeHistory(
     profileId,
     pathId,
-    historyOpened && state.isOnline && state.entry !== undefined && supportsWorktreeHistory(state.profile?.appVersion)
+    historyOpened && state.isOnline && state.entry !== undefined && supportsWorktreeHistory(state.profile?.appVersion),
+    undefined,
+    scope === "branch" ? "branch" : undefined
   );
   const [historyLayout, setHistoryLayout] = useHistoryLayout();
   // History reports whether a commit's diff is on screen; the diff toggles follow it.
@@ -143,6 +149,12 @@ function ChangesViewForCheckout({ profileId, pathId }: WorktreeChangesViewProps)
       window.history.back();
     } else {
       (mode === "push" ? push : replace)(route("history", commit));
+    }
+  };
+  const changeScope = (next: HistoryScope) => {
+    if (next !== scope) {
+      setScope(next);
+      replace(route("history", null));
     }
   };
   const refreshing = onHistory ? history.initialLoading || history.refreshing : changes.loading;
@@ -225,6 +237,7 @@ function ChangesViewForCheckout({ profileId, pathId }: WorktreeChangesViewProps)
             {!onHistory && <ChangesSummary files={files} />}
             {isOnline && !onHistory && <RevertAllButton state={state} />}
             <div className="ml-auto flex items-center gap-1">
+              {onHistory && !phoneCommit && canScope && isOnline && <HistoryScopeToggle value={scope} onChange={changeScope} />}
               {/* The diff toggles only while a diff is on screen, left of List | Graph so it never moves. */}
               {!noDiffShown && (
                 <ChangesViewToggles
@@ -265,6 +278,7 @@ function ChangesViewForCheckout({ profileId, pathId }: WorktreeChangesViewProps)
           <div className="grid min-h-0 min-w-0 flex-1 grid-cols-[minmax(0,1fr)] grid-rows-[minmax(0,1fr)] overflow-hidden">
             {onHistory ? (
               <WorktreeHistoryView
+                key={scope}
                 profileId={profileId}
                 pathId={pathId}
                 history={history}
@@ -278,6 +292,7 @@ function ChangesViewForCheckout({ profileId, pathId }: WorktreeChangesViewProps)
                 selectedHash={target?.commit ?? null}
                 onSelect={selectCommit}
                 onDiffShownChange={setHistoryDiffShown}
+                branch={scope === "branch" ? { fork: history.fork, onShowAll: () => changeScope("all") } : undefined}
               />
             ) : (
               <div className="flex min-h-0 flex-col">

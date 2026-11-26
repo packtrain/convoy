@@ -14,6 +14,7 @@ const state = vi.hoisted(() => ({
   enqueue: vi.fn(),
   changes: { resultJson: null as string | null, loading: false, error: null as string | null, refresh: vi.fn() },
   toast: { error: vi.fn(), success: vi.fn() },
+  opCalls: [] as { kind: string; scope?: string; enabled: boolean }[],
 }));
 
 vi.mock("convex/react", () => ({
@@ -63,7 +64,10 @@ vi.mock("@/lib/navigation", async () => {
 });
 
 vi.mock("@/lib/worktrees/hooks/use-worktree-op", () => ({
-  useWorktreeOp: () => state.changes,
+  useWorktreeOp: (args: { kind: string; scope?: string; enabled: boolean }) => {
+    state.opCalls.push(args);
+    return state.changes;
+  },
 }));
 
 vi.mock("@/lib/threads/hooks/use-diff-theme", () => ({
@@ -413,6 +417,53 @@ describe("WorktreeChangesView", () => {
     const item = screen.getByRole("menuitem", { name: /Remove worktree/ });
     expect(item.getAttribute("aria-disabled")).toBe("true");
     expect(item.textContent).toContain("Commit or revert changes first");
+  });
+
+  test("a worktree's History opens on This branch, a main checkout's on All, and the switch changes the walk (OS-2595)", () => {
+    onlineWorktree("");
+    state.profile = { ...state.profile, appVersion: "0.176.0" };
+    url.search = "?profileId=profile_1&pathId=path_1&view=history";
+    const lastLog = () => state.opCalls.filter((call) => call.kind === "gitLog" && call.enabled).at(-1);
+    state.opCalls = [];
+    render(<WorktreeChangesView profileId={"profile_1" as Id<"cliProfiles">} pathId="path_1" />);
+
+    expect(screen.getByRole("button", { name: "This branch" }).getAttribute("aria-pressed")).toBe("true");
+    expect(lastLog()?.scope).toBe("branch");
+    fireEvent.click(screen.getByRole("button", { name: "All" }));
+    expect(screen.getByRole("button", { name: "All" }).getAttribute("aria-pressed")).toBe("true");
+    expect(lastLog()?.scope).toBeUndefined();
+    cleanup();
+
+    url.search = "?profileId=profile_1&pathId=repo&view=history";
+    render(<WorktreeChangesView profileId={"profile_1" as Id<"cliProfiles">} pathId="repo" />);
+    expect(screen.getByRole("button", { name: "All" }).getAttribute("aria-pressed")).toBe("true");
+  });
+
+  test("This branch | All sits left of the diff toggles, first in the toolbar's right group (OS-2595)", () => {
+    mobile.value = false;
+    window.localStorage.setItem("convoy.history-layout", "list");
+    state.profile = { paths: WORKTREE_PATHS, isOnline: true, appVersion: "0.176.0" };
+    const commit = { hash: "a".repeat(40), parents: [], authorName: "Ada", authorEmail: "a@x", committedAt: 1, refs: ["HEAD -> feat/x"], subject: "first" };
+    state.changes = { resultJson: JSON.stringify({ commits: [commit] }), loading: false, error: null, refresh: vi.fn() };
+    url.search = "?profileId=profile_1&pathId=path_1&view=history";
+    render(<WorktreeChangesView profileId={"profile_1" as Id<"cliProfiles">} pathId="path_1" />);
+
+    const scopeGroup = screen.getByRole("group", { name: "History scope" });
+    const wrap = screen.getByRole("button", { name: "Enable word wrap" });
+    expect(scopeGroup.compareDocumentPosition(wrap) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+    expect(scopeGroup.parentElement?.firstElementChild).toBe(scopeGroup);
+    mobile.value = true;
+  });
+
+  test("a CLI without the branch walk gets no scope switch and the full history (OS-2595)", () => {
+    onlineWorktree("");
+    state.profile = { ...state.profile, appVersion: "0.175.0" };
+    url.search = "?profileId=profile_1&pathId=path_1&view=history";
+    state.opCalls = [];
+    render(<WorktreeChangesView profileId={"profile_1" as Id<"cliProfiles">} pathId="path_1" />);
+
+    expect(screen.queryByRole("group", { name: "History scope" })).toBeNull();
+    expect(state.opCalls.filter((call) => call.kind === "gitLog" && call.enabled).every((call) => call.scope === undefined)).toBe(true);
   });
 
   test("a main checkout has no header menu (OS-2459)", () => {

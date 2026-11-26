@@ -207,6 +207,100 @@ describe("git history (real git)", () => {
     });
   });
 
+  describe("branch scope (OS-2595)", () => {
+    const rev = async (ref: string) => (await runGit(repo, ["rev-parse", ref])).stdout.trim();
+    const subjects = (page: { commits: { subject: string }[] }) => page.commits.map((entry) => entry.subject);
+
+    it("lists only HEAD's commits that no default branch has, and where the branch forked", async () => {
+      await commit("a.txt", "one\n", "base");
+      const fork = await rev("HEAD");
+      await runGit(repo, ["checkout", "-q", "-b", "feature"]);
+      await commit("f.txt", "f\n", "f1");
+      await commit("f.txt", "g\n", "f2");
+      await runGit(repo, ["checkout", "-q", "main"]);
+      await commit("m.txt", "m\n", "main 1");
+      await commit("m.txt", "n\n", "main 2");
+      await runGit(repo, ["update-ref", "refs/remotes/origin/main", "main~1"]);
+      await runGit(repo, ["checkout", "-q", "feature"]);
+
+      const page = await listCommits(repo, undefined, { scope: "branch" });
+
+      expect(subjects(page)).toEqual(["f2", "f1"]);
+      expect(page.fork).toEqual({ ref: "main", hash: fork, behind: 2 });
+    });
+
+    it("leaves out main's commits merged into the branch, and forks at the merged-in commit", async () => {
+      await commit("a.txt", "one\n", "base");
+      await runGit(repo, ["checkout", "-q", "-b", "feature"]);
+      await commit("f.txt", "f\n", "feature work");
+      await runGit(repo, ["checkout", "-q", "main"]);
+      await commit("m.txt", "m\n", "main moves on");
+      const merged = await rev("HEAD");
+      await runGit(repo, ["checkout", "-q", "feature"]);
+      await runGit(repo, [...IDENTITY, "merge", "-q", "--no-edit", "-m", "merge main", "main"]);
+
+      const page = await listCommits(repo, undefined, { scope: "branch" });
+
+      expect(subjects(page)).toEqual(["merge main", "feature work"]);
+      expect(page.fork).toEqual({ ref: "main", hash: merged, behind: 0 });
+    });
+
+    it("names the closer default branch: origin/main when local main is behind it", async () => {
+      await commit("a.txt", "one\n", "base");
+      await commit("a.txt", "two\n", "fetched");
+      const fetched = await rev("HEAD");
+      await runGit(repo, ["update-ref", "refs/remotes/origin/main", fetched]);
+      await runGit(repo, ["reset", "-q", "--hard", "HEAD~1"]);
+      await runGit(repo, ["checkout", "-q", "-b", "feature", "origin/main"]);
+      await commit("f.txt", "f\n", "f1");
+
+      const page = await listCommits(repo, undefined, { scope: "branch" });
+
+      expect(subjects(page)).toEqual(["f1"]);
+      expect(page.fork).toEqual({ ref: "origin/main", hash: fetched, behind: 0 });
+    });
+
+    it("on the default branch itself lists the commits origin doesn't have", async () => {
+      await commit("a.txt", "one\n", "pushed");
+      const pushed = await rev("HEAD");
+      await runGit(repo, ["update-ref", "refs/remotes/origin/main", pushed]);
+      await commit("a.txt", "two\n", "unpushed");
+
+      const page = await listCommits(repo, undefined, { scope: "branch" });
+
+      expect(subjects(page)).toEqual(["unpushed"]);
+      expect(page.fork).toEqual({ ref: "origin/main", hash: pushed, behind: 0 });
+    });
+
+    it("has no commits for a branch that hasn't moved, and still says where it starts", async () => {
+      await commit("a.txt", "one\n", "base");
+      const base = await rev("HEAD");
+      await runGit(repo, ["checkout", "-q", "-b", "feature"]);
+
+      const page = await listCommits(repo, undefined, { scope: "branch" });
+
+      expect(page.commits).toEqual([]);
+      expect(page.fork).toEqual({ ref: "main", hash: base, behind: 0 });
+    });
+
+    it("keeps the exclusions in the cursor, so later pages stay on the branch", async () => {
+      await commit("a.txt", "one\n", "base");
+      const base = await rev("HEAD");
+      await runGit(repo, ["checkout", "-q", "-b", "feature"]);
+      for (let index = 0; index <= COMMIT_PAGE_SIZE; index++) {
+        await runGit(repo, [...IDENTITY, "commit", "-q", "--allow-empty", "-m", `f${index}`]);
+      }
+      const head = await rev("HEAD");
+
+      const first = await listCommits(repo, undefined, { scope: "branch" });
+      expect(first.nextCursor).toBe(`${head},^${base}:${COMMIT_PAGE_SIZE}`);
+      const second = await listCommits(repo, first.nextCursor);
+
+      expect(subjects(second)).toEqual(["f0"]);
+      expect(second.fork).toBeUndefined();
+    });
+  });
+
   it("rejects a cursor that is not one it produced", async () => {
     await expect(listCommits(repo, "--all:0")).rejects.toThrow("Invalid history cursor");
   });
@@ -275,7 +369,7 @@ describe("git history (real git)", () => {
       await runGit(repo, [...IDENTITY, "commit", "-q", "--allow-empty", "-m", `c${index}`]);
     }
 
-    const page = await listCommits(repo, undefined, 400);
+    const page = await listCommits(repo, undefined, { budgetBytes: 400 });
     expect(page.commits.length).toBeLessThan(3);
     const rest = await listCommits(repo, page.nextCursor);
     expect([...page.commits, ...rest.commits].map((entry) => entry.subject)).toEqual(["c2", "c1", "c0"]);

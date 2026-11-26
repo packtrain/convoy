@@ -39,6 +39,7 @@ import {
   cliThreadPullRequestValidator,
   cliThreadMetadataValidator,
   cliWorktreeOpKindValidator,
+  cliHistoryScopeValidator,
   cliWorktreeOpStatusValidator,
   cliLoginRequestStatusValidator,
   apiKeyKindValidator,
@@ -1276,6 +1277,7 @@ export default defineSchema({
     postRef: v.optional(v.string()), // readFile/diffFile: post-run checkpoint ref; commitPatch: the commit
     query: v.optional(v.string()), // searchFiles: composer @-mention search text
     cursor: v.optional(v.string()), // gitLog: the previous page's nextCursor
+    scope: v.optional(cliHistoryScopeValidator), // gitLog: first page's walk (OS-2595)
     status: cliWorktreeOpStatusValidator,
     error: v.optional(v.string()),
     resultJson: v.optional(v.string()), // rescan: `{ refs: [...] }`

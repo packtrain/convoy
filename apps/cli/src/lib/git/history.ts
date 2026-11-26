@@ -14,7 +14,8 @@ const PAGE_HEADROOM_BYTES = 256;
 const HASH = "[0-9a-f]{40}(?:[0-9a-f]{24})?";
 const HASH_PATTERN = new RegExp(`^${HASH}$`);
 // `<tip>[,<tip>[,<tip>]]:<skip>`: later pages walk from the first page's tips, so new commits don't shift them.
-const CURSOR_PATTERN = new RegExp(`^(${HASH}(?:,${HASH}){0,2}):(\\d+)$`);
+// A `^` tip is excluded, as git reads it: the branch scope's default branches (OS-2595).
+const CURSOR_PATTERN = new RegExp(`^(\\^?${HASH}(?:,\\^?${HASH}){0,2}):(\\d+)$`);
 // The default branch on origin (OS-2536) and locally (OS-2586), drawn beside HEAD in the graph.
 const DEFAULT_BRANCH_REFS = [
   ["refs/remotes/origin/HEAD", "refs/remotes/origin/main", "refs/remotes/origin/master"],
@@ -36,10 +37,24 @@ export interface CommitSummary {
   subject: string;
 }
 
+/** Where a branch-scoped walk left the default branch: its newest merge-base with `ref` (OS-2595). */
+export interface ForkPoint {
+  /** Short name, e.g. `main` or `origin/main`. */
+  ref: string;
+  hash: string;
+  /** Commits on `ref` that HEAD doesn't have. */
+  behind: number;
+}
+
 export interface CommitPage {
   commits: CommitSummary[];
   nextCursor?: string;
+  /** Branch scope's first page only. */
+  fork?: ForkPoint;
 }
+
+/** `branch`: only HEAD's commits that no default branch has (OS-2595). */
+export type HistoryScope = "branch";
 
 export interface CommitPatch {
   body: string;
@@ -65,23 +80,50 @@ async function resolveCommit(cwd: string, ref: string): Promise<string | null> {
   return result.exitCode === 0 ? result.stdout.trim() : null;
 }
 
-async function resolveFirst(cwd: string, refs: string[]): Promise<string | null> {
+async function resolveFirst(cwd: string, refs: string[]): Promise<{ ref: string; hash: string } | null> {
   for (const ref of refs) {
     const hash = await resolveCommit(cwd, ref);
     if (hash) {
-      return hash;
+      return { ref, hash };
     }
   }
   return null;
 }
 
+/** The default branch HEAD has the fewest own commits against; local first on a tie. */
+async function findFork(cwd: string, bases: { ref: string; hash: string }[]): Promise<ForkPoint | undefined> {
+  const counts = await Promise.all(
+    bases.map(async (base) => {
+      const result = await runGit(cwd, ["rev-list", "--left-right", "--count", `${base.hash}...HEAD`]);
+      const [behind = 0, ahead = 0] = result.stdout.trim().split(/\s+/).map(Number);
+      return { base, behind, ahead };
+    })
+  );
+  const closest = counts.reduceRight<(typeof counts)[number] | undefined>((best, next) => (!best || next.ahead < best.ahead ? next : best), undefined);
+  if (!closest) {
+    return undefined;
+  }
+  const [mergeBase, name] = await Promise.all([
+    runGit(cwd, ["merge-base", closest.base.hash, "HEAD"], { allowNonZeroExit: true }),
+    runGit(cwd, ["rev-parse", "--abbrev-ref", closest.base.ref]),
+  ]);
+  const hash = mergeBase.stdout.trim();
+  return hash ? { ref: name.stdout.trim(), hash, behind: closest.behind } : undefined;
+}
+
 /**
- * One page of `git log --topo-order HEAD <origin default> <local default>`; an unborn branch has no commits.
+ * One page of `git log --topo-order HEAD <origin default> <local default>`, or with `scope: "branch"`
+ * of `HEAD --not <defaults>`; an unborn branch has no commits.
  * ponytail: `--skip` re-walks from the tip, so a page costs O(depth); key pages by a commit if huge repos time out.
  */
-export async function listCommits(cwd: string, cursor?: string, budgetBytes = MAX_FILE_OP_BYTES): Promise<CommitPage> {
+export async function listCommits(
+  cwd: string,
+  cursor?: string,
+  { budgetBytes = MAX_FILE_OP_BYTES, scope }: { budgetBytes?: number; scope?: HistoryScope } = {}
+): Promise<CommitPage> {
   let tips: string[];
   let skip = 0;
+  let fork: ForkPoint | undefined;
   if (cursor !== undefined) {
     const match = CURSOR_PATTERN.exec(cursor);
     if (!match) {
@@ -94,8 +136,16 @@ export async function listCommits(cwd: string, cursor?: string, budgetBytes = MA
     if (!head) {
       return { commits: [] };
     }
-    const bases = await Promise.all(DEFAULT_BRANCH_REFS.map((refs) => resolveFirst(cwd, refs)));
-    tips = [...new Set([head, ...bases.filter((base) => base !== null)])];
+    const found = (await Promise.all(DEFAULT_BRANCH_REFS.map((refs) => resolveFirst(cwd, refs)))).filter((base) => base !== null);
+    if (scope === "branch") {
+      // On the default branch itself only origin's copy is excluded: what's left is unpushed.
+      const branch = await runGit(cwd, ["symbolic-ref", "-q", "HEAD"], { allowNonZeroExit: true });
+      const bases = found.filter((base) => base.ref !== branch.stdout.trim());
+      fork = await findFork(cwd, bases);
+      tips = [...new Set([head, ...bases.map((base) => `^${base.hash}`)])];
+    } else {
+      tips = [...new Set([head, ...found.map((base) => base.hash)])];
+    }
   }
   const result = await runGit(
     cwd,
@@ -117,7 +167,9 @@ export async function listCommits(cwd: string, cursor?: string, budgetBytes = MA
     }
     kept++;
   }
-  return kept < commits.length ? { commits: commits.slice(0, kept), nextCursor: `${tips.join(",")}:${skip + kept}` } : { commits };
+  const page: CommitPage =
+    kept < commits.length ? { commits: commits.slice(0, kept), nextCursor: `${tips.join(",")}:${skip + kept}` } : { commits };
+  return fork ? { ...page, fork } : page;
 }
 
 /** One commit's body and patch; a merge gets git's dense combined diff (`--cc`). */

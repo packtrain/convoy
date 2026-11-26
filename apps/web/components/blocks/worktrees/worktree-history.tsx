@@ -16,7 +16,7 @@ import { formatCompactRelativeTime } from "@/lib/format-relative-time";
 import type { HistoryLayout } from "@/lib/threads/changes-view-prefs";
 import { type GraphRow, graphLanes, layoutGraph } from "@/lib/worktrees/commit-graph";
 import { WORKTREE_HISTORY_MIN_CLI_VERSION, supportsWorktreeHistory } from "@/lib/worktrees/cli-version";
-import type { CommitSummary, WorktreeHistory } from "@/lib/worktrees/hooks/use-worktree-history";
+import type { CommitSummary, ForkPoint, WorktreeHistory } from "@/lib/worktrees/hooks/use-worktree-history";
 import { cn } from "@/lib/utils";
 import { ErrorWithRetry, Message } from "./worktree-changes-body";
 import { GraphCell, graphWidth } from "./commit-graph";
@@ -83,6 +83,47 @@ export function HistoryLayoutToggle({ value, onChange }: { value: HistoryLayout;
           </Button>
         </TooltipExt>
       ))}
+    </div>
+  );
+}
+
+export type HistoryScope = "branch" | "all";
+const SCOPES = [
+  { scope: "branch", label: "This branch" },
+  { scope: "all", label: "All" },
+] as const;
+
+/** This branch | All, beside List | Graph (OS-2595). */
+export function HistoryScopeToggle({ value, onChange }: { value: HistoryScope; onChange: (scope: HistoryScope) => void }) {
+  return (
+    <div className="flex w-fit shrink-0 items-center gap-0.5" role="group" aria-label="History scope">
+      {SCOPES.map(({ scope, label }) => (
+        <Button
+          key={scope}
+          type="button"
+          variant="ghost"
+          size="sm"
+          aria-pressed={value === scope}
+          className={cn("h-7 cursor-pointer rounded-md px-2 text-xs text-muted-foreground", value === scope && "bg-muted text-foreground hover:bg-muted")}
+          onClick={() => onChange(scope)}
+        >
+          {label}
+        </Button>
+      ))}
+    </div>
+  );
+}
+
+/** The branch scope's last row: where the branch left the default branch, and the way to the rest. */
+function ForkRow({ fork, onShowAll }: { fork?: ForkPoint; onShowAll: () => void }) {
+  const newer = fork && fork.behind > 0 ? ` · ${fork.behind} newer ${fork.behind === 1 ? "commit" : "commits"} on ${fork.ref}` : "";
+  return (
+    <div className="flex min-h-9 items-center gap-2 border-t border-border px-3 py-1 text-xs text-muted-foreground">
+      <GitBranch className="size-3.5 shrink-0" aria-hidden />
+      {fork && <span className="min-w-0 truncate">{`Branched from ${fork.ref} at ${short(fork.hash)}${newer}`}</span>}
+      <Button type="button" variant="ghost" size="sm" className="ml-auto h-7 shrink-0 cursor-pointer px-2 text-xs" onClick={onShowAll}>
+        Show full history
+      </Button>
     </div>
   );
 }
@@ -338,6 +379,8 @@ interface WorktreeHistoryViewProps {
   onSelect: (hash: string | null, mode: "push" | "replace" | "back") => void;
   /** The thread panel's row above the list: the layout toggle (All commits over a one-pane commit), then `actions`. */
   toolbar?: { onLayoutChange: (layout: HistoryLayout) => void; actions: ReactNode };
+  /** Set in the branch scope: the list ends with the fork point (OS-2595). */
+  branch?: { fork?: ForkPoint; onShowAll: () => void };
   /** Whether a commit's diff is on screen, so the host shows its diff toggles only then. */
   onDiffShownChange?: (shown: boolean) => void;
 }
@@ -375,6 +418,7 @@ export function WorktreeHistoryView({
   onSelect,
   toolbar,
   onDiffShownChange,
+  branch,
 }: WorktreeHistoryViewProps) {
   const isMobile = useIsMobile();
   const rootRef = useRef<HTMLDivElement>(null);
@@ -657,7 +701,12 @@ export function WorktreeHistoryView({
       );
     }
     if (commits.length === 0) {
-      return <Message>No commits on this branch yet.</Message>;
+      return (
+        <>
+          <Message>No commits on this branch yet.</Message>
+          {branch && <ForkRow fork={branch.fork} onShowAll={branch.onShowAll} />}
+        </>
+      );
     }
 
     const detailOpen = (!onePane && !table) || opened !== undefined || seeking;
@@ -716,6 +765,7 @@ export function WorktreeHistoryView({
             </div>
           )
         )}
+        {branch && !history.hasMore && !history.loadingMore && !history.error && <ForkRow fork={branch.fork} onShowAll={branch.onShowAll} />}
       </div>
     );
     const finding = (

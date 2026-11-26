@@ -13,6 +13,7 @@ interface OpArgs {
   kind: string;
   postRef?: string;
   cursor?: string;
+  scope?: string;
   enabled: boolean;
 }
 
@@ -1335,3 +1336,91 @@ describe("useWorktreeHistory, cache across a remount (OS-2534 review)", () => {
     expect(ops.calls.some((call) => call.kind === "gitLog" && call.enabled)).toBe(true);
   });
 });
+
+describe("branch scope (OS-2595)", () => {
+  const FORK = { ref: "main", hash: hash("f"), behind: 3 };
+  const BRANCH_PAGE_1 = { commits: [{ ...commit("a", "branch tip", [hash("b")]), refs: ["HEAD -> feature"] }], nextCursor: `${hash("a")},^${hash("f")}:1`, fork: FORK };
+  const BRANCH_PAGE_2 = { commits: [commit("b", "branch start", [hash("f")])] };
+  const branchAnswer = (args: OpArgs) =>
+    args.kind === "gitLog" ? done(args.scope !== "branch" ? PAGE_1 : args.cursor ? BRANCH_PAGE_2 : BRANCH_PAGE_1) : done(PATCH("a.txt"));
+
+  beforeEach(() => {
+    mobile.value = false;
+    paneWidth.value = null;
+    ops.calls = [];
+    ops.answer = branchAnswer;
+  });
+
+  afterEach(() => {
+    cleanup();
+  });
+
+  test("the hook asks for the branch walk and keeps the first page's fork point across Load more", () => {
+    const { result } = renderHook(() => useWorktreeHistory("profile_1" as Id<"cliProfiles">, "path_1", true, undefined, "branch"));
+
+    expect(ops.calls.at(-1)).toMatchObject({ kind: "gitLog", scope: "branch", cursor: undefined });
+    expect(result.current.fork).toEqual(FORK);
+    act(() => result.current.loadMore());
+
+    expect(result.current.commits.map((entry) => entry.subject)).toEqual(["branch tip", "branch start"]);
+    expect(result.current.fork).toEqual(FORK);
+  });
+
+  test("switching scope starts over instead of showing the other scope's rows", () => {
+    const { result, rerender } = renderHook((props: { scope?: "branch" }) => useWorktreeHistory("profile_1" as Id<"cliProfiles">, "path_1", true, undefined, props.scope), {
+      initialProps: { scope: "branch" },
+    });
+    act(() => result.current.loadMore());
+    ops.answer = (args) => (args.scope === "branch" ? branchAnswer(args) : PENDING_OP);
+
+    rerender({ scope: undefined });
+
+    expect(result.current.commits).toEqual([]);
+    expect(result.current.initialLoading).toBe(true);
+    expect(result.current.fork).toBeUndefined();
+  });
+
+  function BranchHarness({ onShowAll }: { onShowAll: () => void }) {
+    const history = useWorktreeHistory("profile_1" as Id<"cliProfiles">, "path_1", true, undefined, "branch");
+    return (
+      <WorktreeHistoryView
+        profileId={"profile_1" as Id<"cliProfiles">}
+        pathId="path_1"
+        history={history}
+        layout="list"
+        registered
+        isOnline
+        appVersion="0.176.0"
+        diffOptions={{} as never}
+        allCollapsed={false}
+        wordWrap={false}
+        selectedHash={null}
+        onSelect={() => {}}
+        branch={{ fork: history.fork, onShowAll }}
+      />
+    );
+  }
+
+  test("the last page ends with where the branch forked and a way to the full history", () => {
+    const onShowAll = vi.fn();
+    render(<BranchHarness onShowAll={onShowAll} />);
+    expect(screen.queryByText(/Branched from/)).toBeNull();
+
+    fireEvent.click(screen.getByRole("button", { name: "Load more" }));
+
+    expect(screen.getByText("Branched from main at fffffff · 3 newer commits on main")).toBeTruthy();
+    fireEvent.click(screen.getByRole("button", { name: "Show full history" }));
+    expect(onShowAll).toHaveBeenCalled();
+  });
+
+  test("a branch with no commits of its own still says where it starts", () => {
+    ops.answer = (args) => (args.kind === "gitLog" ? done({ commits: [], fork: { ...FORK, behind: 0 } }) : done(PATCH("a.txt")));
+    render(<BranchHarness onShowAll={() => {}} />);
+
+    expect(screen.getByText("No commits on this branch yet.")).toBeTruthy();
+    expect(screen.getByText("Branched from main at fffffff")).toBeTruthy();
+    expect(screen.getByRole("button", { name: "Show full history" })).toBeTruthy();
+  });
+});
+
+const PENDING_OP: WorktreeOpState = { resultJson: undefined, error: null, loading: true, refresh: () => {} };

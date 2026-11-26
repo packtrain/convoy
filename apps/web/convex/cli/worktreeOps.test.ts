@@ -621,6 +621,32 @@ describe("cli worktreeOps", () => {
     expect(await s.asUser.query(api.cli.worktreeOps.get, { opId })).toBeNull();
   });
 
+  test("gitLog carries the branch scope and excluded tips in the cursor; other kinds drop the scope (OS-2595)", async () => {
+    const s = await setup();
+    const head = "a".repeat(40);
+    const excluded = `^${"b".repeat(40)},^${"c".repeat(40)}`;
+
+    await s.asUser.mutation(api.cli.worktreeOps.enqueue, { profileId: s.profile._id, kind: "gitLog", pathId: s.repoPath.id, scope: "branch" });
+    await s.asUser.mutation(api.cli.worktreeOps.enqueue, {
+      profileId: s.profile._id,
+      kind: "gitLog",
+      pathId: s.repoPath.id,
+      scope: "branch",
+      cursor: `${head},${excluded}:50`,
+    });
+    await s.asUser.mutation(api.cli.worktreeOps.enqueue, { profileId: s.profile._id, kind: "worktreeChanges", pathId: s.repoPath.id, scope: "branch" });
+    const pending = await s.t.query(api.cli.worktreeOps.listPending, { profileId: s.profile._id, apiKey: s.apiKey });
+
+    expect(pending.map((op) => [op.kind, op.scope, op.cursor])).toEqual([
+      ["gitLog", "branch", undefined],
+      ["gitLog", "branch", `${head},${excluded}:50`],
+      ["worktreeChanges", undefined, undefined],
+    ]);
+    await expect(
+      s.asUser.mutation(api.cli.worktreeOps.enqueue, { profileId: s.profile._id, kind: "gitLog", pathId: s.repoPath.id, cursor: `^^${head}:0` })
+    ).rejects.toThrow("History cursor is invalid");
+  });
+
   test("gitLog carries the cursor to the CLI and is pruned on the file-op TTL (OS-2534)", async () => {
     const s = await setup();
 

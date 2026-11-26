@@ -138,6 +138,16 @@ describe("worktree op processor", () => {
       expect(JSON.parse(completion.resultJson as string)).toMatchObject({ commits: [{ hash, subject: "init" }] });
     });
 
+    it("answers a branch-scoped gitLog with the branch's commits and its fork point (OS-2595)", async () => {
+      await runGit(repo, ["checkout", "-q", "-b", "feature"]);
+      await runGit(repo, ["-c", "user.name=t", "-c", "user.email=t@t", "commit", "-q", "--allow-empty", "-m", "feature"]);
+      const completion = await result(op("gitLog", { scope: "branch" }));
+      expect(JSON.parse(completion.resultJson as string)).toMatchObject({
+        commits: [{ subject: "feature" }],
+        fork: { ref: "main", hash, behind: 0 },
+      });
+    });
+
     it("answers commitPatch with the commit named in postRef", async () => {
       const completion = await result(op("commitPatch", { postRef: hash }));
       expect(JSON.parse(completion.resultJson as string)).toMatchObject({ patch: expect.stringContaining("+++ b/a.txt"), truncated: false });
