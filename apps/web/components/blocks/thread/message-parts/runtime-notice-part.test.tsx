@@ -1,7 +1,7 @@
 /**
  * @vitest-environment jsdom
  */
-import { cleanup, render, screen } from "@testing-library/react";
+import { cleanup, fireEvent, render, screen } from "@testing-library/react";
 import { afterEach, describe, expect, test, vi } from "vitest";
 import { RuntimeNoticePart } from "./runtime-notice-part";
 
@@ -90,5 +90,69 @@ describe("RuntimeNoticePart: code change published", () => {
 
     expect(screen.getByText(/Code change published: Published packtrain\/convoy#9\./)).toBeDefined();
     expect(screen.queryByRole("link")).toBeNull();
+  });
+});
+
+const worktreeNotice = (code: string, fields: Record<string, string>) => ({
+  type: "runtime-notice" as const,
+  code,
+  title: "Working directory recovered",
+  message: "The thread previously ran in /repo-worktrees/feat-captions. Its working directory is now /repo.",
+  detailsJson: JSON.stringify(fields),
+});
+
+describe("worktree change notices (OS-2609)", () => {
+  const fallback = { change: "parent", previousPath: "/repo-worktrees/feat-captions", path: "/repo", branch: "main" };
+
+  test("shows (old) → (new) and the cause, with the old directory struck through when it is gone", () => {
+    render(<RuntimeNoticePart part={worktreeNotice("workspace-recovered", fallback)} />);
+
+    const trigger = screen.getByRole("button");
+    expect(trigger.textContent).toContain("feat-captions");
+    expect(trigger.textContent).toContain("repo");
+    expect(trigger.textContent).toContain("worktree removed");
+    expect(trigger.textContent).not.toContain("previously ran in");
+    expect(screen.getByText("feat-captions").className).toContain("line-through");
+  });
+
+  test("opens the full paths, branch and explanation on click", () => {
+    render(<RuntimeNoticePart part={worktreeNotice("workspace-recovered", fallback)} />);
+    expect(screen.queryByText("/repo-worktrees/feat-captions")).toBeNull();
+
+    fireEvent.click(screen.getByRole("button"));
+
+    expect(screen.getByText("/repo-worktrees/feat-captions")).toBeDefined();
+    expect(screen.getByText("/repo")).toBeDefined();
+    expect(screen.getByText("main")).toBeDefined();
+    expect(screen.getByText(/fell back to its parent checkout/)).toBeDefined();
+  });
+
+  test("labels a moved worktree by its last two folders, since the basenames match", () => {
+    render(<RuntimeNoticePart part={worktreeNotice("workspace-recovered", {
+      change: "moved", previousPath: "/wt/feat-captions", path: "/wt/archive/feat-captions", branch: "feat/captions",
+    })} />);
+
+    const trigger = screen.getByRole("button");
+    expect(trigger.textContent).toContain("wt/feat-captions");
+    expect(trigger.textContent).toContain("archive/feat-captions");
+    expect(trigger.textContent).toContain("worktree moved");
+  });
+
+  test("shows a created worktree, and the pending create before it finishes", () => {
+    const { unmount } = render(<RuntimeNoticePart part={worktreeNotice("worktree-created", {
+      change: "created", previousPath: "/repo", path: "/repo-worktrees/feat-captions", branch: "feat/captions", baseRef: "main",
+    })} />);
+    expect(screen.getByRole("button").textContent).toContain("new worktree");
+    expect(screen.getByText("feat-captions").className).not.toContain("line-through");
+    unmount();
+
+    render(<RuntimeNoticePart part={worktreeNotice("worktree-create", { previousPath: "/repo", branch: "feat/captions", baseRef: "main" })} />);
+    expect(screen.queryByRole("button")).toBeNull();
+    expect(screen.getByText(/Creating worktree/).textContent).toContain("feat/captions");
+  });
+
+  test("falls back to the message row when an older CLI sent no fields", () => {
+    render(<RuntimeNoticePart part={{ ...worktreeNotice("workspace-recovered", {}), detailsJson: undefined }} />);
+    expect(screen.getByText(/previously ran in/)).toBeDefined();
   });
 });

@@ -21,6 +21,19 @@ describe("normalizeCliChunkToEvent", () => {
     expect(normalizeCliChunkToEvent(chunk)).toEqual({ kind: "text", text: "src/a.ts: unused import\n" });
   });
 
+  // Structured notice fields reach the web renderer (OS-2609).
+  test("keeps a bridge notice's extra fields as detailsJson", () => {
+    const fields = { change: "parent", previousPath: "/repo-worktrees/feat", path: "/repo", branch: "main" };
+    expect(normalizeCliChunkToEvent(chunk("convoy_notice", {
+      code: "workspace-recovered", title: "Working directory recovered", message: "moved", ...fields,
+    }), "codex")).toEqual({
+      kind: "runtime-notice", code: "workspace-recovered", title: "Working directory recovered", message: "moved",
+      detailsJson: JSON.stringify(fields),
+    });
+    expect(normalizeCliChunkToEvent(chunk("convoy_notice", { code: "script-exit", title: "Script", message: "done" })))
+      .toEqual({ kind: "runtime-notice", code: "script-exit", title: "Script", message: "done" });
+  });
+
   // ── assistant: text ──────────────────────────────────────────────
   test("extracts text from assistant message", () => {
     const result = normalizeCliChunkToEvent(

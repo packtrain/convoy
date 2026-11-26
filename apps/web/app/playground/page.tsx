@@ -8,6 +8,11 @@ interface PlaygroundLink {
 
 const ACTIVE_PLAYGROUNDS: PlaygroundLink[] = [
   {
+    href: "/playground/workspace-recovered",
+    title: "Worktree changes",
+    description: "Worktree creation and working directory recovery as one (old) → (new) divider that expands to full details (OS-2609).",
+  },
+  {
     href: "/playground/code-change-published",
     title: "Code change published",
     description: "Claude's PR-published event as a quiet row, a PR card, or a transcript milestone, next to today's JSON notice (OS-2611).",

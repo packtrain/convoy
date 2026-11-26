@@ -18,6 +18,7 @@ import { getThreadPullRequestPresentation } from "@/lib/threads/pull-request";
 import { cn } from "@/lib/utils";
 import { CollapsibleToolPart } from "./components/collapsible-tool-part";
 import { ToolSurface } from "./components/tool-surface";
+import { parseWorktreeNotice, WorktreeChangeNotice } from "./worktree-change-notice";
 
 interface RuntimeNoticePartProps {
   part: RuntimeNoticePartModel;
@@ -120,6 +121,9 @@ export function RuntimeNoticePart({ part }: RuntimeNoticePartProps) {
   if (part.code === "worktree-setup-unapproved") {
     return <WorktreeSetupUnapprovedNotice part={part} />;
   }
+
+  const worktreeNotice = parseWorktreeNotice(part);
+  if (worktreeNotice) return <WorktreeChangeNotice notice={worktreeNotice} />;
 
   if (part.code === "claude-code-change-published") {
     const { payload } = parseNoticePayload(part);

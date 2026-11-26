@@ -359,7 +359,8 @@ worktrees removed through a shell command.
   updates the path id, path snapshot, worktree metadata, previous path, and
   current branch together. Recovering to the parent clears the worktree spec.
   Continuation ids, conversation content, and task associations stay intact.
-- The assistant run shows a `workspace-recovered` notice. The runtime receives
+- The assistant run shows a `workspace-recovered` notice (see
+  [Worktree change notices](#worktree-change-notices)). The runtime receives
   the new working directory as context, including on resumed runs. The pending
   notice survives process restarts until an ordinary run completes and
   acknowledges that exact directory change in the same transaction. Commands
@@ -389,6 +390,35 @@ checkout and that thread has never fallen back to its parent. The permanent
 checkpoints carry their own identity and remain usable after parent recovery.
 See `cli-thread-run-diffs.md`.
 
+### Worktree change notices
+
+Each change of a thread's working directory renders as one transcript divider
+(OS-2609): an icon, the old directory, an arrow, the new directory, and a short
+cause. The new directory never truncates first; the cause and then the old
+directory give way on a narrow thread. When the two basenames match (a moved
+worktree) the chips show the last two folders. A gone directory is struck through.
+Clicking the divider opens the full new and old paths, the branch, and one
+sentence on what happened. The mockup is `/playground/workspace-recovered`.
+
+| `code` | `change` | When | Cause label |
+|---|---|---|---|
+| `worktree-create` | — | Before creation; renders "Creating worktree `branch` from `baseRef`…" | — |
+| `worktree-created` | `created` | After `resolveCreated`; replaces the `worktree-create` part in place | new worktree |
+| `workspace-recovered` | `moved` | Git found the same worktree at a new path | worktree moved |
+| `workspace-recovered` | `parent` | Fell back to the parent checkout | worktree removed |
+
+The `convoy_notice` chunk carries `previousPath`, `path`, `change`, and
+`branch` next to `code`, `title`, and `message`; creation adds `baseRef`, and
+`worktree-create` sends only `previousPath`, `branch`, and `baseRef`. The branch
+is the recovered checkout's current branch, read locally, and is omitted on a
+detached HEAD. Bridge normalization (`convex/cli/lib/chunks/normalizedEvents.ts`)
+stores every field other than `code`, `title`, and `message` as the notice's
+`detailsJson`. A notice without valid fields (an older CLI) keeps the generic
+`title: message` row, and older web builds show `message`. A `worktree-create`
+whose creation failed stays as the "Creating worktree…" divider; the run's error
+explains the failure. The text passed to the runtime (`workspaceNotice`) is
+unchanged.
+
 ### Recovery request cost
 
 With the workspace included in run start, healthy worktree runs add no backend
@@ -400,7 +430,7 @@ session ownership instead of fetching it again.
 |---|---|
 | Ordinary checkout or healthy worktree with saved identity | None |
 | First run in an existing worktree without saved identity | One identity mutation |
-| First run creating a new worktree | One post-creation query and one identity mutation |
+| First run creating a new worktree | One post-creation query, one identity mutation, and the `worktree-created` notice append |
 | Recovery before launch | Target mutation and notice append |
 | Deletion during launch | One heartbeat, workspace query, target mutation, notice append, and branch report beyond initial preparation |
 

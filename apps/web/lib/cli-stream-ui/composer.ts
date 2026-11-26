@@ -1269,6 +1269,17 @@ function applyEventToMessage(
     }
 
     case "runtime-notice": {
+      // The finished create replaces its "Creating worktree…" divider (docs/specs/cli-worktrees.md#worktree-change-notices).
+      const pendingCreate = event.code === "worktree-created"
+        ? msg.parts.findLastIndex((part) => part.type === "runtime-notice" && part.code === "worktree-create")
+        : -1;
+      if (pendingCreate !== -1) {
+        msg.parts[pendingCreate] = createRuntimeNoticePart(
+          { code: event.code, title: event.title, message: event.message, detailsJson: event.detailsJson, sessionId: event.sessionId },
+          getRuntimeNoticeDebugJson(event)
+        );
+        break;
+      }
       addRuntimeNoticePart(
         msg,
         {

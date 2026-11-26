@@ -880,6 +880,34 @@ describe("composer", () => {
     });
   });
 
+  describe("worktree change notices (OS-2609)", () => {
+    const notice = (code: string, fields: Record<string, string>) => ({
+      kind: "runtime-notice" as const, code, title: "Worktree", message: code, detailsJson: JSON.stringify(fields),
+    });
+
+    test("the created notice replaces the pending create notice in place", () => {
+      const created = notice("worktree-created", { change: "created", previousPath: "/repo", path: "/wt", branch: "feat" });
+      const rows = [
+        makeRow("msg-1", 0, notice("worktree-create", { previousPath: "/repo", branch: "feat" })),
+        makeRow("msg-1", 1, { kind: "text", text: "setup output" }),
+        makeRow("msg-1", 2, created),
+      ];
+
+      const msg = applyRowsToComposer(emptyComposer(), rows).messages.get("msg-1")!;
+
+      expect(msg.parts).toEqual([
+        { type: "runtime-notice", code: "worktree-created", title: "Worktree", message: "worktree-created", detailsJson: created.detailsJson },
+        { type: "text", text: "setup output" },
+      ]);
+    });
+
+    test("a created notice with no pending one is appended", () => {
+      const rows = [makeRow("msg-1", 0, notice("worktree-created", { change: "created", previousPath: "/repo", path: "/wt", branch: "feat" }))];
+      const msg = applyRowsToComposer(emptyComposer(), rows).messages.get("msg-1")!;
+      expect(msg.parts.map((part) => part.type === "runtime-notice" && part.code)).toEqual(["worktree-created"]);
+    });
+  });
+
   describe("warning collection", () => {
     test("warning events are collected", () => {
       const rows = [

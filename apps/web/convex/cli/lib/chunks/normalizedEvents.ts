@@ -34,17 +34,16 @@ function normalizeBridgeChunk(chunk: RawChunk): CliNormalizedEvent | null {
 
   const parsed = safeJsonParse(chunk.data);
   const obj = parsed !== null && typeof parsed === "object" && !Array.isArray(parsed) ? (parsed as Record<string, unknown>) : {};
+  // Any other fields are the notice's structured payload, e.g. a steered
+  // marker's `messageId` or a worktree change's paths (cli-worktrees.md).
+  const { code, title, message, ...details } = obj;
 
   return {
     kind: "runtime-notice",
-    code: typeof obj.code === "string" ? obj.code : "convoy-notice",
-    title: typeof obj.title === "string" ? obj.title : "Convoy",
-    message: typeof obj.message === "string" ? obj.message : chunk.data,
-    // Steered-message markers carry the steered user message id so the
-    // inline bubble can resolve that message's attachments at render time.
-    ...(typeof obj.messageId === "string"
-      ? { detailsJson: JSON.stringify({ messageId: obj.messageId }) }
-      : {}),
+    code: typeof code === "string" ? code : "convoy-notice",
+    title: typeof title === "string" ? title : "Convoy",
+    message: typeof message === "string" ? message : chunk.data,
+    ...(Object.keys(details).length > 0 ? { detailsJson: JSON.stringify(details) } : {}),
   };
 }
 

@@ -574,6 +574,7 @@ export function createMessageHandler(
                     code: "worktree-create",
                     title: "Worktree",
                     message: `Creating worktree for branch \`${spec.branch}\`${spec.baseRef ? ` from \`${spec.baseRef}\`` : ""}…`,
+                    previousPath: workingDirectory, branch: spec.branch, baseRef: spec.baseRef,
                   }),
                 },
               ],
@@ -621,6 +622,17 @@ export function createMessageHandler(
               branch: spec.branch,
             });
 
+            // Replaces the "Creating worktree…" divider (docs/specs/cli-worktrees.md#worktree-change-notices).
+            await client.mutation(api.cli.messages.appendRunContent, {
+              messageId: started.assistantMessageId,
+              sessionId: typedSessionId,
+              chunks: [{ type: "convoy_notice", data: JSON.stringify({
+                code: "worktree-created", title: "Worktree",
+                message: `Created worktree for branch \`${spec.branch}\` at ${created.path}.`,
+                change: "created", previousPath: workingDirectory, path: created.path, branch: spec.branch, baseRef: spec.baseRef,
+              }) }],
+            });
+
             createdWorktreeThisRun = true;
             workingDirectory = created.path;
             executionWorktree = { ...spec, status: "created" };
@@ -640,6 +652,10 @@ export function createMessageHandler(
                 chunks: [{ type: "convoy_notice", data: JSON.stringify({
                   code: "workspace-recovered", title: "Working directory recovered",
                   message: formatWorkspaceNotice(resolved.workspaceNotice),
+                  // Recovery keeps the worktree only when Git found it at a new path.
+                  change: resolved.executionWorktree ? "moved" : "parent",
+                  ...resolved.workspaceNotice,
+                  branch: await getCurrentBranch(resolved.workingDirectory).catch(() => null) ?? undefined,
                 }) }],
               });
             }

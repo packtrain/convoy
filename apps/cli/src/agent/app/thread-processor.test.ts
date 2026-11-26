@@ -21,6 +21,7 @@ import type {
 } from "../runtimes/contracts.js";
 import { RunnerExecutionError } from "../runtimes/contracts.js";
 import { runGit } from "../../lib/git/exec.js";
+import { getCurrentBranch } from "../../lib/git/index.js";
 import { resolveExecutionWorkspace } from "../../lib/git/worktrees.js";
 import type { ConvoyClient } from "../../lib/config/convex-client.js";
 
@@ -235,6 +236,7 @@ describe("message-handler", () => {
     const worktreePath = join(parentPath, "checkout");
     await runGit(parentPath, ["worktree", "add", "-b", "feat/test", worktreePath]);
     if (when === "before-run") await runGit(parentPath, ["worktree", "remove", worktreePath]);
+    vi.mocked(getCurrentBranch).mockImplementation(async (path) => path === parentPath ? "main-in-parent" : "feat/test");
     if (when !== "before-run") {
       vi.mocked(mockRunner.execute).mockImplementationOnce(async function* () {
         if (when === "after-output") yield { type: "assistant", data: "Already started work" };
@@ -271,8 +273,53 @@ describe("message-handler", () => {
       expect(mockRunner.execute).toHaveBeenCalledWith(parentPath, expect.any(String), expect.objectContaining({
         continuationId: "session-prev", requireContinuation: true,
       }));
+      const notices = mockMutation.mock.calls
+        .filter(([fn]) => getFunctionName(fn) === "cli/messages:appendRunContent")
+        .flatMap(([, args]) => args.chunks as ContentChunk[])
+        .filter((chunk) => chunk.type === "convoy_notice").map((chunk) => JSON.parse(chunk.data));
+      expect(notices.filter((notice) => notice.code === "workspace-recovered")).toEqual([expect.objectContaining({
+        change: "parent", previousPath: worktreePath, path: parentPath, branch: "main-in-parent",
+      })]);
       expect(mockMutation.mock.calls.some(([fn, args]) => getFunctionName(fn) === "cli/worktrees:resolveExecutionWorkspace" && args.path === parentPath)).toBe(true);
       expect(mockRunner.execute).toHaveBeenCalledTimes(when === "before-run" ? 1 : 2);
+    } finally {
+      await handler.shutdown();
+      vi.mocked(getCurrentBranch).mockResolvedValue("feat/test");
+    }
+  });
+
+  it("reports a moved worktree as moved, with its new path and branch (OS-2609)", async () => {
+    const parent = mkdtempSync(join(tmpdir(), "convoy-moved-workspace-"));
+    attachmentCacheDirs.push(parent);
+    await runGit(parent, ["init", "-b", "main"]);
+    await runGit(parent, ["-c", "user.name=Test", "-c", "user.email=test@example.com", "commit", "--allow-empty", "-m", "initial"]);
+    const checkout = join(parent, "checkout");
+    await runGit(parent, ["worktree", "add", "-b", "feat/test", checkout]);
+    const spec = { parentPathId: "parent", parentPath: parent, branch: "feat/test", status: "created" as const };
+    const identity = await resolveExecutionWorkspace(checkout, spec);
+    const worktree = { ...spec, repositoryId: identity.repositoryId, worktreeId: identity.worktreeId };
+    const moved = join(parent, "moved");
+    await runGit(parent, ["worktree", "move", checkout, moved]);
+    const chat = makePendingChat({ workingDirectory: checkout, worktree });
+    setQueryResponses({ pendingRuns: [[makeUserMessage()], []], continuationIds: ["session"] });
+    const mutate = mockMutation.getMockImplementation()!;
+    mockMutation.mockImplementation(async (fn, args) => {
+      const result = await Reflect.apply(mutate, undefined, [fn, args]);
+      return getFunctionName(fn) === "cli/messages:startRunResponse"
+        ? { ...result, workspace: { pathId: chat.pathId, path: checkout, worktree } }
+        : result;
+    });
+    const handler = createMessageHandler(() => mockRunner, mockClient, sessionId);
+    handler.enqueueChat(chat);
+    try {
+      await vi.waitFor(() => expect(handler.isProcessing()).toBe(false), { timeout: 5000 });
+      expect(mockRunner.execute).toHaveBeenCalledWith(moved, expect.any(String), expect.anything());
+      const notice = mockMutation.mock.calls
+        .filter(([fn]) => getFunctionName(fn) === "cli/messages:appendRunContent")
+        .flatMap(([, args]) => args.chunks as ContentChunk[])
+        .filter((chunk) => chunk.type === "convoy_notice").map((chunk) => JSON.parse(chunk.data))
+        .find((data) => data.code === "workspace-recovered");
+      expect(notice).toMatchObject({ change: "moved", previousPath: checkout, path: moved, branch: "feat/test" });
     } finally {
       await handler.shutdown();
     }
@@ -472,6 +519,18 @@ describe("message-handler", () => {
     }
 
     const approved = (script: string) => ({ status: "approved", repoKey: "packtrain/convoy", script, revision: 3 });
+
+    it("announces the worktree before creating it and its path after (OS-2609)", async () => {
+      const repo = await pendingWorktreeChat(undefined);
+      const result = await repo.run();
+      expect(result.failure).toBeUndefined();
+      const notices = (codes: string[]) => result.chunks.filter((chunk) => chunk.type === "convoy_notice")
+        .map((chunk) => JSON.parse(chunk.data)).filter((data) => codes.includes(data.code));
+      expect(notices(["worktree-create", "worktree-created"])).toEqual([
+        expect.objectContaining({ code: "worktree-create", previousPath: repo.parent, branch: BRANCH }),
+        expect.objectContaining({ code: "worktree-created", change: "created", previousPath: repo.parent, path: repo.worktreePath, branch: BRANCH }),
+      ]);
+    });
 
     it("fails an unapproved setup before creating the worktree, with a notice the web links", async () => {
       const repo = await pendingWorktreeChat({ status: "unapproved", repoKey: "packtrain/convoy" });
