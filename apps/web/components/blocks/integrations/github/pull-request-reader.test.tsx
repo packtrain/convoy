@@ -1447,6 +1447,19 @@ describe("PullRequestReader GitHub comments (OS-2183)", () => {
     expect(within(popover).getByText("No conflicts with base branch")).toBeTruthy();
   });
 
+  test("a branch that can't be rebased gets Fix, which drafts the rebase thread", async () => {
+    linkedAs({ login: "maya", githubUserId: 42, status: "active" });
+    readOverview.mockResolvedValue({ ...overview, rebaseConflicts: true });
+    window.localStorage.setItem("convoy:github:merge-method:42", "rebase");
+    seeded.length = 0;
+    render(connected());
+    const popover = await openMergeStatus();
+    fireEvent.click(within(popover).getByRole("button", { name: "Fix" }));
+
+    expect(await screen.findByLabelText("Thread composer")).toBeTruthy();
+    expect(seeded).toEqual(["Rebase #7 on main, resolve the conflicts, and push."]);
+  });
+
   test("a mid-stack Layer merges the open Layers below it, and a draft below blocks it", async () => {
     linkedAs({ login: "maya", githubUserId: 42, status: "active" });
     readPermission.mockResolvedValue("write");

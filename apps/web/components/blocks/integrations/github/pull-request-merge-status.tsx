@@ -90,7 +90,7 @@ export function MergeStatus({
   projectId: Id<"projects">;
   repositoryId: string;
   commenting: GithubCommenting;
-  /** Drafts the conflicts Fix thread; absent when the repository isn't connected here. */
+  /** Drafts the conflicts Fix thread, also for a branch that can't be rebased; absent when the repository isn't connected here. */
   onResolveLocally?: () => void;
   onBranchUpdated: () => void;
 }) {
@@ -179,7 +179,21 @@ export function MergeStatus({
               tone="blocked"
               title="This branch cannot be rebased due to conflicts"
               body={`Rebase it onto ${overview.baseRef} locally and push, or pick another merge method.`}
-            />
+            >
+              {onResolveLocally ? (
+                <Button
+                  variant="outline"
+                  size="sm"
+                  className="mt-3"
+                  onClick={() => {
+                    setOpen(false);
+                    onResolveLocally();
+                  }}
+                >
+                  Fix
+                </Button>
+              ) : null}
+            </StatusRow>
           ) : (
             <StatusRow tone="ok" title="No conflicts with base branch" body="Merging can be performed automatically." />
           )}

@@ -1276,7 +1276,8 @@ compact), and the reader's header, tab row, and Overview.
   while GitHub reports `null`), and conflicts with Resolve on GitHub. A head
   that merges cleanly but that GitHub can't rebase (`rebaseable: false`)
   reads "This branch cannot be rebased due to conflicts" in place of "No
-  conflicts with base branch" while Rebase and merge is the picked method. Its
+  conflicts with base branch" while Rebase and merge is the picked method,
+  with a Fix button that drafts the same rebase thread as Resolve locally. Its
   button's icon is red for conflicts or failing checks, the pending circle
   while either is unsettled, and green otherwise. GitHub sends no event
   when mergeability settles, so while it reads `null` the reader re-reads it
