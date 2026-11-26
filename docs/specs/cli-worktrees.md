@@ -796,8 +796,10 @@ every row, header included, past a phone viewport. The right pane is the file tr
     hash takes the button's place, selected for Ctrl+C.
 - File tree (OS-2037, `components/custom/diff/worktree-file-tree.tsx`): the changed files nested by
   folder in `ThreadWorkspaceSplitPane`'s sidebar, titled "Files". The split
-  pane sits below the header, so the header spans the full width and the
-  tree's 41px "Files" row (`FileTreeHeader`) lines up with the toolbar. Folders come
+  pane sits below the header and the Changes | History tabs row, so both span
+  the full width and switching tabs never moves them; the tree starts under
+  the tabs with its "Files" row (`FileTreeHeader`), as tall as the first diff
+  file header beside it and, like it, without the toolbar's background. Folders come
   first, in patch order, each with the ±sum of its files and a chevron that
   collapses it; single-child folder chains are joined into one row
   (`components/custom/diff/file-tree.ts`). File rows show the name, ±counts (or

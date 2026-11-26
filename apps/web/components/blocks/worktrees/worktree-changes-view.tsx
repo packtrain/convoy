@@ -148,7 +148,12 @@ function ChangesViewForCheckout({ profileId, pathId }: WorktreeChangesViewProps)
   const refreshing = onHistory ? history.initialLoading || history.refreshing : changes.loading;
   return (
     // minmax(0,1fr) column: an auto column takes the longest diff line's width and overflows a phone viewport.
-    <main className="grid h-full min-h-0 min-w-0 flex-1 grid-cols-[minmax(0,1fr)] grid-rows-[auto_minmax(0,1fr)] overflow-hidden">
+    <main
+        className={cn(
+          "grid h-full min-h-0 min-w-0 flex-1 grid-cols-[minmax(0,1fr)] overflow-hidden",
+          entry ? "grid-rows-[auto_auto_minmax(0,1fr)]" : "grid-rows-[auto_minmax(0,1fr)]"
+        )}
+      >
         <ThreadHeader
           title={title}
           leading={<ThreadMobileBackButton organizationSlug={params.organizationSlug} projectAlias={params.projectAlias} />}
@@ -199,12 +204,51 @@ function ChangesViewForCheckout({ profileId, pathId }: WorktreeChangesViewProps)
             ) : undefined
           }
         />
-        {/* The header spans the file tree too; the tree starts level with the toolbar. */}
+        {/* ponytail: 41px like ThreadChangesToolbar — lines up with the sidebar's "New thread" row. */}
+        {entry && (
+          <div className="flex h-[41px] shrink-0 items-center gap-3 border-b border-border bg-card px-4 text-xs text-muted-foreground">
+            <Tabs value={tab} onValueChange={(value) => openTab(value === "history" ? "history" : "changes")} className="shrink-0">
+              <TabsList variant="underline" className="w-auto border-b-0" aria-label="Worktree view">
+                <TabsTrigger value="changes">
+                  Changes
+                  {hasFiles && <span className="rounded-sm bg-muted px-1 text-xs tabular-nums">{files.length}</span>}
+                </TabsTrigger>
+                <TabsTrigger value="history">History</TabsTrigger>
+              </TabsList>
+            </Tabs>
+            {/* A phone has room for a few characters only; the header names the checkout. */}
+            {!isMobile && (
+              <span className="truncate font-mono" title={entry.path}>
+                {entry.path}
+              </span>
+            )}
+            {!onHistory && <ChangesSummary files={files} />}
+            {isOnline && !onHistory && <RevertAllButton state={state} />}
+            <div className="ml-auto flex items-center gap-1">
+              {/* The diff toggles only while a diff is on screen, left of List | Graph so it never moves. */}
+              {!noDiffShown && (
+                <ChangesViewToggles
+                  allCollapsed={allCollapsed}
+                  onToggleCollapseAll={() => setAllCollapsed((value) => !value)}
+                  diffStyle={diffStyle}
+                  onToggleDiffStyle={toggleDiffStyle}
+                  wordWrap={wordWrap}
+                  onToggleWordWrap={toggleWordWrap}
+                  fileTreeOpen={sidebarOpen}
+                  onToggleFileTree={hasFiles && !isMobile && !onHistory ? () => setSidebarOpen((open) => !open) : undefined}
+                />
+              )}
+              {/* A phone's commit pane drops the layout toggle. */}
+              {onHistory && !phoneCommit && <HistoryLayoutToggle value={historyLayout} onChange={setHistoryLayout} />}
+            </div>
+          </div>
+        )}
+        {/* Header and tabs row span the full width, so switching tabs never moves them. */}
         <ThreadWorkspaceSplitPane
           isSidebarOpen={sidebarOpen && hasFiles && !isMobile && !onHistory}
           onCloseSidebar={() => setSidebarOpen(false)}
           sidebarTitle="Files"
-          sidebarHeader={<FileTreeHeader onClose={() => setSidebarOpen(false)} />}
+          sidebarHeader={<FileTreeHeader levelWith="section" onClose={() => setSidebarOpen(false)} />}
           sidebarSide={treeSide}
           sidebarContent={
             <WorktreeFileTree
@@ -218,46 +262,7 @@ function ChangesViewForCheckout({ profileId, pathId }: WorktreeChangesViewProps)
             />
           }
         >
-          <div className="grid min-h-0 min-w-0 flex-1 grid-cols-[minmax(0,1fr)] grid-rows-[auto_minmax(0,1fr)] overflow-hidden">
-            {/* ponytail: 41px like ThreadChangesToolbar — lines up with the sidebar's "New thread" row. */}
-            {entry && (
-              <div className="flex h-[41px] shrink-0 items-center gap-3 border-b border-border bg-card px-4 text-xs text-muted-foreground">
-                <Tabs value={tab} onValueChange={(value) => openTab(value === "history" ? "history" : "changes")} className="shrink-0">
-                  <TabsList variant="underline" className="w-auto border-b-0" aria-label="Worktree view">
-                    <TabsTrigger value="changes">
-                      Changes
-                      {hasFiles && <span className="rounded-sm bg-muted px-1 text-xs tabular-nums">{files.length}</span>}
-                    </TabsTrigger>
-                    <TabsTrigger value="history">History</TabsTrigger>
-                  </TabsList>
-                </Tabs>
-                {/* A phone has room for a few characters only; the header names the checkout. */}
-                {!isMobile && (
-                  <span className="truncate font-mono" title={entry.path}>
-                    {entry.path}
-                  </span>
-                )}
-                {!onHistory && <ChangesSummary files={files} />}
-                {isOnline && !onHistory && <RevertAllButton state={state} />}
-                <div className="ml-auto flex items-center gap-1">
-                  {/* The diff toggles only while a diff is on screen, left of List | Graph so it never moves. */}
-                  {!noDiffShown && (
-                    <ChangesViewToggles
-                      allCollapsed={allCollapsed}
-                      onToggleCollapseAll={() => setAllCollapsed((value) => !value)}
-                      diffStyle={diffStyle}
-                      onToggleDiffStyle={toggleDiffStyle}
-                      wordWrap={wordWrap}
-                      onToggleWordWrap={toggleWordWrap}
-                      fileTreeOpen={sidebarOpen}
-                      onToggleFileTree={hasFiles && !isMobile && !onHistory ? () => setSidebarOpen((open) => !open) : undefined}
-                    />
-                  )}
-                  {/* A phone's commit pane drops the layout toggle. */}
-                  {onHistory && !phoneCommit && <HistoryLayoutToggle value={historyLayout} onChange={setHistoryLayout} />}
-                </div>
-              </div>
-            )}
+          <div className="grid min-h-0 min-w-0 flex-1 grid-cols-[minmax(0,1fr)] grid-rows-[minmax(0,1fr)] overflow-hidden">
             {onHistory ? (
               <WorktreeHistoryView
                 profileId={profileId}

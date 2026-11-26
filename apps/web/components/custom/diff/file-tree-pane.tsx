@@ -45,13 +45,21 @@ export function FileTreePane({
   );
 }
 
-/** The "Files" row atop every changed-files tree; 41px and bg-card to match the changes toolbar. */
-export function FileTreeHeader({ onClose }: { onClose?: () => void }) {
+const HEADER_LEVEL = {
+  // Level with a 41px bg-card changes toolbar.
+  toolbar: { row: "h-[41px] bg-card", button: "size-7" },
+  // Level with the first diff file header (`PatchFileSection`), under a toolbar that already has the bg.
+  section: { row: "py-1.5", button: "size-6" },
+} as const;
+
+/** The "Files" row atop every changed-files tree, sized to the row beside it. */
+export function FileTreeHeader({ onClose, levelWith = "toolbar" }: { onClose?: () => void; levelWith?: keyof typeof HEADER_LEVEL }) {
+  const level = HEADER_LEVEL[levelWith];
   return (
-    <div className="flex h-[41px] shrink-0 items-center justify-between border-b border-border bg-card px-3 text-xs font-medium">
+    <div className={cn("flex shrink-0 items-center justify-between border-b border-border px-3 text-xs font-medium", level.row)}>
       Files
       {onClose && (
-        <Button variant="ghost" size="icon-sm" className="cursor-pointer" aria-label="Close files" onClick={onClose}>
+        <Button variant="ghost" size="icon-sm" className={cn("cursor-pointer", level.button)} aria-label="Close files" onClick={onClose}>
           <X />
         </Button>
       )}

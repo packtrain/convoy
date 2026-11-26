@@ -357,15 +357,32 @@ describe("WorktreeChangesView", () => {
     expect(container.querySelector("main")?.className).toContain("grid-cols-[minmax(0,1fr)]");
   });
 
-  test("the header spans the file tree; its Files header sits level with the toolbar", () => {
+  test("the header and tabs row span the full width; the file tree sits below the tabs", () => {
     onlineWithOneFile();
     mobile.value = false;
     render(<WorktreeChangesView profileId={"profile_1" as Id<"cliProfiles">} pathId="path_1" />);
 
     const split = screen.getByTestId("split-pane");
     expect(split.contains(screen.getByRole("banner"))).toBe(false);
-    expect(split.contains(screen.getByRole("tablist", { name: "Worktree view" }))).toBe(true);
+    expect(split.contains(screen.getByRole("tablist", { name: "Worktree view" }))).toBe(false);
     expect(split.contains(screen.getByRole("button", { name: "Close files" }))).toBe(true);
+  });
+
+  test("the Files row matches the first file header's height and has no background under the tabs row", () => {
+    onlineWithOneFile();
+    mobile.value = false;
+    render(<WorktreeChangesView profileId={"profile_1" as Id<"cliProfiles">} pathId="path_1" />);
+
+    const close = screen.getByRole("button", { name: "Close files" });
+    const revert = screen.getByRole("button", { name: "Revert a.txt" });
+    const row = close.parentElement!;
+    const fileHeader = revert.parentElement!;
+    expect(row.className).not.toContain("bg-card");
+    expect(row.className).not.toContain("h-[41px]");
+    expect(row.className).toContain("py-1.5");
+    expect(fileHeader.className).toContain("py-1.5");
+    expect(close.className).toContain("size-6");
+    expect(revert.className).toContain("size-6");
   });
 
   test("the header menu removes a clean worktree, then leaves its view (OS-2459)", async () => {
