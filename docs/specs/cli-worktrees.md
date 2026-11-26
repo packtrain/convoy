@@ -880,7 +880,7 @@ every row, header included, past a phone viewport. The right pane is the file tr
 
 ## Worktree setup scripts
 
-Tickets: OS-1116 (epic), OS-2572 (setup scripts), OS-2573 (teammate approval). A worktree the CLI creates has
+Tickets: OS-1116 (epic), OS-2572 (setup scripts), OS-2573 (teammate approval), OS-2574 (`convoy worktree-setups`). A worktree the CLI creates has
 none of the parent's ignored files (`.mcp.json`, `.env.local`) and no
 installed dependencies. A project can hold one bash script per repo, and the
 CLI runs it in every worktree it creates for that repo, before the agent
@@ -937,18 +937,32 @@ fork's worktrees run no script.
 
 | Function | Permission | Notes |
 |---|---|---|
-| `list({ projectId })` | `cli:thread` | The project's setups, plus the repo keys of the caller's own profiles in this project that have none yet (`setup: null`). Sorted by repo key in code-unit order, like the index. Each setup carries `script`, `revision`, `updatedByName`, `updatedAt`, and the caller's `approval`: `approved`, `never`, or `changed`. Reads at most 100 setups, one approval point read per setup, the caller's profiles, and the editors' user rows. |
-| `save({ projectId, repoKey, script })` | `project:update` | Web session only, no `apiKey` argument; a principal with an `apiKeyScope` is refused, as in `approve`. Inserts with `revision: 1` or bumps `revision` when the text changed, and writes the saver's approval in the same mutation. Saving unchanged text keeps the revision and approves it. |
-| `remove({ setupId })` | `project:update` | Web session only. Deletes the row. |
+| `list({ projectId, apiKey? })` | `cli:thread` | The project's setups, plus the repo keys of the caller's own profiles in this project that have none yet (`setup: null`). Sorted by repo key in code-unit order, like the index. Each setup carries `script`, `revision`, `updatedByName`, `updatedAt`, and the caller's `approval`: `approved`, `never`, or `changed`. Reads at most 100 setups, one approval point read per setup, the caller's profiles, and the editors' user rows. |
+| `save({ projectId, repoKey, script, apiKey? })` | `project:update` | Inserts with `revision: 1` or bumps `revision` when the text changed. A web session also writes the saver's approval in the same mutation; saving unchanged text keeps the revision and approves it. A save by API key writes no approval, so it changes text without approving it, and a bump stops the saver's earlier approval from matching. Returns `{ setupId, revision, changed, settingsUrl }`; the URL is Project settings → Worktrees (one organization read). |
+| `remove({ projectId, repoKey, apiKey? })` | `project:update` | Deletes the row; fails when the repo has no setup. |
 | `approve({ setupId, revision })` | `cli:thread` | Web session only: no `apiKey` argument, and a principal with an `apiKeyScope` is refused ("Approve setup scripts in the web app"). Upserts the caller's approval row with the current revision. |
 
-An API key never approves a script, including its owner's. An agent runs
-with the user's API key. If a save through the key counted as approval, the
-agent could write a script, start a worktree thread, and have the CLI run the
-script outside the agent's permission mode and sandbox. For the same reason
-there is no MCP tool and no approve command. Slice 3 (OS-2574) adds
-`convoy worktree-setups` commands; a save from the CLI approves for nobody,
-so the saver approves it in the web like any teammate.
+An API key never approves a script, including its owner's. In
+`getAuthenticatedAccess` a web session has `principal.apiKeyScope === null`;
+anything else is an API key. An agent runs with the user's API key. If a save
+through the key counted as approval, the agent could write a script, start a
+worktree thread, and have the CLI run the script outside the agent's
+permission mode and sandbox. For the same reason there is no MCP tool and no
+approve command.
+
+### Commands
+
+`convoy worktree-setups list | get [repo] | set [repo] --file <path> | --script <text> | delete [repo]`
+(`apps/cli/src/commands/worktree-setups/`). Without `[repo]`, the CLI derives
+the key from the current directory's `origin` remote with its own copy of
+`toRepoKey` (`apps/cli/src/commands/worktree-setups/normalize.ts`). The server's
+`normalize.test.ts` runs both copies, and both `isRepoKey`s, on the same
+cases. `set` prints the settings URL and asks for approval in the web: the
+script runs for nobody, the saver included, until each user approves it in the
+settings page. There is no draft, so a changed script makes new worktrees for
+that repo fail for every teammate until they approve it, as a web save does.
+Details: [cli-one-shot-commands.md](cli-one-shot-commands.md#worktree-setups-list--get--set--delete).
+There is no MCP tool: agents that need this have a shell (hard rule 19).
 
 ### Approval
 
@@ -962,7 +976,8 @@ caller, and the settings row shows it as a badge:
 | `never` | Needs your approval | The caller has no approval row for this setup. |
 | `changed` | Changed since you approved | The caller approved an older revision. |
 
-Saving approves for the saver. Everyone else with `cli:thread` approves in
+Saving in the web approves for the saver; a save from the CLI approves for
+nobody. Everyone else with `cli:thread` approves in
 the settings page. `approve` takes the revision the page showed; if the
 setup has moved on, it fails with "The script changed. Review the new
 version.", so nobody approves text they did not read. A script change bumps
@@ -1059,7 +1074,6 @@ happens only for older CLIs.
 
 ### Not built yet
 
-- `convoy worktree-setups list | get | set | delete` (OS-2574).
 - A notice when a repo has no setup but another repo key would match, such as
   a fork of a repo that has one. The epic asks for it; today a fork's thread
   runs no script and says nothing.

@@ -164,7 +164,7 @@ function ScriptDialog({ projectId, row, canEdit, onClose }: { projectId: Id<"pro
   const handleRemove = async () => {
     if (!row.setup) return;
     try {
-      await remove({ setupId: row.setup._id });
+      await remove({ projectId, repoKey: row.repoKey });
       onClose();
     } catch (error) {
       showConvexErrorToast(error, "Failed to remove the setup script");

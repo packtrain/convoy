@@ -299,6 +299,10 @@ both steps.
 | `project-agents list` | List Project agents |
 | `project-agents create` | Create a Project agent |
 | `project-agents update <projectAgentId>` | Update a Project agent |
+| `worktree-setups list` | List the project's worktree setup scripts and your approval of each |
+| `worktree-setups get [repo]` | Print a repo's worktree setup script |
+| `worktree-setups set [repo]` | Save a repo's worktree setup script |
+| `worktree-setups delete [repo]` | Remove a repo's worktree setup script |
 | `lists list` | List project Lists (Backlog and friends) |
 | `lists create` | Create a project List |
 | `lists update <list>` | Rename, re-ref, recolor, or set the default view of a project List |
@@ -498,6 +502,33 @@ Supports the create fields plus `--clear-description`, `--clear-prompt`,
 `--clear-category`, and `--clear-automation`. Automation detail flags require
 `--automation enabled|disabled`; providing automation replaces the complete
 stored configuration.
+
+## Worktree setup scripts
+
+A project holds one bash script per repo, and the CLI runs it in every
+worktree it creates for that repo. The commands use the standard `--project` /
+`--org` resolution and support `--output <text|json>`.
+
+`[repo]` is an `owner/repo` key such as `packtrain/convoy`, or a remote URL. Leave it out to use
+the `origin` remote of the current directory: the last two path segments,
+lowercased, with the host and `.git` dropped.
+
+- `list` shows each repo with its revision, last editor, date, and whether you
+  approved the current revision.
+- `get` prints only the script, so `convoy worktree-setups get > setup.sh`
+  gives you the file. A repo without a script exits non-zero.
+- `set` reads the script from `--file <path>` or `--script <text>`; pass
+  exactly one. It prints the repo key and a link to Project settings →
+  Worktrees, or "No change" when the text is the same. Needs the project's
+  update permission.
+- `delete` removes the script without asking. Needs the project's update
+  permission.
+
+A script saved from the CLI runs for nobody, you included, until each user
+approves it in the web app. There is no draft: a changed script replaces the
+current one, and new worktrees for that repo fail for every teammate until
+they approve it. An agent uses your API key, so it can change a script but
+cannot make one run. There is no approve command.
 
 ## Prompts
 

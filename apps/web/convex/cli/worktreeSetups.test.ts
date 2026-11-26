@@ -48,7 +48,7 @@ describe("cli worktree setups", () => {
       return { thread, started };
     }
 
-    return { ctx, user, project, asUser, t, apiKey: apiKey.key, apiKeyId: apiKey.id, profile, repoPath, session, member, pendingRun };
+    return { ctx, user, org, project, asUser, t, apiKey: apiKey.key, apiKeyId: apiKey.id, profile, repoPath, session, member, pendingRun };
   }
 
   async function readSetup(s: Awaited<ReturnType<typeof setup>>, setupId: Id<"projectWorktreeSetups">) {
@@ -61,7 +61,7 @@ describe("cli worktree setups", () => {
   describe("save", () => {
     test("inserts revision 1 and approves it for the saver", async () => {
       const s = await setup();
-      const setupId = await s.asUser.mutation(api.cli.worktreeSetups.save, { projectId: s.project._id, repoKey: "packtrain/convoy", script: `  ${SCRIPT}\n` });
+      const { setupId } = await s.asUser.mutation(api.cli.worktreeSetups.save, { projectId: s.project._id, repoKey: "packtrain/convoy", script: `  ${SCRIPT}\n` });
       const { setup: row, approvals } = await readSetup(s, setupId);
       expect(row).toMatchObject({ repoKey: "packtrain/convoy", script: SCRIPT, revision: 1, createdBy: s.user._id, updatedBy: s.user._id });
       expect(approvals).toMatchObject([{ userId: s.user._id, setupId, revision: 1 }]);
@@ -70,7 +70,7 @@ describe("cli worktree setups", () => {
     test("bumps the revision only when the text changed, and re-approves for the saver", async () => {
       const s = await setup();
       const args = { projectId: s.project._id, repoKey: "packtrain/convoy" };
-      const setupId = await s.asUser.mutation(api.cli.worktreeSetups.save, { ...args, script: SCRIPT });
+      const { setupId } = await s.asUser.mutation(api.cli.worktreeSetups.save, { ...args, script: SCRIPT });
       await s.asUser.mutation(api.cli.worktreeSetups.save, { ...args, script: `${SCRIPT}  ` });
       expect((await readSetup(s, setupId)).setup?.revision).toBe(1);
 
@@ -113,14 +113,16 @@ describe("cli worktree setups", () => {
   });
 
   describe("remove", () => {
-    test("deletes the row for project:update and refuses a member", async () => {
+    test("deletes the row by repo key for project:update and refuses a member", async () => {
       const s = await setup();
-      const setupId = await s.asUser.mutation(api.cli.worktreeSetups.save, { projectId: s.project._id, repoKey: "packtrain/convoy", script: SCRIPT });
+      const { setupId } = await s.asUser.mutation(api.cli.worktreeSetups.save, { projectId: s.project._id, repoKey: "packtrain/convoy", script: SCRIPT });
+      const args = { projectId: s.project._id, repoKey: "packtrain/convoy" };
       const { as } = await s.member("member");
-      await expect(as.mutation(api.cli.worktreeSetups.remove, { setupId })).rejects.toThrow();
+      await expect(as.mutation(api.cli.worktreeSetups.remove, args)).rejects.toThrow();
 
-      await s.asUser.mutation(api.cli.worktreeSetups.remove, { setupId });
+      await s.asUser.mutation(api.cli.worktreeSetups.remove, args);
       expect((await readSetup(s, setupId)).setup).toBeNull();
+      await expect(s.asUser.mutation(api.cli.worktreeSetups.remove, args)).rejects.toThrow("Worktree setup not found");
     });
   });
 
@@ -175,7 +177,7 @@ describe("cli worktree setups", () => {
 
     test("a teammate approves the shown revision, until someone changes the script", async () => {
       const s = await withAdmin();
-      const setupId = await s.adminSaves(SCRIPT);
+      const { setupId } = await s.adminSaves(SCRIPT);
       expect((await s.pendingRun()).started.worktreeSetup).toEqual({ status: "unapproved", repoKey: "packtrain/convoy" });
 
       await s.asUser.mutation(api.cli.worktreeSetups.approve, { setupId, revision: 1 });
@@ -189,7 +191,7 @@ describe("cli worktree setups", () => {
 
     test("rejects a revision that is no longer current", async () => {
       const s = await withAdmin();
-      const setupId = await s.adminSaves(SCRIPT);
+      const { setupId } = await s.adminSaves(SCRIPT);
       await s.adminSaves("pnpm i");
       await expect(s.asUser.mutation(api.cli.worktreeSetups.approve, { setupId, revision: 1 }))
         .rejects.toThrow("The script changed. Review the new version.");
@@ -198,14 +200,14 @@ describe("cli worktree setups", () => {
 
     test("requires cli:thread", async () => {
       const s = await withAdmin();
-      const setupId = await s.adminSaves(SCRIPT);
+      const { setupId } = await s.adminSaves(SCRIPT);
       const viewer = await s.member("viewer");
       await expect(viewer.as.mutation(api.cli.worktreeSetups.approve, { setupId, revision: 1 })).rejects.toThrow("Permission denied: cli:thread");
     });
 
-    test("refuses an API-key principal, for approve and save alike", async () => {
+    test("refuses an API-key principal", async () => {
       const s = await withAdmin();
-      const setupId = await s.adminSaves(SCRIPT);
+      const { setupId } = await s.adminSaves(SCRIPT);
       const user = await s.t.run((ctx) => ctx.db.get("users", s.user._id));
       const access = vi.spyOn(auth, "getAuthenticatedAccess").mockResolvedValue({
         user: user!, principal: { userId: s.user._id, apiKeyScope: { kind: "unscoped" } },
@@ -213,12 +215,66 @@ describe("cli worktree setups", () => {
       try {
         await expect(s.asUser.mutation(api.cli.worktreeSetups.approve, { setupId, revision: 1 }))
           .rejects.toThrow("Approve setup scripts in the web app");
-        await expect(s.asUser.mutation(api.cli.worktreeSetups.save, { projectId: s.project._id, repoKey: "packtrain/convoy", script: SCRIPT }))
-          .rejects.toThrow("Approve setup scripts in the web app");
       } finally {
         access.mockRestore();
       }
       expect((await readSetup(s, setupId)).approvals.filter((a) => a.userId === s.user._id)).toEqual([]);
+    });
+  });
+
+  describe("with an API key", () => {
+    const repoKey = "packtrain/convoy";
+
+    test("a save approves for nobody, not even the key's owner, and bumps the revision", async () => {
+      const s = await setup();
+      const args = { projectId: s.project._id, repoKey, apiKey: s.apiKey };
+      const { setupId } = await s.asUser.mutation(api.cli.worktreeSetups.save, { projectId: s.project._id, repoKey, script: SCRIPT });
+
+      const saved = await s.t.mutation(api.cli.worktreeSetups.save, { ...args, script: "pnpm i" });
+      expect(saved).toMatchObject({ setupId, revision: 2, changed: true });
+      expect(await s.t.mutation(api.cli.worktreeSetups.save, { ...args, script: "pnpm i" })).toMatchObject({ revision: 2, changed: false });
+      expect((await readSetup(s, setupId)).approvals).toMatchObject([{ userId: s.user._id, revision: 1 }]);
+      expect((await s.pendingRun()).started.worktreeSetup).toEqual({ status: "unapproved", repoKey });
+      expect((await s.t.query(api.cli.worktreeSetups.list, { projectId: s.project._id, apiKey: s.apiKey }))[0].setup?.approval).toBe("changed");
+
+      await s.asUser.mutation(api.cli.worktreeSetups.save, { projectId: s.project._id, repoKey, script: "pnpm i" });
+      expect((await s.pendingRun()).started.worktreeSetup).toMatchObject({ status: "approved", revision: 2 });
+    });
+
+    test("a new setup saved by key needs the owner's approval too", async () => {
+      const s = await setup();
+      const { setupId } = await s.t.mutation(api.cli.worktreeSetups.save, { projectId: s.project._id, repoKey, script: SCRIPT, apiKey: s.apiKey });
+      expect((await readSetup(s, setupId)).approvals).toEqual([]);
+      expect((await s.asUser.query(api.cli.worktreeSetups.list, { projectId: s.project._id }))[0].setup?.approval).toBe("never");
+      expect((await s.pendingRun()).started.worktreeSetup).toEqual({ status: "unapproved", repoKey });
+    });
+
+    test("returns the settings link", async () => {
+      const s = await setup();
+      const { settingsUrl } = await s.t.mutation(api.cli.worktreeSetups.save, { projectId: s.project._id, repoKey, script: SCRIPT, apiKey: s.apiKey });
+      expect(settingsUrl).toMatch(new RegExp(`/o/${s.org.slug}/${s.project.alias}/settings/worktrees$`));
+    });
+
+    test("removes by repo key", async () => {
+      const s = await setup();
+      const { setupId } = await s.asUser.mutation(api.cli.worktreeSetups.save, { projectId: s.project._id, repoKey, script: SCRIPT });
+      await s.t.mutation(api.cli.worktreeSetups.remove, { projectId: s.project._id, repoKey, apiKey: s.apiKey });
+      expect((await readSetup(s, setupId)).setup).toBeNull();
+    });
+
+    test("keeps the permissions: a member's key reads but cannot write, a viewer's key cannot read", async () => {
+      const s = await setup();
+      await s.asUser.mutation(api.cli.worktreeSetups.save, { projectId: s.project._id, repoKey, script: SCRIPT });
+      const keyOf = async (role: "member" | "viewer") =>
+        (await (await s.member(role)).as.mutation(api.apiKeys.core.create, { name: role, expiresAt: Date.now() + 86_400_000 })).key;
+      const memberKey = await keyOf("member");
+      const args = { projectId: s.project._id, repoKey, apiKey: memberKey };
+
+      expect(await s.t.query(api.cli.worktreeSetups.list, { projectId: s.project._id, apiKey: memberKey })).toMatchObject([{ repoKey }]);
+      await expect(s.t.mutation(api.cli.worktreeSetups.save, { ...args, script: "pnpm i" })).rejects.toThrow("Permission denied: project:update");
+      await expect(s.t.mutation(api.cli.worktreeSetups.remove, args)).rejects.toThrow("Permission denied: project:update");
+      await expect(s.t.query(api.cli.worktreeSetups.list, { projectId: s.project._id, apiKey: await keyOf("viewer") }))
+        .rejects.toThrow("Permission denied: cli:thread");
     });
   });
 

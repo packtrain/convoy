@@ -6,6 +6,10 @@ import { requireAuthorizedProject, type AuthenticatedAccess } from "../lib/acces
 import { ProjectPermission } from "../../lib/authz/permissions";
 import { ensure } from "../lib/shared/ensure";
 import { getUsersByIds } from "../users/lib/usersRepo";
+import { getActiveOrganizationById } from "../organizations/lib/organizationsRepo";
+import { getAppUrlBase } from "../lib/shared/appUrl";
+import { appRoute } from "../../lib/navigation/routes";
+import { href } from "../../lib/navigation/target";
 import { errors } from "./errors";
 import { MAX_WORKTREE_SETUP_SCRIPT_LENGTH, MAX_WORKTREE_SETUPS_PER_PROJECT } from "./lib/constants";
 import { listActiveProfilesByUserAndProject } from "./lib/cliProfilesRepo";
@@ -39,8 +43,12 @@ const worktreeSetupRowValidator = v.object({
 });
 
 /** Only a web session approves a script; an agent holding the user's API key must not. */
+function isWebSession(principal: AuthenticatedAccess) {
+  return principal.apiKeyScope === null;
+}
+
 function requireWebSession(principal: AuthenticatedAccess) {
-  ensure(principal.apiKeyScope).isNull(errors.WORKTREE_SETUP_APPROVE_WEB_ONLY);
+  ensure(isWebSession(principal)).isTrue(errors.WORKTREE_SETUP_APPROVE_WEB_ONLY);
 }
 
 function approvalStatus(approved: number | undefined, current: number) {
@@ -52,10 +60,10 @@ function approvalStatus(approved: number | undefined, current: number) {
  * repo-key order. Spec: cli-worktrees.md#worktree-setup-scripts.
  */
 export const list = query({
-  args: { projectId: v.id("projects") },
+  args: { projectId: v.id("projects"), apiKey: v.optional(v.string()) },
   returns: v.array(worktreeSetupRowValidator),
   handler: async (ctx, args) => {
-    const { user, principal } = await getAuthenticatedAccess(ctx);
+    const { user, principal } = await getAuthenticatedAccess(ctx, args.apiKey);
     await requireAuthorizedProject(ctx, principal, args.projectId, ProjectPermission.CLI_THREAD);
 
     const [setups, profiles] = await Promise.all([
@@ -91,14 +99,13 @@ export const list = query({
   },
 });
 
-/** Web session only: a save approves the new revision for the saver, and an API key must never approve. */
+/** A web save approves the new revision for the saver; a save by API key approves for nobody. */
 export const save = mutation({
-  args: { projectId: v.id("projects"), repoKey: v.string(), script: v.string() },
-  returns: v.id("projectWorktreeSetups"),
+  args: { projectId: v.id("projects"), repoKey: v.string(), script: v.string(), apiKey: v.optional(v.string()) },
+  returns: v.object({ setupId: v.id("projectWorktreeSetups"), revision: v.number(), changed: v.boolean(), settingsUrl: v.string() }),
   handler: async (ctx, args) => {
-    const { user, principal } = await getAuthenticatedAccess(ctx);
-    requireWebSession(principal);
-    await requireAuthorizedProject(ctx, principal, args.projectId, ProjectPermission.PROJECT_UPDATE);
+    const { user, principal } = await getAuthenticatedAccess(ctx, args.apiKey);
+    const { project } = await requireAuthorizedProject(ctx, principal, args.projectId, ProjectPermission.PROJECT_UPDATE);
 
     ensure(isRepoKey(args.repoKey)).isTrue(errors.WORKTREE_SETUP_REPO_KEY_INVALID);
     const script = args.script.trim();
@@ -117,24 +124,27 @@ export const save = mutation({
       setupId = await insertWorktreeSetup(ctx, { projectId: args.projectId, repoKey: args.repoKey, script }, user._id);
       revision = 1;
     }
-    await upsertWorktreeSetupApproval(ctx, user._id, setupId, revision);
-    return setupId;
+    if (isWebSession(principal)) await upsertWorktreeSetupApproval(ctx, user._id, setupId, revision);
+
+    const organization = await ensure(getActiveOrganizationById(ctx, project.organizationId)).notNull(errors.PROJECT_NOT_FOUND);
+    const settingsUrl = `${getAppUrlBase()}${href(appRoute.projectSettings(organization.slug, project.alias, "worktrees"))}`;
+    return { setupId, revision, changed: existing?.script !== script, settingsUrl };
   },
 });
 
 export const remove = mutation({
-  args: { setupId: v.id("projectWorktreeSetups") },
+  args: { projectId: v.id("projects"), repoKey: v.string(), apiKey: v.optional(v.string()) },
   returns: v.null(),
   handler: async (ctx, args) => {
-    const { principal } = await getAuthenticatedAccess(ctx);
-    const setup = await ensure(getWorktreeSetupById(ctx, args.setupId)).notNull(errors.WORKTREE_SETUP_NOT_FOUND);
-    await requireAuthorizedProject(ctx, principal, setup.projectId, ProjectPermission.PROJECT_UPDATE);
+    const { principal } = await getAuthenticatedAccess(ctx, args.apiKey);
+    await requireAuthorizedProject(ctx, principal, args.projectId, ProjectPermission.PROJECT_UPDATE);
+    const setup = await ensure(findWorktreeSetup(ctx, args.projectId, args.repoKey)).notNull(errors.WORKTREE_SETUP_NOT_FOUND);
     await deleteWorktreeSetup(ctx, setup._id);
     return null;
   },
 });
 
-/** Web session only, like `save`. `revision` is the one the page showed; a newer one rejects it. */
+/** Web session only: an API key never approves. `revision` is the one the page showed; a newer one rejects it. */
 export const approve = mutation({
   args: { setupId: v.id("projectWorktreeSetups"), revision: v.number() },
   returns: v.null(),
