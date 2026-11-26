@@ -80,6 +80,19 @@ describe("cli worktree setups", () => {
       expect(approvals).toMatchObject([{ userId: s.user._id, revision: 2 }]);
     });
 
+    test("rejects a save based on a version that is no longer current, a recreated setup included", async () => {
+      const s = await setup();
+      const args = { projectId: s.project._id, repoKey: "packtrain/convoy" };
+      const { setupId } = await s.asUser.mutation(api.cli.worktreeSetups.save, { ...args, script: SCRIPT, expected: null });
+      await expect(s.asUser.mutation(api.cli.worktreeSetups.save, { ...args, script: "make", expected: null })).rejects.toThrow("The script changed");
+      await s.asUser.mutation(api.cli.worktreeSetups.save, { ...args, script: "pnpm i", expected: { setupId, revision: 1 } });
+      await expect(s.asUser.mutation(api.cli.worktreeSetups.save, { ...args, script: "make", expected: { setupId, revision: 1 } })).rejects.toThrow("The script changed");
+
+      await s.asUser.mutation(api.cli.worktreeSetups.remove, args);
+      await s.asUser.mutation(api.cli.worktreeSetups.save, { ...args, script: "teammate", expected: null });
+      await expect(s.asUser.mutation(api.cli.worktreeSetups.save, { ...args, script: "make", expected: { setupId, revision: 1 } })).rejects.toThrow("The script changed");
+    });
+
     test("rejects an empty or oversized script and a malformed repo key", async () => {
       const s = await setup();
       const args = { projectId: s.project._id, repoKey: "packtrain/convoy" };

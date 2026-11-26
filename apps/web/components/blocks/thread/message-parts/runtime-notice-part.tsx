@@ -38,6 +38,19 @@ function getNoticeIcon(part: RuntimeNoticePartModel): {
   return { icon: AlertTriangle };
 }
 
+/** `a `b` c` with the backticked spans as `<code>`, as the CLI writes repo keys. */
+function InlineCode({ text }: { text: string }) {
+  return text.split("`").map((piece, index) =>
+    index % 2 === 1 ? (
+      <code key={index} className="font-mono text-foreground">
+        {piece}
+      </code>
+    ) : (
+      piece
+    )
+  );
+}
+
 /** The CLI's unapproved-setup notice (docs/specs/cli-worktrees.md#worktree-setup-scripts); approval happens in settings. */
 function WorktreeSetupUnapprovedNotice({ part }: RuntimeNoticePartProps) {
   const params = useRouteParams<{ organizationSlug?: string; projectAlias?: string }>();
@@ -48,6 +61,12 @@ function WorktreeSetupUnapprovedNotice({ part }: RuntimeNoticePartProps) {
     <CollapsibleToolPart
       icon={AlertTriangle}
       title={`${part.title}: ${part.message}`}
+      // Wraps instead of truncating, so a narrow thread still shows the repo.
+      titleNode={
+        <span className="min-w-0">
+          {part.title}: <InlineCode text={part.message} />
+        </span>
+      }
       hasBody={false}
       trailing={
         link ? (
