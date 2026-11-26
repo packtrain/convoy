@@ -51,7 +51,7 @@ export function SentMessageText({ text, messageId, attachments }: Props) {
 
   return (
     <>
-      <span className="whitespace-pre-wrap">
+      <span className="whitespace-pre-wrap wrap-anywhere">
         {parts.map((part, partIndex) => {
           if (part.type === "slash-command") {
             const scheme = part.isSkill ? "skill" : "command";

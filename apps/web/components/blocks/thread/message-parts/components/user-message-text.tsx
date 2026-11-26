@@ -14,7 +14,7 @@ export function UserMessageText({ text, messageId, attachments }: UserMessageTex
     return <SentMessageText key={messageId} text={text} messageId={messageId} attachments={attachments} />;
   }
   return (
-    <span className="whitespace-pre-wrap">
+    <span className="whitespace-pre-wrap wrap-anywhere">
       <SlashCommandDisplayText text={text} />
     </span>
   );

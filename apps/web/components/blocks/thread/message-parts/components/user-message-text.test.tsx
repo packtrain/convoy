@@ -123,3 +123,15 @@ test("hover resolves the owning message and preview-image click opens its lightb
   fireEvent.click(screen.getByRole("button", { name: "Open before shot.png in lightbox" }));
   expect(screen.getByRole("dialog").textContent).toContain("hover.png");
 });
+
+// A long unbroken token (a path in a pasted log) must wrap, not push the bubble past the view.
+test.each([
+  ["plain", undefined],
+  ["with attachments", [attachment]],
+])("wraps long unbroken tokens (%s)", (_, attachments) => {
+  query.mockReturnValue([]);
+  const { container } = render(
+    <UserMessageText text={`at /vercel/${"node_modules/".repeat(20)}x.js`} messageId="m-1" attachments={attachments} />
+  );
+  expect(container.querySelector(".whitespace-pre-wrap")?.classList.contains("wrap-anywhere")).toBe(true);
+});
