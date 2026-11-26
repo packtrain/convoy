@@ -4667,6 +4667,23 @@ describe("ThreadWorkspace", () => {
         }
       });
 
+      test("shows the unread dot on a done thread with activity since it was read", async () => {
+        useGroupChildThread();
+        const base = doneGroupChildren();
+        groupQueryResult = {
+          ...base,
+          children: base.children.map((child, index) => index === 1 ? { ...child, hasUnread: true } : child),
+        };
+        renderWorkspace();
+        fireEvent.pointerDown(screen.getByRole("button", { name: "Done threads" }), {
+          button: 0, ctrlKey: false,
+        });
+        const unread = await screen.findByRole("menuitem", { name: /Older done/ });
+        const read = screen.getByRole("menuitem", { name: /Newest done/ });
+        expect(unread.querySelector('[data-slot="thread-tab-indicator"] [title="Unread"]')).not.toBeNull();
+        expect(read.querySelector('[data-slot="thread-tab-indicator"]')).toBeNull();
+      });
+
       test("hides unselected done tabs behind a separate Done menu", async () => {
         useGroupChildThread();
         groupQueryResult = doneGroupChildren();

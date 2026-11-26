@@ -1681,7 +1681,10 @@ function ThreadWorkspaceBody({
 
   const doneThreadMenu = doneThreadTabs.length > 0 ? (
     <DoneThreadMenu
-      tabs={doneThreadTabs}
+      // A done row shows a glyph only when it has unread activity (sticky done, OS-2176).
+      tabs={doneThreadTabs.map((tab) =>
+        tabStatusByThreadId.get(tab.id)?.hasUnread ? tab : { ...tab, indicator: undefined }
+      )}
       activeId={activeThreadTabId}
       onSelect={onThreadTabSelect}
       collapsed={isMobile}

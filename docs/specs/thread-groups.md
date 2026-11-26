@@ -326,7 +326,11 @@ strip retains the source and draft tabs while a newly formed group loads.
     thread's `...` actions menu, before the sidebar separator. It opens a menu
     of all done threads, newest `doneAt` first, including the selected thread
     with a current-item checkmark. Rows retain task refs and titles but omit
-    status indicators and their empty slots. A truncated title shows in full on
+    status indicators and their empty slots, except a row with unread
+    activity. It shows the tab's glyph, usually the unread dot: a done mark is
+    sticky (OS-2176), so a thread can get new activity after it is marked done.
+    The group row's unread dot counts done children, and without the dot
+    here the user could not find which child it meant. A truncated title shows in full on
     hover (native `title`), in this menu and the overflow menu. Marking done acknowledges read
     and attention state; new activity returns the thread to unfinished tabs.
     The button has an accessible name and a tooltip with the count. It is
