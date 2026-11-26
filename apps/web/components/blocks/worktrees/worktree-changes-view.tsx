@@ -4,6 +4,7 @@ import { useCallback, useRef, useState } from "react";
 import { MoreHorizontal, RefreshCw, Trash2 } from "lucide-react";
 import type { Id } from "@/convex/_generated/dataModel";
 import { Button } from "@/components/ui/button";
+import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 import { ThreadHeader } from "@/components/blocks/thread/thread-header";
 import { ThreadMobileBackButton } from "@/components/blocks/thread/thread-mobile-back-button";
@@ -145,11 +146,6 @@ function ChangesViewForCheckout({ profileId, pathId }: WorktreeChangesViewProps)
     }
   };
   const refreshing = onHistory ? history.initialLoading || history.refreshing : changes.loading;
-  const tabClass = (active: boolean) =>
-    cn(
-      "flex h-7 cursor-pointer items-center gap-1.5 rounded-md px-2.5 text-xs",
-      active ? "bg-muted font-medium text-foreground" : "text-muted-foreground hover:text-foreground"
-    );
   return (
     // minmax(0,1fr) column: an auto column takes the longest diff line's width and overflows a phone viewport.
     <main className="grid h-full min-h-0 min-w-0 flex-1 grid-cols-[minmax(0,1fr)] grid-rows-[auto_minmax(0,1fr)] overflow-hidden">
@@ -226,15 +222,15 @@ function ChangesViewForCheckout({ profileId, pathId }: WorktreeChangesViewProps)
             {/* ponytail: 41px like ThreadChangesToolbar — lines up with the sidebar's "New thread" row. */}
             {entry && (
               <div className="flex h-[41px] shrink-0 items-center gap-3 border-b border-border bg-card px-4 text-xs text-muted-foreground">
-                <div className="flex shrink-0 items-center gap-1" role="group" aria-label="Worktree view">
-                  <button type="button" aria-pressed={!onHistory} className={tabClass(!onHistory)} onClick={() => openTab("changes")}>
-                    Changes
-                    {hasFiles && <span className="rounded-sm bg-background px-1 tabular-nums">{files.length}</span>}
-                  </button>
-                  <button type="button" aria-pressed={onHistory} className={tabClass(onHistory)} onClick={() => openTab("history")}>
-                    History
-                  </button>
-                </div>
+                <Tabs value={tab} onValueChange={(value) => openTab(value === "history" ? "history" : "changes")} className="shrink-0">
+                  <TabsList variant="underline" className="w-auto border-b-0" aria-label="Worktree view">
+                    <TabsTrigger value="changes">
+                      Changes
+                      {hasFiles && <span className="rounded-sm bg-muted px-1 text-xs tabular-nums">{files.length}</span>}
+                    </TabsTrigger>
+                    <TabsTrigger value="history">History</TabsTrigger>
+                  </TabsList>
+                </Tabs>
                 {/* A phone has room for a few characters only; the header names the checkout. */}
                 {!isMobile && (
                   <span className="truncate font-mono" title={entry.path}>

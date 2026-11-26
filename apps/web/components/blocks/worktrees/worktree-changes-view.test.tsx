@@ -156,9 +156,9 @@ describe("WorktreeChangesView", () => {
     render(<WorktreeChangesView profileId={"profile_1" as Id<"cliProfiles">} pathId="path_1" />);
     expect(screen.getByRole("button", { name: "Download a.txt" })).toBeTruthy();
 
-    fireEvent.click(screen.getByRole("button", { name: "History" }));
+    fireEvent.mouseDown(screen.getByRole("tab", { name: "History" }), { button: 0 });
 
-    expect(screen.getByRole("button", { name: "History" }).getAttribute("aria-pressed")).toBe("true");
+    expect(screen.getByRole("tab", { name: "History" }).getAttribute("aria-selected")).toBe("true");
     expect(screen.queryByRole("button", { name: "Download a.txt" })).toBeNull();
     expect(screen.getByText(/to view history \(connected: v0\.83\.0\)/)).toBeTruthy();
     expect(screen.getByRole("button", { name: "Refresh history" })).toBeTruthy();
@@ -168,12 +168,12 @@ describe("WorktreeChangesView", () => {
     state.profile = { paths: WORKTREE_PATHS, isOnline: true, appVersion: "0.83.0" };
     const { unmount } = render(<WorktreeChangesView profileId={"profile_1" as Id<"cliProfiles">} pathId="path_1" />);
 
-    fireEvent.click(screen.getByRole("button", { name: "History" }));
+    fireEvent.mouseDown(screen.getByRole("tab", { name: "History" }), { button: 0 });
     expect(url.search).toBe("?profileId=profile_1&pathId=path_1&view=history");
 
     unmount();
     render(<WorktreeChangesView profileId={"profile_1" as Id<"cliProfiles">} pathId="path_1" />);
-    expect(screen.getByRole("button", { name: "History" }).getAttribute("aria-pressed")).toBe("true");
+    expect(screen.getByRole("tab", { name: "History" }).getAttribute("aria-selected")).toBe("true");
   });
 
   test("on a phone, All commits pops the entry its commit pushed (OS-2534 UX review 2)", () => {
@@ -259,12 +259,12 @@ describe("WorktreeChangesView", () => {
   test("opening another checkout starts from a fresh view, not the previous one's state (OS-2534 review #1)", () => {
     state.profile = { paths: [...WORKTREE_PATHS, { id: "path_2", path: "/tmp/y", label: "y" }], isOnline: true, appVersion: "0.171.0" };
     const { rerender } = render(<WorktreeChangesView profileId={"profile_1" as Id<"cliProfiles">} pathId="path_1" />);
-    fireEvent.click(screen.getByRole("button", { name: "History" }));
-    expect(screen.getByRole("button", { name: "History" }).getAttribute("aria-pressed")).toBe("true");
+    fireEvent.mouseDown(screen.getByRole("tab", { name: "History" }), { button: 0 });
+    expect(screen.getByRole("tab", { name: "History" }).getAttribute("aria-selected")).toBe("true");
 
     rerender(<WorktreeChangesView profileId={"profile_1" as Id<"cliProfiles">} pathId="path_2" />);
 
-    expect(screen.getByRole("button", { name: "History" }).getAttribute("aria-pressed")).toBe("false");
+    expect(screen.getByRole("tab", { name: "History" }).getAttribute("aria-selected")).toBe("false");
   });
 
   test("a failed changes fetch offers Retry, which refreshes the changes", () => {
@@ -364,7 +364,7 @@ describe("WorktreeChangesView", () => {
 
     const split = screen.getByTestId("split-pane");
     expect(split.contains(screen.getByRole("banner"))).toBe(false);
-    expect(split.contains(screen.getByRole("group", { name: "Worktree view" }))).toBe(true);
+    expect(split.contains(screen.getByRole("tablist", { name: "Worktree view" }))).toBe(true);
     expect(split.contains(screen.getByRole("button", { name: "Close files" }))).toBe(true);
   });
 

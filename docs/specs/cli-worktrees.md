@@ -562,7 +562,7 @@ every row, header included, past a phone viewport. The right pane is the file tr
   button. While a refresh runs the button is `aria-disabled` (not
   `disabled`, which would drop keyboard focus) and its icon spins. Below it a 41px toolbar row (same height as the thread Changes
   toolbar, so it lines up with the sidebar's "New thread" row) with a
-  Changes | History switch (Changes carries the file count once the patch
+  Changes | History tabs (underline tabs, as in the PR reader; Changes carries the file count once the patch
   has files), the full path (not on a phone, where only a few characters
   fit), `N files +A -D` once the patch is in (Changes
   only), and the Changes tab's three
