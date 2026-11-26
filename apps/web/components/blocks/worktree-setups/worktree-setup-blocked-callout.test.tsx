@@ -151,8 +151,10 @@ describe("WorktreeSetupBlockedCallout", () => {
 
     fireEvent.click(screen.getByRole("button", { name: "Review script" }));
 
-    expect(screen.getByText("No setup script is saved for this repo.")).toBeDefined();
-    expect(within(screen.getByRole("dialog")).getByRole("button", { name: "Retry" })).toBeDefined();
+    const dialog = within(screen.getByRole("dialog"));
+    expect(dialog.getByText("Retry runs without a setup step.", { exact: false })).toBeDefined();
+    expect(dialog.queryByText(/Bash that runs once/)).toBeNull();
+    expect(dialog.getByRole("button", { name: "Retry" })).toBeDefined();
   });
 
   test("a failed plain retry does not claim an approval", async () => {
