@@ -34,6 +34,7 @@ This document defines resize behavior for the left-hand thread list sidebar on `
 - "Hide thread list" is the first entry of the list's settings menu (the gear), with `[` as its keycap hint. The gear shows in the default header only, not in multiselect or the shared-threads view; mobile's panel omits the entry.
 - Collapsed, the list is hidden entirely; no icon rail. It stays mounted, so loaded pages, multiselect, and the shared view survive reopening.
 - Every thread header (thread, new-thread composer, worktree changes) leads with a reopen button (`PanelLeftOpen`) while the list is collapsed.
+- In a tab row the first tab sits 16px after the reopen button, matching the header's left inset, so the tab neither slides under the button nor touches it.
 - The reopen button carries an info dot when any active or pinned thread is unread or needs attention. Done threads don't count.
 - `[` toggles the list when no input is focused. It matches the physical key (`BracketLeft`), so it works on layouts where that key types another character. It is independent of the app sidebar (`Cmd/Ctrl + B`).
 - Collapsed state is stored in local storage under `thread-list-collapsed`, browser-local like the width. Reopening restores the stored width.

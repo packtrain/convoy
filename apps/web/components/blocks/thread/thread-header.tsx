@@ -76,6 +76,7 @@ export function ThreadHeader({
   maxTitleLength = THREAD_TITLE_MAX_LENGTH,
 }: ThreadHeaderProps) {
   const isEditable = typeof onTitleCommit === "function";
+  const showsReopenButton = useThreadListCollapse()?.collapsed === true;
   const leading = (
     <>
       <ThreadListReopenButton />
@@ -206,11 +207,13 @@ export function ThreadHeader({
             {/* -mb-px drops the active tab's underline onto the header's own
                 divider instead of leaving it floating a pixel above; -ml-3
                 cancels the first tab's padding so its content starts where
-                the title would. Neither applies to a title-mode strip. */}
+                the title would. Neither applies to a title-mode strip. Beside
+                the reopen button, ml-4 repeats the header's edge inset. */}
             <div
               className={cn(
                 "flex min-w-0 flex-1 items-stretch self-stretch",
-                !tabsAsTitle && "-mb-px -ml-3"
+                !tabsAsTitle && "-mb-px",
+                !tabsAsTitle && (showsReopenButton ? "ml-4" : "-ml-3")
               )}
             >
               {tabs}

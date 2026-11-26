@@ -331,6 +331,20 @@ describe("ThreadHeader thread list reopen button", () => {
     expect(toggle).toHaveBeenCalledOnce();
   });
 
+  test("spaces the first tab from the button like the header edge", () => {
+    render(
+      <ThreadListCollapseProvider
+        value={{ collapsed: true, toggle: vi.fn(), hasAttention: false, setHasAttention: () => {} }}
+      >
+        <ThreadHeader title="Release planning" tabs={<button type="button">First tab</button>} />
+      </ThreadListCollapseProvider>
+    );
+    // Beside the button the row gets the header's own inset (px-4), not -ml-3.
+    const classes = screen.getByRole("button", { name: "First tab" }).parentElement!.className.split(/\s+/);
+    expect(classes).not.toContain("-ml-3");
+    expect(classes).toContain("ml-4");
+  });
+
   test("badges the button when a thread needs attention", () => {
     renderWithList({ collapsed: true, hasAttention: true });
     expect(screen.getByRole("button", { name: "Show thread list (unread threads)" })).toBeDefined();
