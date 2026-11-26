@@ -285,9 +285,11 @@ The local identity and recovery contracts are defined in `cli-worktrees.md`.
 - Hosts on `ThreadWorkspaceSplitPane` pass `sidebarSide`. The inline trees
   render through `components/custom/diff/file-tree-pane.tsx`, which reads the
   setting itself.
-- Every tree opens with the same 41px `bg-card` "Files" row (the changes
-  toolbar's height and background), `FileTreeHeader` in
-  `file-tree-pane.tsx`. Split-pane hosts (worktree view, pull request Diff
+- Every tree opens with the same "Files" row, `FileTreeHeader` in
+  `file-tree-pane.tsx`, sized to the row beside it. Beside a changes toolbar
+  (pull request Diff tab) it is 41px with the toolbar's `bg-card`. Below a
+  full-width toolbar (thread Changes tab, worktree page) it is 37px with no
+  background, level with the first diff file header. Split-pane hosts (worktree view, pull request Diff
   tab) add its close button; the inline trees in the thread Changes tab have
   none, because the toolbar's toggle sits right above them.
 - No CLI command: this is a per-browser view preference (hard rule 19).

@@ -38,7 +38,7 @@ export function FileTreePane({
         aria-label="Changed files"
         className={cn("flex h-full flex-col border-border", left ? "border-r" : "border-l")}
       >
-        <FileTreeHeader />
+        <FileTreeHeader levelWith="section" />
         <div className="min-h-0 flex-1 overflow-auto">{children}</div>
       </aside>
     </div>
@@ -48,8 +48,8 @@ export function FileTreePane({
 const HEADER_LEVEL = {
   // Level with a 41px bg-card changes toolbar.
   toolbar: { row: "h-[41px] bg-card", button: "size-7" },
-  // Level with the first diff file header (`PatchFileSection`), under a toolbar that already has the bg.
-  section: { row: "py-1.5", button: "size-6" },
+  // Level with the first diff file header (`PatchFileSection`: py-1.5 + size-6 actions + border).
+  section: { row: "h-[37px]", button: "size-6" },
 } as const;
 
 /** The "Files" row atop every changed-files tree, sized to the row beside it. */

@@ -383,7 +383,7 @@ describe("WorktreeChangesView", () => {
     const fileHeader = revert.parentElement!;
     expect(row.className).not.toContain("bg-card");
     expect(row.className).not.toContain("h-[41px]");
-    expect(row.className).toContain("py-1.5");
+    expect(row.className).toContain("h-[37px]");
     expect(fileHeader.className).toContain("py-1.5");
     expect(close.className).toContain("size-6");
     expect(revert.className).toContain("size-6");

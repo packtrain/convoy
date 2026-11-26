@@ -48,8 +48,10 @@ test("the pane opens with the same Files header as the other file trees", () => 
   expect(aside.firstElementChild?.textContent).toBe("Files");
 });
 
-test("the Files header shares the changes toolbar's bg-card, since they sit on one line", () => {
+test("the Files header matches the first diff file header's height, with no toolbar background", () => {
   render(<Host />);
   const aside = screen.getByRole("complementary", { name: "Changed files" });
-  expect(aside.firstElementChild?.className).toContain("bg-card");
+  const header = aside.firstElementChild?.className;
+  expect(header).not.toContain("bg-card");
+  expect(header).toContain("h-[37px]");
 });
