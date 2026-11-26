@@ -30,14 +30,15 @@ This document defines how thread message attachments are uploaded, persisted, re
 - `cliMessages.send` accepts optional `attachments`:
   - `storageId`, `fileName`, `fileSize`, `contentType`, optional `dimensions`
     (`{ width, height }` in pixels, images only), optional `display: "inline"`
-    (`text/html` only; see [Inline HTML](#inline-html-os-2220))
+    (`text/html` only; see [Inline HTML](#inline-html-os-2220)), optional
+    `caption` (at most 500 characters; see [Captions](#captions-os-2587))
 - `cliThreads.create` accepts optional initial `attachments` with the same shape.
 
 ### Stored message data
 
 - `cliMessages.attachments[]` stores:
   - `storageId`, `fileName`, `fileSize`, `contentType`, `uploadedAt`, optional `dimensions`,
-    optional `display`
+    optional `display`, optional `caption`
 - The web upload queue measures an image's `dimensions` (`createImageBitmap`) while it
   uploads. Drafts, queued-message edits, and edit-last resends carry them; envelopes and
   `getMessageAttachmentUrls` return them. CLI uploads and messages sent before this field
@@ -296,6 +297,28 @@ re-read their URLs:
 - An attachment with `display: "inline"` also renders as an expanded page above
   the attachments (see below).
 - `threads messages` and MCP message summaries do not list reply attachments.
+
+### Captions (OS-2587)
+
+`convoy threads attach shot.png --caption "The red badge in the header"` gives a
+file a caption: the agent's note on where to look. Only agent reply attachments
+get one; `send` and `cliThreads.create` drop it.
+
+- **CLI.** `--caption` repeats; the nth value goes to the nth file. Values are
+  trimmed, and an empty one (`""`) leaves its file uncaptioned. More values than
+  files fails before anything uploads (`Got 2 --caption values for 1 file. Pass
+  at most one per file, in file order.`).
+- **Backend.** `assertValidMessageAttachments` rejects a caption over 500
+  characters (`Attachment caption is too long: at most 500 characters`). The
+  caption is part of the dedupe metadata: the same storage ID with a different
+  caption is a second name for an attached blob and fails like a rename. Envelopes,
+  `getMessageAttachmentUrls`, `listAgentAttachmentsByThread`, and a Check result's
+  `files` return it.
+- **Rendering.** The attachment lightbox shows the caption centered below the
+  picture or video, in a 112px band at the bottom of the slide. The band is
+  reserved on every slide once any slide in the gallery has a caption, so
+  stepping between slides does not resize the pictures. A longer caption scrolls
+  inside the band. The thread itself does not show captions.
 
 ### Inline HTML (OS-2220)
 

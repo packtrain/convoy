@@ -23,6 +23,7 @@ vi.mock("yet-another-react-lightbox", () => ({
     slides: Array<{ src?: string }>;
     render?: {
       slideHeader?: (props: { slide: { src?: string } }) => ReactNode;
+      slideFooter?: (props: { slide: { src?: string } }) => ReactNode;
     };
   }) => {
     lightboxSpy(props);
@@ -31,6 +32,7 @@ vi.mock("yet-another-react-lightbox", () => ({
     return (
       <div data-testid="yarl-lightbox">
         {slide ? props.render?.slideHeader?.({ slide }) : null}
+        {slide ? props.render?.slideFooter?.({ slide }) : null}
       </div>
     );
   },
@@ -189,6 +191,33 @@ describe("AttachmentLightbox", () => {
     // The slide reserves a top band, so the header pill never covers the picture.
     const props = lightboxSpy.mock.calls.at(-1)?.[0] as { styles: { slide?: { paddingTop?: number } } };
     expect(props.styles.slide?.paddingTop).toBeGreaterThan(48);
+  });
+
+  test("shows the slide's caption below the picture and reserves a bottom band only when a slide has one (OS-2587)", () => {
+    const slide = (name: string, caption?: string) => ({
+      src: `https://example.com/${name}`,
+      fileName: name,
+      alt: name,
+      caption,
+      download: { url: `https://example.com/${name}`, filename: name },
+    });
+    const { rerender } = render(
+      <AttachmentLightbox open initialIndex={0} slides={[slide("a.png")]} onClose={vi.fn()} onDownload={vi.fn()} />
+    );
+    const stylesOf = () => (lightboxSpy.mock.calls.at(-1)?.[0] as { styles: { slide?: { paddingBottom?: number } } }).styles;
+    expect(stylesOf().slide?.paddingBottom).toBeUndefined();
+
+    rerender(
+      <AttachmentLightbox
+        open
+        initialIndex={0}
+        slides={[slide("a.png", "Look at the red badge"), slide("b.png")]}
+        onClose={vi.fn()}
+        onDownload={vi.fn()}
+      />
+    );
+    expect(screen.getByText("Look at the red badge")).toBeDefined();
+    expect(stylesOf().slide?.paddingBottom).toBeGreaterThan(48);
   });
 
   test("keeps the viewed slide when the parent re-renders with fresh slides", () => {

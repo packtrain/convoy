@@ -152,6 +152,7 @@ convoy threads attach <threadId> <file...> --message-id <replyId> --session-id <
 
 - Copy the IDs from this run's prompt. A command from an earlier run fails once that run ends.
 - Images appear inline, adjacent images form a gallery, and other files are cards showing name and size. Up to 10 files per reply, 50 MB each.
+- Caption each screenshot with what to look at: `--caption "The badge in the header is now red"`. Repeat `--caption` once per file, in file order (`""` skips one). The caption shows under the image when the user opens it.
 - For a chart, comparison table, or small dashboard, write a self-contained `.html` page and attach it with `--inline`; it shows expanded at the end of the reply. Follow `references/inline-html.md`. Without `--inline`, an `.html` file is a download card, which is right for exports and raw evidence.
 - Attach to the task (`convoy tasks attach`) only when the file belongs with the task's durable record rather than this conversation.
 - If the command reports an ambiguous failure, do not rerun it blindly; each rerun uploads new copies.

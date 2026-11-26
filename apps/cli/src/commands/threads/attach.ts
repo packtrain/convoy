@@ -22,6 +22,7 @@ interface AttachToResponseOptions extends OutputOptions {
   messageId: string;
   sessionId: string;
   inline?: boolean;
+  caption?: string[];
   check?: string;
   passed?: boolean;
   warning?: boolean;
@@ -66,6 +67,14 @@ function parseCheck(files: string[], options: AttachToResponseOptions) {
   };
 }
 
+/** The nth `--caption` goes to the nth file; an empty one skips its file (OS-2587). */
+function parseCaptions(files: string[], captions: string[] = []): Array<string | undefined> {
+  if (captions.length > files.length) {
+    throw new Error(`Got ${captions.length} --caption values for ${files.length} file${files.length === 1 ? "" : "s"}. Pass at most one per file, in file order.`);
+  }
+  return files.map((_, index) => captions[index]?.trim() || undefined);
+}
+
 /** The running agent attaches files to its own live reply (OS-2091), optionally answering a Check. Specs: docs/specs/cli-message-attachments.md, docs/specs/task-checks.md. */
 export const attachToResponseCommand = addGlobalOptions(
   addOutputOptions(
@@ -76,6 +85,11 @@ export const attachToResponseCommand = addGlobalOptions(
       .requiredOption("--message-id <messageId>", "The live reply's message ID, from the run instructions")
       .requiredOption("--session-id <sessionId>", "The running session's ID, from the run instructions")
       .option("--inline", "Show .html files expanded in the reply instead of as download cards")
+      .option(
+        "--caption <text>",
+        "What to look at in a file, shown under it in the image viewer; repeat once per file, in file order (\"\" skips one)",
+        (value: string, previous: string[] = []) => [...previous, value]
+      )
       .option("--check <key>", "Report these files as evidence for a check (see `convoy threads checks`)")
       .option("--passed", "The check passed")
       .option("--warning", "The check passed, but a human should look; needs --note")
@@ -90,6 +104,7 @@ export const attachToResponseCommand = addGlobalOptions(
   await runOneShotCommand(cmd, async ({ client }) => {
     const outputMode = resolveOutputMode(options);
     const check = parseCheck(files, options);
+    const captions = parseCaptions(files, options.caption);
     const notHtml = options.inline ? files.filter((file) => getContentType(file) !== "text/html") : [];
     if (notHtml.length > 0) {
       throw new Error(`--inline works only on .html files: ${notHtml.join(", ")}`);
@@ -102,7 +117,11 @@ export const attachToResponseCommand = addGlobalOptions(
         threadId: parsedThreadId,
         messageId: parseId<"cliMessages">(options.messageId, "messageId"),
         sessionId: parseId<"cliSessions">(options.sessionId, "sessionId"),
-        attachments: options.inline ? attachments.map((attachment) => ({ ...attachment, display: "inline" as const })) : attachments,
+        attachments: attachments.map((attachment, index) => ({
+          ...attachment,
+          ...(options.inline ? { display: "inline" as const } : {}),
+          ...(captions[index] ? { caption: captions[index] } : {}),
+        })),
         ...(check ? { check } : {}),
       })
     );

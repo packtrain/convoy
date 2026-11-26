@@ -256,6 +256,7 @@ async function resolveMessageAttachments(ctx: MutationCtx | QueryCtx, message: D
       uploadedAt: attachment.uploadedAt,
       dimensions: attachment.dimensions,
       display: attachment.display,
+      caption: attachment.caption,
       url: await ctx.storage.getUrl(attachment.storageId),
     }))
   );
@@ -358,6 +359,7 @@ function toMessageEnvelope(msg: Doc<"cliMessages">, task?: TaskSummary) {
     uploadedAt: attachment.uploadedAt,
     dimensions: attachment.dimensions,
     display: attachment.display,
+    caption: attachment.caption,
   }));
   return {
     _id: msg._id,
@@ -912,7 +914,8 @@ export const attachToResponse = mutation({
       a.fileName === b.fileName &&
       a.fileSize === b.fileSize &&
       a.contentType === b.contentType &&
-      a.display === b.display;
+      a.display === b.display &&
+      a.caption === b.caption;
     const incoming = args.attachments.filter((attachment, index) => args.attachments.findIndex((other) => sameFile(attachment, other)) === index);
     const added = incoming.filter((attachment) => !existing.some((previous) => sameFile(previous, attachment)));
     // Whatever survives exact dedupe must be a fresh blob: a second name for an attached

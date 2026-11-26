@@ -20,9 +20,12 @@ const GALLERY_SWIPE_ANIMATION_MS = 220;
 const GALLERY_NAVIGATION_ANIMATION_MS = 180;
 /** Top band reserved for the header pill (pill height plus its padding), so it never covers the picture. */
 const SLIDE_HEADER_BAND_PX = 64;
+/** Bottom band for captions (OS-2587); reserved for every slide once any has one, so pictures don't jump in size. */
+const SLIDE_CAPTION_BAND_PX = 112;
 
 interface AttachmentSlideMeta {
   fileName: string;
+  caption?: string;
   download: {
     url: string;
     filename: string;
@@ -88,6 +91,7 @@ export function AttachmentLightbox({
   // The library jumps back to `index` whenever `slides` changes identity, so feed it the slide in view.
   const [viewed, setViewed] = useState<{ from: number; index: number } | null>(null);
   const index = viewed?.from === initialIndex ? viewed.index : initialIndex;
+  const hasCaptions = slides.some((slide) => slide.caption);
 
   if (textPreview) {
     return <TextAttachmentDialog preview={textPreview} onClose={onClose} />;
@@ -118,7 +122,7 @@ export function AttachmentLightbox({
           backgroundColor: "#000",
           ["--yarl__container_background_color"]: "#000",
         },
-        slide: { paddingTop: SLIDE_HEADER_BAND_PX },
+        slide: { paddingTop: SLIDE_HEADER_BAND_PX, ...(hasCaptions ? { paddingBottom: SLIDE_CAPTION_BAND_PX } : {}) },
       }}
       download={{
         download: ({ slide }) => {
@@ -146,6 +150,23 @@ export function AttachmentLightbox({
                 <span className="shrink-0 tabular-nums text-muted-foreground">{index + 1}/{slides.length}</span>
                 <span className="truncate">{matched.fileName}</span>
               </div>
+            </div>
+          );
+        },
+        slideFooter: ({ slide }) => {
+          const caption = slides[getSlideIndex(slides, slide)]?.caption;
+          if (!caption) {
+            return null;
+          }
+
+          return (
+            <div
+              className="absolute inset-x-0 bottom-0 flex justify-center px-4 py-3"
+              style={{ height: SLIDE_CAPTION_BAND_PX }}
+            >
+              <p className="max-h-full max-w-[min(90vw,48rem)] overflow-y-auto whitespace-pre-line text-center text-sm text-white/90">
+                {caption}
+              </p>
             </div>
           );
         },

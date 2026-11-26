@@ -107,6 +107,8 @@ describe("withRunAttachmentInstructions (OS-2091)", () => {
     expect(prepared.prompt).toContain(command);
     expect(prepared.prompt).not.toContain("convoy browser");
     expect(prepared.prompt).toContain("Convoy skill's inline HTML guide");
+    // A caption tells the reader where to look in a screenshot (OS-2587).
+    expect(prepared.prompt).toContain('--caption "<what to look at>"');
     // The footer names the checks command, so "run the checks" needs no other context (OS-2291).
     expect(prepared.prompt).toContain("--check <key>");
     expect(prepared.prompt).toContain("`convoy threads checks thr_1`");

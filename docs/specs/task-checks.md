@@ -94,7 +94,9 @@ convoy threads attach debug.png    # plain evidence, no check
 ```
 
 - Files always land on the live reply's `attachments`, exactly as today, so
-  the transcript keeps rendering them.
+  the transcript keeps rendering them. A file's `--caption` rides along to the
+  result's `files` and shows in the lightbox
+  ([Captions](cli-message-attachments.md#captions-os-2587)).
 - `--check` also writes a Check result that points at those files. With
   `--check`, zero files is allowed.
 - `--warning`, `--failed`, and `--not-performed` without `--note` are

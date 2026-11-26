@@ -45,6 +45,7 @@ export const errors = {
   ATTACHMENT_UPLOAD_NOT_OWNED: "Upload not found. Register the upload before attaching it",
   ATTACHMENT_SIZE_MISMATCH: "Attachment fileSize does not match the uploaded file",
   ATTACHMENT_INLINE_NOT_HTML: "Only html attachments can be shown inline",
+  attachmentCaptionTooLong: (max: number) => `Attachment caption is too long: at most ${max} characters`,
   ATTACHMENT_FILE_NAME_INVALID: "Attachment file name must be a plain file name without path separators or control characters",
   MESSAGE_TO_CONTAINER: "Groups and workflow runs cannot receive messages",
   // `sentBy` attribution (OS-1630). Named for the tool argument, `sourceThreadId`,

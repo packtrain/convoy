@@ -534,6 +534,40 @@ describe("threads write commands", () => {
       expect(mutation).not.toHaveBeenCalled();
     });
 
+    it("gives the nth --caption to the nth file, trimmed; an empty one skips its file (OS-2587)", async () => {
+      query.mockResolvedValueOnce(threadRow);
+      mutation.mockImplementation(async (reference: unknown) => {
+        if (isFunction(reference, api.cli.messages.generateMessageAttachmentUploadUrl)) return "https://upload.example";
+        if (isFunction(reference, api.cli.messages.attachToResponse)) return { messageId: "msg_reply", storageIds: [] };
+        return null;
+      });
+      attachToResponseCommand.setOptionValue("messageId", "msg_reply");
+      attachToResponseCommand.setOptionValue("sessionId", "ses_1");
+      attachToResponseCommand.setOptionValue("caption", ["", "  The red badge  "]);
+
+      await invoke(attachToResponseCommand, ["thr_1", ["a.png", "b.png", "c.png"]]);
+
+      const call = mutation.mock.calls.find(([reference]) => isFunction(reference, api.cli.messages.attachToResponse));
+      expect((call?.[1] as { attachments: Array<{ fileName: string; caption?: string }> }).attachments.map(
+        ({ fileName, caption }) => [fileName, caption]
+      )).toEqual([
+        ["a.png", undefined],
+        ["b.png", "The red badge"],
+        ["c.png", undefined],
+      ]);
+    });
+
+    it("rejects more captions than files before uploading anything (OS-2587)", async () => {
+      attachToResponseCommand.setOptionValue("messageId", "msg_reply");
+      attachToResponseCommand.setOptionValue("sessionId", "ses_1");
+      attachToResponseCommand.setOptionValue("caption", ["one", "two"]);
+
+      await expect(invoke(attachToResponseCommand, ["thr_1", ["a.png"]])).rejects.toThrow(
+        "Got 2 --caption values for 1 file. Pass at most one per file, in file order."
+      );
+      expect(mutation).not.toHaveBeenCalled();
+    });
+
     it("rejects when the thread is not accessible, before uploading anything", async () => {
       query.mockResolvedValueOnce(null);
       attachToResponseCommand.setOptionValue("messageId", "msg_reply");

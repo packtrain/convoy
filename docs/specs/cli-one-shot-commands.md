@@ -58,7 +58,7 @@ Commands covered:
 - `convoy threads messages <threadId>`
 - `convoy threads create ...`
 - `convoy threads send <threadId> [content]`
-- `convoy threads attach <threadId> [file...] --message-id <id> --session-id <id> [--inline] [--check <key> ...]`
+- `convoy threads attach <threadId> [file...] --message-id <id> --session-id <id> [--inline] [--caption <text> ...] [--check <key> ...]`
 - `convoy threads attach-task <threadId> <task>`
 - `convoy threads attach-pr <threadId> <pullRequest>`
 - `convoy threads submit-guide <threadId> <file|->` or `--failed --note <why>`
@@ -729,6 +729,9 @@ status changes rather than being true last-activity.
   reply shows it expanded. Any file whose inferred type isn't `text/html` fails
   the command before anything uploads (`--inline works only on .html files: …`).
   See [Inline HTML](cli-message-attachments.md#inline-html-os-2220).
+- `--caption <text>` (OS-2587) captions a file in the lightbox; repeat it once
+  per file, in file order. Rules:
+  [Captions](cli-message-attachments.md#captions-os-2587).
 - `--check <key>` (OS-2291) with exactly one of `--passed`, `--warning`,
   `--failed`, `--not-performed` also reports a Check result; `--note` and
   `--label` go with it. Files become optional. These fail before anything

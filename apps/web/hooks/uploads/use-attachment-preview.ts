@@ -14,6 +14,7 @@ interface PreviewableAttachment {
   fileName: string;
   /** Unknown size never previews as text. */
   fileSize?: number;
+  caption?: string;
 }
 
 interface UseAttachmentPreviewOptions<T extends PreviewableAttachment> {
@@ -67,6 +68,7 @@ function toLightboxSlide<T extends PreviewableAttachment & { url: string }>(
       type: "video",
       sources: [{ src: attachment.url, type: attachment.contentType }],
       fileName: attachment.fileName,
+      caption: attachment.caption,
       download,
     };
   }
@@ -75,6 +77,7 @@ function toLightboxSlide<T extends PreviewableAttachment & { url: string }>(
     src: attachment.url,
     alt: attachment.fileName,
     fileName: attachment.fileName,
+    caption: attachment.caption,
     download,
   };
 }

@@ -2,7 +2,7 @@ import { ConvexError } from "convex/values";
 import type { Id } from "../../../_generated/dataModel";
 import type { MutationCtx } from "../../../_generated/server";
 import type { CliMessageAttachmentInput, CliMessageRole } from "../../../lib/contracts/validators";
-import { MAX_MESSAGE_ATTACHMENTS } from "../../../lib/constants";
+import { MAX_ATTACHMENT_CAPTION_LENGTH, MAX_MESSAGE_ATTACHMENTS } from "../../../lib/constants";
 import { ensure } from "../../../lib/shared/ensure";
 import { isSafeFileName } from "../../../lib/shared/strings";
 import { deleteStorageIfUnreferenced, getStorageSize } from "../../../lib/storageRepo";
@@ -18,6 +18,7 @@ export function assertValidMessageAttachments(attachments: CliMessageAttachmentI
   for (const attachment of normalized) {
     ensure(isSafeFileName(attachment.fileName)).isTrue(errors.ATTACHMENT_FILE_NAME_INVALID);
     ensure(attachment.display !== "inline" || attachment.contentType === "text/html").isTrue(errors.ATTACHMENT_INLINE_NOT_HTML);
+    ensure(attachment.caption?.length ?? 0).lte(MAX_ATTACHMENT_CAPTION_LENGTH, errors.attachmentCaptionTooLong(MAX_ATTACHMENT_CAPTION_LENGTH));
   }
 
   return normalized;

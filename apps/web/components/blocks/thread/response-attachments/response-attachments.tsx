@@ -24,6 +24,7 @@ export interface ThreadMessageAttachment {
   uploadedAt: number;
   dimensions?: ImageDimensions;
   display?: AttachmentDisplay;
+  caption?: string;
 }
 
 type ResolvedAttachment = ThreadMessageAttachment & { url: string | null };

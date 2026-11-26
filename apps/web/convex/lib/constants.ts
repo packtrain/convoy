@@ -3,6 +3,7 @@ export const MAX_ATTACHMENT_SIZE_MB = 50;
 export const MAX_ATTACHMENT_SIZE = MAX_ATTACHMENT_SIZE_MB * 1024 * 1024;
 /** Per-message attachment count; the composer and the thread handoff check it client-side. */
 export const MAX_MESSAGE_ATTACHMENTS = 10;
+export const MAX_ATTACHMENT_CAPTION_LENGTH = 500;
 /** Bounds for `tasks.core.listClosed`, shared with the MCP tool (docs/specs/task-closed-at.md). */
 export const DEFAULT_CLOSED_TASKS_LIMIT = 50;
 export const MAX_CLOSED_TASKS_LIMIT = 200;

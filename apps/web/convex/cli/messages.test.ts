@@ -7,6 +7,7 @@ import { createTestContext, type TestContext } from "../../convex-testing";
 import { STRANDED_ASSISTANT_SCAN_LIMIT } from "./lib/cliMessagesRepo";
 import { CHUNK_DELETE_BATCH_SIZE } from "./lib/chunks/lifecycle";
 import { ENVELOPE_WINDOW_LIMIT, PENDING_UPLOAD_RETENTION_MS } from "./lib/constants";
+import { MAX_ATTACHMENT_CAPTION_LENGTH } from "../lib/constants";
 
 /**
  * The live chunk cursor: on the head row while a run streams, back on the
@@ -7684,6 +7685,44 @@ describe("cliMessages", () => {
       const { envelopes } = await asUser.query(api.cli.messages.listEnvelopesByThread, { threadId: chat._id });
       const reply = envelopes.find((envelope) => envelope._id === started.assistantMessageId);
       expect(reply?.attachments.map((attachment) => attachment.display)).toEqual(["inline", undefined]);
+    });
+
+    test("persists a caption, returns it on reads, and carries it to the check result (OS-2587)", async () => {
+      const { t, asUser, apiKey, session, chat, started, upload } = await setupLiveRun();
+      const shot = { ...(await upload("shot")), caption: "The red badge in the header" };
+      const plain = await upload("plain");
+
+      await t.mutation(api.cli.messages.attachToResponse, {
+        threadId: chat._id,
+        messageId: started.assistantMessageId,
+        sessionId: session._id,
+        attachments: [shot, plain],
+        check: { key: "ui", status: "passed", label: "UI" },
+        apiKey,
+      });
+
+      const rows = await asUser.query(api.cli.messages.getMessageAttachmentUrls, { messageId: started.assistantMessageId });
+      expect(rows.map((row) => row.caption)).toEqual(["The red badge in the header", undefined]);
+      const { envelopes } = await asUser.query(api.cli.messages.listEnvelopesByThread, { threadId: chat._id });
+      const reply = envelopes.find((envelope) => envelope._id === started.assistantMessageId);
+      expect(reply?.attachments.map((attachment) => attachment.caption)).toEqual(["The red badge in the header", undefined]);
+      const [result] = await t.run((runCtx) => runCtx.db.query("checkResults").collect());
+      expect(result?.files.map((file) => file.caption)).toEqual(["The red badge in the header", undefined]);
+    });
+
+    test("rejects a caption longer than the limit (OS-2587)", async () => {
+      const { t, apiKey, session, chat, started, upload } = await setupLiveRun();
+      const shot = { ...(await upload("shot")), caption: "x".repeat(MAX_ATTACHMENT_CAPTION_LENGTH + 1) };
+
+      await expect(
+        t.mutation(api.cli.messages.attachToResponse, {
+          threadId: chat._id,
+          messageId: started.assistantMessageId,
+          sessionId: session._id,
+          attachments: [shot],
+          apiKey,
+        })
+      ).rejects.toThrow(errors.attachmentCaptionTooLong(MAX_ATTACHMENT_CAPTION_LENGTH));
     });
 
     test("listAgentAttachmentsByThread returns agent replies' files newest first, not user uploads (OS-2289)", async () => {

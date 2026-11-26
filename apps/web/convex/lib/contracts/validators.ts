@@ -446,6 +446,7 @@ export type ImageDimensions = Infer<typeof imageDimensionsValidator>;
 export const attachmentDisplayValidator = v.literal("inline");
 export type AttachmentDisplay = Infer<typeof attachmentDisplayValidator>;
 
+/** `caption` (OS-2587): the agent's note on what to look at, shown under the file in the lightbox. */
 export const cliMessageAttachmentInputValidator = v.object({
   storageId: v.id("_storage"),
   fileName: v.string(),
@@ -453,6 +454,7 @@ export const cliMessageAttachmentInputValidator = v.object({
   contentType: v.string(),
   dimensions: v.optional(imageDimensionsValidator),
   display: v.optional(attachmentDisplayValidator),
+  caption: v.optional(v.string()),
 });
 export type CliMessageAttachmentInput = Infer<typeof cliMessageAttachmentInputValidator>;
 
@@ -464,6 +466,7 @@ export const cliMessageAttachmentValidator = v.object({
   uploadedAt: v.number(),
   dimensions: v.optional(imageDimensionsValidator),
   display: v.optional(attachmentDisplayValidator),
+  caption: v.optional(v.string()),
 });
 export type CliMessageAttachment = Infer<typeof cliMessageAttachmentValidator>;
 
@@ -492,6 +495,7 @@ export const cliMessageAttachmentSummaryValidator = v.object({
   uploadedAt: v.number(),
   dimensions: v.optional(imageDimensionsValidator),
   display: v.optional(attachmentDisplayValidator),
+  caption: v.optional(v.string()),
   url: v.union(v.string(), v.null()),
 });
 export type CliMessageAttachmentSummary = Infer<typeof cliMessageAttachmentSummaryValidator>;
@@ -510,6 +514,7 @@ export const cliMessageAttachmentMetadataValidator = v.object({
   uploadedAt: v.number(),
   dimensions: v.optional(imageDimensionsValidator),
   display: v.optional(attachmentDisplayValidator),
+  caption: v.optional(v.string()),
 });
 export type CliMessageAttachmentMetadata = Infer<typeof cliMessageAttachmentMetadataValidator>;
 
