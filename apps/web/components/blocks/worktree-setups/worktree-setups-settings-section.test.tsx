@@ -190,7 +190,7 @@ describe("WorktreeSetupsSettingsSection", () => {
     expect(data.remove).not.toHaveBeenCalled();
     fireEvent.click(within(screen.getByRole("alertdialog")).getByRole("button", { name: "Remove" }));
 
-    await waitFor(() => expect(data.remove).toHaveBeenCalledWith({ setupId: "setup_1" }));
+    await waitFor(() => expect(data.remove).toHaveBeenCalledWith({ projectId, repoKey: "packtrain/convoy" }));
   });
 
   test("announces loading once", () => {

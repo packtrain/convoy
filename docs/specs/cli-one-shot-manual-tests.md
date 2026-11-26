@@ -93,6 +93,25 @@ pnpm --filter @useconvoy/cli run dev -- project-agents update <projectAgentId> -
 
 ---
 
+## `worktree-setups`
+
+Run inside a checkout of a repo the project has registered.
+
+```bash
+printf 'cp "$CONVOY_PARENT_PATH/.mcp.json" .\npnpm i\n' > /tmp/setup.sh
+pnpm --filter @useconvoy/cli run dev -- worktree-setups set --project WEB --file /tmp/setup.sh
+pnpm --filter @useconvoy/cli run dev -- worktree-setups list --project WEB
+pnpm --filter @useconvoy/cli run dev -- worktree-setups get --project WEB > /tmp/got.sh && diff /tmp/setup.sh /tmp/got.sh
+pnpm --filter @useconvoy/cli run dev -- worktree-setups set packtrain/convoy --project WEB --script "pnpm i" --json
+pnpm --filter @useconvoy/cli run dev -- worktree-setups delete packtrain/convoy --project WEB
+```
+
+After `set`, open the printed link: the row shows "Needs your approval" (or
+"Changed since you approved"). Approve it, start a "New worktree" thread, and
+watch the script run before the agent starts.
+
+---
+
 ## `tasks list`
 
 ```bash

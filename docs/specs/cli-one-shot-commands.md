@@ -16,6 +16,10 @@ Commands covered:
 - `convoy project-agents list`
 - `convoy project-agents create ...`
 - `convoy project-agents update <projectAgentId> ...`
+- `convoy worktree-setups list`
+- `convoy worktree-setups get [repo]`
+- `convoy worktree-setups set [repo] --file <path> | --script <text>`
+- `convoy worktree-setups delete [repo]`
 - `convoy prompts list`
 - `convoy prompts create ...`
 - `convoy prompts update <promptId> ...`
@@ -98,7 +102,7 @@ Cursor pagination is the canonical CLI pagination model. JSON output preserves t
 
 ## Project/Organization Resolution
 
-For `task-types`, `project-agents`, `lists`, and `tasks` commands that need a project:
+For `task-types`, `project-agents`, `worktree-setups`, `lists`, and `tasks` commands that need a project:
 
 1. Use `--project` when provided.
 2. Otherwise use resolved profile `project_id`.
@@ -194,6 +198,34 @@ caller is missing is `--org`.
 - Automation updates replace the whole automation configuration, matching the
   MCP contract; automation detail flags require `--automation`.
 - Empty updates and conflicting set/clear flags fail before the mutation.
+
+### `worktree-setups list | get | set | delete`
+
+Spec: [cli-worktrees.md](cli-worktrees.md#worktree-setup-scripts). No MCP
+tool: an agent that needs these has a shell.
+
+- `[repo]` is an `owner/repo` key or a remote URL; the CLI lowercases it and
+  rejects anything that is not `owner/repo` (`isRepoKey`) before calling the
+  server, with an error that names `[repo]`. Without it the
+  command takes the `origin` remote of the current directory through
+  `toRepoKey` (`apps/cli/src/commands/worktree-setups/normalize.ts`, a copy of the server's;
+  `normalize.test.ts` runs both on the same cases). No origin, or an origin
+  with no key, fails with an error that names `[repo]`.
+- `list` calls `api.cli.worktreeSetups.list`. Text output prints repo key,
+  `r<revision>`, last editor, date, and the caller's approval; registered
+  repos without a script print "no script". JSON returns the rows unchanged.
+- `get` reads the same list and prints only the script on stdout, so it can
+  be redirected into a file. A repo without a script fails. JSON output is the
+  row's setup plus `repoKey`.
+- `set` calls `api.cli.worktreeSetups.save`. It needs exactly one of `--file`
+  and `--script` (`resolveRequiredStringInput`). Text output prints the repo
+  key, the revision, the settings URL, and "Approve it in the web before it
+  runs. New worktrees for this repo fail for everyone until they approve it."
+  When the text did not change it prints "No change … (revision N)" only.
+  JSON output is `{ repoKey, setupId, revision, changed, settingsUrl }`.
+- `delete` calls `api.cli.worktreeSetups.remove` with the project and repo
+  key, without a confirmation prompt, like `skills remove`. JSON output is
+  `{ repoKey, deleted: true }`.
 
 ### `prompts list`
 

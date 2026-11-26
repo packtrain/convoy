@@ -20,6 +20,7 @@ import { listsCommand } from "./commands/lists/index.js";
 import { labelsCommand } from "./commands/labels/index.js";
 import { taskTypesCommand } from "./commands/task-types/index.js";
 import { projectAgentsCommand } from "./commands/project-agents/index.js";
+import { worktreeSetupsCommand } from "./commands/worktree-setups/index.js";
 import { promptsCommand } from "./commands/prompts/index.js";
 import { skillsCommand } from "./commands/skills/index.js";
 import { threadsCommand } from "./commands/threads/index.js";
@@ -68,6 +69,7 @@ export function registerCommands(program: Command): void {
   program.addCommand(labelsCommand);
   program.addCommand(taskTypesCommand);
   program.addCommand(projectAgentsCommand);
+  program.addCommand(worktreeSetupsCommand);
   program.addCommand(promptsCommand);
   program.addCommand(skillsCommand);
   program.addCommand(threadsCommand);

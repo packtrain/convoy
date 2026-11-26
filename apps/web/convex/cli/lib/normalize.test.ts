@@ -1,7 +1,12 @@
 import { describe, expect, test } from "vitest";
-import { isRepoKey, toRepoKey } from "./normalize";
+import { isRepoKey as cliIsRepoKey, toRepoKey as cliToRepoKey } from "../../../../cli/src/commands/worktree-setups/normalize";
+import { isRepoKey as webIsRepoKey, toRepoKey as webToRepoKey } from "./normalize";
 
-describe("toRepoKey", () => {
+// The CLI ships its own copy to default `convoy worktree-setups [repo]`; both must agree.
+describe.each([
+  ["web", webToRepoKey],
+  ["cli", cliToRepoKey],
+])("toRepoKey (%s)", (_side, toRepoKey) => {
   test.each([
     "git@github-personal:packtrain/convoy.git",
     "git@github.com:packtrain/convoy.git",
@@ -44,8 +49,12 @@ describe("toRepoKey", () => {
     },
   );
 
-  test("isRepoKey accepts only the stored form", () => {
-    expect(isRepoKey("packtrain/convoy")).toBe(true);
-    for (const value of ["PackTrain/convoy", "convoy", "a/b/c", "../convoy", "o wner/repo"]) expect(isRepoKey(value)).toBe(false);
-  });
+});
+
+test.each([
+  ["web", webIsRepoKey],
+  ["cli", cliIsRepoKey],
+])("isRepoKey (%s) accepts only the stored form", (_side, isRepoKey) => {
+  expect(isRepoKey("packtrain/convoy")).toBe(true);
+  for (const value of ["PackTrain/convoy", "convoy", "a/b/c", "../convoy", "o wner/repo"]) expect(isRepoKey(value)).toBe(false);
 });
