@@ -1903,9 +1903,19 @@ Slice 8 (OS-2185).
   button's label for a stack, with "Into main from <branch>", the warnings
   (pending reviews, failed checks, running checks, out of date), the commit
   message, a textarea whose first line is the commit title and the rest its
-  body (squash defaults to `Title (#482)`, a merge commit to `Merge pull
-  request #482 from <branch>`, each with GitHub's default body), the rebase description, or the stack's PRs
-  bottom first. While merging, Confirm reads Merging… and Cancel and the close
+  body, the rebase description, or the stack's PRs bottom first. The default
+  message comes from the Overview's commit subjects (OS-2603). Its body lists
+  each subject once, oldest first, as `- <subject>`, without `fixup!`,
+  `squash!`, and `amend!` commits or the merge commits Update branch leaves.
+  When the PR has more commits than the Overview read (100), the body stays
+  empty so GitHub's default, which lists them all, applies.
+  A squash title is the PR title with the prefix of the first `feat` commit
+  (else the first Conventional Commits subject) when the title has none, then
+  the refs of the PR's Tasks (`referencedTasks`) it doesn't name yet in
+  parentheses, then `(#482)`, e.g. `feat(worktrees): Setup scripts (OS-1116)
+  (#8)`. A merge commit keeps GitHub's `Merge pull request #482 from
+  <branch>` title over the same body. The title is sent only when it differs
+  from GitHub's default; a cleared body leaves GitHub's. While merging, Confirm reads Merging… and Cancel and the close
   button hide; GitHub's answer closes it with a toast.
 
 ### Reviews

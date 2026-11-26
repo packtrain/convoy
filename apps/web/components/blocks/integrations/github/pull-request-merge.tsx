@@ -1,7 +1,7 @@
 "use client";
 
 import { useId, useState } from "react";
-import { useAction } from "convex/react";
+import { useAction, useQuery } from "convex/react";
 import type { FunctionArgs } from "convex/server";
 import { ChevronDown, CircleAlert, Layers } from "lucide-react";
 import { toast } from "sonner";
@@ -117,8 +117,34 @@ export function useMergeMethod(commenting: GithubCommenting): [Method | null, (m
 }
 
 /** GitHub's default commit title for a single PR; sent only when the member changes it. */
-function defaultTitle(method: Method, pr: PullRequestView): string {
+function defaultTitle(method: Method, pr: Pick<PullRequestView, "title" | "number" | "headRef">): string {
   return method === "squash" ? `${pr.title} (#${pr.number})` : `Merge pull request #${pr.number} from ${pr.headRef}`;
+}
+
+const CONVENTIONAL_PREFIX = /^(\w+(?:\([^)]*\))?!?): /;
+// Autosquash markers, and the merge commits Update branch leaves.
+const SKIPPED_SUBJECT = /^(?:(?:fixup|squash|amend)! |Merge (?:remote-tracking )?branch )/;
+
+/** The dialog's default message, built from the commit subjects (spec: Merge and update branch). */
+export function defaultCommitMessage(
+  method: "merge" | "squash",
+  pr: Pick<PullRequestView, "title" | "number" | "headRef">,
+  commits: { message: string }[],
+  taskRefs: string[],
+  commitCount: number,
+): string {
+  const subjects = [...new Set(commits.map((commit) => commit.message.trim()).filter((subject) => subject && !SKIPPED_SUBJECT.test(subject)))];
+  let title = method === "squash" ? pr.title.trim() : defaultTitle(method, pr);
+  if (method === "squash") {
+    const prefixes = subjects.flatMap((subject) => CONVENTIONAL_PREFIX.exec(subject)?.[1] ?? []);
+    const prefix = prefixes.find((candidate) => /^feat\b/.test(candidate)) ?? prefixes[0];
+    if (prefix && !CONVENTIONAL_PREFIX.test(title)) title = `${prefix}: ${title}`;
+    const missing = taskRefs.filter((ref) => !new RegExp(`(?<![A-Za-z0-9])${ref}(?![0-9])`, "i").test(title));
+    if (missing.length) title = `${title} (${missing.join(" ")})`;
+    title = `${title} (#${pr.number})`;
+  }
+  // The Overview holds GitHub's first 100 commits; a partial list leaves GitHub's own body.
+  return subjects.length && commits.length >= commitCount ? `${title}\n\n${subjects.map((subject) => `- ${subject}`).join("\n")}` : title;
 }
 
 /** What a merge would do with the member's `picked` method: the method, the Layers it takes along, and what blocks it. */
@@ -211,7 +237,11 @@ export function MergeConfirmDialog({ plan, onClose, ...target }: Target & { plan
   const { method, below, count } = plan;
   const autoDeletes = overview.mergeSettings?.deleteBranchOnMerge === true;
   const [merging, setMerging] = useState(false);
-  const [title, setTitle] = useState(() => defaultTitle(method, pr));
+  // Shares the reader's subscription; refs only of tasks the member can open.
+  const tasks = useQuery(api.integrations.github.pullRequests.referencedTasks, { projectId, repositoryId, number: pr.number });
+  const [title, setTitle] = useState(() =>
+    method === "rebase" ? "" : defaultCommitMessage(method, pr, overview.commits, tasks?.map((task) => task.refId) ?? [], overview.commitCount),
+  );
   const [deleteBranch, setDeleteBranch] = useState(autoDeletes);
   const titleId = useId();
   const deleteId = useId();
@@ -288,7 +318,7 @@ export function MergeConfirmDialog({ plan, onClose, ...target }: Target & { plan
             <Label htmlFor={titleId} className="text-xs">
               Commit message
             </Label>
-            <Textarea id={titleId} value={title} rows={3} disabled={merging} onChange={(event) => setTitle(event.target.value)} />
+            <Textarea id={titleId} value={title} rows={3} className="max-h-64" disabled={merging} onChange={(event) => setTitle(event.target.value)} />
           </div>
         )}
         <div className="flex items-center gap-2" title={autoDeletes ? "The repository deletes merged branches" : undefined}>

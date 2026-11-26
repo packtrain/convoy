@@ -1358,7 +1358,7 @@ describe("PullRequestReader GitHub comments (OS-2183)", () => {
     expect(within(confirm).getByText("1 check failed.")).toBeTruthy();
     const message = within(confirm).getByLabelText("Commit message") as HTMLTextAreaElement;
     expect(message.tagName).toBe("TEXTAREA");
-    expect(message.value).toBe("Add search (#7)");
+    expect(message.value).toBe("Add search (#7)\n\n- Add search box");
     // The first line is the commit title, the rest its body.
     fireEvent.change(message, { target: { value: "Add the search box\n\nWith keyboard support.\nAnd tests." } });
     fireEvent.click(within(confirm).getByRole("checkbox", { name: "Delete the branch after merging" }));
