@@ -148,6 +148,48 @@ describe("worktree op processor", () => {
       });
     });
 
+    describe("worktreeChanges vs main (OS-2596)", () => {
+      const commitFile = async (file: string, content: string, message: string) => {
+        await writeFile(join(repo, file), content);
+        await runGit(repo, ["add", "."]);
+        await runGit(repo, ["-c", "user.name=t", "-c", "user.email=t@t", "commit", "-q", "-m", message]);
+      };
+      const changedPaths = async (extra: Record<string, unknown>) => {
+        const completion = await result(op("worktreeChanges", extra));
+        const { patch } = JSON.parse(completion.resultJson as string) as { patch: string };
+        return [...patch.matchAll(/^diff --git a\/(\S+)/gm)].map((match) => match[1]);
+      };
+
+      it("diffs the working tree against the merge-base: committed, uncommitted and untracked, not main's newer commits", async () => {
+        await runGit(repo, ["checkout", "-q", "-b", "feature"]);
+        await commitFile("committed.txt", "c\n", "feature work");
+        await runGit(repo, ["checkout", "-q", "main"]);
+        await commitFile("main-only.txt", "m\n", "main moves on");
+        await runGit(repo, ["checkout", "-q", "feature"]);
+        await writeFile(join(repo, "a.txt"), "edited\n");
+        await writeFile(join(repo, "untracked.txt"), "u\n");
+
+        expect(await changedPaths({ scope: "branch" })).toEqual(["a.txt", "committed.txt", "untracked.txt"]);
+        expect(await changedPaths({})).toEqual(["a.txt", "untracked.txt"]);
+      });
+
+      it("takes the newer merge-base: origin/main when the branch started from it", async () => {
+        await commitFile("fetched.txt", "f\n", "fetched");
+        await runGit(repo, ["update-ref", "refs/remotes/origin/main", "HEAD"]);
+        await runGit(repo, ["reset", "-q", "--hard", "HEAD~1"]);
+        await runGit(repo, ["checkout", "-q", "-b", "feature", "origin/main"]);
+        await commitFile("feature.txt", "x\n", "feature work");
+
+        expect(await changedPaths({ scope: "branch" })).toEqual(["feature.txt"]);
+      });
+
+      it("fails when there is no default branch to compare with", async () => {
+        await runGit(repo, ["branch", "-m", "trunk"]);
+
+        expect((await result(op("worktreeChanges", { scope: "branch" }))).error).toBe("No default branch to compare with");
+      });
+    });
+
     it("answers commitPatch with the commit named in postRef", async () => {
       const completion = await result(op("commitPatch", { postRef: hash }));
       expect(JSON.parse(completion.resultJson as string)).toMatchObject({ patch: expect.stringContaining("+++ b/a.txt"), truncated: false });

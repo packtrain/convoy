@@ -1277,7 +1277,7 @@ export default defineSchema({
     postRef: v.optional(v.string()), // readFile/diffFile: post-run checkpoint ref; commitPatch: the commit
     query: v.optional(v.string()), // searchFiles: composer @-mention search text
     cursor: v.optional(v.string()), // gitLog: the previous page's nextCursor
-    scope: v.optional(cliHistoryScopeValidator), // gitLog: first page's walk (OS-2595)
+    scope: v.optional(cliHistoryScopeValidator), // gitLog: first page's walk (OS-2595); worktreeChanges: "vs main" (OS-2596)
     status: cliWorktreeOpStatusValidator,
     error: v.optional(v.string()),
     resultJson: v.optional(v.string()), // rescan: `{ refs: [...] }`

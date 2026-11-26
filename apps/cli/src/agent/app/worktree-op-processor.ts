@@ -8,6 +8,7 @@ import { uploadToStorage } from "../../lib/storage-upload.js";
 import {
   diffBetweenRefs,
   diffWorkingTree,
+  findBranchFork,
   listBranchRefs,
   listCommits,
   listWorktrees,
@@ -182,9 +183,14 @@ export function createWorktreeOpProcessor(client: ConvoyClient, sessionId: strin
     await completeOp(op._id, { resultJson: JSON.stringify({ files }) });
   }
 
-  // Worktree changes view (OS-2036): the uncommitted working tree as one patch.
+  // Worktree changes view (OS-2036): the uncommitted working tree as one patch; "vs main" diffs from the fork point (OS-2596).
   async function handleWorktreeChanges(op: PendingWorktreeOp): Promise<void> {
-    const result = await diffWorkingTree(op.path);
+    const fork = op.scope === "branch" ? await findBranchFork(op.path) : undefined;
+    if (op.scope === "branch" && !fork) {
+      await completeOp(op._id, { error: "No default branch to compare with" });
+      return;
+    }
+    const result = await diffWorkingTree(op.path, fork?.hash);
     await completeOp(op._id, { resultJson: JSON.stringify(result) });
   }
 

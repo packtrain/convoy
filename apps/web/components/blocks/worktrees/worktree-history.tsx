@@ -18,7 +18,7 @@ import { type GraphRow, graphLanes, layoutGraph } from "@/lib/worktrees/commit-g
 import { WORKTREE_HISTORY_MIN_CLI_VERSION, supportsWorktreeHistory } from "@/lib/worktrees/cli-version";
 import type { CommitSummary, ForkPoint, WorktreeHistory } from "@/lib/worktrees/hooks/use-worktree-history";
 import { cn } from "@/lib/utils";
-import { ErrorWithRetry, Message } from "./worktree-changes-body";
+import { ErrorWithRetry, Message, ScopeToggle } from "./worktree-changes-body";
 import { GraphCell, graphWidth } from "./commit-graph";
 import { CommitDetail, CommitDetailSkeleton, type DiffOptions, RefBadge, refName, short, visibleRefs } from "./commit-detail";
 import { COMMIT_SIDEBAR_RESIZE_BOUNDS, CommitDiffPane, CommitSidebar, CommitSidebarHeader, CommitSidebarSkeleton } from "./commit-sidebar";
@@ -95,23 +95,7 @@ const SCOPES = [
 
 /** This branch | All, beside List | Graph (OS-2595). */
 export function HistoryScopeToggle({ value, onChange }: { value: HistoryScope; onChange: (scope: HistoryScope) => void }) {
-  return (
-    <div className="flex w-fit shrink-0 items-center gap-0.5" role="group" aria-label="History scope">
-      {SCOPES.map(({ scope, label }) => (
-        <Button
-          key={scope}
-          type="button"
-          variant="ghost"
-          size="sm"
-          aria-pressed={value === scope}
-          className={cn("h-7 cursor-pointer rounded-md px-2 text-xs text-muted-foreground", value === scope && "bg-muted text-foreground hover:bg-muted")}
-          onClick={() => onChange(scope)}
-        >
-          {label}
-        </Button>
-      ))}
-    </div>
-  );
+  return <ScopeToggle label="History scope" options={SCOPES} value={value} onChange={onChange} />;
 }
 
 /** The branch scope's last row: where the branch left the default branch, and the way to the rest. */

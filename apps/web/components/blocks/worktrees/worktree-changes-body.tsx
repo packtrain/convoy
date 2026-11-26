@@ -101,6 +101,50 @@ export function useSectionCollapse(allCollapsed: boolean) {
   return { isCollapsed, toggle };
 }
 
+/** Text-button switch between scopes, e.g. History's This branch | All (OS-2595). */
+export function ScopeToggle<T extends string>({
+  label,
+  options,
+  value,
+  onChange,
+}: {
+  label: string;
+  options: readonly { scope: T; label: string }[];
+  value: T;
+  onChange: (scope: T) => void;
+}) {
+  return (
+    <div className="flex w-fit shrink-0 items-center gap-0.5" role="group" aria-label={label}>
+      {options.map(({ scope, label: text }) => (
+        <Button
+          key={scope}
+          type="button"
+          variant="ghost"
+          size="sm"
+          aria-pressed={value === scope}
+          className={cn("h-7 cursor-pointer rounded-md px-2 text-xs text-muted-foreground", value === scope && "bg-muted text-foreground hover:bg-muted")}
+          onClick={() => onChange(scope)}
+        >
+          {text}
+        </Button>
+      ))}
+    </div>
+  );
+}
+
+const CHANGES_SCOPES = [
+  { scope: "uncommitted", label: "Uncommitted" },
+  { scope: "branch", label: "vs main" },
+] as const;
+
+/** Uncommitted | vs main (OS-2596); hidden on CLIs without the branch diff. */
+export function ChangesScopeToggle({ state }: { state: WorktreeChanges }) {
+  if (!state.canScope) {
+    return null;
+  }
+  return <ScopeToggle label="Changes scope" options={CHANGES_SCOPES} value={state.scope} onChange={state.setScope} />;
+}
+
 /** Opens the typed-confirmation dialog; hidden on CLIs without `revertWorkingTree`. */
 export function RevertAllButton({ state }: { state: WorktreeChanges }) {
   if (!state.canRevertAll || state.files.length === 0) {
@@ -187,7 +231,7 @@ export function WorktreeChangesBody({
     );
   }
   if (files.length === 0) {
-    return <Message>No uncommitted changes.</Message>;
+    return <Message>{state.scope === "branch" ? "No changes against the default branch." : "No uncommitted changes."}</Message>;
   }
   return (
     <div>
@@ -206,7 +250,7 @@ export function WorktreeChangesBody({
           collapsed={isCollapsed(file.path)}
           onToggle={onToggle}
           registerSection={registerSection}
-          onRevertFile={state.setRevertTarget}
+          onRevertFile={state.canRevert ? state.setRevertTarget : undefined}
           onDownloadFile={state.canDownload ? state.requestDownload : undefined}
           busy={state.busy}
           onOpenFile={state.canOpenFile ? state.openFile : undefined}
@@ -238,7 +282,8 @@ function FileSection({
   collapsed: boolean;
   onToggle: (path: string) => void;
   registerSection: (path: string, element: HTMLElement | null) => void;
-  onRevertFile: (file: CliRunDiffFile) => void;
+  /** Absent where there is nothing to revert (vs main). */
+  onRevertFile?: (file: CliRunDiffFile) => void;
   /** Absent on CLIs that cannot upload a file. */
   onDownloadFile?: (path: string) => void;
   /** A revert or download is in flight; both wait for it. */
@@ -298,18 +343,20 @@ function FileSection({
               <Download className="size-3.5" />
             </Button>
           )}
-          <Button
-            type="button"
-            variant="ghost"
-            size="icon-sm"
-            className={ICON_BUTTON}
-            aria-label={`Revert ${file.path}`}
-            title="Revert file"
-            disabled={busy}
-            onClick={() => onRevertFile(file)}
-          >
-            <RotateCcw className="size-3.5" />
-          </Button>
+          {onRevertFile && (
+            <Button
+              type="button"
+              variant="ghost"
+              size="icon-sm"
+              className={ICON_BUTTON}
+              aria-label={`Revert ${file.path}`}
+              title="Revert file"
+              disabled={busy}
+              onClick={() => onRevertFile(file)}
+            >
+              <RotateCcw className="size-3.5" />
+            </Button>
+          )}
         </>
       }
     >

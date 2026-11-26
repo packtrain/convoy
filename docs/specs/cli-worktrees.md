@@ -122,7 +122,8 @@ after 1h TTL; 10 min for file ops, whose results carry file contents).
 "revertWorkingFile" | "revertWorkingTree" | "downloadFile" | "gitLog" |
 "commitPatch", pathId }` plus
   `filePath`/`preRef`/`postRef` for file/revert ops, `filePaths` for
-  `revertWorkingTree`, `query` for searches, and `cursor` for `gitLog`. `readFile` needs only `filePath`:
+  `revertWorkingTree`, `query` for searches, `cursor` for `gitLog`, and
+  `scope: "branch"` for `gitLog` and `worktreeChanges` (dropped for any other kind). `readFile` needs only `filePath`:
   without `postRef` it reads the working tree (OS-2041).
   The server resolves and snapshots `path` (and `parentPath` for removals) so
   the CLI stays stateless. Rescan ops dedupe against a pending rescan of the
@@ -192,6 +193,22 @@ no handler for it and completes the op with `Unsupported operation … update
 @useconvoy/cli`, and the web does not enqueue it at all when the profile's
 reported `appVersion` is older. The web never caches the result: the working
 tree is mutable.
+
+With `scope: "branch"` (OS-2596, CLI 0.177.0, the view's "vs main") the
+same temp index is diffed against the branch's fork point instead of `HEAD`:
+every committed and uncommitted change since the branch left the default
+branch, which is what its pull request will contain. The fork point is the
+merge-base the History branch scope reports (`fork` below, `findBranchFork`
+in `history.ts`): Convoy doesn't record whether a worktree started from `main`
+or `origin/main`, so of the two it takes the one HEAD has the fewest own
+commits against, which is the newer merge-base. It is the merge-base, not the
+default branch's tip, so the default branch's newer commits don't show up as
+reversed changes. On the default branch itself only origin's copy counts,
+which leaves the unpushed and uncommitted work. No commit on HEAD, or no
+default branch to compare with, fails the op with "No default branch to
+compare with". The 700 kB cap and `truncated` flag are the same. A CLI before
+0.177.0 ignores the scope and returns the uncommitted patch, so the web only
+sends it to 0.177.0 and newer.
 
 ### Commit history (OS-2534)
 
@@ -594,9 +611,25 @@ every row, header included, past a phone viewport. The right pane is the file tr
   as it scrolls into view. Files come from the patch itself
   (`splitRunPatch` / `parseRunPatchFiles`, `--no-renames`). Binary files show
   a note instead of a diff; a clean tree shows "No uncommitted changes".
+- Scope (OS-2596): an "Uncommitted | vs main" switch opens the Changes
+  toolbar's right group (text buttons, `aria-pressed`, group "Changes
+  scope"), on worktrees and the main checkout alike, hidden on CLIs older than
+  0.177.0. The page opens on Uncommitted; the choice lasts until the page is
+  left and is not stored. vs main sends `worktreeChanges` with `scope:
+  "branch"` (above) and reuses the body, file tree, file tabs and diff
+  toggles. Switching shows the loading state until that scope's patch is in;
+  nothing is cached. Revert is gone in vs main (section button, file-tree
+  menu item, Revert all), since a revert only undoes uncommitted work. Open file
+  and Download stay. An empty result reads "No changes against the default
+  branch.". Remove worktree reads the patch on screen as dirty only in
+  Uncommitted; in vs main the CLI's own dirty check decides. The label says
+  "main" whatever the default branch is called. The thread sidebar's Working
+  tree panel stays uncommitted-only.
 - Fetching: a `worktreeChanges` op is enqueued on open and on each Refresh
   (`lib/worktrees/hooks/use-worktree-op.ts`). Each request carries a
-  generation; a stale op never overwrites a newer outcome, and a pending row
+  generation; a stale op never overwrites a newer outcome, an outcome is
+  forgotten once the request key changes (a file, a scope), so coming back to
+  it loads afresh instead of showing the old result, and a pending row
   pruned before the CLI answers settles as an error with Refresh enabled.
   The previous patch stays on screen while a refresh runs and when a refresh
   fails, with the error as a banner above it. Reload refetches; nothing is

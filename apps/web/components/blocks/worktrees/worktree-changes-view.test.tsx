@@ -466,6 +466,51 @@ describe("WorktreeChangesView", () => {
     expect(state.opCalls.filter((call) => call.kind === "gitLog" && call.enabled).every((call) => call.scope === undefined)).toBe(true);
   });
 
+  test("vs main asks for the branch diff and hides every revert action; Remove worktree no longer reads it as dirty (OS-2596)", () => {
+    onlineWorktree(JSON.parse(ONE_FILE_PATCH).patch);
+    state.profile = { ...state.profile, appVersion: "0.177.0" };
+    mobile.value = false;
+    state.opCalls = [];
+    const lastChanges = () => state.opCalls.filter((call) => call.kind === "worktreeChanges" && call.enabled).at(-1);
+    render(<WorktreeChangesView profileId={"profile_1" as Id<"cliProfiles">} pathId="path_1" />);
+
+    expect(screen.getByRole("button", { name: "Uncommitted" }).getAttribute("aria-pressed")).toBe("true");
+    expect(lastChanges()?.scope).toBeUndefined();
+    expect(screen.getByRole("button", { name: "Revert a.txt" })).toBeTruthy();
+    fireEvent.click(screen.getByRole("button", { name: "vs main" }));
+
+    expect(screen.getByRole("button", { name: "vs main" }).getAttribute("aria-pressed")).toBe("true");
+    expect(lastChanges()?.scope).toBe("branch");
+    expect(screen.queryByRole("button", { name: "Revert a.txt" })).toBeNull();
+    expect(screen.queryByRole("button", { name: "Revert all" })).toBeNull();
+    expect(screen.getByRole("button", { name: "Download a.txt" })).toBeTruthy();
+    fireEvent.contextMenu(screen.getByRole("button", { name: /^a\.txt/ }));
+    expect(screen.queryByRole("menuitem", { name: "Revert" })).toBeNull();
+    fireEvent.keyDown(document.activeElement ?? document.body, { key: "Escape" });
+    fireEvent.pointerDown(screen.getByRole("button", { name: "More actions" }), { button: 0, ctrlKey: false });
+    expect(screen.getByRole("menuitem", { name: /Remove worktree/ }).getAttribute("aria-disabled")).toBeNull();
+    mobile.value = true;
+  });
+
+  test("vs main with nothing changed says so (OS-2596)", () => {
+    onlineWorktree("");
+    state.profile = { ...state.profile, appVersion: "0.177.0" };
+    render(<WorktreeChangesView profileId={"profile_1" as Id<"cliProfiles">} pathId="path_1" />);
+    expect(screen.getByText("No uncommitted changes.")).toBeTruthy();
+
+    fireEvent.click(screen.getByRole("button", { name: "vs main" }));
+
+    expect(screen.getByText("No changes against the default branch.")).toBeTruthy();
+  });
+
+  test("a CLI without the branch diff gets no Changes scope switch (OS-2596)", () => {
+    onlineWorktree(JSON.parse(ONE_FILE_PATCH).patch);
+    state.profile = { ...state.profile, appVersion: "0.176.0" };
+    render(<WorktreeChangesView profileId={"profile_1" as Id<"cliProfiles">} pathId="path_1" />);
+
+    expect(screen.queryByRole("group", { name: "Changes scope" })).toBeNull();
+  });
+
   test("a main checkout has no header menu (OS-2459)", () => {
     onlineWithOneFile();
     render(<WorktreeChangesView profileId={"profile_1" as Id<"cliProfiles">} pathId="path_1" />);

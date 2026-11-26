@@ -112,6 +112,24 @@ describe("useWorktreeOp", () => {
     await waitFor(() => expect(state.enqueue).toHaveBeenCalledTimes(2));
   });
 
+  test("coming back to a key before the other key's op settles loads afresh, not the old result (OS-2596 review)", async () => {
+    state.enqueue.mockResolvedValueOnce("op_1").mockResolvedValueOnce("op_2").mockResolvedValueOnce("op_3");
+    const { result, rerender } = render();
+    await waitFor(() => expect(state.enqueue).toHaveBeenCalledTimes(1));
+    state.op = opRow({ status: "done", resultJson: '{"patch":"a"}' });
+    rerender({ pathId: "path_a" });
+    await waitFor(() => expect(result.current.resultJson).toBe('{"patch":"a"}'));
+
+    state.op = undefined;
+    rerender({ pathId: "path_b" });
+    await waitFor(() => expect(state.enqueue).toHaveBeenCalledTimes(2));
+    rerender({ pathId: "path_a" });
+
+    expect(result.current.resultJson).toBeUndefined();
+    expect(result.current.loading).toBe(true);
+    await waitFor(() => expect(state.enqueue).toHaveBeenCalledTimes(3));
+  });
+
   test("a file path is sent with the op and keys the result (OS-2041)", async () => {
     state.enqueue.mockResolvedValueOnce("op_1").mockResolvedValueOnce("op_2");
     const { result, rerender } = renderHook(

@@ -14,7 +14,7 @@ interface WorktreeFileTreeProps {
   onSelectFile: (path: string) => void;
   /** Right-click "Open file" (OS-2041); absent when the CLI cannot read from disk. */
   onOpenFile?: (path: string) => void;
-  /** Right-click "Revert" (OS-2043); disabled while `reverting`. */
+  /** Right-click "Revert" (OS-2043), absent without it; disabled while `reverting`. */
   onRevertFile?: (file: CliRunDiffFile) => void;
   reverting?: boolean;
   /** Right-click "Download" (OS-2050); absent when the CLI cannot upload. */
@@ -143,10 +143,12 @@ function TreeRow({
               <Download />
               Download
             </ContextMenuItem>
-            <ContextMenuItem disabled={!onRevertFile || reverting} onSelect={() => onRevertFile?.(file)}>
-              <RotateCcw />
-              Revert
-            </ContextMenuItem>
+            {onRevertFile && (
+              <ContextMenuItem disabled={reverting} onSelect={() => onRevertFile(file)}>
+                <RotateCcw />
+                Revert
+              </ContextMenuItem>
+            )}
           </ContextMenuContent>
         </ContextMenu>
       </li>

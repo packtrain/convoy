@@ -10,6 +10,7 @@ import { splitPath } from "@/components/custom/diff/patch-file-sections";
 import { parseFileOpResult, parseRunPatchFiles, splitRunPatch } from "@/lib/threads/run-diff-patch";
 import { downloadFile } from "@/lib/tasks/files";
 import {
+  supportsBranchChanges,
   supportsWorktreeChanges,
   supportsWorktreeDownload,
   supportsWorktreeOpenFile,
@@ -28,6 +29,9 @@ interface FileOpOutcome {
   downloadUrl?: string;
 }
 
+/** `branch` is "vs main": everything since the fork from the default branch (OS-2596). */
+export type ChangesScope = "uncommitted" | "branch";
+
 /**
  * State and actions of one checkout's uncommitted changes, shared by the
  * full-page view and the thread sidebar panel (docs/specs/cli-worktrees.md).
@@ -37,10 +41,14 @@ export function useWorktreeChanges(profileId: Id<"cliProfiles">, pathId: string)
   const entry = profile?.paths.find((path) => path.id === pathId);
   const isOnline = profile?.isOnline ?? false;
   const cliSupported = supportsWorktreeChanges(profile?.appVersion);
+  const canScope = supportsBranchChanges(profile?.appVersion);
+  const [pickedScope, setScope] = useState<ChangesScope>("uncommitted");
+  const scope: ChangesScope = canScope ? pickedScope : "uncommitted";
   const changes = useWorktreeOp({
     profileId,
     pathId,
     kind: "worktreeChanges",
+    scope: scope === "branch" ? "branch" : undefined,
     enabled: isOnline && cliSupported && entry !== undefined,
   });
   // `null` is the Changes tab; file tabs hold their path.
@@ -177,12 +185,18 @@ export function useWorktreeChanges(profileId: Id<"cliProfiles">, pathId: string)
   };
   const requestDownload = (path: string) => runFileOp("downloadFile", path);
 
-  const canRevertAll = supportsWorktreeRevertAll(profile?.appVersion);
+  // Reverting only undoes uncommitted work, so vs main has no revert.
+  const canRevert = scope === "uncommitted";
+  const canRevertAll = canRevert && supportsWorktreeRevertAll(profile?.appVersion);
   return {
     profile,
     entry,
     isOnline,
     cliSupported,
+    canScope,
+    scope,
+    setScope,
+    canRevert,
     changes,
     parsed,
     sections,

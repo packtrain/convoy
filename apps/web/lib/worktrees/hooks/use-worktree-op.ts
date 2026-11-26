@@ -105,6 +105,10 @@ export function useWorktreeOp(args: {
     setPending(null);
   }
 
+  // Another key's outcome is stale by the time its key comes back: forget it (OS-2596 review).
+  if (settled && settled.key !== key) {
+    setSettled(null);
+  }
   const current = settled?.key === key ? settled : null;
   const refresh = useCallback(() => setGeneration((value) => value + 1), []);
 

@@ -29,7 +29,7 @@ import { useWorktreeChanges } from "@/lib/worktrees/hooks/use-worktree-changes";
 import { useHistoryLayout, useWorktreeHistory } from "@/lib/worktrees/hooks/use-worktree-history";
 import { useWorktreeRemoval } from "@/lib/worktrees/hooks/use-worktree-removal";
 import { cn } from "@/lib/utils";
-import { ChangesSummary, RevertAllButton, WorktreeChangesBody, useSectionCollapse } from "./worktree-changes-body";
+import { ChangesScopeToggle, ChangesSummary, RevertAllButton, WorktreeChangesBody, useSectionCollapse } from "./worktree-changes-body";
 import { HistoryLayoutToggle, type HistoryScope, HistoryScopeToggle, WorktreeHistoryView } from "./worktree-history";
 import { RemoveWorktreeDialog } from "./worktree-remove-dialog";
 import { RevertAllDialog, RevertFileDialog } from "./worktree-revert-dialogs";
@@ -128,6 +128,8 @@ function ChangesViewForCheckout({ profileId, pathId }: WorktreeChangesViewProps)
 
   const title = entry ? (entry.kind === "worktree" ? (entry.branch ?? entry.label) : entry.label) : "Changes";
   const hasFiles = sections !== null && files.length > 0;
+  // Only uncommitted files block removal; vs main leaves the check to the CLI.
+  const dirty = hasFiles && state.scope === "uncommitted";
   const onHistory = tab === "history";
   const phoneCommit = isMobile && onHistory && target?.commit != null;
   const noDiffShown = onHistory && !historyDiffShown;
@@ -200,13 +202,13 @@ function ChangesViewForCheckout({ profileId, pathId }: WorktreeChangesViewProps)
                       {/* The CLI refuses a dirty worktree; the patch on screen says so up front. */}
                       <DropdownMenuItem
                         variant="destructive"
-                        disabled={hasFiles || removal.removingPathId !== null}
+                        disabled={dirty || removal.removingPathId !== null}
                         onSelect={() => setConfirmRemove(true)}
                       >
                         <Trash2 />
                         <span className="flex flex-col">
                           Remove worktree
-                          {hasFiles && <span className="text-xs text-muted-foreground">Commit or revert changes first</span>}
+                          {dirty && <span className="text-xs text-muted-foreground">Commit or revert changes first</span>}
                         </span>
                       </DropdownMenuItem>
                     </DropdownMenuContent>
@@ -238,6 +240,7 @@ function ChangesViewForCheckout({ profileId, pathId }: WorktreeChangesViewProps)
             {isOnline && !onHistory && <RevertAllButton state={state} />}
             <div className="ml-auto flex items-center gap-1">
               {onHistory && !phoneCommit && canScope && isOnline && <HistoryScopeToggle value={scope} onChange={changeScope} />}
+              {!onHistory && isOnline && <ChangesScopeToggle state={state} />}
               {/* The diff toggles only while a diff is on screen, left of List | Graph so it never moves. */}
               {!noDiffShown && (
                 <ChangesViewToggles
@@ -269,7 +272,7 @@ function ChangesViewForCheckout({ profileId, pathId }: WorktreeChangesViewProps)
               selectedPath={selectedPath}
               onSelectFile={selectFile}
               onOpenFile={state.canOpenFile ? state.openFile : undefined}
-              onRevertFile={state.setRevertTarget}
+              onRevertFile={state.canRevert ? state.setRevertTarget : undefined}
               reverting={state.busy}
               onDownloadFile={state.canDownload && !state.busy ? state.requestDownload : undefined}
             />

@@ -90,6 +90,21 @@ async function resolveFirst(cwd: string, refs: string[]): Promise<{ ref: string;
   return null;
 }
 
+async function defaultBranches(cwd: string): Promise<{ ref: string; hash: string }[]> {
+  return (await Promise.all(DEFAULT_BRANCH_REFS.map((refs) => resolveFirst(cwd, refs)))).filter((base) => base !== null);
+}
+
+/** The default branches the branch scope leaves out; on the default branch itself only origin's copy, so what's left is unpushed. */
+async function branchBases(cwd: string): Promise<{ ref: string; hash: string }[]> {
+  const [found, branch] = await Promise.all([defaultBranches(cwd), runGit(cwd, ["symbolic-ref", "-q", "HEAD"], { allowNonZeroExit: true })]);
+  return found.filter((base) => base.ref !== branch.stdout.trim());
+}
+
+/** Where HEAD left the default branch, or undefined with no commits or no default branch (OS-2596: Changes "vs main"). */
+export async function findBranchFork(cwd: string): Promise<ForkPoint | undefined> {
+  return (await resolveCommit(cwd, "HEAD")) ? findFork(cwd, await branchBases(cwd)) : undefined;
+}
+
 /** The default branch HEAD has the fewest own commits against; local first on a tie. */
 async function findFork(cwd: string, bases: { ref: string; hash: string }[]): Promise<ForkPoint | undefined> {
   const counts = await Promise.all(
@@ -136,15 +151,12 @@ export async function listCommits(
     if (!head) {
       return { commits: [] };
     }
-    const found = (await Promise.all(DEFAULT_BRANCH_REFS.map((refs) => resolveFirst(cwd, refs)))).filter((base) => base !== null);
     if (scope === "branch") {
-      // On the default branch itself only origin's copy is excluded: what's left is unpushed.
-      const branch = await runGit(cwd, ["symbolic-ref", "-q", "HEAD"], { allowNonZeroExit: true });
-      const bases = found.filter((base) => base.ref !== branch.stdout.trim());
+      const bases = await branchBases(cwd);
       fork = await findFork(cwd, bases);
       tips = [...new Set([head, ...bases.map((base) => `^${base.hash}`)])];
     } else {
-      tips = [...new Set([head, ...found.map((base) => base.hash)])];
+      tips = [...new Set([head, ...(await defaultBranches(cwd)).map((base) => base.hash)])];
     }
   }
   const result = await runGit(

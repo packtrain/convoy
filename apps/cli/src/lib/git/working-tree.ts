@@ -73,15 +73,15 @@ export async function readWorkingFileBytes(cwd: string, filePath: string): Promi
 }
 
 /**
- * Uncommitted changes of a checkout as one unified patch against HEAD,
- * untracked files included (OS-2036, docs/specs/cli-worktrees.md → Worktree
- * changes view). Same byte cap and `truncated` flag as `diffBetweenRefs`.
+ * Uncommitted changes of a checkout as one unified patch against HEAD, or
+ * against the commit `base` (OS-2596), untracked files included (OS-2036,
+ * docs/specs/cli-worktrees.md → Worktree changes). Same byte cap and `truncated` flag as `diffBetweenRefs`.
  */
-export async function diffWorkingTree(cwd: string): Promise<FileDiff> {
+export async function diffWorkingTree(cwd: string, base?: string): Promise<FileDiff> {
   const patch = await withWorkingTreeIndex(cwd, async (env) => {
     // --cached compares the temp index with HEAD (or the empty tree on an
     // unborn branch), so untracked files show as additions.
-    const result = await runGit(cwd, [...DIFF_ARGS, "--cached"], { env, timeoutMs: CAPTURE_TIMEOUT_MS });
+    const result = await runGit(cwd, [...DIFF_ARGS, "--cached", ...(base ? [base] : [])], { env, timeoutMs: CAPTURE_TIMEOUT_MS });
     return result.stdout;
   });
   const capped = capFileOpText(patch);

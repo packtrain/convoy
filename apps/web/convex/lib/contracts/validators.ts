@@ -1034,7 +1034,7 @@ export const cliWorktreeOpKindValidator = v.union(
   v.literal("commitPatch")
 );
 export type CliWorktreeOpKind = Infer<typeof cliWorktreeOpKindValidator>;
-/** gitLog's `branch` scope: HEAD's commits no default branch has (OS-2595). */
+/** `branch` scope: gitLog walks HEAD's commits no default branch has (OS-2595); worktreeChanges diffs from the fork point (OS-2596). */
 export const cliHistoryScopeValidator = v.literal("branch");
 export type CliHistoryScope = Infer<typeof cliHistoryScopeValidator>;
 

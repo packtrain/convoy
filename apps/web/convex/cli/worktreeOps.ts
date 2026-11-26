@@ -210,6 +210,7 @@ export const enqueue = mutation({
       ...(args.kind === "revertWorkingTree" ? { filePaths: args.filePaths } : {}),
       ...(args.kind === "searchFiles" ? { query: args.query } : {}),
       ...(args.kind === "gitLog" ? { cursor: args.cursor, scope: args.scope } : {}),
+      ...(args.kind === "worktreeChanges" ? { scope: args.scope } : {}),
       ...(args.kind === "commitPatch" ? { postRef: args.postRef } : {}),
       status: "pending",
       createdAt: now,
