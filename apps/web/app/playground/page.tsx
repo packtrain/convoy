@@ -8,6 +8,11 @@ interface PlaygroundLink {
 
 const ACTIVE_PLAYGROUNDS: PlaygroundLink[] = [
   {
+    href: "/playground/code-change-published",
+    title: "Code change published",
+    description: "Claude's PR-published event as a quiet row, a PR card, or a transcript milestone, next to today's JSON notice (OS-2611).",
+  },
+  {
     href: "/playground/tui-layout",
     title: "TUI layout",
     description: "Proposed terminal layout with titled panes, scope tabs, a command palette and a key reference, drawn at 110×34 and 80×24 next to frames from today's TUI (OS-2547).",

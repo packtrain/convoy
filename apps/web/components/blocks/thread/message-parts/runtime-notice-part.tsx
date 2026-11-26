@@ -2,8 +2,10 @@
 
 import {
   AlertTriangle,
+  ArrowUpRight,
   Crosshair,
   Gauge,
+  GitBranch,
   RefreshCw,
 } from "lucide-react";
 import type { LucideIcon } from "lucide-react";
@@ -11,7 +13,9 @@ import { Shimmer } from "@/components/ai-elements/shimmer";
 import { Marker, MarkerContent } from "@/components/ui/marker";
 import { AppLink, appRoute, href, useRouteParams } from "@/lib/navigation";
 import type { RuntimeNoticePart as RuntimeNoticePartModel } from "@/lib/cli-stream-ui";
-import { formatJsonString } from "@/lib/cli-stream-ui/runtime-notices";
+import { formatJsonString, parseNoticePayload } from "@/lib/cli-stream-ui/runtime-notices";
+import { getThreadPullRequestPresentation } from "@/lib/threads/pull-request";
+import { cn } from "@/lib/utils";
 import { CollapsibleToolPart } from "./components/collapsible-tool-part";
 import { ToolSurface } from "./components/tool-surface";
 
@@ -79,9 +83,47 @@ function WorktreeSetupUnapprovedNotice({ part }: RuntimeNoticePartProps) {
   );
 }
 
+const OPEN_PR = getThreadPullRequestPresentation("open");
+const str = (value: unknown) => (typeof value === "string" && value ? value : undefined);
+
+/** Claude's `code_change_published`, from the event alone (docs/specs/cli-sdk-integration.md). */
+function CodeChangePublishedNotice({ payload }: { payload: Record<string, unknown> }) {
+  const url = str(payload.url);
+  const repo = str(payload.repo);
+  const identifier = str(payload.identifier);
+  const branch = str(payload.branch);
+  return (
+    <div className="flex w-full min-w-0 items-center gap-2 text-sm text-muted-foreground">
+      <OPEN_PR.icon aria-hidden="true" className={cn("size-3.5 shrink-0", OPEN_PR.colorClass)} />
+      <span className="shrink-0">{payload.action === "created" ? "Opened" : "Published"} pull request</span>
+      <a
+        href={url}
+        target="_blank"
+        rel="noreferrer"
+        className="inline-flex h-6 min-w-0 items-center gap-1 rounded-md border border-border bg-muted/50 px-1.5 text-foreground no-underline hover:bg-muted"
+      >
+        <span className="min-w-0 truncate font-medium">{repo ?? url}</span>
+        {identifier && <span className="shrink-0 text-xs font-medium text-muted-foreground tabular-nums">#{identifier}</span>}
+        <ArrowUpRight aria-hidden="true" className="size-3 shrink-0 text-muted-foreground" />
+      </a>
+      {branch && (
+        <span className="hidden min-w-0 items-center gap-1 font-mono text-xs sm:inline-flex">
+          <GitBranch aria-hidden="true" className="size-3 shrink-0" />
+          <span className="truncate">{branch}</span>
+        </span>
+      )}
+    </div>
+  );
+}
+
 export function RuntimeNoticePart({ part }: RuntimeNoticePartProps) {
   if (part.code === "worktree-setup-unapproved") {
     return <WorktreeSetupUnapprovedNotice part={part} />;
+  }
+
+  if (part.code === "claude-code-change-published") {
+    const { payload } = parseNoticePayload(part);
+    if (payload && str(payload.url)) return <CodeChangePublishedNotice payload={payload} />;
   }
 
   if (part.code === "context-compaction") {
