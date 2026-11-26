@@ -987,6 +987,29 @@ describe("WorktreeHistoryView, UX review OS-2535 OS-2536 round 1", () => {
     expect(cell?.classList.contains("justify-end")).toBe(true);
   });
 
+  test("a row's refs open a menu of every ref; picking one copies its name without opening the commit (OS-2586)", async () => {
+    const writeText = vi.fn().mockResolvedValue(undefined);
+    Object.defineProperty(navigator, "clipboard", { value: { writeText }, configurable: true });
+    ops.answer = (args) =>
+      args.kind === "gitLog"
+        ? done({ commits: [{ ...commit("f", "tip"), refs: ["HEAD -> feature", "origin/main", "origin/HEAD", "tag: v1"] }] })
+        : done(PATCH("f.txt"));
+    render(<Harness layout="graph" />);
+
+    fireEvent.pointerDown(screen.getByRole("button", { name: `Copy a ref of ${hash("f").slice(0, 7)}` }), { button: 0, ctrlKey: false });
+    expect(screen.getByText(`Branches and tags at ${hash("f").slice(0, 7)}`)).toBeTruthy();
+    // Plain names, no badges: a badge shrinks the text and restyles on hover.
+    expect(screen.getAllByRole("menuitem").map((item) => item.textContent)).toEqual(["feature", "origin/main", "v1"]);
+    expect(screen.getAllByRole("menuitem").every((item) => item.querySelector("[title]") === null)).toBe(true);
+    fireEvent.click(screen.getByRole("menuitem", { name: "origin/main" }));
+
+    await vi.waitFor(() => expect(toast.success).toHaveBeenCalledWith("origin/main copied to clipboard"));
+    expect(writeText).toHaveBeenCalledWith("origin/main");
+    expect(screen.queryByRole("button", { name: "Close commit" })).toBeNull();
+    // Focus goes back to the row, so the arrow keys keep moving through the list.
+    await vi.waitFor(() => expect(document.activeElement).toBe(screen.getByRole("option", { name: /^tip/ })));
+  });
+
   test("the view reports whether a diff is on screen, for the host's diff toggles (CR UX fixes #1)", () => {
     const reports: boolean[] = [];
     render(<Harness onDiffShownChange={(shown) => reports.push(shown)} />);

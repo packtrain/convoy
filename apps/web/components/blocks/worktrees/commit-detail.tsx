@@ -21,6 +21,10 @@ export const visibleRefs = (commit: CommitSummary) => commit.refs.filter((ref) =
 export const emptyCommitMessage = (merge: boolean) =>
   merge ? "Merge commit with no conflict resolutions to show." : "This commit changes no files.";
 
+/** The branch or tag a `%D` entry names, as its badge shows it. */
+export const refName = (ref: string) =>
+  ref.startsWith("HEAD -> ") ? ref.slice("HEAD -> ".length) : ref.startsWith("tag: ") ? ref.slice("tag: ".length) : ref;
+
 export function RefBadge({ name, className }: { name: string; className?: string }) {
   const head = name.startsWith("HEAD -> ");
   const tag = name.startsWith("tag: ");
@@ -38,7 +42,7 @@ export function RefBadge({ name, className }: { name: string; className?: string
       title={name}
     >
       {tag && <Tag className="size-2.5 shrink-0" aria-hidden />}
-      <span className="truncate">{head ? name.slice("HEAD -> ".length) : tag ? name.slice("tag: ".length) : name}</span>
+      <span className="truncate">{refName(name)}</span>
     </span>
   );
 }

@@ -1,9 +1,11 @@
 "use client";
 
 import { useEffect, useMemo, useRef, useState, type KeyboardEvent, type ReactNode } from "react";
-import { ArrowLeft, GitCommitHorizontal, GitGraph, GitMerge, List } from "lucide-react";
+import { ArrowLeft, GitBranch, GitCommitHorizontal, GitGraph, GitMerge, List, Tag } from "lucide-react";
+import { toast } from "sonner";
 import type { Id } from "@/convex/_generated/dataModel";
 import { Button } from "@/components/ui/button";
+import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuLabel, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Spinner } from "@/components/custom/spinner";
 import { TooltipExt } from "@/components/custom/tooltip-ext";
@@ -18,7 +20,7 @@ import type { CommitSummary, WorktreeHistory } from "@/lib/worktrees/hooks/use-w
 import { cn } from "@/lib/utils";
 import { ErrorWithRetry, Message } from "./worktree-changes-body";
 import { GraphCell, graphWidth } from "./commit-graph";
-import { CommitDetail, CommitDetailSkeleton, type DiffOptions, RefBadge, short, visibleRefs } from "./commit-detail";
+import { CommitDetail, CommitDetailSkeleton, type DiffOptions, RefBadge, refName, short, visibleRefs } from "./commit-detail";
 import { COMMIT_SIDEBAR_RESIZE_BOUNDS, CommitDiffPane, CommitSidebar, CommitSidebarHeader, CommitSidebarSkeleton } from "./commit-sidebar";
 
 const ROW_HEIGHT = 52;
@@ -111,6 +113,61 @@ function optionProps({ commit, selected, tabbable, onSelect, onFocus }: RowProps
   } as const;
 }
 
+const copyRef = async (name: string) => {
+  // Throws where `navigator.clipboard` is absent (plain-HTTP self-hosting) or denied.
+  try {
+    await navigator.clipboard.writeText(name);
+    toast.success(`${name} copied to clipboard`);
+  } catch {
+    toast.error(`Failed to copy ${name}`);
+  }
+};
+
+/**
+ * A row's badges open a menu of all its refs; picking one copies it (OS-2586).
+ * A span, not a button: it sits inside the row's option button, so it stops the click that would open the commit.
+ */
+function RefsMenu({ commit, className, children }: { commit: CommitSummary; className?: string; children: ReactNode }) {
+  const triggerRef = useRef<HTMLSpanElement>(null);
+  return (
+    <DropdownMenu>
+      <DropdownMenuTrigger asChild>
+        <span
+          ref={triggerRef}
+          role="button"
+          tabIndex={-1}
+          aria-label={`Copy a ref of ${short(commit.hash)}`}
+          className={cn("cursor-pointer rounded-sm hover:bg-background", className)}
+          onClick={(event) => event.stopPropagation()}
+        >
+          {children}
+        </span>
+      </DropdownMenuTrigger>
+      {/* React bubbles portal events to the row: a pick must not open the commit. Focus goes back to the row for arrow keys. */}
+      <DropdownMenuContent
+        align="start"
+        className="w-auto max-w-80"
+        onClick={(event) => event.stopPropagation()}
+        onCloseAutoFocus={(event) => {
+          event.preventDefault();
+          triggerRef.current?.closest<HTMLElement>("[role=option]")?.focus();
+        }}
+      >
+        <DropdownMenuLabel>Branches and tags at {short(commit.hash)}</DropdownMenuLabel>
+        {visibleRefs(commit).map((ref) => {
+          const Icon = ref.startsWith("tag: ") ? Tag : GitBranch;
+          return (
+            <DropdownMenuItem key={ref} onSelect={() => void copyRef(refName(ref))}>
+              <Icon className="text-muted-foreground" />
+              <span className="truncate">{refName(ref)}</span>
+            </DropdownMenuItem>
+          );
+        })}
+      </DropdownMenuContent>
+    </DropdownMenu>
+  );
+}
+
 /** Two-line row; the Graph layout swaps the commit icon for the graph column and drops the row borders. */
 function CommitRow(props: RowProps) {
   const { commit, graph, selected } = props;
@@ -146,9 +203,13 @@ function CommitRow(props: RowProps) {
             {formatCompactRelativeTime(commit.committedAt)}
           </span>
           <span className="shrink-0 font-mono">{short(commit.hash)}</span>
-          {visibleRefs(commit).map((ref) => (
-            <RefBadge key={ref} name={ref} />
-          ))}
+          {visibleRefs(commit).length > 0 && (
+            <RefsMenu commit={commit} className="flex min-w-0 items-center gap-1.5">
+              {visibleRefs(commit).map((ref) => (
+                <RefBadge key={ref} name={ref} />
+              ))}
+            </RefsMenu>
+          )}
         </span>
       </span>
     </button>
@@ -171,12 +232,16 @@ function TableRow(props: RowProps & { graph: NonNullable<RowGraph> }) {
       className={cn("group grid w-full items-center gap-3 pr-3 pl-2 text-xs", ROW_CLASS, selected && SELECTED_CLASS)}
     >
       {/* One badge fits, the rest a count whose title names them; right-aligned against the graph. */}
-      <span data-refs className="flex min-w-0 items-center justify-end gap-1">
-        {first && <RefBadge name={first} className="max-w-full" />}
-        {rest.length > 0 && (
-          <span className="shrink-0 text-[11px] text-muted-foreground" title={rest.join(", ")}>
-            +{rest.length}
-          </span>
+      <span data-refs className="flex min-w-0 items-center justify-end">
+        {first && (
+          <RefsMenu commit={commit} className="flex min-w-0 items-center gap-1">
+            <RefBadge name={first} className="max-w-full" />
+            {rest.length > 0 && (
+              <span className="shrink-0 text-[11px] text-muted-foreground" title={rest.join(", ")}>
+                +{rest.length}
+              </span>
+            )}
+          </RefsMenu>
         )}
       </span>
       <GraphCell row={graph.row} hash={commit.hash} parents={commit.parents} lanes={graph.lanes} height={TABLE_ROW_HEIGHT} head={isHead(commit)} selected={selected} />

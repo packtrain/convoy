@@ -199,13 +199,19 @@ Two read-only kinds for any path entry, on the 10-minute file-op TTL. The CLI
 side lives in `apps/cli/src/lib/git/history.ts`.
 
 - `{ kind: "gitLog", pathId, cursor? }` returns `resultJson = { commits,
-  nextCursor? }`: 50 commits of `git log --topo-order HEAD <default>`, newest
-  first. `<default>` is the repo's default branch (OS-2536): the first of
+  nextCursor? }`: 50 commits of `git log --topo-order HEAD <origin default>
+  <local default>`, newest first. `<origin default>` is the first of
   `refs/remotes/origin/HEAD`, `origin/main` and `origin/master` that resolves
-  to a commit, left out when none does or when it is `HEAD`'s commit. A local
-  `main` is not one. So a worktree shows its branch splitting off the default
-  branch and merging back, and the main checkout shows the default branch plus
-  unpushed commits. Other branches stay hidden; their names can still show as
+  to a commit (OS-2536); `<local default>` is the first of `refs/heads/main`
+  and `refs/heads/master` (OS-2586). Each is left out when none resolves or
+  when it is the same commit as an earlier tip. Both are walked because Convoy
+  doesn't store which ref a worktree was created from: `createWorktree`
+  branches from local `main` by default, or from `origin/main` when
+  `startFromOrigin` fetches first. So a worktree shows its branch splitting
+  off the default branch and merging back: when local `main` has moved on, it
+  gets its own lane that joins the branch at the fork point, and when it
+  hasn't, its ref badge sits on the commit the branch started from. The main
+  checkout shows the default branch plus unpushed commits. Other branches stay hidden; their names can still show as
   ref badges on commits in the walk. Both layouts get the same pages. Git's
   topo order puts the tip with the newer commit first, so commits on the
   default branch newer than `HEAD` come above it, and a branch far behind a
@@ -221,8 +227,8 @@ side lives in `apps/cli/src/lib/git/history.ts`.
   it, the page ends early and `nextCursor` resumes after the last commit
   returned. The parents and
   refs are there for the commit graph (OS-2536), so the graph needs no new
-  request. `nextCursor` is `<tip>[,<tip>]:<skip>` (`HEAD`, then the default
-  branch), present when more commits follow. Later pages walk from the first
+  request. `nextCursor` is `<tip>[,<tip>[,<tip>]]:<skip>` (`HEAD`, then the
+  origin and local default branches), present when more commits follow. Later pages walk from the first
   page's tips, so commits made or fetched while the user pages don't shift or
   repeat rows. `enqueue` and the CLI both reject
   any other cursor shape. An unborn branch returns `{ commits: [] }`.
@@ -249,8 +255,9 @@ side lives in `apps/cli/src/lib/git/history.ts`.
 
 A CLI older than 0.171.0 fails both kinds with `Unsupported operation`, and the
 web shows an update prompt instead of enqueueing. A CLI older than 0.172.0
-walks `HEAD` only; the graph draws that as one lane, so there is no version
-gate for the default branch. There is no `convoy`
+walks `HEAD` only, and one older than 0.175.0 leaves out the local default
+branch; the graph draws whatever tips it gets, so there is no version gate for
+either. There is no `convoy`
 command for history: anyone at the terminal already has `git log`.
 
 ### Revert a working file (OS-2043)
@@ -631,7 +638,12 @@ every row, header included, past a phone viewport. The right pane is the file tr
   two lines: subject, then author (cut at 8rem), relative time, short hash
   and ref badges (the `HEAD ->` branch highlighted, a tag as a tag icon and
   its name; badges shrink before the author does); a merge row has a merge
-  icon and a muted subject. The open row has `bg-muted` and a 2px primary
+  icon and a muted subject. Clicking a row's badges, in either layout, opens
+  a menu titled "Branches and tags at <short hash>" instead of the commit
+  (OS-2586): every ref as plain text with a branch or tag icon, no badges.
+  Picking one copies its name (the branch for `HEAD -> x`, the tag for
+  `tag: x`) and toasts "<name> copied to clipboard". The trigger is a `role="button"` span inside the row's
+  option, out of the Tab order; closing the menu puts focus back on the row. The open row has `bg-muted` and a 2px primary
   bar on its left edge. `origin/HEAD` (that exact ref) gets no badge, since
   it repeats the default branch's. A row's accessible name is its subject (cut at 120
   characters), its refs in words (`HEAD, branch main`, `remote branch origin/main`,
@@ -727,7 +739,8 @@ every row, header included, past a phone viewport. The right pane is the file tr
     row scrolls to the middle of the list. With no `HEAD` in reach the first
     row opens. Graph in a History pane of 900px or more is a table that
     fills the pane, with the columns Refs (up to 180px: the first ref badge,
-    then "+N" whose title names the rest, right-aligned against the graph),
+    then "+N" whose title names the rest, right-aligned against the graph;
+    both open the copy menu with every ref),
     Graph, Description (at least
     160px), Date (up to 150px, the year only outside the current one),
     Author (up to 120px) and Commit, 28px rows under a sticky header; Refs,

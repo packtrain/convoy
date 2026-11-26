@@ -100,6 +100,7 @@ describe("git history (real git)", () => {
     it("falls back to origin/main, then origin/master, when origin/HEAD is missing", async () => {
       const mainTip = await branchWithMergeFromMain();
       await runGit(repo, ["update-ref", "refs/remotes/origin/master", mainTip]);
+      await runGit(repo, ["branch", "-q", "-D", "main"]);
 
       expect((await listCommits(repo)).commits.map((entry) => entry.subject)).toContain("main again");
     });
@@ -110,6 +111,7 @@ describe("git history (real git)", () => {
       await runGit(repo, ["update-ref", "refs/remotes/origin/master", base]);
       await runGit(repo, ["update-ref", "refs/remotes/origin/main", mainTip]);
       await runGit(repo, ["update-ref", "refs/remotes/origin/develop", "main~1"]);
+      await runGit(repo, ["branch", "-q", "-D", "main"]);
       const subjects = async () => (await listCommits(repo)).commits.map((entry) => entry.subject);
 
       expect(await subjects()).toContain("main again");
@@ -139,10 +141,35 @@ describe("git history (real git)", () => {
       expect(commits.find((entry) => entry.subject === "f1")?.refs).toEqual(["HEAD -> feature"]);
     });
 
-    it("shows HEAD alone without a remote default branch; a local main is not one", async () => {
+    it("adds local main, then master, so commits on it past the fork point show (OS-2586)", async () => {
       await branchWithMergeFromMain();
 
-      expect((await listCommits(repo)).commits.map((entry) => entry.subject)).not.toContain("main again");
+      expect((await listCommits(repo)).commits.map((entry) => entry.subject)).toContain("main again");
+      await runGit(repo, ["branch", "-q", "-m", "main", "master"]);
+      expect((await listCommits(repo)).commits.map((entry) => entry.subject)).toContain("main again");
+    });
+
+    it("walks HEAD, origin's default branch and local main, skipping a tip on the same commit (OS-2586)", async () => {
+      for (let index = 0; index < COMMIT_PAGE_SIZE; index++) {
+        await runGit(repo, [...IDENTITY, "commit", "-q", "--allow-empty", "-m", `c${index}`]);
+      }
+      const remoteTip = (await runGit(repo, ["rev-parse", "HEAD"])).stdout.trim();
+      await runGit(repo, ["update-ref", "refs/remotes/origin/main", remoteTip]);
+      await runGit(repo, ["checkout", "-q", "-b", "feature"]);
+      await runGit(repo, [...IDENTITY, "commit", "-q", "--allow-empty", "-m", "feature"]);
+      const head = (await runGit(repo, ["rev-parse", "HEAD"])).stdout.trim();
+      await runGit(repo, ["checkout", "-q", "main"]);
+      await runGit(repo, [...IDENTITY, "commit", "-q", "--allow-empty", "-m", "local main"]);
+      const localTip = (await runGit(repo, ["rev-parse", "HEAD"])).stdout.trim();
+      await runGit(repo, ["checkout", "-q", "feature"]);
+
+      const first = await listCommits(repo);
+      expect(first.nextCursor).toBe(`${head},${remoteTip},${localTip}:${COMMIT_PAGE_SIZE}`);
+      const second = await listCommits(repo, first.nextCursor);
+      expect([...first.commits, ...second.commits]).toHaveLength(COMMIT_PAGE_SIZE + 2);
+
+      await runGit(repo, ["update-ref", "refs/remotes/origin/main", localTip]);
+      expect((await listCommits(repo)).nextCursor).toBe(`${head},${localTip}:${COMMIT_PAGE_SIZE}`);
     });
 
     it("pins both tips in the cursor, so a fetch while paging does not shift pages", async () => {

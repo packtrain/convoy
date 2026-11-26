@@ -13,10 +13,13 @@ const PAGE_HEADROOM_BYTES = 256;
 
 const HASH = "[0-9a-f]{40}(?:[0-9a-f]{24})?";
 const HASH_PATTERN = new RegExp(`^${HASH}$`);
-// `<tip>[,<tip>]:<skip>`: later pages walk from the first page's tips, so new commits don't shift them.
-const CURSOR_PATTERN = new RegExp(`^(${HASH}(?:,${HASH})?):(\\d+)$`);
-// The repo's default branch, drawn beside HEAD in the graph (OS-2536).
-const DEFAULT_BRANCH_REFS = ["refs/remotes/origin/HEAD", "refs/remotes/origin/main", "refs/remotes/origin/master"];
+// `<tip>[,<tip>[,<tip>]]:<skip>`: later pages walk from the first page's tips, so new commits don't shift them.
+const CURSOR_PATTERN = new RegExp(`^(${HASH}(?:,${HASH}){0,2}):(\\d+)$`);
+// The default branch on origin (OS-2536) and locally (OS-2586), drawn beside HEAD in the graph.
+const DEFAULT_BRANCH_REFS = [
+  ["refs/remotes/origin/HEAD", "refs/remotes/origin/main", "refs/remotes/origin/master"],
+  ["refs/heads/main", "refs/heads/master"],
+];
 const LOG_FORMAT = ["%H", "%P", "%an", "%ae", "%ct", "%D", "%s"].join("%x1f");
 
 /** Mirrored by the web in apps/web/lib/worktrees/hooks/use-worktree-history.ts. */
@@ -62,8 +65,8 @@ async function resolveCommit(cwd: string, ref: string): Promise<string | null> {
   return result.exitCode === 0 ? result.stdout.trim() : null;
 }
 
-async function resolveDefaultBranch(cwd: string): Promise<string | null> {
-  for (const ref of DEFAULT_BRANCH_REFS) {
+async function resolveFirst(cwd: string, refs: string[]): Promise<string | null> {
+  for (const ref of refs) {
     const hash = await resolveCommit(cwd, ref);
     if (hash) {
       return hash;
@@ -73,7 +76,7 @@ async function resolveDefaultBranch(cwd: string): Promise<string | null> {
 }
 
 /**
- * One page of `git log --topo-order HEAD <default branch>`; an unborn branch has no commits.
+ * One page of `git log --topo-order HEAD <origin default> <local default>`; an unborn branch has no commits.
  * ponytail: `--skip` re-walks from the tip, so a page costs O(depth); key pages by a commit if huge repos time out.
  */
 export async function listCommits(cwd: string, cursor?: string, budgetBytes = MAX_FILE_OP_BYTES): Promise<CommitPage> {
@@ -91,8 +94,8 @@ export async function listCommits(cwd: string, cursor?: string, budgetBytes = MA
     if (!head) {
       return { commits: [] };
     }
-    const base = await resolveDefaultBranch(cwd);
-    tips = base && base !== head ? [head, base] : [head];
+    const bases = await Promise.all(DEFAULT_BRANCH_REFS.map((refs) => resolveFirst(cwd, refs)));
+    tips = [...new Set([head, ...bases.filter((base) => base !== null)])];
   }
   const result = await runGit(
     cwd,
