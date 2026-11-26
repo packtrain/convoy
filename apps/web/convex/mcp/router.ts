@@ -17,13 +17,14 @@ import { parseToolCallParams } from "./lib/protocol/parsers";
 import { getToolDefinitions } from "./tools";
 import { callTool } from "./handlers";
 
-/** Link format Convoy renders as task previews (docs/specs/cli-thread-message-links.md). */
+/** Link format Convoy renders as task, artifact, and PR previews (docs/specs/cli-thread-message-links.md). */
 function taskLinkInstructions(defaultProjectParam: string): string {
   const scoped = parseScopedAliasParam(defaultProjectParam);
   if (!scoped) return "";
   const ref = `${scoped.alias.toUpperCase()}-123`;
   const taskUrl = `${getTaskUrlBase()}${href(appRoute.projectTask(scoped.orgSlug, scoped.alias, ref))}`;
-  return ` When a reply mentions a task, link it as [Task title](${taskUrl} "type=bug; status=In Progress"), with the task's type key and status from your latest tool result. Link an artifact as [Artifact name](${taskUrl}&artifact=ARTIFACT_ID "type=md"), using md for markdown artifacts and html for HTML ones. Convoy shows a link on its own line as a preview block, a list of such links as a table, and a link inside a sentence as a compact chip.`;
+  const prUrl = `${getTaskUrlBase()}${href(appRoute.projectPullRequest(scoped.orgSlug, scoped.alias, "OWNER/REPO", 123))}`;
+  return ` When a reply mentions a task, link it as [Task title](${taskUrl} "type=bug; status=In Progress"), with the task's type key and status from your latest tool result. Link an artifact as [Artifact name](${taskUrl}&artifact=ARTIFACT_ID "type=md"), using md for markdown artifacts and html for HTML ones. Link a GitHub pull request as [PR title](${prUrl} "state=open"), never as a bare github.com URL; state is open, draft, merged, or closed. Convoy shows a link on its own line as a preview block, a list of such links as a table, and a link inside a sentence as a compact chip.`;
 }
 
 /**

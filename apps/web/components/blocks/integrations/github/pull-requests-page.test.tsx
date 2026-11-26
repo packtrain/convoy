@@ -65,8 +65,8 @@ const replace = vi.fn();
 // The reader has its own tests; this file checks only what the page hands it.
 vi.mock("./pull-request-reader", async (importActual) => ({
   ...(await importActual<typeof import("./pull-request-reader")>()),
-  PullRequestReader: ({ defaultTab, onTabChange, backHref }: { defaultTab?: string; onTabChange?: (tab: string) => void; backHref?: unknown }) => (
-    <div aria-label="Reader" data-tab={defaultTab} data-back={JSON.stringify(backHref)}>
+  PullRequestReader: ({ repositoryId, defaultTab, onTabChange, backHref }: { repositoryId: string; defaultTab?: string; onTabChange?: (tab: string) => void; backHref?: unknown }) => (
+    <div aria-label="Reader" data-repository={repositoryId} data-tab={defaultTab} data-back={JSON.stringify(backHref)}>
       <button onClick={() => onTabChange?.("guide")}>Guide</button>
       <button onClick={() => onTabChange?.("overview")}>Overview</button>
     </div>
@@ -314,6 +314,18 @@ describe("PullRequestsPage", () => {
     expect(replace).toHaveBeenCalledWith(appRoute.projectPullRequest("org", "WEB", "repo_1", 2, "guide"));
     fireEvent.click(screen.getByRole("button", { name: "Overview" }));
     expect(replace).toHaveBeenLastCalledWith(appRoute.projectPullRequest("org", "WEB", "repo_1", 2));
+  });
+
+  test("a message link names the repository as owner/name; the page reads it from the project's connections", () => {
+    status = connected({ syncStatus: "synced" }, [link(2, { owner: "Contoso", name: "Convoy", syncStatus: "synced" })]);
+    locationSearch = "?repo=contoso%2Fconvoy&pr=8";
+    render(<PullRequestsPage />);
+    expect(screen.getByLabelText("Reader").dataset.repository).toBe("repo_2");
+    cleanup();
+    // An unconnected name reaches the reader as is, which shows its no-access state.
+    locationSearch = "?repo=contoso/elsewhere&pr=8";
+    render(<PullRequestsPage />);
+    expect(screen.getByLabelText("Reader").dataset.repository).toBe("contoso/elsewhere");
   });
 
   test("on a phone the reader fills the screen: the browser pane hides and the reader links back to the list (OS-2512)", () => {

@@ -222,8 +222,9 @@ export const handleAttachTaskToThread: ToolHandler = async ({ ctx, apiKey, args 
 export const handleAttachPullRequestToThread: ToolHandler = async ({ ctx, apiKey, args }) => {
   const threadId = should.beId<"cliThreads">(args, "threadId");
   const pullRequest = should.beTrimmedString(args, "pullRequest");
-  await ctx.runMutation(api.cli.threads.core.attachPullRequest, { threadId, pullRequest, apiKey });
-  return ctx.runQuery(api.cli.threads.summaries.getSummary, { threadId, apiKey });
+  const { url } = await ctx.runMutation(api.cli.threads.core.attachPullRequest, { threadId, pullRequest, apiKey });
+  const thread = await ctx.runQuery(api.cli.threads.summaries.getSummary, { threadId, apiKey });
+  return { ...thread, pullRequestReaderUrl: url };
 };
 
 export const handleMarkThreadDone: ToolHandler = async ({ ctx, apiKey, args }) => {

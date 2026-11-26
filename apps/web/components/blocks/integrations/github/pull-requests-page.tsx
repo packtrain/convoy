@@ -28,7 +28,7 @@ import { AppLink, appRoute, PULL_REQUEST_TABS, useNavigation, useRouteParams } f
 import { useCurrentOrgProject } from "@/lib/routing/current-org-project-context";
 import { NoAccess } from "@/components/blocks/no-access";
 import { PullRequestCheckIcons, usePullRequestListChecks } from "@/components/blocks/checks";
-import { toAttachedPullRequest } from "@/convex/lib/contracts/github";
+import { isSameRepository, toAttachedPullRequest } from "@/convex/lib/contracts/github";
 import { Checkbox } from "@/components/ui/checkbox";
 import { useLinkedGithubAccounts } from "./linked-github-account";
 import { PEOPLE_FILTERS, PullRequestBrowser, PullRequestBrowserSkeleton, repositoryName } from "./pull-request-browser";
@@ -66,7 +66,7 @@ export function PullRequestsPage() {
   // Live GitHub search, shared by the list and the reader pane.
   const [query, setQuery] = useState("");
   const params = new URLSearchParams(navigation.location.search);
-  const repositoryId = params.get("repo");
+  const repositoryId = resolveRepository(params.get("repo"), status);
   const number = Number(params.get("pr"));
   const tab = PULL_REQUEST_TABS.find((name) => name === params.get("tab"));
 
@@ -174,6 +174,13 @@ export function PullRequestsPage() {
       </div>
     </main>
   );
+}
+
+/** `?repo=` holds a repository ID, or `owner/name` from a message link (docs/specs/cli-thread-message-links.md). */
+function resolveRepository(repo: string | null, status: IntegrationStatus | null | undefined): string | null {
+  const [owner, name, ...rest] = repo?.split("/") ?? [];
+  if (!repo || name === undefined || rest.length) return repo;
+  return status?.connections.find((connection) => isSameRepository(connection.repository, { owner, name }))?.repositoryId ?? repo;
 }
 
 /** Mirrors the list: tabs, filter and sort (until they render), then framed two-line rows. */

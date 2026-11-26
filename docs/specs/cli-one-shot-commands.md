@@ -835,7 +835,9 @@ task outside the project) exit nonzero without a success message. Rules:
 `convoy threads attach-pr <threadId> <pullRequest> [--json]` attaches a GitHub
 PR to a thread that has none, via `api.cli.threads.core.attachPullRequest`.
 `<pullRequest>` is a github.com PR URL or `owner/repo#number`, passed through;
-the server parses it. JSON output is `{ threadId, pullRequest }`. Errors
+the server parses it. It prints the PR reader link that the mutation returns,
+in the message link format (`cli-thread-message-links.md`). JSON output is
+`{ threadId, pullRequest, url }`. Errors
 (another PR attached, container, not a PR) exit nonzero without a success
 message. Rules: `github-integration.md` → Pull requests in threads.
 

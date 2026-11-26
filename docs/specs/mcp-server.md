@@ -2025,7 +2025,9 @@ container, or a task outside the thread's project is rejected. Ownership and
 
 Attach a GitHub pull request to an owned thread that has none. Requires
 `threadId` and `pullRequest`: a github.com PR URL or `owner/repo#number`.
-Returns the thread as `get_thread` would, with `attachedPullRequest`.
+Returns the thread as `get_thread` would, with `attachedPullRequest`, plus
+`pullRequestReaderUrl`: the PR's Convoy link for messages
+(`docs/specs/cli-thread-message-links.md`).
 Attach-once: the same PR again is a no-op; a thread attached to another PR, a
 group or workflow run container, or a value that isn't a PR is rejected.
 Ownership and `CLI_THREAD` permission apply, including API-key scope. Rules:

@@ -11,21 +11,18 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import { cn } from "@/lib/utils";
-import { parseConvoyLink } from "./parsers";
-import { ArtifactLink, LayoutContext, TaskLink } from "./task-link";
+import { parseConvoyLink, parsePullRequestLink } from "./parsers";
+import { ArtifactLink, LayoutContext, PullRequestLink, TaskLink } from "./task-link";
 
 type HastNode = { type: string; tagName?: string; value?: string; properties?: { href?: unknown }; children?: HastNode[] };
 type WithNode<T extends keyof React.JSX.IntrinsicElements> = ComponentProps<T> & { node?: HastNode };
 
-/** A paragraph or list item whose only content is one task or artifact link. */
+/** A paragraph or list item whose only content is one task, artifact, or PR link. */
 function isStandaloneLink(node: HastNode | undefined) {
   const content = (node?.children ?? []).filter((child) => !(child.type === "text" && !child.value?.trim()));
   const [only] = content;
-  return (
-    content.length === 1 &&
-    only.tagName === "a" &&
-    parseConvoyLink(typeof only.properties?.href === "string" ? only.properties.href : undefined) !== null
-  );
+  const href = typeof only?.properties?.href === "string" ? only.properties.href : undefined;
+  return content.length === 1 && only.tagName === "a" && (parseConvoyLink(href) ?? parsePullRequestLink(href)) !== null;
 }
 
 /** Plain link text; inline code keeps its backticks so the name matches the stored title (OS-2269). */
@@ -109,13 +106,15 @@ function List({ ordered, node, className, children }: { ordered: boolean; node?:
   );
 }
 
-/** Streamdown overrides that render task and artifact links as previews (docs/specs/cli-thread-message-links.md). */
+/** Streamdown overrides that render task, artifact, and PR links as previews (docs/specs/cli-thread-message-links.md). */
 export const taskLinkComponents = {
   a: ({ href, title, className, node, children }: WithNode<"a">) => {
     const link = parseConvoyLink(href);
     const text = node ? plainText(node) : children;
     if (link?.artifactId) return <ArtifactLink link={{ ...link, artifactId: link.artifactId }} title={title}>{text}</ArtifactLink>;
     if (link) return <TaskLink link={link} title={title}>{text}</TaskLink>;
+    const pullRequest = parsePullRequestLink(href);
+    if (pullRequest) return <PullRequestLink link={pullRequest} title={title}>{text}</PullRequestLink>;
     return <ExternalLink href={href} className={className}>{children}</ExternalLink>;
   },
   p: ({ node, className, children }: WithNode<"p">) =>

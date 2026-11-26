@@ -8,6 +8,7 @@ import { getAppUrlBase } from "@/convex/lib/shared/appUrl";
 import { AppLink, routeTarget } from "@/lib/navigation";
 
 const PROJECT_URL = `${getAppUrlBase()}/o/contoso/OS`;
+const PR_URL = `${PROJECT_URL}/pull-requests?repo=contoso%2Fconvoy&pr=`;
 
 const SAMPLE = `I created the follow-up as [Project default views](${PROJECT_URL}?task=OS-2148 "type=feature; status=To Do").
 
@@ -31,6 +32,14 @@ A list with other text keeps its bullets and uses chips:
 - [Clean up sample fixtures](${PROJECT_URL}?task=OS-1001 "type=chore; status=Done")
 - [Investigate preview rendering](${PROJECT_URL}?task=OS-1002 "type=investigation; status=To Do") was created in To Do.
 
+I opened [Render PR links as previews](${PR_URL}2604 "state=open") for the follow-up. The PRs it touches:
+
+- [Add PR previews to messages](${PR_URL}8 "state=draft")
+- [Resolve owner/name in the PR reader](${PR_URL}9 "state=merged")
+- [Old link experiment](${PR_URL}7 "state=closed")
+
+[Teach agents the PR link format](${PR_URL}10 "state=open")
+
 A link without a snapshot falls back to its text: [Board grouping cleanup](${PROJECT_URL}?task=OS-2099). A bare URL shows only the ref: ${PROJECT_URL}?task=OS-2100
 
 External links keep the confirm dialog: [Streamdown docs](https://streamdown.ai).`;
@@ -46,14 +55,16 @@ export default function TaskLinksPlaygroundPage() {
             <ArrowLeft aria-hidden="true" className="size-3.5" /> Playground
           </AppLink>
           <div className="flex flex-wrap items-center gap-3">
-            <h1 className="text-2xl font-semibold">Task and artifact links in agent replies</h1>
-            <span className="rounded-md border border-border px-2 py-1 text-xs text-muted-foreground">OS-2149</span>
+            <h1 className="text-2xl font-semibold">Task, artifact, and PR links in agent replies</h1>
+            <span className="rounded-md border border-border px-2 py-1 text-xs text-muted-foreground">OS-2149 · OS-2604</span>
           </div>
           <p className="max-w-2xl text-sm leading-6 text-muted-foreground">
             The agent writes a normal task URL and puts a snapshot in the link title:{" "}
             <code className="rounded bg-muted px-1 py-0.5 text-xs">[Title](url &quot;type=bug; status=In Progress&quot;)</code>.
             Artifact links add <code className="rounded bg-muted px-1 py-0.5 text-xs">&amp;artifact=ID</code> to the URL and{" "}
             <code className="rounded bg-muted px-1 py-0.5 text-xs">&quot;type=md&quot;</code> (or <code className="rounded bg-muted px-1 py-0.5 text-xs">html</code>) to the title.
+            PR links point at the PR reader with <code className="rounded bg-muted px-1 py-0.5 text-xs">?repo=owner/name&amp;pr=N</code> and carry{" "}
+            <code className="rounded bg-muted px-1 py-0.5 text-xs">&quot;state=open&quot;</code>.
             The preview shows that snapshot as written, with no query. Edit the markdown to try your own.
           </p>
         </header>
@@ -74,7 +85,7 @@ export default function TaskLinksPlaygroundPage() {
 
           <aside className="space-y-5">
             <p className="text-xs leading-5 text-muted-foreground">
-              A link on its own line becomes a block, a list of task or artifact links becomes one table, and a link inside a sentence becomes a chip.
+              A link on its own line becomes a block, a list of task, artifact, or PR links becomes one table, and a link inside a sentence becomes a chip.
             </p>
             <div className="space-y-2">
               <div className="flex items-center justify-between">

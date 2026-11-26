@@ -108,6 +108,34 @@ Chip: [\`convoy tasks\` fails](${app}?task=OS-2267 "type=bug; status=To Do") and
     expect(push).not.toHaveBeenCalled();
   });
 
+  test("renders PR links as blocks, tables, and chips that open the PR reader", async () => {
+    const pr = (number: number) => `${app}/pull-requests?repo=contoso/convoy&pr=${number}`;
+    renderMessage(`I opened [Add PR previews](${pr(8)} "state=open") for review.
+
+[Fix login redirect](${pr(9)} "state=merged")
+
+- [Draft the guide](${pr(10)} "state=draft")
+- [Old approach](${pr(11)} "state=closed")
+
+No snapshot: [Bare title](${pr(12)}).`);
+    const table = await screen.findByTestId("task-link-table");
+
+    expect(texts(within(table).getAllByTestId("pull-request-link-block"))).toEqual(["#10Draft the guideDraft", "#11Old approachClosed"]);
+    expect(screen.getAllByTestId("pull-request-link-block")[0].textContent).toBe("#9Fix login redirectMerged");
+    expect(texts(screen.getAllByTestId("pull-request-link-chip"))).toEqual(["Open#8Add PR previews", "#12Bare title"]);
+    expect(screen.queryByRole("button", { name: /Add PR previews/ })).toBeNull();
+
+    fireEvent.click(screen.getAllByTestId("pull-request-link-chip")[0]);
+    expect(push).toHaveBeenCalledWith("/o/acme/OS/pull-requests?repo=contoso%2Fconvoy&pr=8", expect.anything());
+  });
+
+  test("malformed escapes in a link's path do not break rendering", async () => {
+    renderMessage(`See [bad task](/o/%E0%A4/OS?task=OS-1) and [odd PR](/o/%E0%A4/OS/pull-requests?repo=a/b&pr=8) here.`);
+
+    expect((await screen.findByRole("button", { name: "bad task" })).textContent).toBe("bad task");
+    expect(screen.getByTestId("pull-request-link-chip").textContent).toBe("#8odd PR");
+  });
+
   test("navigates in the app to a task in another project", async () => {
     const { onOpenTask } = renderMessage();
     fireEvent.click(await screen.findByText("Elsewhere"));

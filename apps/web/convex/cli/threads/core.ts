@@ -45,6 +45,10 @@ import {
 } from "./lib/cliThreadsRepo";
 import { cliThreadItemValidator, createThreadArgs, threadSelectionArgs, toThreadItem } from "./lib/validators";
 import { parseAttachedPullRequest } from "../../lib/contracts/github";
+import { getOrganizationById } from "../../organizations/lib/organizationsRepo";
+import { getAppUrlBase } from "../../lib/shared/appUrl";
+import { appRoute } from "../../../lib/navigation/routes";
+import { href } from "../../../lib/navigation/target";
 import { createEmptyThreadCore, createThreadCore, forkThreadCore } from "./lib/lifecycle";
 import { normalizeChatTitle } from "./lib/naming";
 import { assertChecklistInProject } from "../../checks/lib/checklistsRepo";
@@ -340,19 +344,21 @@ export const attachTask = mutation({
 export const attachPullRequest = mutation({
   /** A github.com PR URL or `owner/name#number`. */
   args: { threadId: v.id("cliThreads"), pullRequest: v.string(), apiKey: v.optional(v.string()) },
-  returns: v.null(),
+  /** `url`: the PR reader link agents send in messages (docs/specs/cli-thread-message-links.md). */
+  returns: v.object({ url: v.string() }),
   handler: async (ctx, args) => {
     const access = await getAuthenticatedAccess(ctx, args.apiKey);
     const thread = await requireThreadOwnership(ctx, access.user._id, args.threadId);
-    await requireAuthorizedProject(ctx, access.principal, thread.projectId, ProjectPermission.CLI_THREAD);
+    const { project } = await requireAuthorizedProject(ctx, access.principal, thread.projectId, ProjectPermission.CLI_THREAD);
     ensure(isContainerThread(thread)).isFalse(errors.ATTACH_PULL_REQUEST_TO_CONTAINER);
     const pullRequest = await ensure(parseAttachedPullRequest(args.pullRequest)).notNull(errors.PULL_REQUEST_URL_INVALID);
-    if (thread.attachedPullRequest?.ref === pullRequest.ref) {
-      return null;
+    if (thread.attachedPullRequest?.ref !== pullRequest.ref) {
+      ensure(thread.attachedPullRequest).isNull(errors.THREAD_PULL_REQUEST_ALREADY_ATTACHED);
+      await setThreadAttachedPullRequest(ctx, thread._id, pullRequest);
     }
-    ensure(thread.attachedPullRequest).isNull(errors.THREAD_PULL_REQUEST_ALREADY_ATTACHED);
-    await setThreadAttachedPullRequest(ctx, thread._id, pullRequest);
-    return null;
+    const organization = await ensure(getOrganizationById(ctx, project.organizationId)).notNull(errors.PROJECT_NOT_FOUND);
+    const route = appRoute.projectPullRequest(organization.slug, project.alias, `${pullRequest.owner}/${pullRequest.name}`, pullRequest.number);
+    return { url: `${getAppUrlBase()}${href(route)}` };
   },
 });
 

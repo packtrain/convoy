@@ -2047,7 +2047,7 @@ export function getToolDefinitions(
       name: "attach_pull_request_to_thread",
       description:
         "Attach a GitHub pull request to an owned thread that has none, e.g. the PR your thread opened or is reviewing. " +
-        "The thread then shows on the PR. Returns the thread as get_thread would. Re-attaching the same PR is a no-op; " +
+        "The thread then shows on the PR. Returns the thread as get_thread would, plus pullRequestReaderUrl: link the PR in replies as [PR title](pullRequestReaderUrl \"state=open\"). Re-attaching the same PR is a no-op; " +
         "a thread already attached to another PR, or a group / workflow run container, is rejected.",
       inputSchema: {
         type: "object",

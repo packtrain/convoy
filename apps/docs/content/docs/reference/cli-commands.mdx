@@ -934,7 +934,9 @@ convoy threads attach-pr <threadId> https://github.com/contoso/convoy/pull/482 -
 Attaches a GitHub pull request to your thread when it has none, so the thread
 shows on the PR. `<pullRequest>` is a github.com PR URL or `owner/repo#number`.
 Re-attaching the same PR does nothing; a thread already attached to another PR
-is rejected. JSON output is `{ "threadId": "...", "pullRequest": "..." }`.
+is rejected. It prints the PR's Convoy link to use in messages, which renders
+as a PR preview that opens Convoy's PR reader. JSON output is
+`{ "threadId": "...", "pullRequest": "...", "url": "..." }`.
 
 ### `convoy threads submit-guide <threadId> [file]`
 

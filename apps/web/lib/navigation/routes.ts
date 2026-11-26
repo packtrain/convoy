@@ -221,16 +221,16 @@ export const appRoute = {
     withQuery(`/o/${organizationSlug}/${projectAlias}/settings/integrations/github`, { setup: setupId }),
   projectPullRequests: (organizationSlug: string, projectAlias: string) =>
     routeTarget(`/o/${organizationSlug}/${projectAlias}/pull-requests`),
-  /** `tab` reopens a reader tab (docs/specs/github-integration.md). */
+  /** `repository` is its ID or `owner/name`; `tab` reopens a reader tab (docs/specs/github-integration.md). */
   projectPullRequest: (
     organizationSlug: string,
     projectAlias: string,
-    repositoryId: string,
+    repository: string,
     number: number,
     tab?: PullRequestTab
   ) =>
     withQuery(`/o/${organizationSlug}/${projectAlias}/pull-requests`, {
-      repo: repositoryId,
+      repo: repository,
       pr: String(number),
       tab: tab === "overview" ? undefined : tab,
     }),

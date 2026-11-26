@@ -3377,6 +3377,7 @@ describe("handleMcpRequest URL-based default projectId", () => {
     const instructions = (scoped?.result as { instructions?: string }).instructions;
     expect(instructions).toContain(`[Task title](${getAppUrlBase()}/o/acme/WEB?task=WEB-123 "type=bug; status=In Progress")`);
     expect(instructions).toContain(`?task=WEB-123&artifact=ARTIFACT_ID "type=md")`);
+    expect(instructions).toContain(`[PR title](${getAppUrlBase()}/o/acme/WEB/pull-requests?repo=OWNER%2FREPO&pr=123 "state=open")`);
     expect(runQuery).toHaveBeenCalledTimes(2);
 
     runQuery.mockResolvedValueOnce(URL_PROJECT);
@@ -8622,8 +8623,8 @@ describe("attach_task_to_thread (OS-1713)", () => {
 });
 
 describe("attach_pull_request_to_thread", () => {
-  test("routes the PR and returns the thread summary", async () => {
-    const runMutation = vi.fn().mockResolvedValue(null);
+  test("routes the PR and returns the thread summary with the PR reader link", async () => {
+    const runMutation = vi.fn().mockResolvedValue({ url: "https://app.example/o/acme/OS/pull-requests?repo=contoso%2Fconvoy&pr=482" });
     const runQuery = vi.fn().mockResolvedValue({ _id: "thread_1" });
     const response = await handleMcpRequest({ runMutation, runQuery } as unknown as ActionCtx, "sk_user_test", {
       jsonrpc: "2.0", id: "attach-pr", method: "tools/call",
@@ -8633,6 +8634,9 @@ describe("attach_pull_request_to_thread", () => {
     expect(runMutation).toHaveBeenCalledWith(api.cli.threads.core.attachPullRequest, {
       threadId: "thread_1", pullRequest: "contoso/convoy#482", apiKey: "sk_user_test",
     });
-    expect(parseToolContentJson(response)).toEqual({ _id: "thread_1" });
+    expect(parseToolContentJson(response)).toEqual({
+      _id: "thread_1",
+      pullRequestReaderUrl: "https://app.example/o/acme/OS/pull-requests?repo=contoso%2Fconvoy&pr=482",
+    });
   });
 });

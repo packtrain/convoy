@@ -4,6 +4,7 @@ import type { Id } from "../../_generated/dataModel";
 import { buildCliThread, createTestContext, setupFakeTimers } from "../../../convex-testing";
 import { CHUNK_COPY_BATCH_CHARS, CHUNK_COPY_BATCH_SIZE } from "../lib/chunks/lifecycle";
 import { errors } from "../errors";
+import { getAppUrlBase } from "../../lib/shared/appUrl";
 import { MAX_GROUP_CHILDREN } from "../../../lib/threads/constants";
 
 setupFakeTimers();
@@ -3345,6 +3346,17 @@ describe("attached pull requests (docs/specs/github-integration.md → Pull requ
       .rejects.toThrow(errors.THREAD_PULL_REQUEST_ALREADY_ATTACHED);
 
     expect((await t.run((dbCtx) => dbCtx.db.get("cliThreads", thread._id)))?.attachedPullRequest).toEqual(ATTACHED_482);
+  });
+
+  test("attachPullRequest returns the PR reader link to send in messages (docs/specs/cli-thread-message-links.md)", async () => {
+    const { ctx, user, org, project, asUser } = await setup();
+    const profile = await ctx.cliProfile(user._id, project._id);
+    const thread = await ctx.cliThread(user._id, project._id, profile._id);
+
+    const result = await asUser.mutation(api.cli.threads.core.attachPullRequest, { threadId: thread._id, pullRequest: "Contoso/Convoy#482" });
+    expect(result).toEqual({
+      url: `${getAppUrlBase()}/o/${org.slug}/${project.alias}/pull-requests?repo=Contoso%2FConvoy&pr=482`,
+    });
   });
 
   test("attachPullRequest rejects containers and non-owners", async () => {

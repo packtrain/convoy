@@ -43,6 +43,10 @@ const PR_STATE_PRESENTATION: Record<ThreadPullRequest["state"], ThreadPullReques
   },
 };
 
+export function isThreadPullRequestState(value: string | undefined): value is ThreadPullRequest["state"] {
+  return value !== undefined && Object.hasOwn(PR_STATE_PRESENTATION, value);
+}
+
 export function getThreadPullRequestPresentation(
   state: ThreadPullRequest["state"]
 ): ThreadPullRequestPresentation {

@@ -690,11 +690,13 @@ describe("threads write commands", () => {
   });
 
   describe("threads attach-pr", () => {
-    it("attaches the PR to the thread", async () => {
-      mutation.mockResolvedValueOnce(null);
+    it("attaches the PR to the thread and prints the link to send in messages", async () => {
+      const url = "https://app.convoy.build/o/acme/OS/pull-requests?repo=contoso%2Fconvoy&pr=482";
+      mutation.mockResolvedValueOnce({ url });
       await invoke(attachPullRequestToThreadCommand, ["thr_1", "contoso/convoy#482"]);
       expect(mutation).toHaveBeenCalledWith(api.cli.threads.core.attachPullRequest, { threadId: "thr_1", pullRequest: "contoso/convoy#482" });
       expect(console.log).toHaveBeenCalledWith(chalk.green("✓") + " Pull request attached to thread");
+      expect(console.log).toHaveBeenCalledWith(`  Link it in messages as [PR title](${url} "state=open")`);
     });
   });
 
