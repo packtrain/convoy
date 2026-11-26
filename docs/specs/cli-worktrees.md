@@ -1008,10 +1008,12 @@ from the notice's backticked text (`unapprovedWorktreeSetupRepoKey`,
   the dialog open and does not retry; a failed retry after a good approval
   toasts "Approved, but the retry failed" with "Press Retry to try again." (or
   the mapped server error) as its description.
-- When nothing needs the viewer's approval (approved elsewhere, or no script
-  is saved any more: "No setup script is saved for this repo."), the footer
-  offers Retry instead, also with no second confirm. Its failure toasts
-  "Couldn't retry the run".
+- When nothing needs the viewer's approval, the footer offers Retry instead,
+  also with no second confirm. If the script was approved elsewhere, the
+  dialog shows it. If it was removed, the description says "The setup script
+  for `<repo>` was removed after this run stopped. Retry runs without a setup
+  step." and the dialog shows no script, no editor copy and no variables. A
+  failed Retry toasts "Couldn't retry the run".
 - While a retry is in flight, the callout's Retry and the dialog's Retry and
   Approve and retry are disabled, and a second confirm-free retry is ignored.
 - Older failed runs, a read-only viewer of a shared thread, and a thread that

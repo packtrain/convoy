@@ -282,6 +282,9 @@ export function ScriptDialog({
     </Button>
   );
 
+  // The thread's dialog over a blocked run whose script is gone: nothing to review, only Retry.
+  const removedSinceRun = Boolean(onRetry) && !seen;
+
   return (
     <>
       <Dialog open onOpenChange={(open) => !open && guardDiscard(onClose)}>
@@ -299,8 +302,17 @@ export function ScriptDialog({
           <DialogHeader>
             <DialogTitle className="font-mono">{row.repoKey}</DialogTitle>
             <DialogDescription>
-              Bash that runs once in every new worktree a CLI creates for this repo, before the agent starts. Each teammate&apos;s
-              CLIs run it only after they approve the current version.
+              {removedSinceRun ? (
+                <>
+                  The setup script for <code className="font-mono">{row.repoKey}</code> was removed after this run stopped.
+                  Retry runs without a setup step.
+                </>
+              ) : (
+                <>
+                  Bash that runs once in every new worktree a CLI creates for this repo, before the agent starts. Each
+                  teammate&apos;s CLIs run it only after they approve the current version.
+                </>
+              )}
             </DialogDescription>
           </DialogHeader>
           <form
@@ -344,7 +356,7 @@ export function ScriptDialog({
                   {canEdit ? approveButton(false) : null}
                 </div>
               ) : null}
-              {!canEdit && !seen ? (
+              {removedSinceRun ? null : !canEdit && !seen ? (
                 <p className="text-sm text-muted-foreground">No setup script is saved for this repo.</p>
               ) : (
               <div className="space-y-1">
