@@ -247,24 +247,50 @@ How and when it runs, the approval rule, and the script environment are in
 - One row per repository, shown as `owner/repo`: every repository that has a
   script, plus the repositories of the caller's own CLI paths that have none
   yet. A row with a script reads "Last edited by <name>, <time>"; one without
-  reads "No setup script".
-- Clicking a row opens the script in a monospace editor, with the three
-  environment variables listed under it and an example as placeholder text.
-  Save stays disabled while the script is empty or unchanged. Remove confirms
-  first and deletes the script.
+  reads "No setup script". The row's accessible name is the repo key and its
+  badge; the edit line is its description.
 - A row with a script carries a badge with the caller's approval: "Approved",
-  "Needs your approval", or "Changed since you approved".
-- Under the script, the dialog shows "Last edited by <name>, <time>" and,
-  unless the caller approved the current revision, an Approve button. It sends
-  the revision on screen. An admin sees it while their text matches the
-  script on screen; once it differs, Save approves instead. Save stays disabled
-  while the text matches the saved script.
+  "Needs your approval", or "Changed since you approved". The badge wraps
+  under the repo key on a narrow screen, so the key is not truncated for it.
+- For admins, a row with a script has a `...` menu with Edit and "Remove setup
+  script". Remove confirms first and deletes the script. The editor has no
+  Remove button (Destructive Actions in
+  [frontend-development.md](../guidelines/frontend-development.md#destructive-actions)).
+- Clicking a row opens the script in a monospace editor, with the three
+  environment variables listed under it and an example, headed `# Example`, as
+  placeholder text. The editor is 12 lines tall and scrolls; the dialog is
+  capped at 85% of the viewport and its body scrolls, so the footer stays on
+  screen. Save stays disabled while the script is empty or unchanged. The
+  description says each teammate's CLIs run the script only after they approve
+  the current version.
+- From 9,000 characters a counter shows "N / 10,000 characters". Over the
+  limit it reads "N characters over the 10,000 limit" in red, the field is
+  marked invalid, and Save is disabled. Text is never cut off.
+- Closing the editor with unsaved edits (Escape, the close button, Cancel, the
+  overlay) asks "Discard changes?" first. An untouched editor closes at once.
+  Closing the editor or the Remove confirm returns focus to the row; "Keep
+  editing" returns it to the script.
+- Unless the caller approved the current revision, a callout at the top reads
+  "<name> saved this script. Your CLIs won't run it until you approve it." (or
+  "<name> changed this script since you approved it…") with an Approve button.
+  It sends the revision on screen. An admin whose text differs from it (ignoring
+  leading and trailing whitespace, as `save` trims) sees Approve disabled and
+  "Save approves your edited version." An approved script shows "Approved by
+  you" next to the edit line, except while the text differs. The editor autofocuses the
+  script only when there is nothing to approve.
 - The dialog pins the version it opened with. If someone saves a change while
-  it is open, it keeps showing the text the reader was reading and adds "The
-  script changed. Review the new version." with a "Show new version" button
-  that loads the new text and discards unsaved edits. Approve keeps sending the
-  pinned revision, so the server rejects it with the same message until the
-  reader loads the new version.
+  it is open, it keeps showing the text the reader was reading and adds
+  "<name> changed the script. Review the new version." (a `status` region) with
+  a "Show new version" button. With unsaved edits the button asks "Discard
+  changes?" first. Approve and Save stay disabled until the reader loads the
+  new version. A removed and recreated setup counts as a new version. Save
+  sends the setup and revision it was editing (`expected`), so the server
+  rejects a save that raced a teammate's.
+- If someone removes the script while the editor is open, it reads "This script
+  was removed. Saving adds it again." with "Keep my edits" (or "Start over"
+  without edits). Save stays disabled until then, and then saves as a new
+  script. The editor stays open even when the repo leaves the list (it was not
+  one of the caller's own paths), including when it was the last row.
 - Only `project:update` holders (project admins) can save or remove. Everyone
   else opens the editor read-only, under a notice that only project admins can
   edit setup scripts.

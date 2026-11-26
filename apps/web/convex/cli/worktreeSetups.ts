@@ -99,9 +99,18 @@ export const list = query({
   },
 });
 
-/** A web save approves the new revision for the saver; a save by API key approves for nobody. */
+/**
+ * A web save approves the new revision for the saver; a save by API key approves for nobody.
+ * `expected` (null: no setup yet) rejects a save from an editor opened on another version, or on a setup since recreated.
+ */
 export const save = mutation({
-  args: { projectId: v.id("projects"), repoKey: v.string(), script: v.string(), apiKey: v.optional(v.string()) },
+  args: {
+    projectId: v.id("projects"),
+    repoKey: v.string(),
+    script: v.string(),
+    expected: v.optional(v.union(v.null(), v.object({ setupId: v.id("projectWorktreeSetups"), revision: v.number() }))),
+    apiKey: v.optional(v.string()),
+  },
   returns: v.object({ setupId: v.id("projectWorktreeSetups"), revision: v.number(), changed: v.boolean(), settingsUrl: v.string() }),
   handler: async (ctx, args) => {
     const { user, principal } = await getAuthenticatedAccess(ctx, args.apiKey);
@@ -113,6 +122,11 @@ export const save = mutation({
     ensure(script.length).lte(MAX_WORKTREE_SETUP_SCRIPT_LENGTH, errors.worktreeSetupScriptTooLong(MAX_WORKTREE_SETUP_SCRIPT_LENGTH));
 
     const existing = await findWorktreeSetup(ctx, args.projectId, args.repoKey);
+    if (args.expected !== undefined) {
+      const current = existing ? `${existing._id}@${existing.revision}` : null;
+      const expected = args.expected ? `${args.expected.setupId}@${args.expected.revision}` : null;
+      ensure(current === expected).isTrue(errors.WORKTREE_SETUP_REVISION_CHANGED);
+    }
     let setupId: Id<"projectWorktreeSetups">;
     let revision: number;
     if (existing) {

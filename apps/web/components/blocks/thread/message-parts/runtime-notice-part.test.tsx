@@ -31,6 +31,15 @@ describe("RuntimeNoticePart", () => {
     expect(link.closest(".truncate")).toBeNull();
   });
 
+  test("renders the repo key as code and lets the text wrap", () => {
+    render(<RuntimeNoticePart part={unapproved} />);
+
+    const code = screen.getByText("packtrain/convoy");
+    expect(code.tagName).toBe("CODE");
+    expect(code.closest(".truncate")).toBeNull();
+    expect(screen.queryByText(/`/)).toBeNull();
+  });
+
   test("keeps the text without a link outside a project route", () => {
     params.value = {};
     render(<RuntimeNoticePart part={unapproved} />);
