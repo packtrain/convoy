@@ -898,6 +898,7 @@ export function ThreadView({
         onPlanDecision: handlePlanDecision,
         onContinueFailedSession: handleContinueFailedSession,
         onRetry: handleRetry,
+        onRetryWithoutConfirm: retryMessage,
         onBranchFromHere: canBranch ? handleBranchFromHere : undefined,
         onBranchIntoTab: canBranchIntoTab ? handleBranchIntoTab : undefined,
         // A copying fork's transcript is still arriving, as for Branch.

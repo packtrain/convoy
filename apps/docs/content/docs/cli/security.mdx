@@ -70,7 +70,9 @@ in Project settings → Worktrees, and your CLI runs it with your rights, outsid
 the runtime's permission mode, in every worktree it creates for that repo. It
 runs only when you approved that exact revision in the web: saving it yourself
 in the web approves it, and any later change needs your approval again. Approve
-it under the script in Project settings → Worktrees. A script saved with an
+it under the script in Project settings → Worktrees, or from a thread whose run
+it blocked: Review script shows the script, and Approve and retry approves that
+revision and runs the thread again. A script saved with an
 API key, which is how `convoy worktree-setups set` saves, is approved for
 nobody, you included. An agent running with your key cannot make a script run,
 but a changed script stops matching everyone's approval: new worktrees for

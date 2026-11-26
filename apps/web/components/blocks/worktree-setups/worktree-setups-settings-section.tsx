@@ -194,18 +194,23 @@ export function WorktreeSetupsSettingsSection({ projectId, canEdit }: { projectI
   );
 }
 
-function ScriptDialog({
+/** The editor, also the thread's review dialog; `onApproved` runs after a successful Approve has closed it. */
+export function ScriptDialog({
   projectId,
   row,
   canEdit,
   onClose,
   onFocusRow,
+  approveLabel = "Approve",
+  onApproved,
 }: {
   projectId: Id<"projects">;
   row: Row;
   canEdit: boolean;
   onClose: () => void;
   onFocusRow: (repoKey: string) => void;
+  approveLabel?: string;
+  onApproved?: () => Promise<void>;
 }) {
   const save = useMutation(api.cli.worktreeSetups.save);
   const approve = useMutation(api.cli.worktreeSetups.approve);
@@ -253,12 +258,14 @@ function ScriptDialog({
     setIsSaving(true);
     try {
       await approve({ setupId: seen._id, revision: seen.revision });
-      onClose();
     } catch (error) {
       showConvexErrorToast(error, "Failed to approve the setup script");
+      return;
     } finally {
       setIsSaving(false);
     }
+    onClose();
+    await onApproved?.();
   };
 
   return (
@@ -320,7 +327,7 @@ function ScriptDialog({
                     {differs ? <span className="text-xs text-muted-foreground">Save approves your edited version.</span> : null}
                   </span>
                   <Button type="button" size="sm" className="shrink-0 cursor-pointer self-start sm:self-auto" disabled={!canApprove} onClick={() => void handleApprove()}>
-                    Approve
+                    {approveLabel}
                   </Button>
                 </div>
               ) : null}
