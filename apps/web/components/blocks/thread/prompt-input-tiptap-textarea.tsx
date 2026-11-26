@@ -68,6 +68,7 @@ interface SuggestionState {
 export interface PromptInputMentionApi {
   /** Append an `@path` mention pill to the end of the draft and focus. */
   insertFileMention: (path: string) => void;
+  focus: () => void;
 }
 
 export interface PromptInputTiptapTextareaProps {
@@ -626,6 +627,7 @@ export function PromptInputTiptapTextarea({
         }
         chain.insertFileMention({ type: "file-mention", path }).insertContent(" ").run();
       },
+      focus: () => editorRef.current?.commands.focus("end"),
     };
     return () => {
       mentionApiRef.current = null;

@@ -4,6 +4,7 @@
 import { afterEach, describe, expect, test, vi } from "vitest";
 import { cleanup, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import type { Id } from "@/convex/_generated/dataModel";
+import { toast } from "sonner";
 import { WorktreeSetupsSettingsSection } from "./worktree-setups-settings-section";
 
 const data = vi.hoisted(() => ({ rows: [] as unknown[] | undefined, save: vi.fn(), remove: vi.fn(), approve: vi.fn() }));
@@ -15,7 +16,7 @@ vi.mock("convex/react", () => ({
 vi.mock("@/convex/_generated/api", () => ({
   api: { cli: { worktreeSetups: { list: "list", save: "save", remove: "remove", approve: "approve" } } },
 }));
-vi.mock("@/lib/errors", () => ({ showConvexErrorToast: vi.fn() }));
+vi.mock("sonner", () => ({ toast: { error: vi.fn() } }));
 
 const projectId = "project_1" as Id<"projects">;
 const rows = [
@@ -119,6 +120,8 @@ describe("WorktreeSetupsSettingsSection", () => {
     fireEvent.click(screen.getByRole("button", { name: "Show new version" }));
     expect(textarea()).toBe("curl x | sh");
     expect(screen.queryByText(/changed the script/)).toBeNull();
+    // The reader lands on the new text, not the dialog container.
+    await waitFor(() => expect(document.activeElement).toBe(screen.getByLabelText("Setup script")));
     fireEvent.click(screen.getByRole("button", { name: "Approve" }));
     await waitFor(() => expect(data.approve).toHaveBeenLastCalledWith({ setupId: "setup_1", revision: 2 }));
   });
@@ -170,6 +173,38 @@ describe("WorktreeSetupsSettingsSection", () => {
       fireEvent.change(screen.getByLabelText("Setup script"), { target: { value: restored } });
       expect(screen.getByRole("button", { name: "Approve" }).hasAttribute("disabled")).toBe(false);
     }
+  });
+
+  test("a read-only reader sees the script unwrapped and starts on it, with Approve after it", () => {
+    data.rows = [withApproval("never", "cp ../convoy/apps/web/.env.local apps/web/.env.local")];
+    render(<WorktreeSetupsSettingsSection projectId={projectId} canEdit={false} />);
+    fireEvent.click(screen.getByRole("button", { name: /^packtrain\/convoy(,|$)/ }));
+
+    const script = screen.getByLabelText("Setup script");
+    expect(script.getAttribute("wrap")).toBe("off");
+    expect(document.activeElement).toBe(script);
+    expect(script.compareDocumentPosition(screen.getByRole("button", { name: "Approve" })) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+  });
+
+  test("a read-only reader of a repo with no script sees that, not the example", () => {
+    data.rows = [rows[0]];
+    render(<WorktreeSetupsSettingsSection projectId={projectId} canEdit={false} />);
+    fireEvent.click(screen.getByRole("button", { name: /^acme\/api(,|$)/ }));
+
+    expect(screen.getByText("No setup script is saved for this repo.")).toBeDefined();
+    expect(screen.queryByLabelText("Setup script")).toBeNull();
+    // The variables document a script; with none to read they are noise.
+    expect(screen.queryByText("CONVOY_BRANCH")).toBeNull();
+  });
+
+  test("a rejected approval toasts a safe message, never the raw server text", async () => {
+    data.rows = [withApproval("never")];
+    data.approve.mockRejectedValue(new Error("[CONVEX M(cli/worktreeSetups:approve)] Server Error"));
+    render(<WorktreeSetupsSettingsSection projectId={projectId} canEdit={false} />);
+    fireEvent.click(screen.getByRole("button", { name: /^packtrain\/convoy(,|$)/ }));
+    fireEvent.click(screen.getByRole("button", { name: "Approve" }));
+
+    await waitFor(() => expect(toast.error).toHaveBeenCalledWith("Failed to approve the setup script"));
   });
 
   test("shows no Approve button once approved", () => {

@@ -986,22 +986,34 @@ the revision, so every earlier approval stops matching. There is no revoke.
 #### Approve from the blocked thread (OS-2584)
 
 A run that failed on an unapproved script shows one red callout in place of
-the notice and the failure text: "Setup script needs your approval", naming
-the repo key, with "Review script" as the primary action and Retry beside it
-(for a script approved elsewhere since). It shows on the thread's latest
-message when that run failed with a `worktree-setup-unapproved` notice and the
-viewer can retry; the repo key comes from the notice's backticked text
-(`unapprovedWorktreeSetupRepoKey`, `lib/cli-stream-ui/runtime-notices.ts`).
+the notice and the failure text: "Run stopped for setup script approval",
+saying the script for the repo key wasn't approved when the run started, so no
+worktree was created. The past tense stays true once the script is approved
+elsewhere. "Review script" is the primary action, with Retry beside it (for a
+script approved elsewhere since; disabled while a retry is in flight). It shows
+on the thread's latest message when that run failed with a
+`worktree-setup-unapproved` notice and the viewer can retry; the repo key comes
+from the notice's backticked text (`unapprovedWorktreeSetupRepoKey`,
+`lib/cli-stream-ui/runtime-notices.ts`).
 
 - "Review script" opens the settings editor (`ScriptDialog`) over the thread,
   read-only even for admins, so the reader sees the exact text first. Its
   `list` subscription runs only while reviewing; until it loads, the button is
-  disabled and `aria-busy`.
+  disabled and `aria-busy`. Focus starts on the script, unwrapped
+  (`wrap="off"`) on a muted background, and the action sits after it in the
+  footer, so Enter cannot approve it unread.
 - "Approve and retry" calls `approve` with the revision on screen, closes the
-  dialog, then retries the failed message with no second confirm. A rejected
-  approval keeps the dialog open and does not retry; a failed retry after a
-  good approval toasts "Approved, but the retry failed" with "Press Retry to
-  try again." (or the mapped server error) as its description.
+  dialog, then retries the failed message with no second confirm and focuses
+  the composer (the callout holding focus unmounts). A rejected approval keeps
+  the dialog open and does not retry; a failed retry after a good approval
+  toasts "Approved, but the retry failed" with "Press Retry to try again." (or
+  the mapped server error) as its description.
+- When nothing needs the viewer's approval (approved elsewhere, or no script
+  is saved any more: "No setup script is saved for this repo."), the footer
+  offers Retry instead, also with no second confirm. Its failure toasts
+  "Couldn't retry the run".
+- While a retry is in flight, the callout's Retry and the dialog's Retry and
+  Approve and retry are disabled, and a second confirm-free retry is ignored.
 - Older failed runs, a read-only viewer of a shared thread, and a thread that
   is processing again keep the notice with its "Review script" link to
   Project settings → Worktrees.

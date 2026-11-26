@@ -54,6 +54,8 @@ interface UseThreadDetailMessageActionsArgs {
   clearAfterSubmit: () => void;
   setDraft: (patch: ThreadDraftPatch) => void;
   onMessageSent: () => void;
+  /** Called after a confirm-free retry, whose callout unmounts with focus inside it (OS-2584). */
+  focusComposer?: () => void;
 }
 
 type SubmitThreadDetailMessageArgs = ThreadComposerSubmitMessage;
@@ -77,6 +79,7 @@ export function useThreadDetailMessageActions({
   clearAfterSubmit,
   setDraft,
   onMessageSent,
+  focusComposer,
 }: UseThreadDetailMessageActionsArgs) {
   const respondToInteraction = useMutation(api.cli.interactionRequests.respond);
   const [isStopping, setIsStopping] = useState(false);
@@ -87,6 +90,8 @@ export function useThreadDetailMessageActions({
   const [continuingFailedMessageId, setContinuingFailedMessageId] =
     useState<Id<"cliMessages"> | null>(null);
   const isSubmittingRef = useRef(false);
+  // Shared by both retry paths; a callback held across an await would read stale state.
+  const isRetryingRef = useRef(false);
 
   useEffect(() => {
     if (!continuingFailedMessageId) {
@@ -190,10 +195,11 @@ export function useThreadDetailMessageActions({
   }, []);
 
   const handleRetryConfirm = useCallback(async () => {
-    if (!retryConfirmMessageId || isRetrying) {
+    if (!retryConfirmMessageId || isRetryingRef.current) {
       return;
     }
 
+    isRetryingRef.current = true;
     setIsRetrying(true);
     try {
       await retryMessage(retryConfirmMessageId);
@@ -203,9 +209,27 @@ export function useThreadDetailMessageActions({
         getErrorMessage(error, "Failed to retry message");
       toast.error(errorMessage);
     } finally {
+      isRetryingRef.current = false;
       setIsRetrying(false);
     }
-  }, [isRetrying, retryConfirmMessageId, retryMessage]);
+  }, [retryConfirmMessageId, retryMessage]);
+
+  // "Approve and retry": the approve click was the confirm. Throws, so the caller words the toast.
+  const handleRetryNow = useCallback(
+    async (messageId: Id<"cliMessages">) => {
+      if (isRetryingRef.current) return;
+      isRetryingRef.current = true;
+      setIsRetrying(true);
+      try {
+        await retryMessage(messageId);
+        focusComposer?.();
+      } finally {
+        isRetryingRef.current = false;
+        setIsRetrying(false);
+      }
+    },
+    [focusComposer, retryMessage]
+  );
 
   const handleRetryDialogOpenChange = useCallback(
     (open: boolean) => {
@@ -393,6 +417,7 @@ export function useThreadDetailMessageActions({
     handleContinueFailedSession,
     handlePlanDecision,
     handleRetry,
+    handleRetryNow,
     handleRetryConfirm,
     handleRetryDialogOpenChange,
     handleSteer,

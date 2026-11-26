@@ -282,7 +282,7 @@ How and when it runs, the approval rule, and the script environment are in
   it is open, it keeps showing the text the reader was reading and adds
   "<name> changed the script. Review the new version." (a `status` region) with
   a "Show new version" button. With unsaved edits the button asks "Discard
-  changes?" first. Approve and Save stay disabled until the reader loads the
+  changes?" first, and loading it focuses the script. Approve and Save stay disabled until the reader loads the
   new version. A removed and recreated setup counts as a new version. Save
   sends the setup and revision it was editing (`expected`), so the server
   rejects a save that raced a teammate's.
@@ -297,8 +297,14 @@ How and when it runs, the approval rule, and the script environment are in
 - With no repositories, the empty state says a repository appears once one of
   the caller's CLIs connects a path with a Git origin.
 - While loading, the page shows skeleton rows in the same list frame.
+- Read-only, the editor starts focused on the script, shows it unwrapped on a
+  muted background, and puts Approve in the footer after it. With no script
+  saved it says "No setup script is saved for this repo." instead of the
+  example and the `CONVOY_*` variable list. Save, Approve and Remove failures toast the mapped error or a
+  generic "Failed to …", never raw server text.
 - The same editor opens read-only over a thread whose run is blocked on an
-  unapproved script, with "Approve and retry" in place of Approve
+  unapproved script, with "Approve and retry" in place of Approve, or Retry
+  when nothing needs approval
   ([cli-worktrees.md](cli-worktrees.md#approve-from-the-blocked-thread-os-2584)).
 
 ## Danger Zone

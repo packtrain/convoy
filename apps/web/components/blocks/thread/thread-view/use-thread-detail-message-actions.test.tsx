@@ -49,6 +49,53 @@ function renderActions(overrides?: Partial<Parameters<typeof useThreadDetailMess
 }
 
 describe("useThreadDetailMessageActions", () => {
+  test("Retry now retries at once, holds the in-flight flag, then hands focus to the composer (OS-2584)", async () => {
+    let finish!: () => void;
+    const retryMessage = vi.fn(() => new Promise<void>((resolve) => { finish = resolve; }));
+    const focusComposer = vi.fn();
+    const { result } = renderActions({ retryMessage, focusComposer });
+
+    let done!: Promise<void>;
+    act(() => { done = result.current.handleRetryNow(SENT_MESSAGE_ID); });
+    expect(retryMessage).toHaveBeenCalledWith(SENT_MESSAGE_ID);
+    expect(result.current.isRetrying).toBe(true);
+    await act(async () => { finish(); await done; });
+
+    expect(result.current.isRetrying).toBe(false);
+    expect(focusComposer).toHaveBeenCalledTimes(1);
+  });
+
+  test("a Retry now callback kept across a pending approval cannot start a second retry beside a confirmed one", async () => {
+    const pending: Array<() => void> = [];
+    const retryMessage = vi.fn(() => new Promise<void>((resolve) => pending.push(resolve)));
+    const { result } = renderActions({ retryMessage });
+    const retainedByApproval = result.current.handleRetryNow;
+
+    act(() => result.current.handleRetry(SENT_MESSAGE_ID));
+    let first!: Promise<void>;
+    act(() => { first = result.current.handleRetryConfirm(); });
+    let second!: Promise<void>;
+    act(() => { second = retainedByApproval(SENT_MESSAGE_ID); });
+
+    expect(retryMessage).toHaveBeenCalledTimes(1);
+    expect(result.current.isRetrying).toBe(true);
+    await act(async () => { pending.forEach((resolve) => resolve()); await Promise.all([first, second]); });
+    expect(result.current.isRetrying).toBe(false);
+  });
+
+  test("Retry now ignores a second call while one is in flight", async () => {
+    let finish!: () => void;
+    const retryMessage = vi.fn(() => new Promise<void>((resolve) => { finish = resolve; }));
+    const { result } = renderActions({ retryMessage });
+
+    let first!: Promise<void>;
+    act(() => { first = result.current.handleRetryNow(SENT_MESSAGE_ID); });
+    await act(async () => { await result.current.handleRetryNow(SENT_MESSAGE_ID); });
+    await act(async () => { finish(); await first; });
+
+    expect(retryMessage).toHaveBeenCalledTimes(1);
+  });
+
   test.each(["auto", "default", "agent"] as const)("approves a completed proposal in %s with server-validated identity", async nextMode => {
     const source = { messageId: SENT_MESSAGE_ID, itemId: "p1", turnId: "t1" };
     const stored = { ...source, chunkId: "chunk-1", ready: true };
