@@ -308,6 +308,7 @@ function ChangesViewForCheckout({ profileId, pathId }: WorktreeChangesViewProps)
                     isCollapsed={collapse.isCollapsed}
                     onToggle={collapse.toggle}
                     registerSection={registerSection}
+                    offerBranchScope
                   />
                 </div>
               </div>

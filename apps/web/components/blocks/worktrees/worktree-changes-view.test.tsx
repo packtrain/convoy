@@ -6,6 +6,7 @@ import { act, cleanup, fireEvent, render, screen, waitFor } from "@testing-libra
 import type { Id } from "@/convex/_generated/dataModel";
 import { appRoute } from "@/lib/navigation/routes";
 import { clearHistoryCacheForTests } from "@/lib/worktrees/hooks/use-worktree-history";
+import { expectEmptyState } from "@/test-utils/empty-state";
 import { WorktreeChangesView } from "./worktree-changes-view";
 
 const state = vi.hoisted(() => ({
@@ -492,15 +493,26 @@ describe("WorktreeChangesView", () => {
     mobile.value = true;
   });
 
-  test("vs main with nothing changed says so (OS-2596)", () => {
+  test("a clean tree offers vs main from its empty state (OS-2596)", () => {
     onlineWorktree("");
     state.profile = { ...state.profile, appVersion: "0.177.0" };
     render(<WorktreeChangesView profileId={"profile_1" as Id<"cliProfiles">} pathId="path_1" />);
-    expect(screen.getByText("No uncommitted changes.")).toBeTruthy();
+    expectEmptyState("No uncommitted changes", { action: { role: "button", name: "Show changes vs main" } });
 
-    fireEvent.click(screen.getByRole("button", { name: "vs main" }));
+    fireEvent.click(screen.getByRole("button", { name: "Show changes vs main" }));
 
-    expect(screen.getByText("No changes against the default branch.")).toBeTruthy();
+    expect(screen.getByRole("button", { name: "vs main" }).getAttribute("aria-pressed")).toBe("true");
+    expectEmptyState("No changes against main");
+    expect(screen.queryByRole("button", { name: "Show changes vs main" })).toBeNull();
+  });
+
+  test("a clean tree on a CLI without the branch diff offers no switch (OS-2596)", () => {
+    onlineWorktree("");
+    state.profile = { ...state.profile, appVersion: "0.176.0" };
+    render(<WorktreeChangesView profileId={"profile_1" as Id<"cliProfiles">} pathId="path_1" />);
+
+    expectEmptyState("No uncommitted changes");
+    expect(screen.queryByRole("button", { name: "Show changes vs main" })).toBeNull();
   });
 
   test("a CLI without the branch diff gets no Changes scope switch (OS-2596)", () => {

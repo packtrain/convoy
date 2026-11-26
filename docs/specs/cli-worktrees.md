@@ -609,7 +609,9 @@ every row, header included, past a phone viewport. The right pane is the file tr
   chevron, path and ±counts, the `@pierre/diffs` patch below, mounted lazily
   as it scrolls into view. Files come from the patch itself
   (`splitRunPatch` / `parseRunPatchFiles`, `--no-renames`). Binary files show
-  a note instead of a diff; a clean tree shows "No uncommitted changes".
+  a note instead of a diff; a clean tree shows the "No uncommitted changes"
+  empty state. Where the scope switch is shown, it carries a "Show changes vs
+  main" button that switches the scope to vs main.
 - Scope (OS-2596): an "Uncommitted | vs main" switch opens the Changes
   toolbar's right group (text buttons, `aria-pressed`, group "Changes
   scope"), on worktrees and the main checkout alike, hidden on CLIs older than
@@ -619,8 +621,8 @@ every row, header included, past a phone viewport. The right pane is the file tr
   toggles. Switching shows the loading state until that scope's patch is in;
   nothing is cached. Revert is gone in vs main (section button, file-tree
   menu item, Revert all), since a revert only undoes uncommitted work. Open file
-  and Download stay. An empty result reads "No changes against the default
-  branch.". Remove worktree reads the patch on screen as dirty only in
+  and Download stay. An empty result shows the "No changes against main" empty
+  state. Remove worktree reads the patch on screen as dirty only in
   Uncommitted; in vs main the CLI's own dirty check decides. The label says
   "main" whatever the default branch is called. The thread sidebar's Working
   tree panel stays uncommitted-only.

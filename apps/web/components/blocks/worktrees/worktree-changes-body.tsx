@@ -1,10 +1,11 @@
 "use client";
 
 import { useCallback, useState } from "react";
-import { AtSign, Download, FileText, RotateCcw } from "lucide-react";
+import { AtSign, CircleCheck, Download, FileText, GitCompare, RotateCcw } from "lucide-react";
 import { PatchDiff, File as FileView } from "@pierre/diffs/react";
 import type { CliRunDiffFile } from "@/convex/lib/contracts/validators";
 import { Button } from "@/components/ui/button";
+import { EmptyState } from "@/components/custom/empty-state";
 import { Spinner } from "@/components/custom/spinner";
 import { PatchFileSection, usePatchDiffOptions } from "@/components/custom/diff/patch-file-sections";
 import { useDiffTheme } from "@/lib/threads/hooks/use-diff-theme";
@@ -175,6 +176,8 @@ interface WorktreeChangesBodyProps {
   registerSection: (path: string, element: HTMLElement | null) => void;
   /** Thread sidebar only: insert an `@path` mention into the composer. */
   onMentionFile?: (path: string) => void;
+  /** Page only: a clean tree offers the vs main scope. */
+  offerBranchScope?: boolean;
 }
 
 /** What sits under the tab strip: placeholders, a file tab, or the per-file sections. */
@@ -186,6 +189,7 @@ export function WorktreeChangesBody({
   onToggle,
   registerSection,
   onMentionFile,
+  offerBranchScope = false,
 }: WorktreeChangesBodyProps) {
   const diffTheme = useDiffTheme();
   const { entry, isOnline, cliSupported, changes, sections, files, activeTab, fileRead, profile } = state;
@@ -231,7 +235,7 @@ export function WorktreeChangesBody({
     );
   }
   if (files.length === 0) {
-    return <Message>{state.scope === "branch" ? "No changes against the default branch." : "No uncommitted changes."}</Message>;
+    return <NoChanges state={state} offerBranchScope={offerBranchScope} />;
   }
   return (
     <div>
@@ -258,6 +262,28 @@ export function WorktreeChangesBody({
         />
       ))}
     </div>
+  );
+}
+
+function NoChanges({ state, offerBranchScope }: { state: WorktreeChanges; offerBranchScope: boolean }) {
+  if (state.scope === "branch") {
+    return <EmptyState icon={GitCompare} title="No changes against main" description="This branch matches the default branch." />;
+  }
+  const canSwitch = offerBranchScope && state.canScope;
+  return (
+    <EmptyState
+      icon={CircleCheck}
+      title="No uncommitted changes"
+      description={canSwitch ? "The working tree matches the last commit. Compare with main to see everything this branch changed." : "The working tree matches the last commit."}
+      action={
+        canSwitch && (
+          <Button type="button" variant="secondary" size="sm" className="cursor-pointer" onClick={() => state.setScope("branch")}>
+            <GitCompare className="size-3.5" />
+            Show changes vs main
+          </Button>
+        )
+      }
+    />
   );
 }
 
