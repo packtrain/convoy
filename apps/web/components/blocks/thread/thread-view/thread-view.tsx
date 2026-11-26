@@ -345,6 +345,10 @@ export function ThreadView({
   const handleMessageSent = useCallback(() => {
     conversationRef.current?.scrollToBottom();
   }, []);
+  const localControllerRef = useRef<ThreadComposerControllerApi | null>(null);
+  const focusComposer = useCallback(() => {
+    (composerControllerRef ?? localControllerRef).current?.focus();
+  }, [composerControllerRef]);
 
   const {
     continuingFailedMessageId,
@@ -355,6 +359,7 @@ export function ThreadView({
     handleContinueFailedSession,
     handlePlanDecision,
     handleRetry,
+    handleRetryNow,
     handleRetryConfirm,
     handleRetryDialogOpenChange,
     handleSteer,
@@ -382,6 +387,7 @@ export function ThreadView({
     clearAfterSubmit,
     setDraft,
     onMessageSent: handleMessageSent,
+    focusComposer,
   });
 
   const submitHandler = useMemo(
@@ -480,7 +486,6 @@ export function ThreadView({
     isThreadStreaming &&
     runtimeSupportsSteering &&
     (claimingSessionCapabilities?.supportsSteering ?? false);
-  const localControllerRef = useRef<ThreadComposerControllerApi | null>(null);
 
   // Restore a removed message's text and attachments into the composer, appending after a
   // blank line when a draft already exists. The blobs survived as pending-upload rows, so the
@@ -898,7 +903,7 @@ export function ThreadView({
         onPlanDecision: handlePlanDecision,
         onContinueFailedSession: handleContinueFailedSession,
         onRetry: handleRetry,
-        onRetryWithoutConfirm: retryMessage,
+        onRetryWithoutConfirm: handleRetryNow,
         onBranchFromHere: canBranch ? handleBranchFromHere : undefined,
         onBranchIntoTab: canBranchIntoTab ? handleBranchIntoTab : undefined,
         // A copying fork's transcript is still arriving, as for Branch.

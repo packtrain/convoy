@@ -605,7 +605,8 @@ export const ThreadMessageList = memo(function ThreadMessageList({
                         projectId={projectId}
                         repoKey={blockedSetupRepoKey}
                         onRetry={() => onRetry(message._id)}
-                        onApproveAndRetry={() => onRetryWithoutConfirm(message._id)}
+                        onRetryWithoutConfirm={() => onRetryWithoutConfirm(message._id)}
+                        isRetrying={isRetrying}
                       />
                     ) : showFailedActions && (
                       <DangerCallout

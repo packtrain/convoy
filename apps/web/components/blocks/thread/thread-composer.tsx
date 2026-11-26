@@ -109,6 +109,8 @@ export interface ThreadComposerControllerApi {
   setInput: (value: string) => void;
   /** Append an `@path` mention pill to the draft and focus (OS-1159). */
   insertFileMention: (path: string) => void;
+  /** Focus the draft's end, e.g. after a callout holding focus unmounts (OS-2584). */
+  focus: () => void;
   /**
    * Attach pre-built file parts with caller-supplied ids (e.g. restoring an
    * edited queued message's already-uploaded attachments).
@@ -158,6 +160,7 @@ function ThreadComposerControllerBridge({
       getInput: () => controller.textInput.value,
       setInput: (value: string) => controller.textInput.setInput(value),
       insertFileMention: (path: string) => mentionApiRef.current?.insertFileMention(path),
+      focus: () => mentionApiRef.current?.focus(),
       addFileParts: (parts) => controller.attachments.addParts(parts),
     };
     return () => {

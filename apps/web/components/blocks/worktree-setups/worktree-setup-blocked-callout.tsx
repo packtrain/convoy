@@ -19,12 +19,14 @@ export function WorktreeSetupBlockedCallout({
   projectId,
   repoKey,
   onRetry,
-  onApproveAndRetry,
+  onRetryWithoutConfirm,
+  isRetrying,
 }: {
   projectId: Id<"projects">;
   repoKey: string;
   onRetry: () => void;
-  onApproveAndRetry: () => Promise<void>;
+  onRetryWithoutConfirm: () => Promise<void>;
+  isRetrying: boolean;
 }) {
   const [reviewing, setReviewing] = useState(false);
   const reviewButton = useRef<HTMLButtonElement>(null);
@@ -34,17 +36,17 @@ export function WorktreeSetupBlockedCallout({
   return (
     <>
       <DangerCallout
-        title="Setup script needs your approval"
+        title="Run stopped for setup script approval"
         description={
           <>
-            Review the setup script for <code className="font-mono">{repoKey}</code> before your CLI runs it in this
-            thread&apos;s new worktree.
+            The setup script for <code className="font-mono">{repoKey}</code> wasn&apos;t approved when this run started,
+            so no worktree was created.
           </>
         }
         actions={
           <>
             {/* For a script approved elsewhere since the run failed. */}
-            <Button variant="outline" size="sm" onClick={onRetry}>
+            <Button variant="outline" size="sm" disabled={isRetrying} onClick={onRetry}>
               <RotateCcw className="mr-1.5 size-3" />
               Retry
             </Button>
@@ -66,14 +68,16 @@ export function WorktreeSetupBlockedCallout({
           projectId={projectId}
           row={rows.find((row) => row.repoKey === repoKey) ?? { repoKey, setup: null }}
           canEdit={false}
-          approveLabel="Approve and retry"
+          isRetrying={isRetrying}
           onClose={() => setReviewing(false)}
           onFocusRow={() => reviewButton.current?.focus()}
-          onApproved={async () => {
+          onRetry={async (approvedNow) => {
             try {
-              await onApproveAndRetry();
+              await onRetryWithoutConfirm();
             } catch (error) {
-              toast.error("Approved, but the retry failed", { description: getMutationErrorMessage(error, "Press Retry to try again.") });
+              toast.error(approvedNow ? "Approved, but the retry failed" : "Couldn't retry the run", {
+                description: getMutationErrorMessage(error, "Press Retry to try again."),
+              });
             }
           }}
         />

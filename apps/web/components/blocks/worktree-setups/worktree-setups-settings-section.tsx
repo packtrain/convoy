@@ -25,7 +25,8 @@ import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, D
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Textarea } from "@/components/ui/textarea";
-import { showConvexErrorToast } from "@/lib/errors";
+import { getMutationErrorMessage } from "@/lib/errors";
+import { toast } from "sonner";
 import { formatRelativeTime } from "@/lib/format-relative-time";
 import { cn } from "@/lib/utils";
 
@@ -194,23 +195,23 @@ export function WorktreeSetupsSettingsSection({ projectId, canEdit }: { projectI
   );
 }
 
-/** The editor, also the thread's review dialog; `onApproved` runs after a successful Approve has closed it. */
+/** The editor, also the thread's review dialog: with `onRetry`, Approve retries the run, and Retry replaces it when nothing needs approval. */
 export function ScriptDialog({
   projectId,
   row,
   canEdit,
   onClose,
   onFocusRow,
-  approveLabel = "Approve",
-  onApproved,
+  onRetry,
+  isRetrying = false,
 }: {
   projectId: Id<"projects">;
   row: Row;
   canEdit: boolean;
   onClose: () => void;
   onFocusRow: (repoKey: string) => void;
-  approveLabel?: string;
-  onApproved?: () => Promise<void>;
+  onRetry?: (approvedNow: boolean) => Promise<void>;
+  isRetrying?: boolean;
 }) {
   const save = useMutation(api.cli.worktreeSetups.save);
   const approve = useMutation(api.cli.worktreeSetups.approve);
@@ -232,12 +233,13 @@ export function ScriptDialog({
   const canSave =
     canEdit && !isSaving && !changedUnderReader && !tooLong && draft !== null && draft.trim() !== "" && draft.trim() !== row.setup?.script;
   const needsApproval = seen !== null && row.setup !== null && row.setup.approval !== "approved";
-  const canApprove = needsApproval && !isSaving && !changedUnderReader && !differs;
+  const canApprove = needsApproval && !isSaving && !isRetrying && !changedUnderReader && !differs;
 
   const guardDiscard = (action: () => void) => (edited ? setPendingDiscard(() => action) : action());
   const showNewVersion = () => {
     setSeen(row.setup);
     setDraft(null);
+    textareaRef.current?.focus();
   };
 
   const handleSave = async () => {
@@ -247,7 +249,7 @@ export function ScriptDialog({
       await save({ projectId, repoKey: row.repoKey, script, expected: seen ? { setupId: seen._id, revision: seen.revision } : null });
       onClose();
     } catch (error) {
-      showConvexErrorToast(error, "Failed to save the setup script");
+      toast.error(getMutationErrorMessage(error, "Failed to save the setup script"));
     } finally {
       setIsSaving(false);
     }
@@ -259,14 +261,26 @@ export function ScriptDialog({
     try {
       await approve({ setupId: seen._id, revision: seen.revision });
     } catch (error) {
-      showConvexErrorToast(error, "Failed to approve the setup script");
+      toast.error(getMutationErrorMessage(error, "Failed to approve the setup script"));
       return;
     } finally {
       setIsSaving(false);
     }
     onClose();
-    await onApproved?.();
+    await onRetry?.(true);
   };
+
+  const approveButton = (inFooter: boolean) => (
+    <Button
+      type="button"
+      size={inFooter ? "default" : "sm"}
+      className={inFooter ? "cursor-pointer" : "shrink-0 cursor-pointer self-start sm:self-auto"}
+      disabled={!canApprove}
+      onClick={() => void handleApprove()}
+    >
+      {onRetry ? "Approve and retry" : "Approve"}
+    </Button>
+  );
 
   return (
     <>
@@ -326,11 +340,13 @@ export function ScriptDialog({
                     <span>{APPROVAL_PROMPTS[seen.approval](editorName(seen))}</span>
                     {differs ? <span className="text-xs text-muted-foreground">Save approves your edited version.</span> : null}
                   </span>
-                  <Button type="button" size="sm" className="shrink-0 cursor-pointer self-start sm:self-auto" disabled={!canApprove} onClick={() => void handleApprove()}>
-                    {approveLabel}
-                  </Button>
+                  {/* A reader acts after the script, in the footer; an editor approves beside the prompt. */}
+                  {canEdit ? approveButton(false) : null}
                 </div>
               ) : null}
+              {!canEdit && !seen ? (
+                <p className="text-sm text-muted-foreground">No setup script is saved for this repo.</p>
+              ) : (
               <div className="space-y-1">
                 <Textarea
                   ref={textareaRef}
@@ -341,10 +357,13 @@ export function ScriptDialog({
                   onChange={(event) => setDraft(event.target.value)}
                   placeholder={EXAMPLE_SCRIPT}
                   readOnly={!canEdit}
+                  // Read-only text is for checking: no soft wrap, so a wrapped path never reads as its own command.
+                  wrap={canEdit ? undefined : "off"}
                   rows={12}
                   spellCheck={false}
-                  className="field-sizing-fixed max-h-[50dvh] resize-y overflow-auto font-mono text-xs"
-                  autoFocus={canEdit && !needsApproval}
+                  className={cn("field-sizing-fixed max-h-[50dvh] resize-y overflow-auto font-mono text-xs", !canEdit && "bg-muted/30 dark:bg-muted/30")}
+                  // A reader starts on the script, so Enter cannot approve it unread.
+                  autoFocus={!canEdit || !needsApproval}
                 />
                 {script.length >= LENGTH_HINT_FROM ? (
                   <p id="worktree-setup-length" className={cn("text-right text-xs tabular-nums", tooLong ? "text-destructive" : "text-muted-foreground")}>
@@ -352,20 +371,23 @@ export function ScriptDialog({
                   </p>
                 ) : null}
               </div>
+              )}
               {seen ? (
                 <div className="flex items-center justify-between gap-3 text-xs text-muted-foreground">
                   <span className="min-w-0 truncate">{lastEdited(seen)}</span>
                   {row.setup?.approval === "approved" && !changedUnderReader && !differs ? <span className="shrink-0">Approved by you</span> : null}
                 </div>
               ) : null}
-              <dl className="space-y-1 text-xs text-muted-foreground">
-                {ENV_VARS.map(([name, meaning]) => (
-                  <div key={name} className="flex flex-wrap gap-x-2">
-                    <dt className="font-mono text-foreground">{name}</dt>
-                    <dd>{meaning}</dd>
-                  </div>
-                ))}
-              </dl>
+              {canEdit || seen ? (
+                <dl className="space-y-1 text-xs text-muted-foreground">
+                  {ENV_VARS.map(([name, meaning]) => (
+                    <div key={name} className="flex flex-wrap gap-x-2">
+                      <dt className="font-mono text-foreground">{name}</dt>
+                      <dd>{meaning}</dd>
+                    </div>
+                  ))}
+                </dl>
+              ) : null}
             </div>
             <DialogFooter>
               <Button type="button" variant="outline" className="cursor-pointer" onClick={() => guardDiscard(onClose)}>
@@ -374,6 +396,20 @@ export function ScriptDialog({
               {canEdit ? (
                 <Button type="submit" className="cursor-pointer" disabled={!canSave}>
                   Save
+                </Button>
+              ) : needsApproval ? (
+                approveButton(true)
+              ) : onRetry ? (
+                <Button
+                  type="button"
+                  className="cursor-pointer"
+                  disabled={changedUnderReader || isRetrying}
+                  onClick={() => {
+                    onClose();
+                    void onRetry(false);
+                  }}
+                >
+                  Retry
                 </Button>
               ) : null}
             </DialogFooter>
@@ -430,7 +466,7 @@ function RemoveDialog({
     try {
       await remove({ projectId, repoKey });
     } catch (error) {
-      showConvexErrorToast(error, "Failed to remove the setup script");
+      toast.error(getMutationErrorMessage(error, "Failed to remove the setup script"));
     }
   };
   return (

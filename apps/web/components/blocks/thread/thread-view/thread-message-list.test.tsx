@@ -16,10 +16,10 @@ vi.mock("@/components/blocks/thread/assistant-cli-thread-message", () => ({
 }));
 
 vi.mock("@/components/blocks/worktree-setups", () => ({
-  WorktreeSetupBlockedCallout: ({ repoKey, onRetry, onApproveAndRetry }: { repoKey: string; onRetry: () => void; onApproveAndRetry: () => Promise<void> }) => (
-    <div data-testid="setup-blocked" data-repo-key={repoKey}>
+  WorktreeSetupBlockedCallout: ({ repoKey, onRetry, onRetryWithoutConfirm, isRetrying }: { repoKey: string; onRetry: () => void; onRetryWithoutConfirm: () => Promise<void>; isRetrying: boolean }) => (
+    <div data-testid="setup-blocked" data-repo-key={repoKey} data-retrying={String(isRetrying)}>
       <button onClick={onRetry}>Blocked retry</button>
-      <button onClick={() => void onApproveAndRetry()}>Blocked approve</button>
+      <button onClick={() => void onRetryWithoutConfirm()}>Blocked approve</button>
     </div>
   ),
 }));
@@ -321,6 +321,12 @@ describe("ThreadMessageList blocked worktree setup (OS-2584)", () => {
 
     expect(props.onRetry).toHaveBeenCalledWith(ASSISTANT_MESSAGE_ID);
     expect(props.onRetryWithoutConfirm).toHaveBeenCalledWith(ASSISTANT_MESSAGE_ID);
+  });
+
+  test("passes the in-flight retry to the callout, as the failed-run callout disables Retry", () => {
+    blockedList({ isRetrying: true });
+
+    expect(screen.getByTestId("setup-blocked").dataset.retrying).toBe("true");
   });
 
   test("a read-only viewer keeps the notice and the failure text", () => {
