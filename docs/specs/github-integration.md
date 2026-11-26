@@ -173,7 +173,7 @@ playground prototype. On the PR page, the open tab is in the URL
 (`?tab=guide`, `?tab=commits`, or `?tab=diff`; Overview has none), so a refresh or a shared
 link opens it, and the page loads with that tab's skeleton. Picking a tab replaces the URL rather than adding a history
 entry. The thread sidebar's reader keeps its tab in memory, as its URL is the
-thread's. Overview shows the description, the check cards, a folded Commits card, Activity, and properties: Status, referenced Tasks, Stack, Reviewers, Assignees, Labels, Milestone, and Branch. Changed
+thread's. Overview shows the description, the check cards, a folded Commits card, Activity, and properties: Status, referenced Tasks, Stack, Reviewers, Assignees, Labels, Milestone, and Branch. Its padding follows the pane, not the viewport: a pane under 576px (the thread sidebar, a phone) gets the task sidebar's 16px, a wider one the page's 32px sides and 48px top. Changed
 files live only in the Diff tab. The header's
 Merge status popover shows reviews, checks, behind-base, mergeability
 (including GitHub's `UNKNOWN` while it recomputes), and conflicts with a
@@ -276,6 +276,7 @@ Task ([CLI thread task attachments](cli-thread-task-attachments.md)):
   Refresh, which pulls the latest from GitHub.
 - The thread sidebar adds an Attached pull request tab with the PR reader
   (Overview, Guide, Diff), so the member reads the PR beside the agent.
+  Its header title links to the PR's full reader page.
 - The Overview gets a Threads property, as on the task sidebar: the viewer's
   own threads, and threads shared with them, whose Attached pull request is
   this PR, with "+" opening the thread composer. Activity shows the same

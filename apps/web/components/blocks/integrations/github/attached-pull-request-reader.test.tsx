@@ -4,12 +4,15 @@
 import { afterEach, describe, expect, test, vi } from "vitest";
 import { cleanup, render, screen } from "@testing-library/react";
 import type { Id } from "@/convex/_generated/dataModel";
+import { appRoute, href, type RouteTarget } from "@/lib/navigation";
 import { AttachedPullRequestReader } from "./attached-pull-request-reader";
 
 let status: unknown;
 vi.mock("./use-integration-status", () => ({ useIntegrationStatus: () => status }));
 vi.mock("./pull-request-reader", () => ({
-  PullRequestReader: ({ repositoryId }: { repositoryId: string }) => <p>Reader for {repositoryId}</p>,
+  PullRequestReader: ({ repositoryId, titleHref }: { repositoryId: string; titleHref?: RouteTarget }) => (
+    <p data-title-href={titleHref ? href(titleHref) : undefined}>Reader for {repositoryId}</p>
+  ),
   PullRequestReaderSkeleton: () => <p>Loading</p>,
 }));
 
@@ -30,6 +33,12 @@ describe("AttachedPullRequestReader (OS-2193)", () => {
     status = { connections: [connection("active")] };
     render(tab());
     expect(screen.getByText("Reader for repo_1")).toBeTruthy();
+  });
+
+  test("the reader's title opens the full pull request page", () => {
+    status = { connections: [connection("active")] };
+    render(tab());
+    expect(screen.getByText("Reader for repo_1").dataset.titleHref).toBe(href(appRoute.projectPullRequest("org", "WEB", "repo_1", 7)));
   });
 
   test("a disconnected repository links to GitHub instead", () => {

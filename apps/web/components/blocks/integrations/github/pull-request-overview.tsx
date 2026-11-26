@@ -442,7 +442,7 @@ function SummaryItem({ label, children }: { label: string; children: ReactNode }
 /** The Overview's outline before the PR itself has loaded: title, meta, description, cards, properties. */
 export function PullRequestOverviewSkeleton() {
   return (
-    <div className="mx-auto grid w-full max-w-5xl gap-10 px-5 pt-12 pb-6 md:px-8 @4xl:grid-cols-[minmax(0,1fr)_18rem]">
+    <div className="mx-auto grid w-full max-w-5xl gap-10 px-4 pt-4 pb-6 @xl:px-8 @xl:pt-12 @4xl:grid-cols-[minmax(0,1fr)_18rem]">
       <div className="min-w-0">
         <div className="flex h-7 items-center justify-between gap-3">
           <Skeleton className="h-5 w-2/3" />
@@ -600,7 +600,7 @@ export function PullRequestOverviewTab({
     </span>
   );
   return (
-    <div className="mx-auto grid w-full max-w-5xl gap-10 px-5 pt-12 pb-6 md:px-8 @4xl:grid-cols-[minmax(0,1fr)_18rem]">
+    <div className="mx-auto grid w-full max-w-5xl gap-10 px-4 pt-4 pb-6 @xl:px-8 @xl:pt-12 @4xl:grid-cols-[minmax(0,1fr)_18rem]">
       <div className="min-w-0">
         {/* Too narrow for the properties column: Status, the branch state, and the rest move into the header. */}
         <div className="flex items-start justify-between gap-3">

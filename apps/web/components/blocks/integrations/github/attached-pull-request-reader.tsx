@@ -53,6 +53,7 @@ export function AttachedPullRequestReader({
       number={pullRequest.number}
       status={status}
       hrefFor={(repositoryId, number) => appRoute.projectPullRequest(organizationSlug, projectAlias, repositoryId, number)}
+      titleHref={appRoute.projectPullRequest(organizationSlug, projectAlias, connection.repositoryId, pullRequest.number)}
       organizationSlug={organizationSlug}
       projectAlias={projectAlias}
     />

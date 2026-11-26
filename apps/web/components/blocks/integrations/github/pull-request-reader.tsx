@@ -59,6 +59,7 @@ export function PullRequestReader({
   defaultTab = "overview",
   onTabChange,
   backHref,
+  titleHref,
 }: {
   projectId: Id<"projects">;
   repositoryId: string;
@@ -74,6 +75,8 @@ export function PullRequestReader({
   onTabChange?: (tab: PullRequestTab) => void;
   /** The PR page's list, linked from the header on phones, where the browser pane hides. */
   backHref?: RouteTarget;
+  /** Makes the header title a link, e.g. from the thread sidebar to the full reader page. */
+  titleHref?: RouteTarget;
 }) {
   const args = { projectId, repositoryId, number };
   const result = useQuery(api.integrations.github.pullRequests.get, args);
@@ -263,7 +266,13 @@ export function PullRequestReader({
         {backHref ? <MobileBackButton href={backHref} /> : null}
         <PullRequestStateIcon pr={pr} />
         <h1 className="min-w-0 flex-1 truncate text-sm font-medium" title={pr.title}>
-          {pr.title}
+          {titleHref ? (
+            <AppLink href={titleHref} className="hover:underline">
+              {pr.title}
+            </AppLink>
+          ) : (
+            pr.title
+          )}
         </h1>
         {pr.archived ? <Badge variant="secondary">Archived</Badge> : null}
         <StackBadge header pr={pr} projectId={projectId} hrefFor={layerHref} />

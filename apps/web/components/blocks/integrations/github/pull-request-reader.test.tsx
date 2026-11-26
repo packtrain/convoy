@@ -6,7 +6,7 @@ import { act, cleanup, fireEvent, render, screen, waitFor, within } from "@testi
 import { getFunctionName } from "convex/server";
 import { api } from "@/convex/_generated/api";
 import type { Id } from "@/convex/_generated/dataModel";
-import { appRoute } from "@/lib/navigation";
+import { appRoute, href } from "@/lib/navigation";
 import { PullRequestReader } from "./pull-request-reader";
 
 let stored: unknown;
@@ -284,6 +284,20 @@ async function openDiff() {
   await waitFor(() => expect(screen.getByText(/\+search\(\)/)).toBeTruthy());
   return view;
 }
+
+describe("PullRequestReader title", () => {
+  test("links to the full reader page when given a title href", async () => {
+    render(reader({ titleHref: appRoute.projectPullRequest("org", "WEB", "repo_1", 7) }));
+    const title = await screen.findByRole("heading", { level: 1 });
+    expect(within(title).getByRole("link").getAttribute("href")).toBe(href(appRoute.projectPullRequest("org", "WEB", "repo_1", 7)));
+  });
+
+  test("stays plain text without one", async () => {
+    render(reader());
+    const title = await screen.findByRole("heading", { level: 1 });
+    expect(within(title).queryByRole("link")).toBeNull();
+  });
+});
 
 describe("PullRequestReader tabs", () => {
   test("opens on the tab it is given and reports each tab picked", async () => {
@@ -608,6 +622,16 @@ describe("PullRequestReader overview layout", () => {
     expect(header.textContent).toContain("maya");
     expect(header.textContent).not.toContain("Threads");
     expect(screen.getByRole("complementary", { name: "Pull request properties" }).className.split(" ")).toEqual(expect.arrayContaining(["hidden", "@4xl:block"]));
+  });
+
+  test("the Overview's padding follows its pane, not the viewport", async () => {
+    render(reader());
+    await screen.findByText("Commits: 1");
+    const root = screen.getByRole("heading", { level: 2 }).closest(".max-w-5xl")!;
+    const classes = root.className.split(" ");
+    // Task sidebar spacing in a narrow pane; the page spacing once the pane is wide.
+    expect(classes).toEqual(expect.arrayContaining(["px-4", "pt-4", "@xl:px-8", "@xl:pt-12"]));
+    expect(root.className).not.toMatch(/(^|\s)md:/);
   });
 
   test("Assignees, Labels, and Milestone show only when GitHub has them", async () => {
