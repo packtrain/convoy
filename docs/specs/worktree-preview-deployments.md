@@ -39,6 +39,8 @@ worktree is fully usable the moment creation finishes:
      because `auth.config.ts` needed them.
    - Imports the dev data snapshot with `--replace-all`, so preview data
      mirrors dev at creation time.
+   - Starts pending data migrations on the imported data
+     ([Automatic migrations](automatic-migrations.md)).
    - Rewrites the worktree's `apps/web/.env.local`: removes
      `CONVEX_DEPLOYMENT` (guards against accidentally targeting shared dev),
      points `NEXT_PUBLIC_CONVEX_URL` / `NEXT_PUBLIC_CONVEX_SITE_URL` at the
@@ -62,8 +64,9 @@ subdomains work without extra Clerk configuration.
 - Start the app: `pnpm web:dev` (allowed in linked worktrees — the
   "never start the dev server" rule protects only the primary checkout).
 - After editing `apps/web/convex/` functions: `pnpm worktree:convex:deploy`
-  re-pushes to the preview deployment. Preview deployments do not support
-  `convex dev` watch mode; redeploy after backend changes.
+  re-pushes to the preview deployment and starts pending data migrations.
+  Preview deployments do not support `convex dev` watch mode; redeploy after
+  backend changes.
 - Visual verification: the agent browser login endpoint works on the branch
   host, e.g.
   `https://<branch-slug>.app.convoy.localhost/api/agent/browser-login?...`

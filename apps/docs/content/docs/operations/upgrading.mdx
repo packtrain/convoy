@@ -10,9 +10,9 @@ changes.
 
 ## Before you upgrade
 
-- Read the commit range you are about to deploy, and check the
-  [migration log](/docs/operations/migrations#migration-log) for data
-  migrations introduced since your current version.
+- Read the commit range you are about to deploy. Changes to
+  `apps/web/convex/migrations.ts` are data migrations, and the deploy runs
+  them for you.
 - Take a backup if the range includes schema changes — see
   [`Backups and rollback`](/docs/operations/backups-and-rollback).
 - Remember the one-way-door rule: schema-**narrowing** deploys are not
@@ -24,24 +24,23 @@ changes.
 
 With the [integrated Vercel build](/docs/deployment/deploy-to-vercel),
 pushing the new commit to the production branch deploys both: the build
-runs `convex deploy` (functions + schema) and then builds the Next.js app.
+runs `convex deploy` (functions + schema), builds the Next.js app, and starts
+any pending data migrations.
 
 If you deploy Convex separately, deploy the backend **first**, then the web
 app:
 
 ```bash
 # from apps/web
-CONVEX_DEPLOYMENT="prod:friendly-wolf-872" npx convex deploy
+CONVEX_DEPLOYMENT="prod:friendly-wolf-872" pnpm convex:deploy
 ```
 
-### 2. Run pending data migrations
+`pnpm convex:deploy` pushes the backend and starts pending data migrations.
+A plain `npx convex deploy` skips the migrations. They run in the background;
+[`Migrations`](/docs/operations/migrations#check-progress) shows how to
+check them.
 
-If the release includes data migrations, follow the
-[`Migrations`](/docs/operations/migrations) flow: dry-run all pending
-migrations, run them, verify the invariants. Skipping this leaves the new
-code reading data it does not expect.
-
-### 3. Update CLI workers
+### 2. Update CLI workers
 
 Each machine running `convoy connect` should update its checkout and
 restart the bridge:
@@ -58,7 +57,7 @@ release of the backend to avoid drift. A clean restart re-registers the
 session — in-flight threads fail over via the claim lease and are
 retryable.
 
-### 4. Verify
+### 3. Verify
 
 - **Settings → Developer** in the web app shows both frontend and backend
   build metadata — confirm both match the deployed commit.

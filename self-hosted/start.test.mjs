@@ -51,3 +51,11 @@ test("skipping the email stops asking", () => {
   assert.doesNotMatch(r.out, /Give the demo user/);
   assert.doesNotMatch(r.docker, /claimDemoUser/);
 });
+
+test("the deploy starts data migrations", () => {
+  const { run } = install("INSTANCE_SECRET=x\nCONVEX_SELF_HOSTED_ADMIN_KEY=k\nAUTH_MODE=convex\nAUTH_EMAIL_VERIFICATION=off\n");
+  const r = run("");
+  assert.equal(r.status, 0, r.stderr);
+  assert.match(r.docker, /node scripts\/convexDeploy\.mjs -y/);
+  assert.doesNotMatch(r.docker, /npx convex deploy/);
+});

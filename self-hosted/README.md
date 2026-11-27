@@ -32,6 +32,10 @@ Convoy's functions and schema (from inside Docker — no Node.js needed on the
 host), and starts the web app. Re-running it is always safe; it skips what is
 already done.
 
+To upgrade, pull the new version and re-run `./start.sh`. The deploy starts
+any pending data migrations, which then run in the background. Their state is
+in the Convex dashboard: Data, component `migrations`, table `migrations`.
+
 Open http://127.0.0.1:3000 (app) and http://127.0.0.1:6791 (Convex dashboard,
 log in with `CONVEX_SELF_HOSTED_ADMIN_KEY` from `.env`).
 
@@ -121,7 +125,7 @@ npx convex env set CLERK_JWT_ISSUER_DOMAIN "https://convex.invalid"
 # npx convex env set AUTH_EMAIL_VERIFICATION required
 # npx convex env set RESEND_API_KEY "$RESEND_API_KEY"
 # npx convex env set EMAIL_FROM "$EMAIL_FROM"
-npx convex deploy
+pnpm convex:deploy   # convex deploy, then starts pending data migrations
 
 # 4. Build and start the web app
 cd ../../self-hosted

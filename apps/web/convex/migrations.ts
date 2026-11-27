@@ -12,7 +12,7 @@ import {
   setThreadCodexUsageCursor,
 } from "./cli/threads/lib/cliThreadsRepo";
 
-/** Define data migrations here with `migrations.define` and list them in a `runAll` runner. */
+/** Define data migrations here with `migrations.define` and list them in `runAll`. */
 export const migrations = new Migrations<DataModel, typeof schema>(components.migrations, {
   internalMutation,
   schema,
@@ -61,6 +61,7 @@ export const moveThreadClaimLeases = migrations.define({
   },
 });
 
+/** Every deploy calls this (docs/specs/automatic-migrations.md). An empty list throws, so keep one entry. */
 export const runAll = migrations.runner([
   internal.migrations.migrateLegacySessionHeartbeats,
   internal.migrations.moveThreadClaimLeases,

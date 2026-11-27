@@ -45,7 +45,7 @@ These run inside Convex functions at runtime. They are **not** the same as the N
 
 ## 3. Deploy functions and schema
 
-From the `apps/web` directory, run `npx convex deploy` with the target deployment. There are two ways to specify the target:
+From the `apps/web` directory, run `pnpm convex:deploy` with the target deployment. It runs `convex deploy`, passes your arguments to it, and then starts pending [data migrations](/docs/operations/migrations). A plain `npx convex deploy` skips the migrations. There are two ways to specify the target:
 
 ### Option A: Using `CONVEX_DEPLOYMENT`
 
@@ -53,10 +53,10 @@ Pass the deployment identifier with the `prod:` or `dev:` prefix:
 
 ```bash
 # Production
-CONVEX_DEPLOYMENT="prod:friendly-wolf-872" npx convex deploy
+CONVEX_DEPLOYMENT="prod:friendly-wolf-872" pnpm convex:deploy
 
 # Development
-CONVEX_DEPLOYMENT="dev:curious-otter-119" npx convex deploy
+CONVEX_DEPLOYMENT="dev:curious-otter-119" pnpm convex:deploy
 ```
 
 ### Option B: Using a Deploy Key
@@ -64,7 +64,7 @@ CONVEX_DEPLOYMENT="dev:curious-otter-119" npx convex deploy
 Create a **Deploy Key** in the Convex dashboard under **Settings → General → Deploy Keys**. The key is a single string that includes both the deployment target and an authentication secret — useful for CI/CD pipelines.
 
 ```bash
-CONVEX_DEPLOY_KEY="prod:friendly-wolf-872|sk_deploy_..." npx convex deploy
+CONVEX_DEPLOY_KEY="prod:friendly-wolf-872|sk_deploy_..." pnpm convex:deploy
 ```
 
 Copy the full key from the dashboard.

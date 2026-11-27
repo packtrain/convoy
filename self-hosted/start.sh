@@ -147,7 +147,7 @@ ADMIN_KEY="$(env_get CONVEX_SELF_HOSTED_ADMIN_KEY)"
 say "Building the web app image (first run takes a few minutes)..."
 docker compose build web
 
-say "Deploying Convoy functions and schema to your backend..."
+say "Deploying Convoy functions and schema to your backend, then starting data migrations..."
 # Convex mode sets a placeholder issuer: auth.config.ts always lists Clerk,
 # and no Clerk JWT ever arrives. NEXT_PUBLIC_APP_URL comes from the image.
 # Values travel as env vars to avoid quoting. Convex rejects empty values, so a
@@ -167,7 +167,7 @@ docker compose run --rm --no-deps \
       AUTH_GOOGLE_CLIENT_ID AUTH_GOOGLE_CLIENT_SECRET AUTH_EMAIL_VERIFICATION RESEND_API_KEY EMAIL_FROM; do
     v="$(printenv "$k")"
     if [ -n "$v" ]; then npx convex env set "$k" "$v"; else npx convex env remove "$k"; fi || exit 1
-  done && npx convex deploy -y'
+  done && node scripts/convexDeploy.mjs -y'
 
 if [ -n "$CLAIM_EMAIL" ]; then
   say "Giving the demo user its account..."

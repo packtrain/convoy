@@ -27,7 +27,7 @@ Override the **Build Command** to deploy Convex functions as part of every Verce
 pnpm vercel-build
 ```
 
-This runs the `vercel-build` script from `apps/web/package.json`. The script stores the current Vercel commit metadata on the Convex deployment, runs `convex deploy`, then builds the Next.js app. The `--cmd-url-env-var-name` flag injects the correct `NEXT_PUBLIC_CONVEX_URL` automatically during the build, so you don't need to set it as a separate environment variable.
+This runs the `vercel-build` script from `apps/web/package.json`. The script stores the current Vercel commit metadata on the Convex deployment, runs `convex deploy`, builds the Next.js app, then starts any pending [data migrations](/docs/operations/migrations). The `--cmd-url-env-var-name` flag injects the correct `NEXT_PUBLIC_CONVEX_URL` automatically during the build, so you don't need to set it as a separate environment variable.
 
 `--allow-deleting-large-indexes` is required because Vercel builds are non-interactive: without it, `convex deploy` aborts whenever a schema change drops an index on a table with more than 100,000 documents. Dropped indexes leave their documents untouched, but restoring one means backfilling it again.
 
@@ -76,7 +76,8 @@ Click **Deploy**. Vercel will:
 1. Install dependencies (`pnpm install`)
 2. Run `npx convex deploy` (pushes functions and schema to your Convex production deployment)
 3. Run `next build` (builds the Next.js app)
-4. Deploy the built app to Vercel's edge network
+4. Start pending data migrations on the Convex deployment
+5. Deploy the built app to Vercel's edge network
 
 Subsequent pushes to your production branch will trigger the same flow automatically.
 
@@ -90,8 +91,13 @@ If you don't want Convex to deploy as part of the Vercel build (e.g. you want mo
 4. Deploy Convex manually or from a separate CI step:
 
 ```bash
-CONVEX_DEPLOYMENT="prod:friendly-wolf-872" npx convex deploy
+# from apps/web
+CONVEX_DEPLOYMENT="prod:friendly-wolf-872" pnpm convex:deploy
 ```
+
+`pnpm convex:deploy` runs `convex deploy` and then starts pending
+[data migrations](/docs/operations/migrations). A plain `npx convex deploy`
+skips them.
 
 ## Speed Insights
 

@@ -23,7 +23,7 @@
     "web:test": "pnpm --filter @convoy/web run test",
     "web:test:once": "pnpm --filter @convoy/web run test:once",
     "web:test:coverage": "pnpm --filter @convoy/web run test:coverage",
-    "web:convex:dev": "pnpm --filter @convoy/web exec convex dev --tail-logs always",
+    "web:convex:dev": "pnpm --filter @convoy/web exec convex dev --tail-logs always --run migrations:runAll",
     "worktree:setup": "node scripts/worktree-setup.mjs",
     "worktree:convex:deploy": "node scripts/worktree-setup.mjs deploy",
     "worktree:dev": "node scripts/worktree-setup.mjs dev",

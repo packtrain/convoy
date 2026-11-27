@@ -62,16 +62,16 @@ modes.
 
 Then it does the rest: writes `.env`, generates the instance secret and admin
 key, starts the backend and dashboard, builds the web image, deploys Convoy's
-functions from inside Docker (no Node.js needed on the host), and starts the
-web app.
+functions from inside Docker (no Node.js needed on the host), starts pending
+[data migrations](/docs/operations/migrations), and starts the web app.
 On later runs, review the existing `.env` and back up the data before
 upgrading.
 
 ## Manual walkthrough
 
 The same steps by hand — useful for understanding the moving pieces or for
-customized setups. Requires Node 22+ on the host for the
-`npx convex deploy` step.
+customized setups. Requires Node 22+ and pnpm on the host for the
+deploy step.
 
 ```bash
 cd self-hosted
@@ -117,7 +117,7 @@ npx convex env set CLERK_JWT_ISSUER_DOMAIN "https://convex.invalid"
 # npx convex env set RESEND_API_KEY "re_..."
 # npx convex env set EMAIL_FROM "Convoy <noreply@yourdomain>"
 # npx convex env set SUPPORT_EMAIL "help@yourdomain"
-npx convex deploy
+pnpm convex:deploy   # convex deploy, then starts pending data migrations
 ```
 
 **4. Build and start the web app:**
@@ -152,8 +152,9 @@ The defaults assume one machine. To serve a team:
 
 ## Operations
 
-- **Upgrades**: `docker compose pull && docker compose up -d`, then re-run
-  `npx convex deploy` after pulling a new Convoy version. Pin image tags
+- **Upgrades**: `docker compose pull && docker compose up -d`. After pulling
+  a new Convoy version, re-run `./start.sh`, or `pnpm convex:deploy` if you
+  deploy by hand. Both start pending data migrations. Pin image tags
   instead of `latest` for reproducibility, and follow
   [convex-backend releases](https://github.com/get-convex/convex-backend/releases).
 - **Backups**: data lives in the `convex_data` Docker volume (embedded

@@ -20,6 +20,8 @@ import path from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
 import { parseEnv } from "node:util";
 
+import { startMigrations } from "../apps/web/scripts/convexDeploy.mjs";
+
 const repoRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 const webDir = path.join(repoRoot, "apps", "web");
 const envPath = path.join(webDir, ".env.local");
@@ -50,6 +52,15 @@ function convex(args, { env = {}, capture = false } = {}) {
     env: childEnv,
   });
   return { ok: res.status === 0, stdout: res.stdout ?? "" };
+}
+
+// Preview deploys skip `--preview-run` on an existing deployment, so start them by name.
+// See docs/specs/automatic-migrations.md.
+function startPreviewMigrations(deploymentName, env) {
+  log("starting pending data migrations...");
+  if (!startMigrations(["--deployment", deploymentName], { cwd: webDir, env: convexEnv(process.env, env) })) {
+    fail("starting data migrations on the preview deployment failed");
+  }
 }
 
 function readEnvLines() {
@@ -266,6 +277,7 @@ async function setup() {
   if (!convex(["import", "--deployment", deploymentName, "--replace-all", "-y", snapshotPath], { env: previewEnv }).ok) {
     fail("data import into the preview deployment failed");
   }
+  startPreviewMigrations(deploymentName, previewEnv);
 
   // 7. Convex Auth: the agent user for /api/agent/browser-login, before the
   //    provisioned marker, so a failure leaves setup to rerun from scratch.
@@ -320,11 +332,11 @@ function deploy() {
   const slug = getEnv(lines, "CONVEX_PREVIEW_NAME");
   if (!slug) fail("CONVEX_PREVIEW_NAME not set — run `node scripts/worktree-setup.mjs` first");
   log(`deploying convex functions to preview deployment "${slug}"...`);
-  if (!convex(["deploy", "--typecheck", "disable", "--preview-name", slug], {
-    env: { CONVEX_DEPLOY_KEY: previewKey },
-  }).ok) {
+  const previewEnv = { CONVEX_DEPLOY_KEY: previewKey };
+  if (!convex(["deploy", "--typecheck", "disable", "--preview-name", slug], { env: previewEnv }).ok) {
     fail("deploy failed");
   }
+  startPreviewMigrations(getEnv(lines, "CONVEX_PREVIEW_DEPLOYMENT"), previewEnv);
   log("done.");
 }
 
