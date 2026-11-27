@@ -132,3 +132,44 @@ describe("RunChangesCard", () => {
     expect(onSelectFile).toHaveBeenCalledWith(preview.files[0]);
   });
 });
+
+describe("RunChangesCard in a multi-repo folder", () => {
+  const multiRepo = {
+    preRef: "refs/pre",
+    postRef: "refs/post",
+    files: [
+      { path: "src/a.ts", kind: "modified" as const, additions: 1, deletions: 0, repo: "new-app" },
+      { path: "src/b.ts", kind: "added" as const, additions: 2, deletions: 0, repo: "old-app" },
+    ],
+    fileCount: 2,
+    additions: 3,
+    deletions: 0,
+    repos: [
+      { path: "new-app", pathId: "repo-new", fileCount: 1, additions: 1, deletions: 0 },
+      { path: "old-app", fileCount: 1, additions: 2, deletions: 0 },
+    ],
+  };
+
+  test("groups files under a repo header and keeps totals for the whole run", () => {
+    render(<RunChangesCard diffSummary={multiRepo} onUndo={vi.fn()} />);
+
+    expect(screen.getByText("Edited 2 files")).toBeDefined();
+    expect(screen.getByText("new-app")).toBeDefined();
+    expect(screen.getByText("old-app")).toBeDefined();
+    // Undo restores one checkout; a multi-repo run has several.
+    expect(screen.queryByRole("button", { name: /undo/i })).toBeNull();
+  });
+
+  test("mentions a file by its path in the folder, and offers ops only for a known repo entry", () => {
+    const onMentionFile = vi.fn();
+    const onRevertFile = vi.fn();
+    render(<RunChangesCard diffSummary={multiRepo} onMentionFile={onMentionFile} onRevertFile={onRevertFile} onSelectFile={vi.fn()} />);
+
+    fireEvent.click(screen.getByRole("button", { name: "Mention new-app/src/a.ts in reply" }));
+    expect(onMentionFile).toHaveBeenCalledWith("new-app/src/a.ts");
+    fireEvent.click(screen.getByRole("button", { name: "Revert new-app/src/a.ts" }));
+    expect(onRevertFile).toHaveBeenCalledWith(multiRepo.files[0]);
+    // old-app has no repo entry yet, so nothing can address it.
+    expect(screen.queryByRole("button", { name: "Revert old-app/src/b.ts" })).toBeNull();
+  });
+});

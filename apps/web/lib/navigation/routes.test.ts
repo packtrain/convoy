@@ -92,10 +92,19 @@ describe("appRoute", () => {
       pathId: "path_1",
       view: "changes",
       commit: null,
+      repo: null,
     });
     expect(parseWorktreeChangesTarget("?profileId=profile_1&pathId=path_1")).toBeNull();
     expect(parseWorktreeChangesTarget("?view=changes&profileId=profile_1")).toBeNull();
     expect(parseWorktreeChangesTarget("")).toBeNull();
+  });
+
+  test("a multi-repo folder's page carries the repo it shows", () => {
+    const route = href(
+      appRoute.projectThreadsWithPreselection("acme", "app", { profileId: "profile_1", pathId: "folder", repo: "repo_1", view: "history" })
+    );
+    expect(route).toBe("/o/acme/app/threads?profileId=profile_1&pathId=folder&repo=repo_1&view=history");
+    expect(parseWorktreeChangesTarget(route.split("?")[1])?.repo).toBe("repo_1");
   });
 
   test("the History tab and its open commit live in the URL (OS-2534 UX review)", () => {
@@ -113,6 +122,7 @@ describe("appRoute", () => {
       pathId: "path_1",
       view: "history",
       commit: "a".repeat(40),
+      repo: null,
     });
     expect(isNewThreadComposerTarget(`?${search}`)).toBe(false);
   });

@@ -27,7 +27,9 @@ export class GitCommandError extends Error {
     message: string,
     public readonly gitArgs: readonly string[],
     public readonly exitCode: number | null,
-    public readonly stderr: string
+    public readonly stderr: string,
+    /** Killed at its `timeoutMs`. */
+    public readonly timedOut = false
   ) {
     super(message);
     this.name = "GitCommandError";
@@ -80,7 +82,7 @@ export async function runGit(cwd: string, args: string[], options: RunGitOptions
         }
 
         const reason = error.killed ? `git ${args[0] ?? ""} timed out` : errorLine(stderr) || error.message;
-        reject(new GitCommandError(reason, args, exitCode, stderr));
+        reject(new GitCommandError(reason, args, exitCode, stderr, error.killed === true));
       }
     );
   });

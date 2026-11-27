@@ -169,6 +169,29 @@ describe("WorktreeChangesView", () => {
     expect(screen.getByRole("button", { name: "Refresh history" })).toBeTruthy();
   });
 
+  test("a multi-repo folder shows the repo in the URL, else its first, and switches repos there", () => {
+    state.profile = {
+      paths: [
+        { id: "folder", path: "/code/acme", label: "acme" },
+        { id: "r-new", path: "/code/acme/new-app", label: "new-app", kind: "repo", parentPathId: "folder" },
+        { id: "r-old", path: "/code/acme/old-app", label: "old-app", kind: "repo", parentPathId: "folder" },
+      ],
+      isOnline: true,
+      appVersion: "0.187.0",
+    };
+    url.search = "?profileId=profile_1&pathId=folder&repo=r-old&view=changes";
+    const opPaths = () => state.opCalls.map((call) => (call as { pathId?: string }).pathId);
+    state.opCalls.length = 0;
+    render(<WorktreeChangesView profileId={"profile_1" as Id<"cliProfiles">} pathId="folder" />);
+    expect(opPaths().at(-1)).toBe("r-old");
+    expect(opPaths()).not.toContain("folder");
+
+    fireEvent.pointerDown(screen.getByRole("button", { name: "Repository: old-app" }), { button: 0, ctrlKey: false });
+    fireEvent.click(screen.getByRole("menuitemradio", { name: "new-app" }));
+    expect(url.search).toBe("?profileId=profile_1&pathId=folder&repo=r-new&view=changes");
+    expect(opPaths().at(-1)).toBe("r-new");
+  });
+
   test("the History tab is in the URL, so a reload reopens it (OS-2534 UX review)", () => {
     state.profile = { paths: WORKTREE_PATHS, isOnline: true, appVersion: "0.83.0" };
     const { unmount } = render(<WorktreeChangesView profileId={"profile_1" as Id<"cliProfiles">} pathId="path_1" />);

@@ -1,8 +1,8 @@
 import { mkdtemp, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { runGit } from "./exec.js";
-import { getCheckoutIdentity } from "./repo.js";
+import { GitCommandError, runGit } from "./exec.js";
+import { getCheckoutIdentity, listRepositoryPaths, mapLimited, repoRelativePath } from "./repo.js";
 
 /**
  * Hidden-ref git checkpoints around a thread run (OS-1142).
@@ -14,7 +14,10 @@ import { getCheckoutIdentity } from "./repo.js";
  */
 
 export interface RunDiffFile {
+  /** Relative to `repo` when set, else to the working directory. */
   path: string;
+  /** The repo's relative path in a multi-repo folder. */
+  repo?: string;
   kind: "added" | "modified" | "deleted";
   additions: number;
   deletions: number;
@@ -26,6 +29,8 @@ export interface RunDiffSummary {
   postRef: string;
   files: RunDiffFile[];
   truncated?: boolean;
+  /** Multi-repo folder: the repos with changes, in `files` order. */
+  repos?: { path: string }[];
 }
 
 export const MAX_DIFF_FILES = 200;
@@ -37,9 +42,14 @@ const MAX_REFS_PER_THREAD = 40;
 export const CAPTURE_TIMEOUT_MS = 120_000;
 const WORKSPACE_TRAILER = "Convoy-Checkout: ";
 
-async function checkpointWorkspace(cwd: string): Promise<string> {
-  const prefix = await runGit(cwd, ["rev-parse", "--show-prefix"]);
-  return JSON.stringify([await getCheckoutIdentity(cwd), prefix.stdout.trim()]);
+async function checkpointWorkspace(cwd: string, deadline?: number): Promise<string> {
+  const prefix = await runGit(cwd, ["rev-parse", "--show-prefix"], { timeoutMs: timeLeft(deadline) });
+  return JSON.stringify([await getCheckoutIdentity(cwd, timeLeft(deadline)), prefix.stdout.trim()]);
+}
+
+/** Time left before `deadline` for one git command, else `fallback` (the command's default). */
+function timeLeft(deadline: number | undefined, fallback?: number): number | undefined {
+  return deadline === undefined ? fallback : Math.max(1, deadline - Date.now());
 }
 
 // Snapshot commits need an ident even in repos without user.name/email.
@@ -49,8 +59,8 @@ export function checkpointRef(threadId: string, runId: string, phase: "pre" | "p
   return `refs/convoy/checkpoints/${threadId}/${runId}/${phase}`;
 }
 
-async function refExists(cwd: string, ref: string): Promise<boolean> {
-  const result = await runGit(cwd, ["rev-parse", "--verify", "--quiet", ref], { allowNonZeroExit: true });
+async function refExists(cwd: string, ref: string, deadline?: number): Promise<boolean> {
+  const result = await runGit(cwd, ["rev-parse", "--verify", "--quiet", ref], { allowNonZeroExit: true, timeoutMs: timeLeft(deadline) });
   return result.exitCode === 0;
 }
 
@@ -62,19 +72,22 @@ async function isGitWorkTree(cwd: string): Promise<boolean> {
 /**
  * Stage the whole working tree (tracked + untracked-but-not-ignored files)
  * into a temporary index and hand its env to `fn`. The user's real index is
- * never touched. Shared by checkpoints and the worktree changes view.
+ * never touched. Shared by checkpoints and the worktree changes view. A
+ * `deadline` (epoch ms) bounds every git command in it.
  */
-export async function withWorkingTreeIndex<T>(cwd: string, fn: (env: { GIT_INDEX_FILE: string }) => Promise<T>): Promise<T> {
+export async function withWorkingTreeIndex<T>(
+  cwd: string, fn: (env: { GIT_INDEX_FILE: string }) => Promise<T>, deadline?: number,
+): Promise<T> {
   const tempDir = await mkdtemp(join(tmpdir(), "convoy-index-"));
   const env = { GIT_INDEX_FILE: join(tempDir, "index") };
   try {
-    const head = await runGit(cwd, ["rev-parse", "--verify", "--quiet", "HEAD"], { allowNonZeroExit: true });
+    const head = await runGit(cwd, ["rev-parse", "--verify", "--quiet", "HEAD"], { allowNonZeroExit: true, timeoutMs: timeLeft(deadline) });
     if (head.exitCode === 0) {
-      await runGit(cwd, ["read-tree", "HEAD"], { env });
+      await runGit(cwd, ["read-tree", "HEAD"], { env, timeoutMs: timeLeft(deadline) });
     } else {
-      await runGit(cwd, ["read-tree", "--empty"], { env });
+      await runGit(cwd, ["read-tree", "--empty"], { env, timeoutMs: timeLeft(deadline) });
     }
-    await runGit(cwd, ["add", "-A", "--", "."], { env, timeoutMs: CAPTURE_TIMEOUT_MS });
+    await runGit(cwd, ["add", "-A", "--", "."], { env, timeoutMs: timeLeft(deadline, CAPTURE_TIMEOUT_MS) });
     return await fn(env);
   } finally {
     await rm(tempDir, { recursive: true, force: true });
@@ -83,20 +96,23 @@ export async function withWorkingTreeIndex<T>(cwd: string, fn: (env: { GIT_INDEX
 
 /**
  * Snapshot the working tree into a commit stored at `ref`. Idempotent: an
- * existing ref is left untouched.
+ * existing ref is left untouched. A `deadline` (epoch ms) bounds every git command.
  */
-export async function captureCheckpoint(cwd: string, ref: string): Promise<void> {
-  if (await refExists(cwd, ref)) {
+export async function captureCheckpoint(cwd: string, ref: string, deadline?: number): Promise<void> {
+  if (await refExists(cwd, ref, deadline)) {
     return;
   }
 
   await withWorkingTreeIndex(cwd, async (env) => {
-    const tree = (await runGit(cwd, ["write-tree"], { env })).stdout.trim();
-    const commit = (
-      await runGit(cwd, [...IDENT_ARGS, "commit-tree", tree, "-m", `convoy checkpoint ${ref}\n\n${WORKSPACE_TRAILER}${await checkpointWorkspace(cwd)}`], { env })
-    ).stdout.trim();
-    await runGit(cwd, ["update-ref", ref, commit]);
-  });
+    const tree = (await runGit(cwd, ["write-tree"], { env, timeoutMs: timeLeft(deadline) })).stdout.trim();
+    await writeCheckpointCommit(cwd, ref, tree, deadline);
+  }, deadline);
+}
+
+async function writeCheckpointCommit(cwd: string, ref: string, tree: string, deadline?: number): Promise<void> {
+  const message = `convoy checkpoint ${ref}\n\n${WORKSPACE_TRAILER}${await checkpointWorkspace(cwd, deadline)}`;
+  const commit = (await runGit(cwd, [...IDENT_ARGS, "commit-tree", tree, "-m", message], { timeoutMs: timeLeft(deadline) })).stdout.trim();
+  await runGit(cwd, ["update-ref", ref, commit], { timeoutMs: timeLeft(deadline) });
 }
 
 /**
@@ -137,6 +153,120 @@ export async function captureRunDiffSummary(cwd: string, threadId: string, runId
     return { preRef, postRef, files: files.slice(0, MAX_DIFF_FILES), truncated: true };
   }
   return { preRef, postRef, files };
+}
+
+/** What a run's pre-run capture covered: the working directory's repo, or the repos of a multi-repo folder. */
+export type RunBaseline = { kind: "repo" } | { kind: "folder"; repos: RepoBaseline[] };
+
+/** A repo of a multi-repo folder at run start. A clean one has no pre checkpoint yet, only its HEAD. */
+export interface RepoBaseline {
+  path: string;
+  relativePath: string;
+  head: string | null;
+  clean: boolean;
+}
+
+// Spec: docs/specs/cli-thread-run-diffs.md#multi-repo-folders (t3code's CheckpointCaptureService limits).
+const REPO_CAPTURE_CONCURRENCY = 6;
+const BASELINE_TIMEOUT_MS = 5_000;
+const MAX_BASELINE_TIMEOUTS = 2;
+// Consecutive timeouts per repo path; a baseline that finishes resets it.
+const baselineTimeouts = new Map<string, number>();
+
+/**
+ * Pre-run capture for the working directory: its own repo, or each repo of a
+ * multi-repo folder. Null when there is no repo to checkpoint.
+ */
+export async function captureRunBaseline(
+  cwd: string, threadId: string, runId: string, options: { baselineTimeoutMs?: number } = {},
+): Promise<RunBaseline | null> {
+  // Child repos win over a checkout the folder sits inside: that one's tree doesn't see their files.
+  const paths = await listRepositoryPaths(cwd).catch(() => []);
+  if (paths.length === 0 || paths[0] === cwd) {
+    return (await capturePreRunCheckpoint(cwd, threadId, runId)) ? { kind: "repo" } : null;
+  }
+  const ref = checkpointRef(threadId, runId, "pre");
+  const budget = options.baselineTimeoutMs ?? BASELINE_TIMEOUT_MS;
+  const repos = await mapLimited(paths, async (path): Promise<RepoBaseline | null> => {
+    if ((baselineTimeouts.get(path) ?? 0) >= MAX_BASELINE_TIMEOUTS) return null;
+    // One budget for the repo's status and snapshot.
+    const deadline = Date.now() + budget;
+    try {
+      const state = await readRepoState(path, budget);
+      if (!state.clean) await captureCheckpoint(path, ref, deadline);
+      baselineTimeouts.delete(path);
+      return { path, relativePath: repoRelativePath(cwd, path), ...state };
+    } catch (error) {
+      if (error instanceof GitCommandError && error.timedOut) {
+        const timeouts = (baselineTimeouts.get(path) ?? 0) + 1;
+        baselineTimeouts.set(path, timeouts);
+        if (timeouts === MAX_BASELINE_TIMEOUTS) console.warn(`[Checkpoint] ${path}: baseline timed out twice; its changes are no longer tracked`);
+      } else {
+        console.warn(`[Checkpoint] ${path}: baseline failed: ${error instanceof Error ? error.message : String(error)}`);
+      }
+      return null;
+    }
+  }, REPO_CAPTURE_CONCURRENCY);
+  return { kind: "folder", repos: repos.filter((repo): repo is RepoBaseline => repo !== null) };
+}
+
+/**
+ * Post-run capture and change summary for a baseline from `captureRunBaseline`.
+ * A repo still clean on the same HEAD costs one `git status`; a failed repo is left out.
+ */
+export async function captureRunChanges(
+  cwd: string, baseline: RunBaseline, threadId: string, runId: string,
+): Promise<RunDiffSummary | null> {
+  if (baseline.kind === "repo") {
+    return captureRunDiffSummary(cwd, threadId, runId);
+  }
+  const preRef = checkpointRef(threadId, runId, "pre");
+  const summaries = await mapLimited(baseline.repos, async (repo) => {
+    try {
+      if (repo.clean) {
+        const now = await readRepoState(repo.path);
+        if (now.clean && now.head === repo.head) return null;
+        if (!(await refExists(repo.path, preRef))) await writeCheckpointCommit(repo.path, preRef, repo.head ? `${repo.head}^{tree}` : await emptyTree(repo.path));
+      }
+      return await captureRunDiffSummary(repo.path, threadId, runId);
+    } catch (error) {
+      console.warn(`[Checkpoint] ${repo.path}: post-run capture failed: ${error instanceof Error ? error.message : String(error)}`);
+      return null;
+    }
+  }, REPO_CAPTURE_CONCURRENCY);
+  const files = baseline.repos.flatMap((repo, i) => (summaries[i]?.files ?? []).map((file) => ({ ...file, repo: repo.relativePath })));
+  if (files.length === 0) {
+    return null;
+  }
+  // The cap is for the run's files as a whole; `repos` still names every changed repo.
+  const changed = new Set(files.map((file) => file.repo));
+  return {
+    preRef,
+    postRef: checkpointRef(threadId, runId, "post"),
+    files: files.slice(0, MAX_DIFF_FILES),
+    ...(files.length > MAX_DIFF_FILES || summaries.some((summary) => summary?.truncated) ? { truncated: true } : {}),
+    repos: baseline.repos.filter((repo) => changed.has(repo.relativePath)).map((repo) => ({ path: repo.relativePath })),
+  };
+}
+
+/**
+ * HEAD and cleanliness from one `git status`. Untracked files count whatever the user's config says,
+ * and the real index is never refreshed (no `index.lock`).
+ */
+async function readRepoState(cwd: string, timeoutMs?: number): Promise<{ head: string | null; clean: boolean }> {
+  const args = ["--no-optional-locks", "status", "--porcelain=v2", "--branch", "--untracked-files=normal", "-z"];
+  const entries = (await runGit(cwd, args, { timeoutMs })).stdout.split("\0").filter(Boolean);
+  const oid = entries.find((entry) => entry.startsWith("# branch.oid "))?.slice("# branch.oid ".length);
+  return { head: oid && oid !== "(initial)" ? oid : null, clean: entries.every((entry) => entry.startsWith("# ")) };
+}
+
+async function emptyTree(cwd: string): Promise<string> {
+  const tempDir = await mkdtemp(join(tmpdir(), "convoy-index-"));
+  try {
+    return (await runGit(cwd, ["write-tree"], { env: { GIT_INDEX_FILE: join(tempDir, "index") } })).stdout.trim();
+  } finally {
+    await rm(tempDir, { recursive: true, force: true });
+  }
 }
 
 /**

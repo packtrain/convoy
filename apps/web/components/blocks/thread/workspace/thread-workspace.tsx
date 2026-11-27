@@ -96,6 +96,9 @@ import {
   writeChangesDiffStyle,
   writeChangesWordWrap,
 } from "@/lib/threads/changes-view-prefs";
+import { folderPathOf, repoPathIdOf, scopeRunToRepo } from "@/lib/threads/run-diff-repos";
+import { useChangesRepo } from "@/lib/threads/hooks/use-changes-repo";
+import { RepoSwitcher } from "@/components/blocks/cli/profiles/repo-switcher";
 import { useThreadRunReviewComments } from "@/lib/threads/hooks/use-thread-run-review-comments";
 import { composeReviewFeedbackMessage } from "@/lib/threads/run-review-comments";
 import { TaskArtifactPanel } from "@/components/blocks/tasks/task-artifact-panel";
@@ -105,10 +108,11 @@ import {
   useUpdateTaskArtifact,
 } from "@/lib/tasks/hooks/use-task-artifacts";
 import { TaskRefWithType, TaskType } from "@/components/blocks/tasks/task-ref-with-type";
-import type {
-  CliRunDiffFile,
-  CliRunDiffSummary,
-  CliRunDiffSummaryPreview,
+import {
+  folderRepos,
+  type CliRunDiffFile,
+  type CliRunDiffSummary,
+  type CliRunDiffSummaryPreview,
 } from "@/convex/lib/contracts/validators";
 import { ThreadTaskRefLink } from "@/components/blocks/thread/thread-task-link";
 import { ThreadAttachedPrRefLink } from "@/components/blocks/thread/thread-pr-badge";
@@ -641,6 +645,8 @@ function ThreadWorkspaceBody({
   const [revertTarget, setRevertTarget] = useState<{
     diffSummary: CliRunDiffSummaryPreview;
     file?: CliRunDiffFile;
+    /** A multi-repo file's repo entry; else the thread's path. */
+    pathId?: string;
   } | null>(null);
   const [revertOpId, setRevertOpId] = useState<Id<"cliWorktreeOps"> | null>(null);
 
@@ -667,12 +673,22 @@ function ThreadWorkspaceBody({
     [closeThreadArtifact]
   );
 
+  // Multi-repo folder: the Changes tab shows one repo at a time (docs/specs/cli-thread-run-diffs.md#multi-repo-folders).
+  const threadRepos = useMemo(() => folderRepos(activeProfile?.paths ?? [], chat?.pathId), [activeProfile?.paths, chat?.pathId]);
+  const { repo: changesRepo, select: selectChangesRepo, envelopes: changesEnvelopes } = useChangesRepo(threadId, threadRepos, envelopes, !messagesLoading);
+  // A run or range belongs to the repo it was opened in; History closes its commit on a switch.
+  const [viewRepoId, setViewRepoId] = useState(changesRepo?.id);
+  if (viewRepoId !== changesRepo?.id) {
+    setViewRepoId(changesRepo?.id);
+    setChangesView((view) => (view.kind === "run" || view.kind === "range" ? { kind: "latest" } : view.kind === "history" ? { kind: "history" } : view));
+  }
+
   // Range for the cumulative "All changes" view (OS-1158): oldest loaded
   // run's preRef → newest run's postRef. Files stay empty — the viewer
   // derives them from the fetched patch. Envelopes are oldest-first; runs
   // beyond the loaded chunks are outside the range.
   const cumulativeDiffSummary = useMemo<CliRunDiffSummary | null>(() => {
-    const summaries = envelopes.flatMap((message) =>
+    const summaries = changesEnvelopes.flatMap((message) =>
       message.role === "assistant" && message.diffSummary ? [message.diffSummary] : []
     );
     if (summaries.length === 0) {
@@ -683,7 +699,7 @@ function ThreadWorkspaceBody({
       postRef: summaries[summaries.length - 1].postRef,
       files: [],
     };
-  }, [envelopes]);
+  }, [changesEnvelopes]);
 
   // Pushes `task=<REF>` and reveals the tab (`setTask` carries `revealTaskTab`);
   // the mirror below keeps back/forward and deep links in sync.
@@ -924,7 +940,16 @@ function ThreadWorkspaceBody({
 
   const handleOpenDiffFile = useCallback(
     (file: CliRunDiffFile, diffSummary: CliRunDiffSummaryPreview) => {
-      setChangesView({ kind: "run", diffSummary, file });
+      const repo = threadRepos.find((entry) => entry.id === repoPathIdOf(diffSummary, file));
+      if (diffSummary.repos && !repo) {
+        toast.error("This repository is no longer in the project folder.");
+        return;
+      }
+      if (repo) {
+        selectChangesRepo(repo.id);
+        setViewRepoId(repo.id);
+      }
+      setChangesView({ kind: "run", diffSummary: (repo && scopeRunToRepo(diffSummary, repo)) || diffSummary, file });
       setActivePanel("changes");
       // Full view has no pane; leaving the flag alone keeps it meaning
       // "the split pane was open", which is what the mode toggle reads.
@@ -932,7 +957,7 @@ function ThreadWorkspaceBody({
         openSidebar();
       }
     },
-    [isFullView, openSidebar, setActivePanel]
+    [isFullView, openSidebar, selectChangesRepo, setActivePanel, threadRepos]
   );
   const handleSelectChangesView = useCallback(
     (kind: "latest" | "all" | "worktree" | "history") => {
@@ -1032,6 +1057,11 @@ function ThreadWorkspaceBody({
         : undefined,
     [chatProfileId, chatPathId, isProfileOnline, readOnly]
   );
+  // The Changes tab's checkout: the chosen repo of a multi-repo folder.
+  const changesFileOpContext = useMemo(
+    () => (runFileOpContext && changesRepo ? { ...runFileOpContext, pathId: changesRepo.id } : runFileOpContext),
+    [changesRepo, runFileOpContext]
+  );
   const enqueueWorktreeOp = useMutation(api.cli.worktreeOps.enqueue);
   const revertOp = useQuery(
     api.cli.worktreeOps.get,
@@ -1068,7 +1098,7 @@ function ThreadWorkspaceBody({
       profileId: runFileOpContext.profileId as Id<"cliProfiles">,
       // revertFile restores one file (OS-1156); revertRun the whole run.
       kind: target.file ? "revertFile" : "revertRun",
-      pathId: runFileOpContext.pathId,
+      pathId: target.pathId ?? runFileOpContext.pathId,
       preRef: target.diffSummary.preRef,
       ...(target.file ? { filePath: target.file.path } : {}),
     })
@@ -1085,20 +1115,26 @@ function ThreadWorkspaceBody({
   const handleMentionFile = useCallback((path: string) => {
     composerControllerRef.current?.insertFileMention(path);
   }, []);
+  // Changes-tab paths are relative to the chosen repo; a mention names the file from the folder.
+  const changesRepoLabel = changesRepo?.label;
+  const handleChangesMentionFile = useCallback(
+    (path: string) => handleMentionFile(folderPathOf({ path, repo: changesRepoLabel })),
+    [changesRepoLabel, handleMentionFile]
+  );
   const handleRevertRun = useCallback(
     (diffSummary: CliRunDiffSummaryPreview) => setRevertTarget({ diffSummary }),
     []
   );
   const handleRevertFile = useCallback(
     (file: CliRunDiffFile, diffSummary: CliRunDiffSummaryPreview) =>
-      setRevertTarget({ diffSummary, file }),
+      setRevertTarget({ diffSummary, file, pathId: repoPathIdOf(diffSummary, file) }),
     []
   );
   // Run timeline (OS-1160): browse runs, range-select a span to diff it,
   // restore to before any run.
   const timelineRuns = useMemo(
-    () => buildTimelineRuns(envelopes, userTextById),
-    [envelopes, userTextById]
+    () => buildTimelineRuns(changesEnvelopes, userTextById),
+    [changesEnvelopes, userTextById]
   );
   // The "latest" view follows the newest loaded run with a summary, so it moves
   // as runs land; its checkpoints are the last the CLI prunes (OS-1882).
@@ -1114,10 +1150,10 @@ function ThreadWorkspaceBody({
   const handleRevertViewerFile = useCallback(
     (file: CliRunDiffFile) => {
       if (viewerDiffSummary) {
-        setRevertTarget({ diffSummary: viewerDiffSummary, file });
+        setRevertTarget({ diffSummary: viewerDiffSummary, file: { ...file, repo: changesRepo?.label }, pathId: changesRepo?.id });
       }
     },
-    [viewerDiffSummary]
+    [changesRepo, viewerDiffSummary]
   );
 
   // Shown on the changes toolbar selector.
@@ -1757,7 +1793,8 @@ function ThreadWorkspaceBody({
           deriveFilesFromPatch: true,
           selectedPath: changesView.kind === "run" ? changesView.file.path : undefined,
           changesTabLabel: changesView.kind === "latest" ? "Latest run" : undefined,
-          review: viewerReview,
+          // Review comments name files from the working directory; a repo-scoped view doesn't, yet.
+          review: changesRepo ? undefined : viewerReview,
           onRevertFile: handleRevertViewerFile,
         }
       : changesView.kind === "range" && rangeDiffSummary
@@ -1765,14 +1802,14 @@ function ThreadWorkspaceBody({
             diffSummary: rangeDiffSummary,
             deriveFilesFromPatch: true,
             changesTabLabel: changesView.label,
-            review: rangeReview,
+            review: changesRepo ? undefined : rangeReview,
           }
         : cumulativeDiffSummary
           ? {
               diffSummary: cumulativeDiffSummary,
               deriveFilesFromPatch: true,
               changesTabLabel: "All changes",
-              review: cumulativeReview,
+              review: changesRepo ? undefined : cumulativeReview,
             }
           : null;
 
@@ -1875,7 +1912,9 @@ function ThreadWorkspaceBody({
           // Same gate the transcript's run cards use: reverting goes through
           // the owner-scoped `worktreeOps.enqueue`, so a viewer gets no handler
           // and the timeline drops its restore action.
-          onRevertRun={runFileOpContext ? handleRevertRun : undefined}
+          // A multi-repo run has no one checkout to restore (no Undo on its card either).
+          onRevertRun={runFileOpContext && !changesRepo ? handleRevertRun : undefined}
+          leading={changesRepo && <RepoSwitcher repos={threadRepos} value={changesRepo.id} onChange={selectChangesRepo} />}
           allCollapsed={changesAllCollapsed}
           onToggleCollapseAll={() => setChangesAllCollapsed((value) => !value)}
           diffStyle={changesDiffStyle}
@@ -1904,35 +1943,35 @@ function ThreadWorkspaceBody({
           }
         />
         <div className="min-h-0 flex-1 overflow-auto">
-          {(changesView.kind === "worktree" || changesView.kind === "history") && runFileOpContext ? (
+          {(changesView.kind === "worktree" || changesView.kind === "history") && changesFileOpContext ? (
             <WorktreeChangesPanel
               // A path switch is a different checkout: start fresh.
-              key={`${changesView.kind}:${runFileOpContext.profileId}:${runFileOpContext.pathId}`}
+              key={`${changesView.kind}:${changesFileOpContext.profileId}:${changesFileOpContext.pathId}`}
               view={changesView.kind}
-              profileId={runFileOpContext.profileId as Id<"cliProfiles">}
-              pathId={runFileOpContext.pathId}
+              profileId={changesFileOpContext.profileId as Id<"cliProfiles">}
+              pathId={changesFileOpContext.pathId}
               allCollapsed={changesAllCollapsed}
               diffStyle={changesDiffStyle}
               wordWrap={changesWordWrap}
               fileTreeOpen={changesFileTree}
               refreshKey={timelineRuns.at(-1)?.diffSummary.postRef}
-              onMentionFile={handleMentionFile}
+              onMentionFile={handleChangesMentionFile}
               openCommit={changesView.kind === "history" ? (changesView.commit ?? null) : null}
               onOpenCommit={handleOpenHistoryCommit}
               onHistoryDiffShownChange={setHistoryDiffShown}
             />
-          ) : changesViewer && runFileOpContext ? (
+          ) : changesViewer && changesFileOpContext ? (
             <RunFileViewerPanel
               // Remount when the diffed range changes so tab/collapse state
-              // resets per run, per selected range, and as new runs land.
-              key={`${changesViewer.diffSummary.preRef}:${changesViewer.diffSummary.postRef}`}
+              // resets per run, per selected range, per repo, and as new runs land.
+              key={`${changesFileOpContext.pathId}:${changesViewer.diffSummary.preRef}:${changesViewer.diffSummary.postRef}`}
               {...changesViewer}
               allCollapsed={changesAllCollapsed}
               diffStyle={changesDiffStyle}
               wrapLines={changesWordWrap}
               fileTreeOpen={changesFileTree}
-              context={runFileOpContext}
-              onMentionFile={handleMentionFile}
+              context={changesFileOpContext}
+              onMentionFile={handleChangesMentionFile}
             />
           ) : (
             <p className="p-4 text-sm text-muted-foreground">No changes yet.</p>
@@ -2229,7 +2268,7 @@ function ThreadWorkspaceBody({
       <RunUndoConfirmDialog
         open={revertTarget !== null}
         fileCount={revertTarget?.diffSummary.fileCount ?? 0}
-        filePath={revertTarget?.file?.path}
+        filePath={revertTarget?.file ? folderPathOf(revertTarget.file) : undefined}
         onOpenChange={(open) => {
           if (!open) {
             setRevertTarget(null);

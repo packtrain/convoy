@@ -7,7 +7,7 @@ import { hasProjectAccess, requireAuthorizedProject } from "../lib/access/permis
 import { ProjectPermission } from "../../lib/authz/permissions";
 import { ensure } from "../lib/shared/ensure";
 import { errors } from "./errors";
-import { cliHistoryScopeValidator, cliWorktreeOpKindValidator, cliWorktreeOpStatusValidator } from "../lib/contracts/validators";
+import { cliHistoryScopeValidator, cliWorktreeOpKindValidator, cliWorktreeOpStatusValidator, type CliProfilePathEntry } from "../lib/contracts/validators";
 import { getCliProfileById } from "./lib/cliProfilesRepo";
 import { listOnlineSessionsByProfile } from "./lib/cliSessionsRepo";
 import { getThreadByCheckpointRef, listThreadsClaimedBySession } from "./threads/lib/cliThreadsRepo";
@@ -79,15 +79,19 @@ function toWorktreeOpItem(doc: Doc<"cliWorktreeOps">) {
   };
 }
 
-/** Whether any active session holds a claim on a thread in this path, or still running in it after an agent move (OS-2622). */
+/**
+ * Whether any active session holds a claim on a thread in this path (a repo entry's folder counts), or still
+ * running in it after an agent move (OS-2622).
+ */
 async function isPathInUse(
   ctx: Parameters<typeof listOnlineSessionsByProfile>[0],
   profile: Doc<"cliProfiles">,
-  entry: { id: string; path: string }
+  entry: Pick<CliProfilePathEntry, "id" | "path" | "kind" | "parentPathId">
 ): Promise<boolean> {
   const sessions = await listOnlineSessionsByProfile(ctx, profile._id);
   const claimedPerSession = await Promise.all(sessions.map((session) => listThreadsClaimedBySession(ctx, session._id)));
-  return claimedPerSession.flat().some((thread) => !thread.isDeleted && (thread.pathId === entry.id ||
+  const folderId = entry.kind === "repo" ? entry.parentPathId : undefined;
+  return claimedPerSession.flat().some((thread) => !thread.isDeleted && (thread.pathId === entry.id || (folderId !== undefined && thread.pathId === folderId) ||
     (thread.git?.movedByAgent === true && thread.git.previousWorkingDirectory === entry.path)));
 }
 

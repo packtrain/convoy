@@ -663,7 +663,9 @@ Opened from an expanded Connected CLIs row (see
 [cli-thread-list.md](cli-thread-list.md#connected-clis-os-1993)) at
 `/threads?profileId&pathId&view=changes` (`view=history` for the History
 tab), recognised by
-`parseWorktreeChangesTarget` in `lib/navigation`. `ThreadWorkspaceHost`
+`parseWorktreeChangesTarget` in `lib/navigation`. On a multi-repo folder the
+URL adds `&repo=<repo entry id>` and the toolbar row starts with a repo
+switcher ([Multi-repo projects](cli-multi-repo-projects.md#repo-switcher)). `ThreadWorkspaceHost`
 renders it in place of the new-thread composer; a thread URL still wins. The
 threads layout uses the same helper, so on mobile the view is a full-screen
 conversation like a thread, not the list. The view's grid column is

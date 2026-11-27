@@ -493,6 +493,38 @@ describe("cli worktreeOps", () => {
     ).rejects.toThrow("A thread is currently running in this working directory");
   });
 
+  test("reverts in a repo entry are rejected while a thread runs in its folder", async () => {
+    const s = await setup();
+    const folder = buildPathEntry({ path: "/home/dev/acme" });
+    const repo = buildPathEntry({ path: "/home/dev/acme/new-app", label: "new-app", kind: "repo", parentPathId: folder.id });
+    await s.t.run(async (runCtx) => {
+      await runCtx.db.patch("cliProfiles", s.profile._id, { paths: [folder, repo] });
+    });
+    await s.ctx.cliThread(s.user._id, s.project._id, s.profile._id, {
+      pathId: folder.id,
+      path: folder.path,
+      status: "streaming",
+      processingState: "streaming",
+      claimedBySessionId: s.session._id,
+      claimLeaseExpiresAt: Date.now() + 60_000,
+    });
+    const diffOp = await s.asUser.mutation(api.cli.worktreeOps.enqueue, {
+      profileId: s.profile._id, pathId: repo.id, kind: "diffFile", preRef: "refs/convoy/checkpoints/t/b/pre", postRef: "refs/convoy/checkpoints/t/b/post",
+    });
+    // A read runs in the repo itself.
+    expect(await s.asUser.query(api.cli.worktreeOps.get, { opId: diffOp })).toMatchObject({ kind: "diffFile", status: "pending" });
+    const pending = await s.t.query(api.cli.worktreeOps.listPending, { profileId: s.profile._id, apiKey: s.apiKey });
+    expect(pending.find((op) => op._id === diffOp)?.path).toBe(repo.path);
+    for (const op of [
+      { kind: "revertFile" as const, preRef: "refs/convoy/checkpoints/t/b/pre", filePath: "a.ts" },
+      { kind: "revertWorkingFile" as const, filePath: "a.ts" },
+    ]) {
+      await expect(
+        s.asUser.mutation(api.cli.worktreeOps.enqueue, { profileId: s.profile._id, pathId: repo.id, ...op })
+      ).rejects.toThrow("A thread is currently running in this working directory");
+    }
+  });
+
   test("revertFile requires preRef and filePath and persists the file path", async () => {
     const s = await setup();
 

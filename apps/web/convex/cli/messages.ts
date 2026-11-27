@@ -60,13 +60,15 @@ import {
   type CliMessageAttachmentInput,
   type CliMessageAttachmentMetadata,
   type CliMessageAttachmentSummary,
+  type CliRunDiffRepo,
+  type CliRunDiffRepoPreview,
   type CliRunDiffSummary,
   type CliRunDiffSummaryPreview,
 } from "../lib/contracts/validators";
 import type { Doc, Id } from "../_generated/dataModel";
 import { clampChars } from "../lib/shared/strings";
 import { assertThreadClaimedBySession, isThreadClaimExpired } from "./lib/claims";
-import { ENVELOPE_WINDOW_LIMIT, PENDING_UPLOAD_RETENTION_MS, PENDING_UPLOAD_SWEEP_BATCH, STREAM_WATCHDOG_INTERVAL_MS } from "./lib/constants";
+import { ENVELOPE_WINDOW_LIMIT, MAX_PROFILE_REPOS, PENDING_UPLOAD_RETENTION_MS, PENDING_UPLOAD_SWEEP_BATCH, STREAM_WATCHDOG_INTERVAL_MS } from "./lib/constants";
 import { hasAwaitingUserInputTool } from "./lib/waitingInput";
 import { isContainerThread } from "./lib/watchStatus";
 import { resolveRunWindDown } from "./lib/parkedWindDown";
@@ -343,6 +345,17 @@ function toDiffSummaryPreview(summary: CliRunDiffSummary): CliRunDiffSummaryPrev
     additions,
     deletions,
     ...(summary.truncated !== undefined ? { truncated: summary.truncated } : {}),
+    ...(summary.repos ? { repos: summary.repos.map((repo) => toRepoPreview(repo, summary.files)) } : {}),
+  };
+}
+
+function toRepoPreview(repo: CliRunDiffRepo, files: CliRunDiffSummary["files"]): CliRunDiffRepoPreview {
+  const own = files.filter((file) => file.repo === repo.path);
+  return {
+    ...repo,
+    fileCount: own.length,
+    additions: own.reduce((sum, file) => sum + file.additions, 0),
+    deletions: own.reduce((sum, file) => sum + file.deletions, 0),
   };
 }
 
@@ -403,6 +416,23 @@ function toMessageEnvelope(msg: Doc<"cliMessages">, task?: TaskSummary) {
 // The CLI already caps the summary; this is a belt against oversized payloads
 // from older/foreign CLI builds so the message document stays small.
 const MAX_DIFF_SUMMARY_FILES = 200;
+
+/** A multi-repo run's repos get their repo entry ids from the thread's folder; the CLI's are dropped. */
+async function withRepoPathIds(ctx: MutationCtx, thread: Doc<"cliThreads">, summary: CliRunDiffSummary): Promise<CliRunDiffSummary> {
+  if (!summary.repos) {
+    return summary;
+  }
+  const profile = await getCliProfileById(ctx, thread.profileId);
+  // Joined on the entry's label, which `mergeRepoEntries` sets to the repo's relative path.
+  const idByLabel = new Map(
+    (profile?.paths ?? []).filter((entry) => entry.kind === "repo" && entry.parentPathId === thread.pathId).map((entry) => [entry.label, entry.id])
+  );
+  const repos = summary.repos.slice(0, MAX_PROFILE_REPOS).map(({ path }) => {
+    const pathId = idByLabel.get(path);
+    return pathId ? { path, pathId } : { path };
+  });
+  return { ...summary, repos };
+}
 
 function capDiffSummary(summary: CliRunDiffSummary): CliRunDiffSummary {
   if (summary.files.length <= MAX_DIFF_SUMMARY_FILES) {
@@ -2271,7 +2301,7 @@ export const complete = mutation({
       {
         status: "completed",
         cliContext: args.cliContext ?? message.cliContext,
-        ...(args.diffSummary ? { diffSummary: capDiffSummary(args.diffSummary) } : {}),
+        ...(args.diffSummary ? { diffSummary: capDiffSummary(await withRepoPathIds(ctx, chat, args.diffSummary)) } : {}),
         // The CLI already caps the tail; clamped again so a foreign build
         // cannot grow the message document.
         ...(args.scriptResult
