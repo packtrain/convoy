@@ -1,6 +1,8 @@
 export { GitCommandError, runGit, type GitResult } from "./exec.js";
 export {
   capturePreRunCheckpoint,
+  captureRunBaseline,
+  captureRunChanges,
   captureRunDiffSummary,
   checkpointRef,
   diffBetweenRefs,
@@ -8,6 +10,7 @@ export {
   revertToCheckpoint,
   type FileAtRef,
   type FileDiff,
+  type RunBaseline,
   type RunDiffFile,
   type RunDiffSummary,
 } from "./checkpoint.js";

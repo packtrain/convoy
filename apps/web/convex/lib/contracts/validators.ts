@@ -352,12 +352,31 @@ export const cliMessageContextValidator = v.object({
 // Per-file entry of a completed run's git change summary (OS-1142).
 // Renames surface as delete+add (the CLI diffs with --no-renames).
 export const cliRunDiffFileValidator = v.object({
+  // Relative to `repo` when set, else to the working directory.
   path: v.string(),
+  // Multi-repo folder: the repo's relative path (docs/specs/cli-thread-run-diffs.md#multi-repo-folders).
+  repo: v.optional(v.string()),
   kind: v.union(v.literal("added"), v.literal("modified"), v.literal("deleted")),
   additions: v.number(),
   deletions: v.number(),
   // Line counts are 0 for binary files (git numstat reports "-").
   binary: v.optional(v.boolean()),
+});
+
+// A changed repo of a multi-repo folder. `path` matches the repo entry's `label` (its relative path);
+// `pathId` is that entry, resolved by `cli.messages.complete`.
+export const cliRunDiffRepoValidator = v.object({
+  path: v.string(),
+  pathId: v.optional(v.string()),
+});
+
+// The envelope's repo row: the repo's own file count and totals from the stored files.
+export const cliRunDiffRepoPreviewValidator = v.object({
+  path: v.string(),
+  pathId: v.optional(v.string()),
+  fileCount: v.number(),
+  additions: v.number(),
+  deletions: v.number(),
 });
 
 // Git change summary for the run an assistant message represents. The
@@ -368,6 +387,7 @@ export const cliRunDiffSummaryValidator = v.object({
   postRef: v.string(),
   files: v.array(cliRunDiffFileValidator),
   truncated: v.optional(v.boolean()),
+  repos: v.optional(v.array(cliRunDiffRepoValidator)),
 });
 
 /**
@@ -387,9 +407,12 @@ export const cliRunDiffSummaryPreviewValidator = v.object({
   additions: v.number(),
   deletions: v.number(),
   truncated: v.optional(v.boolean()),
+  repos: v.optional(v.array(cliRunDiffRepoPreviewValidator)),
 });
 
 export type CliRunDiffFile = Infer<typeof cliRunDiffFileValidator>;
+export type CliRunDiffRepo = Infer<typeof cliRunDiffRepoValidator>;
+export type CliRunDiffRepoPreview = Infer<typeof cliRunDiffRepoPreviewValidator>;
 export type CliRunDiffSummary = Infer<typeof cliRunDiffSummaryValidator>;
 export type CliRunDiffSummaryPreview = Infer<typeof cliRunDiffSummaryPreviewValidator>;
 
@@ -964,6 +987,11 @@ export type CliProfilePathKind = Infer<typeof cliProfilePathKindValidator>;
 /** A path the user configured: not a synced worktree, not a detected repo. */
 export function isConfiguredPath(entry: { kind?: CliProfilePathKind }): boolean {
   return entry.kind === undefined;
+}
+
+/** The detected repos of a multi-repo folder, in stored order; [] for any other path. */
+export function folderRepos<T extends { kind?: CliProfilePathKind; parentPathId?: string }>(paths: readonly T[], folderId: string | undefined): T[] {
+  return folderId === undefined ? [] : paths.filter((path) => path.kind === "repo" && path.parentPathId === folderId);
 }
 
 // A profile path entry as returned to clients (regular path, synced worktree or detected repo)

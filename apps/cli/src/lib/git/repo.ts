@@ -27,8 +27,8 @@ export async function getGitDirectoryIdentity(directory: string): Promise<string
 }
 
 /** The checkout identity differs between linked worktrees and their parent. */
-export async function getCheckoutIdentity(cwd: string): Promise<string> {
-  const result = await runGit(cwd, ["rev-parse", "--absolute-git-dir"]);
+export async function getCheckoutIdentity(cwd: string, timeoutMs?: number): Promise<string> {
+  const result = await runGit(cwd, ["rev-parse", "--absolute-git-dir"], { timeoutMs });
   return getGitDirectoryIdentity(result.stdout.trim());
 }
 
@@ -220,10 +220,11 @@ async function childFolders(folder: string): Promise<string[]> {
     .map((entry) => join(folder, entry.name));
 }
 
-async function mapLimited<T, R>(items: T[], fn: (item: T) => Promise<R>): Promise<R[]> {
+/** `fn` over `items`, at most `limit` at a time, results in input order. */
+export async function mapLimited<T, R>(items: T[], fn: (item: T) => Promise<R>, limit = DISCOVERY_CONCURRENCY): Promise<R[]> {
   const results: R[] = new Array(items.length);
   let next = 0;
-  await Promise.all(Array.from({ length: Math.min(DISCOVERY_CONCURRENCY, items.length) }, async () => {
+  await Promise.all(Array.from({ length: Math.min(limit, items.length) }, async () => {
     while (next < items.length) {
       const index = next++;
       results[index] = await fn(items[index]);

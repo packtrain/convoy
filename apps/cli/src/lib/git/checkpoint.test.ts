@@ -1,10 +1,12 @@
-import { mkdtemp, rm, writeFile, readFile } from "node:fs/promises";
+import { mkdtemp, rm, writeFile, readFile, utimes } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { runGit } from "./exec.js";
 import {
   capturePreRunCheckpoint,
+  captureRunBaseline,
+  captureRunChanges,
   captureRunDiffSummary,
   diffBetweenRefs,
   parseDiffSummary,
@@ -195,6 +197,186 @@ describe("checkpoint capture (real git)", () => {
       expect(await capturePreRunCheckpoint(plainDir, "thread1", "batch1")).toBe(false);
     } finally {
       await rm(plainDir, { recursive: true, force: true });
+    }
+  });
+});
+
+describe("multi-repo checkpoints (real git)", () => {
+  let folder: string;
+  const git = (repo: string, args: string[]) => runGit(join(folder, repo), ["-c", "user.name=t", "-c", "user.email=t@t", ...args]);
+  const refsIn = async (repo: string) => (await runGit(join(folder, repo), ["for-each-ref", "--format=%(refname)", "refs/convoy/"])).stdout.trim();
+
+  beforeEach(async () => {
+    folder = await mkdtemp(join(tmpdir(), "convoy-multi-repo-test-"));
+    for (const repo of ["old-app", "new-app", "untouched"]) {
+      await runGit(folder, ["init", "--initial-branch=main", repo]);
+      await writeFile(join(folder, repo, "readme.md"), "one\n");
+      await git(repo, ["add", "."]);
+      await git(repo, ["commit", "-m", "init"]);
+    }
+  });
+
+  afterEach(async () => {
+    await rm(folder, { recursive: true, force: true });
+  });
+
+  it("groups changed files by repo and leaves an untouched clean repo alone", async () => {
+    await writeFile(join(folder, "old-app", "dirty.txt"), "before run\n");
+    const baseline = await captureRunBaseline(folder, "thread1", "run1");
+    expect(baseline?.kind).toBe("folder");
+    // A clean repo gets no snapshot at run start.
+    expect(await refsIn("new-app")).toBe("");
+
+    await writeFile(join(folder, "old-app", "readme.md"), "one\ntwo\n");
+    await writeFile(join(folder, "new-app", "added.txt"), "new\n");
+    const summary = await captureRunChanges(folder, baseline!, "thread1", "run1");
+
+    expect(summary).toEqual({
+      preRef: "refs/convoy/checkpoints/thread1/run1/pre",
+      postRef: "refs/convoy/checkpoints/thread1/run1/post",
+      files: [
+        { path: "added.txt", kind: "added", additions: 1, deletions: 0, repo: "new-app" },
+        { path: "readme.md", kind: "modified", additions: 1, deletions: 0, repo: "old-app" },
+      ],
+      repos: [{ path: "new-app" }, { path: "old-app" }],
+    });
+    expect(await refsIn("untouched")).toBe("");
+  });
+
+  it("diffs a repo that was clean at start from its recorded HEAD, commits included", async () => {
+    const baseline = await captureRunBaseline(folder, "thread1", "run1");
+    await writeFile(join(folder, "new-app", "committed.txt"), "c\n");
+    await git("new-app", ["add", "."]);
+    await git("new-app", ["commit", "-m", "agent commit"]);
+
+    const summary = await captureRunChanges(folder, baseline!, "thread1", "run1");
+    expect(summary?.files).toEqual([{ path: "committed.txt", kind: "added", additions: 1, deletions: 0, repo: "new-app" }]);
+  });
+
+  it("reverts one file of a repo that was clean at start", async () => {
+    const baseline = await captureRunBaseline(folder, "thread1", "run1");
+    await writeFile(join(folder, "old-app", "readme.md"), "changed\n");
+    await writeFile(join(folder, "new-app", "readme.md"), "changed too\n");
+    await captureRunChanges(folder, baseline!, "thread1", "run1");
+
+    await revertToCheckpoint(join(folder, "old-app"), "refs/convoy/checkpoints/thread1/run1/pre", "readme.md");
+    expect(await readFile(join(folder, "old-app", "readme.md"), "utf8")).toBe("one\n");
+    expect(await readFile(join(folder, "new-app", "readme.md"), "utf8")).toBe("changed too\n");
+  });
+
+  it("leaves out a repo whose capture fails and still reports the others", async () => {
+    const baseline = await captureRunBaseline(folder, "thread1", "run1");
+    await writeFile(join(folder, "old-app", "readme.md"), "changed\n");
+    await writeFile(join(folder, "new-app", "readme.md"), "changed\n");
+    await rm(join(folder, "old-app", ".git"), { recursive: true, force: true });
+
+    const summary = await captureRunChanges(folder, baseline!, "thread1", "run1");
+    expect(summary?.repos).toEqual([{ path: "new-app" }]);
+  });
+
+  it("caps the file list for the run as a whole, not per repo", async () => {
+    const baseline = await captureRunBaseline(folder, "thread1", "run1");
+    for (const repo of ["old-app", "new-app"]) {
+      await Promise.all(Array.from({ length: 150 }, (_, i) => writeFile(join(folder, repo, `f${i}.txt`), "x\n")));
+    }
+    const summary = await captureRunChanges(folder, baseline!, "thread1", "run1");
+    expect(summary?.files).toHaveLength(200);
+    expect(summary?.truncated).toBe(true);
+  });
+
+  it("stops taking a repo's baseline after two timeouts", async () => {
+    await writeFile(join(folder, "old-app", "dirty.txt"), "dirty\n");
+    // A slow fsmonitor hook makes `git add` outlast the budget.
+    const hook = join(folder, "slow-fsmonitor.sh");
+    await writeFile(hook, "#!/bin/sh\nsleep 0.5\n", { mode: 0o755 });
+    await git("old-app", ["config", "core.fsmonitor", hook]);
+    for (const runId of ["run1", "run2"]) {
+      const baseline = await captureRunBaseline(folder, "thread1", runId, { baselineTimeoutMs: 200 });
+      expect(baseline?.kind === "folder" && baseline.repos.map((repo) => repo.relativePath)).toEqual(["new-app", "untouched"]);
+    }
+    const baseline = await captureRunBaseline(folder, "thread1", "run3");
+    expect(baseline?.kind === "folder" && baseline.repos.map((repo) => repo.relativePath)).toEqual(["new-app", "untouched"]);
+  });
+
+  it("checkpoints the child repos of a folder inside another checkout, not the outer one", async () => {
+    // outer repo → plain `projects/` → child repos
+    const outer = await mkdtemp(join(tmpdir(), "convoy-outer-"));
+    try {
+      await runGit(outer, ["init", "--initial-branch=main"]);
+      const projects = join(outer, "projects");
+      await runGit(outer, ["init", "--initial-branch=main", join("projects", "app")]);
+      await writeFile(join(projects, "app", "a.txt"), "one\n");
+      await runGit(join(projects, "app"), ["add", "."]);
+      await runGit(join(projects, "app"), ["-c", "user.name=t", "-c", "user.email=t@t", "commit", "-m", "init"]);
+
+      const baseline = await captureRunBaseline(projects, "thread1", "run1");
+      expect(baseline?.kind).toBe("folder");
+      await writeFile(join(projects, "app", "a.txt"), "changed\n");
+      const summary = await captureRunChanges(projects, baseline!, "thread1", "run1");
+      expect(summary?.files.map((file) => `${file.repo}/${file.path}`)).toEqual(["app/a.txt"]);
+    } finally {
+      await rm(outer, { recursive: true, force: true });
+    }
+  });
+
+  it("sees untracked files even with status.showUntrackedFiles=no", async () => {
+    await git("old-app", ["config", "status.showUntrackedFiles", "no"]);
+    await writeFile(join(folder, "old-app", "mine.txt"), "user's file\n");
+    const baseline = await captureRunBaseline(folder, "thread1", "run1");
+    await writeFile(join(folder, "old-app", "readme.md"), "changed\n");
+    await writeFile(join(folder, "new-app", "only-added.txt"), "new\n");
+    await git("new-app", ["config", "status.showUntrackedFiles", "no"]);
+
+    const summary = await captureRunChanges(folder, baseline!, "thread1", "run1");
+    // The user's file predates the run, and an added-only run still shows.
+    expect(summary?.files.map((file) => `${file.repo}/${file.path}`)).toEqual(["new-app/only-added.txt", "old-app/readme.md"]);
+  });
+
+  it("reads repo state without touching the real index", async () => {
+    const index = join(folder, "new-app", ".git", "index");
+    // Same content, new mtime: a refreshing `git status` would rewrite the index.
+    await utimes(join(folder, "new-app", "readme.md"), new Date(2020, 0, 1), new Date(2020, 0, 1));
+    const before = await readFile(index);
+    await captureRunBaseline(folder, "thread1", "run1");
+    expect((await readFile(index)).equals(before)).toBe(true);
+  });
+
+  it("lists every changed repo when the file cap cuts one out", async () => {
+    const baseline = await captureRunBaseline(folder, "thread1", "run1");
+    await Promise.all(Array.from({ length: 210 }, (_, i) => writeFile(join(folder, "new-app", `f${i}.txt`), "x\n")));
+    await writeFile(join(folder, "old-app", "readme.md"), "changed\n");
+    const summary = await captureRunChanges(folder, baseline!, "thread1", "run1");
+    expect(summary?.files).toHaveLength(200);
+    expect(summary?.repos).toEqual([{ path: "new-app" }, { path: "old-app" }]);
+  });
+
+  it("counts a slow status in a clean repo against the budget, and only consecutive timeouts", async () => {
+    const hook = join(folder, "slow-fsmonitor.sh");
+    await writeFile(hook, "#!/bin/sh\nsleep 0.5\n", { mode: 0o755 });
+    await git("new-app", ["config", "core.fsmonitor", hook]);
+    const names = (baseline: Awaited<ReturnType<typeof captureRunBaseline>>) =>
+      baseline?.kind === "folder" ? baseline.repos.map((repo) => repo.relativePath) : [];
+    expect(names(await captureRunBaseline(folder, "thread1", "run1", { baselineTimeoutMs: 200 }))).toEqual(["old-app", "untouched"]);
+    // A success in between resets the count.
+    expect(names(await captureRunBaseline(folder, "thread1", "run2"))).toContain("new-app");
+    expect(names(await captureRunBaseline(folder, "thread1", "run3", { baselineTimeoutMs: 200 }))).toEqual(["old-app", "untouched"]);
+    expect(names(await captureRunBaseline(folder, "thread1", "run4"))).toContain("new-app");
+  });
+
+  it("counts every command of a dirty repo's snapshot against the budget, update-ref included", async () => {
+    await writeFile(join(folder, "old-app", "dirty.txt"), "dirty\n");
+    await writeFile(join(folder, "old-app", ".git", "hooks", "reference-transaction"), "#!/bin/sh\nsleep 0.5\n", { mode: 0o755 });
+    const baseline = await captureRunBaseline(folder, "thread1", "run1", { baselineTimeoutMs: 300 });
+    expect(baseline?.kind === "folder" && baseline.repos.map((repo) => repo.relativePath)).toEqual(["new-app", "untouched"]);
+  });
+
+  it("uses the single-repo capture when the folder is a repo, and nothing for a folder without repos", async () => {
+    expect(await captureRunBaseline(join(folder, "old-app"), "thread1", "run1")).toEqual({ kind: "repo" });
+    const empty = await mkdtemp(join(tmpdir(), "convoy-no-repos-"));
+    try {
+      expect(await captureRunBaseline(empty, "thread1", "run1")).toBeNull();
+    } finally {
+      await rm(empty, { recursive: true, force: true });
     }
   });
 });

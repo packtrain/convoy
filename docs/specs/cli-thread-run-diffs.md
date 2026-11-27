@@ -24,7 +24,8 @@ model: one run (one assistant message) = one run.
   than the preview carries fetches the full list on demand and shows a
   "Loading files..." footer meanwhile, keeping the preview rows on screen
   (OS-1600).
-- No card appears when: the working directory is not a git repository, the
+- No card appears when: the working directory is neither a git repository nor
+  a folder of repos ([multi-repo folders](#multi-repo-folders)), the
   run changed nothing, the run failed, or checkpoint capture failed for any
   reason. Checkpointing is strictly fail-soft — it never blocks or fails a
   run.
@@ -326,11 +327,75 @@ The local identity and recovery contracts are defined in `cli-worktrees.md`.
 - **Pruning**: after each post capture, refs under the thread's prefix are
   sorted by `-creatordate` and only the newest 40 (≈20 runs) are kept.
 
+### Multi-repo folders
+
+When the working directory holds repos and isn't one itself
+([Multi-repo projects](cli-multi-repo-projects.md#discovery)), each repo is
+checkpointed on its own, with the same ref names. This holds even when the
+folder sits inside another checkout, whose tree wouldn't see the child repos'
+files; a folder with no child repos falls back to the single-repo capture. `captureRunBaseline` and
+`captureRunChanges` in `checkpoint.ts` do it; the cost controls are t3code's
+(`CheckpointCaptureService.ts`):
+
+- **Clean repos are skipped.** At run start a repo with a clean tree gets one
+  `git --no-optional-locks status --porcelain=v2 --branch
+  --untracked-files=normal` and no snapshot; its HEAD is kept. The flags keep
+  the real index unrefreshed (no `index.lock`) and count untracked files
+  whatever `status.showUntrackedFiles` says. At run end it gets one more
+  `git status`, and nothing else if it is still clean on the same HEAD. One that
+  changed gets its pre ref from the recorded HEAD's tree (with the
+  `Convoy-Checkout` trailer, so Revert file works), then the usual post
+  capture. A dirty repo is snapshotted at start as a single repo is.
+- **6 repos at a time**, at start and at end.
+- **5 s per baseline capture**: the status and, for a dirty repo, every git
+  command of its snapshot (`git add -A` into the temporary index through
+  `update-ref`) share one deadline. After 2
+  consecutive timeouts in a repo (a baseline that finishes resets the count),
+  the worker stops taking its baseline until it restarts, and logs it once.
+- **Fail-soft per repo.** A repo whose capture fails is left out of the card
+  and logged. The run's other repos still report, and the run never fails.
+- The summary's files carry `repo` (the repo's relative path) and a `path`
+  relative to that repo. `repos` lists every changed repo in file order, even
+  one whose files the cap cut. The 200-file cap is for the run as a whole, and
+  a truncated repo marks the run truncated.
+- A backend older than CLI 0.187.0 rejects the new fields. The CLI then
+  completes the run once more without a summary, so the run succeeds with no
+  card.
+
+`cli.messages.complete` resolves each `repos[]` entry to its repo entry id
+(`pathId`) from the thread's folder in the profile (one profile read, only for
+a multi-repo summary), joining on the entry's `label`, which is the repo's
+relative path. An id sent by the CLI is dropped. A repo with no entry at that
+moment (not synced yet, or a repo that is also a configured path) keeps no
+`pathId` for good: its files show on the card without diff or revert. The
+envelope preview adds each repo's own `fileCount`, `additions` and
+`deletions`, counted from the stored files.
+
+On the web:
+
+- The Changes card groups files under a repo header. The header totals cover
+  every repo. A row's file diff and Revert file target its repo entry, and
+  Mention in reply names `repo/path`. A repo with no `pathId` lists its files
+  but offers no diff or revert. Undo is not offered: it restores one checkout,
+  and the run has several.
+- The sidebar's Changes tab shows one repo at a time, picked by the repo
+  switcher in front of the view selector
+  ([Multi-repo projects](cli-multi-repo-projects.md#repo-switcher)). Latest
+  run, All changes, the run timeline and ranges keep only the runs that changed
+  that repo, with the repo's own counts. The default repo settles once the
+  messages load, so a new run in another repo never moves an open view; a
+  repo change from any source sends a run or range view back to Latest run. Working tree and History run their ops on the repo entry. Opening a file
+  from a card switches to that file's repo. Review comments and the timeline's
+  restore action are off in a repo-scoped view: comments name files from the
+  working directory, and restore has the same one-checkout problem as Undo.
+- Summaries without `repos` (single-repo runs, older CLIs) render as before.
+
 ## Data model (Convex)
 
 - `cliMessages.diffSummary` (optional, assistant messages only):
   `{ preRef, postRef, files: [{ path, kind: added|modified|deleted,
-  additions, deletions, binary? }], truncated? }` — validators in
+  additions, deletions, binary?, repo? }], truncated?, repos?: [{ path,
+  pathId? }] }` (`repo`/`repos`: [multi-repo folders](#multi-repo-folders)) — validators in
   `convex/lib/contracts/validators.ts` (`cliRunDiffSummaryValidator`).
 - Written by `cli.messages.complete` via the new optional `diffSummary` arg.
   The server re-caps `files` at 200 entries (sets `truncated`) as a guard

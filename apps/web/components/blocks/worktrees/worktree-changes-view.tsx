@@ -2,7 +2,11 @@
 
 import { useCallback, useRef, useState } from "react";
 import { MoreHorizontal, RefreshCw, Trash2 } from "lucide-react";
+import { useQuery } from "convex/react";
+import { api } from "@/convex/_generated/api";
 import type { Id } from "@/convex/_generated/dataModel";
+import { folderRepos, type CliProfilePathEntry } from "@/convex/lib/contracts/validators";
+import { RepoSwitcher } from "@/components/blocks/cli/profiles/repo-switcher";
 import { Button } from "@/components/ui/button";
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
@@ -39,23 +43,42 @@ interface WorktreeChangesViewProps {
   pathId: string;
 }
 
+/** A multi-repo folder whose repo the page shows; `pathId` is then that repo's entry. */
+interface CheckoutFolder {
+  pathId: string;
+  label: string;
+  repos: CliProfilePathEntry[];
+}
+
 /**
  * Uncommitted changes of one checkout as a full page (OS-1980, OS-2036,
  * docs/specs/cli-worktrees.md → Worktree changes view). State lives in
  * `useWorktreeChanges`, shared with the thread sidebar panel.
  */
 export function WorktreeChangesView({ profileId, pathId }: WorktreeChangesViewProps) {
+  // Same subscription `useWorktreeChanges` holds; the client shares it.
+  const profile = useQuery(api.cli.profiles.get, { profileId });
+  const { location } = useNavigation();
+  if (profile === undefined) {
+    return null;
+  }
+  // A multi-repo folder shows one repo at a time: `&repo=`, else the first (docs/specs/cli-multi-repo-projects.md#repo-switcher).
+  const repos = folderRepos(profile?.paths ?? [], pathId);
+  const requested = parseWorktreeChangesTarget(location.search)?.repo;
+  const repo = repos.find((entry) => entry.id === requested) ?? repos[0];
+  const folder = repo ? { pathId, label: profile?.paths.find((entry) => entry.id === pathId)?.label ?? "", repos } : undefined;
+  const checkoutId = repo?.id ?? pathId;
   // The host reuses this instance across checkouts; a new one must not inherit tabs or a history cursor.
-  return <ChangesViewForCheckout key={`${profileId}:${pathId}`} profileId={profileId} pathId={pathId} />;
+  return <ChangesViewForCheckout key={`${profileId}:${checkoutId}`} profileId={profileId} pathId={checkoutId} folder={folder} />;
 }
 
-function ChangesViewForCheckout({ profileId, pathId }: WorktreeChangesViewProps) {
+function ChangesViewForCheckout({ profileId, pathId, folder }: WorktreeChangesViewProps & { folder?: CheckoutFolder }) {
   const params = useRouteParams<{ organizationSlug: string; projectAlias: string }>();
   const state = useWorktreeChanges(profileId, pathId);
   const { location, push, replace } = useNavigation();
   // The tab and the open commit live in the URL, so a reload or Back keeps them (OS-2534).
   const parsed = parseWorktreeChangesTarget(location.search);
-  const target = parsed?.profileId === profileId && parsed.pathId === pathId ? parsed : null;
+  const target = parsed?.profileId === profileId && parsed.pathId === (folder?.pathId ?? pathId) ? parsed : null;
   const tab = target?.view ?? "changes";
   // Changes drops `commit` from the URL; this brings it back on the way to History.
   const [lastCommit, setLastCommit] = useState(target?.commit ?? null);
@@ -126,15 +149,17 @@ function ChangesViewForCheckout({ profileId, pathId }: WorktreeChangesViewProps)
     return null;
   }
 
-  const title = entry ? (entry.kind === "worktree" ? (entry.branch ?? entry.label) : entry.label) : "Changes";
+  const title = folder ? folder.label : entry ? (entry.kind === "worktree" ? (entry.branch ?? entry.label) : entry.label) : "Changes";
   const hasFiles = sections !== null && files.length > 0;
   // Only uncommitted files block removal; vs main leaves the check to the CLI.
   const dirty = hasFiles && state.scope === "uncommitted";
   const onHistory = tab === "history";
   const phoneCommit = isMobile && onHistory && target?.commit != null;
   const noDiffShown = onHistory && !historyDiffShown;
-  const route = (view: WorktreeView, commit: string | null) =>
-    appRoute.projectThreadsWithPreselection(params.organizationSlug, params.projectAlias, { profileId, pathId, view, commit });
+  const route = (view: WorktreeView, commit: string | null, repo = pathId) =>
+    appRoute.projectThreadsWithPreselection(params.organizationSlug, params.projectAlias, folder
+      ? { profileId, pathId: folder.pathId, repo, view, commit }
+      : { profileId, pathId, view, commit });
   const openTab = (next: WorktreeView) => {
     if (next === tab) {
       return;
@@ -221,6 +246,7 @@ function ChangesViewForCheckout({ profileId, pathId }: WorktreeChangesViewProps)
         {/* ponytail: 41px like ThreadChangesToolbar — lines up with the sidebar's "New thread" row. */}
         {entry && (
           <div className="flex h-[41px] shrink-0 items-center gap-3 border-b border-border bg-card px-4 text-xs text-muted-foreground">
+            {folder && <RepoSwitcher repos={folder.repos} value={pathId} onChange={(repo) => replace(route(tab, null, repo))} />}
             <Tabs value={tab} onValueChange={(value) => openTab(value === "history" ? "history" : "changes")} className="shrink-0">
               <TabsList variant="underline" className="w-auto border-b-0" aria-label="Worktree view">
                 <TabsTrigger value="changes">

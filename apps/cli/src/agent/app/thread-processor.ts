@@ -21,7 +21,7 @@ import { getDebugLevel } from "../runtimes/debug.js";
 import { getChunkStreamPolicy, isInlineImageAttachment, normalizeCliRuntimeModel, prepareRunExecution, signalsVcsStateChange } from "../runtimes/registry.js";
 import { createChunkFlushBuffer, type ChunkFlushBuffer } from "./chunk-flush-buffer.js";
 import { createThreadAttachmentCache } from "./thread-attachment-cache.js";
-import { capturePreRunCheckpoint, captureRunDiffSummary, createWorktree, getCurrentBranch, type RunDiffSummary } from "../../lib/git/index.js";
+import { captureRunBaseline, captureRunChanges, createWorktree, getCurrentBranch, type RunBaseline, type RunDiffSummary } from "../../lib/git/index.js";
 import { lookupThreadPullRequest } from "../../lib/pull-requests.js";
 import { DEFAULT_MAX_CONCURRENT_CHATS, MESSAGE_HANDLER_SHUTDOWN_TIMEOUT_MS } from "./runtime-config.js";
 import { emitConnectEvent } from "../../lib/connect-events.js";
@@ -670,7 +670,7 @@ export function createMessageHandler(
             }
             return resolved;
           };
-          const captureRunBaseline = async (path: string, runId: string): Promise<boolean> => {
+          const snapshotRunStart = async (path: string, runId: string): Promise<RunBaseline | null> => {
             // Branch snapshot (OS-1247): record the checkout actually used for
             // this run; null (detached HEAD / non-Git) clears the snapshot.
             // Display metadata only — fail soft, never block the run.
@@ -686,10 +686,10 @@ export function createMessageHandler(
               // ignore: branch display must never interfere with execution
             }
 
-            // Pre-run git checkpoint (OS-1142). Fail soft: a checkpoint problem
-            // must never block the run; false also covers non-git directories.
+            // Pre-run git checkpoint (OS-1142), per repo in a multi-repo folder. Fail soft:
+            // a checkpoint problem must never block the run; null also covers non-git directories.
             try {
-              return await capturePreRunCheckpoint(path, chat._id as string, runId);
+              return await captureRunBaseline(path, chat._id as string, runId);
             } catch (error) {
               console.warn(
                 chalk.yellow(
@@ -697,12 +697,12 @@ export function createMessageHandler(
                 )
               );
             }
-            return false;
+            return null;
           };
           ({ workingDirectory, executionWorktree, workspaceNotice } = await resolveWorkspace(
             createdWorktreeThisRun ? undefined : workspace,
           ));
-          let checkpointCaptured = await captureRunBaseline(workingDirectory, checkpointRunId);
+          let checkpointBaseline = await snapshotRunStart(workingDirectory, checkpointRunId);
           if (isPlainRun) {
             const repos = await options.syncRepos?.(workingDirectory).catch((error: unknown) => {
               console.warn(chalk.yellow(`[Repos] chat ${shortId} scan failed: ${error instanceof Error ? error.message : String(error)}`));
@@ -910,7 +910,7 @@ export function createMessageHandler(
               const previousDirectory = workingDirectory;
               checkpointRunId = `${started.runId}-recovered`;
               ({ workingDirectory, executionWorktree, workspaceNotice } = await resolveWorkspace());
-              checkpointCaptured = await captureRunBaseline(workingDirectory, checkpointRunId);
+              checkpointBaseline = await snapshotRunStart(workingDirectory, checkpointRunId);
               if (workingDirectory === previousDirectory) throw error;
               retriedLaunch = true;
               execution = openExecution();
@@ -967,9 +967,9 @@ export function createMessageHandler(
           // Post-run checkpoint + change summary (OS-1142); null when nothing
           // changed. Same fail-soft rule as the pre-run capture.
           let diffSummary: RunDiffSummary | null = null;
-          if (checkpointCaptured) {
+          if (checkpointBaseline) {
             try {
-              diffSummary = await captureRunDiffSummary(workingDirectory, chat._id as string, checkpointRunId);
+              diffSummary = await captureRunChanges(workingDirectory, checkpointBaseline, chat._id as string, checkpointRunId);
             } catch (error) {
               console.warn(
                 chalk.yellow(
@@ -981,7 +981,7 @@ export function createMessageHandler(
 
           await ensureClaimHeartbeat(chat._id);
 
-          await client.mutation(api.cli.messages.complete, {
+          const completeArgs = {
             messageId: started.assistantMessageId,
             sessionId: typedSessionId,
             cliContext: runResult.continuationId ? {
@@ -992,6 +992,12 @@ export function createMessageHandler(
             diffSummary: diffSummary ?? undefined,
             scriptResult: runResult.scriptResult,
             workspaceNotice: deliversWorkspaceNotice ? workspaceNotice : undefined,
+          };
+          await client.mutation(api.cli.messages.complete, completeArgs).catch(async (error: unknown) => {
+            // A backend older than CLI 0.187.0 rejects a multi-repo summary; the run still completes, without its card.
+            if (!diffSummary?.repos || !String(error instanceof Error ? error.message : error).includes("ArgumentValidationError")) throw error;
+            console.warn(chalk.yellow(`[Checkpoint] chat ${shortId}: the server is older than this CLI and can't store a multi-repo change summary`));
+            await client.mutation(api.cli.messages.complete, { ...completeArgs, diffSummary: undefined });
           });
 
           if (deliversWorkspaceNotice) workspaceNotice = undefined;

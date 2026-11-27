@@ -21,7 +21,7 @@ import type {
 } from "../runtimes/contracts.js";
 import { RunnerExecutionError } from "../runtimes/contracts.js";
 import { runGit } from "../../lib/git/exec.js";
-import { getCurrentBranch } from "../../lib/git/index.js";
+import { captureRunBaseline, captureRunChanges, getCurrentBranch } from "../../lib/git/index.js";
 import { inspectWorktreeMoveTarget, resolveExecutionWorkspace } from "../../lib/git/worktrees.js";
 import type { ConvoyClient } from "../../lib/config/convex-client.js";
 
@@ -40,7 +40,12 @@ afterAll(() => rm(TEST_ROOT, { recursive: true, force: true }));
 
 vi.mock("../../lib/git/index.js", async (importOriginal) => {
   const actual = await importOriginal<typeof import("../../lib/git/index.js")>();
-  return { ...actual, getCurrentBranch: vi.fn().mockResolvedValue("feat/test") };
+  return {
+    ...actual,
+    getCurrentBranch: vi.fn().mockResolvedValue("feat/test"),
+    captureRunBaseline: vi.fn(actual.captureRunBaseline),
+    captureRunChanges: vi.fn(actual.captureRunChanges),
+  };
 });
 
 function makePendingChat(overrides: Partial<PendingChat> = {}): PendingChat {
@@ -1098,6 +1103,29 @@ describe("message-handler", () => {
         })
       );
     });
+  });
+
+  it("completes without the multi-repo summary when an older backend rejects its fields", async () => {
+    setQueryResponses({ pendingRuns: [[makeUserMessage()], []], continuationIds: [null] });
+    vi.mocked(captureRunBaseline).mockResolvedValueOnce({ kind: "folder", repos: [] });
+    vi.mocked(captureRunChanges).mockResolvedValueOnce({
+      preRef: "pre", postRef: "post", files: [{ path: "a.ts", kind: "added", additions: 1, deletions: 0, repo: "app" }], repos: [{ path: "app" }],
+    });
+    const fallback = mockMutation.getMockImplementation() as (fn: unknown, args: unknown) => Promise<unknown>;
+    mockMutation.mockImplementation(async (fn, args) => {
+      if (getFunctionName(fn) === "cli/messages:complete" && args.diffSummary) {
+        throw new Error("[CONVEX M(cli/messages:complete)] Server Error\nArgumentValidationError: Object contains extra field `repos` that is not in the validator.");
+      }
+      return fallback(fn, args);
+    });
+
+    const handler = createMessageHandler(() => mockRunner, mockClient, sessionId);
+    handler.enqueueChat(makePendingChat());
+
+    const completions = () => mockMutation.mock.calls.filter(([fn]) => getFunctionName(fn) === "cli/messages:complete");
+    await vi.waitFor(() => expect(completions()).toHaveLength(2));
+    expect(completions()[1][1].diffSummary).toBeUndefined();
+    expect(mockMutation.mock.calls.some(([fn]) => getFunctionName(fn) === "cli/messages:fail")).toBe(false);
   });
 
   it("branches a Codex fork through the recorded turn and stores the new turn id (OS-2073)", async () => {

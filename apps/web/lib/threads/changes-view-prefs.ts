@@ -6,7 +6,7 @@
  */
 
 import { useSyncExternalStore } from "react";
-import { readLocalString, writeLocalString } from "@/lib/browser/local-storage";
+import { readLocalJson, readLocalString, writeLocalJson, writeLocalString } from "@/lib/browser/local-storage";
 
 const DIFF_STYLE_KEY = "convoy.thread-changes-diff-style";
 const WORD_WRAP_KEY = "convoy.thread-changes-word-wrap";
@@ -103,4 +103,24 @@ export function readHistoryLayout(): HistoryLayout {
 
 export function writeHistoryLayout(layout: HistoryLayout): void {
   writeLocalString(HISTORY_LAYOUT_KEY, layout);
+}
+
+// Multi-repo threads: the repo the Changes tab last showed, per thread (newest 100).
+const CHANGES_REPO_KEY = "convoy.thread-changes-repo";
+const MAX_REMEMBERED_REPOS = 100;
+
+function readChangesRepos(): [string, string][] {
+  const parsed = readLocalJson(CHANGES_REPO_KEY);
+  return Array.isArray(parsed)
+    ? parsed.filter((pair): pair is [string, string] => Array.isArray(pair) && typeof pair[0] === "string" && typeof pair[1] === "string")
+    : [];
+}
+
+export function readChangesRepo(threadId: string): string | null {
+  return readChangesRepos().find(([id]) => id === threadId)?.[1] ?? null;
+}
+
+export function writeChangesRepo(threadId: string, repoId: string): void {
+  const rest = readChangesRepos().filter(([id]) => id !== threadId);
+  writeLocalJson(CHANGES_REPO_KEY, [[threadId, repoId], ...rest].slice(0, MAX_REMEMBERED_REPOS));
 }

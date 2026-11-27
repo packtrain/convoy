@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { Fragment, useState } from "react";
 import { AtSign, ChevronDown, ChevronUp, FileDiff, RotateCcw } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Spinner } from "@/components/custom/spinner";
@@ -8,6 +8,7 @@ import type {
   CliRunDiffFile,
   CliRunDiffSummaryPreview,
 } from "@/convex/lib/contracts/validators";
+import { folderPathOf, repoPathIdOf } from "@/lib/threads/run-diff-repos";
 import { cn } from "@/lib/utils";
 
 const COLLAPSED_FILE_COUNT = 3;
@@ -47,7 +48,7 @@ export interface RunChangesCardProps {
   onExpandedChange?: (expanded: boolean) => void;
   /** When present, rows open the on-demand patch/full-file viewer (OS-1143). */
   onSelectFile?: (file: CliRunDiffFile) => void;
-  /** When present, the header shows Undo — revert to the pre-run checkpoint (OS-1151). */
+  /** When present, the header shows Undo — revert to the pre-run checkpoint (OS-1151). Not for a multi-repo run. */
   onUndo?: () => void;
   /** Row hover action: insert an `@path` mention into the composer (OS-1159). */
   onMentionFile?: (path: string) => void;
@@ -82,6 +83,9 @@ export function RunChangesCard({
   const previewIsComplete = diffSummary.files.length >= fileCount;
   const isLoadingMore = expanded && !previewIsComplete && allFiles === undefined;
   const hiddenCount = fileCount - visibleFiles.length;
+  // A multi-repo run lists files under their repo; Undo restores one checkout, so it's off.
+  const multiRepo = diffSummary.repos !== undefined;
+  const showUndo = onUndo !== undefined && !multiRepo;
 
   const handleToggleExpanded = () => {
     const next = !expanded;
@@ -105,9 +109,9 @@ export function RunChangesCard({
             <span className="text-destructive">-{totalDeletions}</span>
           </span>
         </div>
-        {(onUndo || onSelectFile) && (
+        {(showUndo || onSelectFile) && (
           <div className="ml-auto flex shrink-0 items-center gap-1.5">
-            {onUndo && (
+            {showUndo && (
               <Button
                 type="button"
                 variant="ghost"
@@ -134,20 +138,29 @@ export function RunChangesCard({
         )}
       </div>
       <ul className="divide-y border-t">
-        {visibleFiles.map((file) => {
+        {visibleFiles.map((file, index) => {
           const { dir, base } = splitPath(file.path);
-          const clickable = onSelectFile !== undefined && !file.binary;
-          const hasRowActions = onMentionFile !== undefined || onRevertFile !== undefined;
+          const shownPath = folderPathOf(file);
+          // A repo with no entry yet (not synced) has nothing to address its ops to.
+          const addressable = !multiRepo || repoPathIdOf(diffSummary, file) !== undefined;
+          const clickable = onSelectFile !== undefined && !file.binary && addressable;
+          const canRevert = onRevertFile !== undefined && addressable;
+          const hasRowActions = onMentionFile !== undefined || canRevert;
+          const repoHeader = multiRepo && file.repo !== visibleFiles[index - 1]?.repo ? (
+            <li className="bg-muted/40 px-3 py-1.5 text-xs font-medium text-muted-foreground">{file.repo}</li>
+          ) : null;
           const path = (
-            <span className="min-w-0 flex-1 truncate" title={file.path}>
+            <span className="min-w-0 flex-1 truncate" title={shownPath}>
               <span className="text-muted-foreground">{dir}</span>
               <span className={cn(file.kind === "deleted" && "line-through")}>{base}</span>
             </span>
           );
           return (
-            // Named group: an ancestor message row already owns bare `group`,
-            // which would show the actions on hovering the whole message.
-            <li key={file.path} className="group/file-row flex items-center text-sm hover:bg-muted/50">
+            <Fragment key={shownPath}>
+            {repoHeader}
+            {/* Named group: an ancestor message row already owns bare `group`,
+                which would show the actions on hovering the whole message. */}
+            <li className="group/file-row flex items-center text-sm hover:bg-muted/50">
               {clickable ? (
                 <button
                   type="button"
@@ -177,22 +190,22 @@ export function RunChangesCard({
                         variant="ghost"
                         size="icon-sm"
                         className="size-6 cursor-pointer text-muted-foreground hover:text-foreground"
-                        aria-label={`Mention ${file.path} in reply`}
+                        aria-label={`Mention ${shownPath} in reply`}
                         title="Mention in reply"
-                        onClick={() => onMentionFile(file.path)}
+                        onClick={() => onMentionFile(shownPath)}
                       >
                         <AtSign className="size-3.5" />
                       </Button>
                     )}
-                    {onRevertFile && (
+                    {canRevert && (
                       <Button
                         type="button"
                         variant="ghost"
                         size="icon-sm"
                         className="size-6 cursor-pointer text-muted-foreground hover:text-foreground"
-                        aria-label={`Revert ${file.path}`}
+                        aria-label={`Revert ${shownPath}`}
                         title="Revert file"
-                        onClick={() => onRevertFile(file)}
+                        onClick={() => onRevertFile?.(file)}
                       >
                         <RotateCcw className="size-3.5" />
                       </Button>
@@ -201,6 +214,7 @@ export function RunChangesCard({
                 )}
               </span>
             </li>
+            </Fragment>
           );
         })}
       </ul>

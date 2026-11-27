@@ -1418,6 +1418,49 @@ describe("ThreadWorkspace", () => {
     );
   });
 
+  test("a multi-repo thread's Changes tab shows one repo, switched in front of the view selector", () => {
+    (defaultUseQueryResult as { paths: unknown[] }).paths = [
+      { id: "path_1", path: "/code/acme", label: "acme" },
+      { id: "r-new", path: "/code/acme/new-app", label: "new-app", kind: "repo", parentPathId: "path_1" },
+      { id: "r-old", path: "/code/acme/old-app", label: "old-app", kind: "repo", parentPathId: "path_1" },
+    ];
+    const run = (name: string, createdAt: number, repo: string, pathId: string) => ({
+      _id: `message_${name}` as Id<"cliMessages">,
+      role: "assistant" as const,
+      status: "completed",
+      cliType: "codex",
+      createdAt,
+      content: [],
+      attachments: [],
+      diffSummary: {
+        preRef: `refs/pre-${name}`,
+        postRef: `refs/post-${name}`,
+        files: [{ path: "a.ts", kind: "modified" as const, additions: 1, deletions: 0, repo }],
+        fileCount: 1,
+        additions: 1,
+        deletions: 0,
+        repos: [{ path: repo, pathId, fileCount: 1, additions: 1, deletions: 0 }],
+      },
+    });
+    useCliMessagesMock.mockReturnValue(
+      buildCliMessagesResult({ messages: [run("old", 1, "old-app", "r-old"), run("new", 2, "new-app", "r-new")] })
+    );
+    updateTitleMutationMock.mockResolvedValue("op_1");
+    renderWorkspace();
+    fireEvent.click(screen.getByRole("button", { name: "Open thread sidebar" }));
+
+    // The newest run's repo, and its latest run in that repo.
+    expect(updateTitleMutationMock).toHaveBeenLastCalledWith(
+      expect.objectContaining({ kind: "diffFile", pathId: "r-new", preRef: "refs/pre-new", postRef: "refs/post-new" })
+    );
+
+    fireEvent.pointerDown(screen.getByRole("button", { name: "Repository: new-app" }), { button: 0, ctrlKey: false });
+    fireEvent.click(screen.getByRole("menuitemradio", { name: "old-app" }));
+    expect(updateTitleMutationMock).toHaveBeenLastCalledWith(
+      expect.objectContaining({ kind: "diffFile", pathId: "r-old", preRef: "refs/pre-old", postRef: "refs/post-old" })
+    );
+  });
+
   test("opens and closes the in-flow thread sidebar from the header action", () => {
     renderWorkspace();
 

@@ -332,6 +332,8 @@ interface ThreadChangesToolbarProps {
   onToggleFileTree?: () => void;
   /** Stored PR snapshot of the thread (OS-1370); renders the PR badge when set. */
   pullRequest?: ThreadPullRequest;
+  /** Before the view selector: the repo switcher of a multi-repo folder. */
+  leading?: ReactNode;
 }
 
 /** Selector items above the run timeline, in menu order. */
@@ -365,6 +367,7 @@ export function ThreadChangesToolbar({
   fileTreeOpen = false,
   onToggleFileTree,
   pullRequest,
+  leading,
 }: ThreadChangesToolbarProps) {
   const [menuOpen, setMenuOpen] = useState(false);
 
@@ -372,6 +375,7 @@ export function ThreadChangesToolbar({
     // ponytail: 41px, not h-10 — lines up with the sidebar's "New thread" row
     // (py-3 + 20px content + border).
     <div className="flex h-[41px] shrink-0 items-center border-b border-border bg-card px-2">
+      {leading}
       <Popover open={menuOpen} onOpenChange={setMenuOpen}>
         <PopoverTrigger asChild>
           <button

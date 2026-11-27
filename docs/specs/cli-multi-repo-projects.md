@@ -5,14 +5,16 @@ A project can be one folder with a git repo in each subfolder, e.g.
 top folder, and threads run there. The CLI detects the repos inside it and
 reports each one to Convoy as its own path entry.
 
-Epic: OS-2520. Slice 0 (this spec): OS-2521. Later slices point Changes,
-History, branch, PR and worktree features at repo entries.
+Epic: OS-2520. Slice 0: OS-2521 (detection). Slice 1: OS-2522 (Changes,
+History and revert per repo, [repo switcher](#repo-switcher)). Later slices
+point branch, PR and worktree features at repo entries.
 
 ## Related specs
 
 - [Shared environments → Projects](cli-shared-environments.md#projects): mount roots
 - [Worktrees](cli-worktrees.md): the path entry model repo entries reuse
 - [TUI](cli-tui.md#multi-repo-review-cli-01860-os-2521): the Add project review
+- [Thread run diffs](cli-thread-run-diffs.md#multi-repo-folders): per-repo checkpoints and the grouped Changes card
 
 ## Discovery
 
@@ -133,12 +135,47 @@ relative path (`RepoCount`, `components/blocks/cli/profiles/repo-count.tsx`, a
 native `title`: the count sits inside a link or menu item that owns focus).
 The data comes from the profile queries the views already subscribe to.
 
+## Repo switcher
+
+Slice 1 (OS-2522, CLI 0.187.0). Changes and History work on one repo entry at
+a time through the existing worktree ops; there are no new ops and no merged
+history. `RepoSwitcher` (`components/blocks/cli/profiles/repo-switcher.tsx`)
+picks the repo, listing the folder's repo entries in stored order:
+
+- **Thread sidebar, Changes tab.** In front of the view selector, for every
+  view ([Thread run diffs](cli-thread-run-diffs.md#multi-repo-folders)). The
+  pick is remembered per thread in browser storage
+  (`convoy.thread-changes-repo`, newest 100 threads). The default is the first
+  repo the newest loaded run changed, else the first repo. The plan said "the
+  first repo with uncommitted changes"; knowing that would take an op per repo
+  or a dirty flag the CLI keeps current, so the newest run stands in for it.
+  The default settles once the thread's messages load and then holds until
+  the user picks another repo or opens a file of one. Switching repos keeps
+  Working tree and History (History closes its commit) and sends a run or
+  range view back to Latest run (`useChangesRepo` in `lib/threads/hooks/`).
+- **Worktree page** (`/threads?profileId&pathId&repo=<id>&view=changes|history`,
+  built with `appRoute.projectThreadsWithPreselection`). `pathId` stays the
+  folder, `repo` names the repo entry, and a missing or unknown `repo` shows the
+  first. The title is the folder's label; the path in the toolbar is the
+  repo's. Switching replaces the URL and starts the page fresh for that repo.
+- A revert on a repo entry is refused while a thread runs in its folder
+  (`isPathInUse` in `convex/cli/worktreeOps.ts`).
+
+No CLI command: the switcher only picks which existing path entry the web
+views target.
+
 ## Verification
 
 Unit tests: `lib/git/repo.test.ts` (discovery rules, cap, missing folder),
 `project/validators.test.ts` (mount roots), `thread-processor.test.ts` (prompt
 line), `convex/cli/profiles.test.ts` (`syncRepos`, register, thread refusal),
 `worktree-list.test.tsx` (repo count), TUI `onboarding-review.tsx reuse-repos`.
+Slice 1: `lib/git/checkpoint.test.ts` (multi-repo checkpoints),
+`convex/cli/messages.test.ts` (repo ids), `convex/cli/worktreeOps.test.ts`
+(repo in use), `run-changes-card.test.tsx` (groups), `run-diff-repos.test.ts`,
+`use-changes-repo.test.tsx`, `worktree-changes-view.test.tsx` and
+`thread-workspace.test.tsx` (switcher), `thread-processor.test.ts` (older
+backend).
 
 By hand: in a shared environment, mount `~/code/acme` holding `old-app`,
 `new-app` and `packages/api`, then add `~/code/acme` itself in the TUI with

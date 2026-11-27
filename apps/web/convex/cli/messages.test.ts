@@ -3807,6 +3807,60 @@ describe("cliMessages", () => {
       expect(full?.files).toHaveLength(200);
     });
 
+    test("resolves each changed repo of a multi-repo folder to its repo entry", async () => {
+      const ctx = createTestContext();
+      const { user, project, asUser, t } = await ctx.setupProject();
+      const apiKeyResult = await asUser.mutation(api.apiKeys.core.create, {
+        name: "CLI Key",
+        expiresAt: Date.now() + 30 * 24 * 60 * 60 * 1000,
+      });
+      const profile = await ctx.cliProfile(user._id, project._id, {
+        paths: [
+          { id: "folder", path: "/code/acme", label: "acme" },
+          { id: "repo-new", path: "/code/acme/new-app", label: "new-app", kind: "repo", parentPathId: "folder" },
+          { id: "repo-other", path: "/code/other/new-app", label: "new-app", kind: "repo", parentPathId: "other" },
+        ],
+      });
+      const session = await ctx.cliSession(profile._id, apiKeyResult.id);
+      const chat = await ctx.cliThread(user._id, project._id, profile._id, {
+        pathId: "folder",
+        status: "streaming",
+        claimedBySessionId: session._id,
+        claimLeaseExpiresAt: Date.now() + 60_000,
+        processingState: "streaming",
+      });
+      const message = await ctx.cliMessage(chat._id, profile._id, {
+        role: "assistant",
+        status: "streaming",
+        claimedBySessionId: session._id,
+      });
+
+      await t.mutation(api.cli.messages.complete, {
+        messageId: message._id,
+        sessionId: session._id,
+        diffSummary: {
+          preRef: "refs/convoy/checkpoints/thread/run/pre",
+          postRef: "refs/convoy/checkpoints/thread/run/post",
+          files: [
+            { path: "a.ts", kind: "modified" as const, additions: 1, deletions: 0, repo: "new-app" },
+            { path: "b.ts", kind: "added" as const, additions: 2, deletions: 0, repo: "unsynced" },
+          ],
+          // A CLI-sent pathId is never trusted.
+          repos: [{ path: "new-app", pathId: "repo-other" }, { path: "unsynced", pathId: "repo-other" }],
+        },
+        apiKey: apiKeyResult.key,
+      });
+
+      const { envelopes } = await asUser.query(api.cli.messages.listEnvelopesByThread, { threadId: chat._id });
+      const preview = envelopes.find((envelope) => envelope._id === message._id)?.diffSummary;
+      // The preview counts each repo's files, so a repo-scoped view needn't load them.
+      expect(preview?.repos).toEqual([
+        { path: "new-app", pathId: "repo-new", fileCount: 1, additions: 1, deletions: 0 },
+        { path: "unsynced", fileCount: 1, additions: 2, deletions: 0 },
+      ]);
+      expect(preview?.files.map((file) => file.repo)).toEqual(["new-app", "unsynced"]);
+    });
+
     test("accumulates thread line totals across runs from uncapped summaries", async () => {
       const ctx = createTestContext();
       const { user, project, asUser, t } = await ctx.setupProject();
