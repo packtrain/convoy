@@ -15,6 +15,8 @@ import {
   cliThreadWorktreeSpecValidator,
   cliThreadWorktreeValidator,
   cliThreadPullRequestValidator,
+  cliThreadRepoBranchValidator,
+  cliThreadRepoPullRequestValidator,
   cliThreadForkedFromValidator,
 } from "../../../lib/contracts/validators";
 import { slashCommandComposerDocumentValidator } from "../../../lib/contracts/slashCommands";
@@ -70,6 +72,9 @@ export const cliThreadItemValidator = v.object({
   linesRemoved: v.optional(v.number()),
   // Last-known PR snapshot for the thread's branch (OS-1370).
   pullRequest: v.optional(cliThreadPullRequestValidator),
+  // A multi-repo folder's branches while they differ, and its repos' PRs (OS-2523).
+  repoBranches: v.optional(v.array(cliThreadRepoBranchValidator)),
+  repoPullRequests: v.optional(v.array(cliThreadRepoPullRequestValidator)),
   readAt: v.optional(v.number()),
   createdAt: v.number(),
   lastActivityAt: v.number(),
@@ -131,6 +136,8 @@ export const watchTowerThreadItemValidator = v.object({
   linesAdded: cliThreadItemValidator.fields.linesAdded,
   linesRemoved: cliThreadItemValidator.fields.linesRemoved,
   pullRequest: cliThreadItemValidator.fields.pullRequest,
+  repoBranches: cliThreadItemValidator.fields.repoBranches,
+  repoPullRequests: cliThreadItemValidator.fields.repoPullRequests,
   associatedTask: cliThreadItemValidator.fields.associatedTask,
   agent: cliThreadItemValidator.fields.agent,
   workflow: cliThreadItemValidator.fields.workflow,
@@ -180,6 +187,8 @@ export function toWatchTowerThreadItem(
       linesAdded: ownItem.linesAdded,
       linesRemoved: ownItem.linesRemoved,
       pullRequest: ownItem.pullRequest,
+      repoBranches: ownItem.repoBranches,
+      repoPullRequests: ownItem.repoPullRequests,
       associatedTask: ownItem.associatedTask,
       agent: ownItem.agent,
       workflow: ownItem.workflow,
@@ -227,6 +236,8 @@ export function toThreadItem(
     linesAdded: chat.git?.linesAdded,
     linesRemoved: chat.git?.linesRemoved,
     pullRequest: chat.git?.pullRequest,
+    repoBranches: chat.git?.repoBranches,
+    repoPullRequests: chat.git?.repoPullRequests,
     attachedPullRequest: chat.attachedPullRequest,
     readAt: chat.readAt,
     createdAt: chat.createdAt,

@@ -3,7 +3,7 @@
  */
 import { afterEach, describe, expect, test, vi } from "vitest";
 import { cleanup, fireEvent, render, screen } from "@testing-library/react";
-import { ThreadPrBadge } from "./thread-pr-badge";
+import { ThreadPrBadge, ThreadPrBadges } from "./thread-pr-badge";
 import type { ThreadPullRequest } from "@/lib/threads/pull-request";
 
 const pullRequest: ThreadPullRequest = {
@@ -55,5 +55,27 @@ describe("ThreadPrBadge", () => {
     fireEvent.keyDown(badge, { key: "Enter" });
     expect(open).toHaveBeenCalledTimes(2);
     open.mockRestore();
+  });
+});
+
+describe("ThreadPrBadges (OS-2523)", () => {
+  afterEach(cleanup);
+
+  test("shows one badge per repo's PR, at most 3, then +N naming the rest", () => {
+    const repos = ["a", "b", "c", "d", "e"].map((repo, index) => ({
+      ...pullRequest,
+      repo,
+      number: index + 1,
+      url: `https://github.com/acme/${repo}/pull/${index + 1}`,
+    }));
+    render(<ThreadPrBadges pullRequests={repos} />);
+
+    expect(screen.getAllByRole("link").map((badge) => badge.getAttribute("aria-label"))).toEqual([
+      "a · PR #1 · Open — Add PR badge",
+      "b · PR #2 · Open — Add PR badge",
+      "c · PR #3 · Open — Add PR badge",
+    ]);
+    const more = screen.getByText("+2");
+    expect(more.getAttribute("title")).toBe("d · PR #4 · Open — Add PR badge\ne · PR #5 · Open — Add PR badge");
   });
 });

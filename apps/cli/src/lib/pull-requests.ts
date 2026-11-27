@@ -1,5 +1,5 @@
 import { execFile } from "node:child_process";
-import { getCurrentBranch, getDefaultBranch, getGitRemoteUrl } from "./git/index.js";
+import { getCurrentBranch, getDefaultBranch, getGitRemoteUrl, getOriginHeadBranch, mapLimited, repoRelativePath } from "./git/index.js";
 
 /**
  * Last-known PR lookup for a thread's branch (OS-1370). Detects the forge from the origin
@@ -385,4 +385,48 @@ export async function lookupThreadPullRequest(cwd: string): Promise<PullRequestL
 
   const { updatedAt: _updatedAt, ...snapshotFields } = candidate;
   return { pullRequest: { ...snapshotFields, capturedAt: Date.now() } };
+}
+
+const REPO_LOOKUP_CONCURRENCY = 4;
+
+/**
+ * Each repo's lookup in a multi-repo folder (OS-2523), by relative path. A failed lookup, or one not done by the
+ * deadline, is left out, so that repo's last-known PR survives. A repo on origin's default branch is cleared without a forge call.
+ */
+export async function lookupRepoPullRequests(
+  folder: string,
+  paths: string[],
+  { deadlineMs = LOOKUP_TIMEOUT_MS }: { deadlineMs?: number } = {},
+): Promise<RepoPullRequestLookup[]> {
+  // Kept as each lookup answers, so the deadline returns what finished; a forge CLI past it ends on its own timeout.
+  const answered: RepoPullRequestLookup[] = [];
+  let expired = false;
+  const lookups = mapLimited(paths, async (path) => {
+    if (expired) return;
+    const repo = repoRelativePath(folder, path);
+    try {
+      const [branch, originHead] = await Promise.all([getCurrentBranch(path), getOriginHeadBranch(path)]);
+      if (branch !== null && branch === originHead) {
+        answered.push({ repo });
+        return;
+      }
+      const lookup = await lookupThreadPullRequest(path);
+      if (lookup) answered.push(lookup.pullRequest ? { repo, pullRequest: lookup.pullRequest } : { repo });
+    } catch {
+      // A failed git read counts as a failed lookup: only this repo is left out.
+    }
+  }, REPO_LOOKUP_CONCURRENCY);
+  let timer: NodeJS.Timeout | undefined;
+  try {
+    await Promise.race([lookups, new Promise((resolve) => (timer = setTimeout(resolve, deadlineMs)))]);
+  } finally {
+    clearTimeout(timer);
+    expired = true;
+  }
+  return [...answered];
+}
+
+export interface RepoPullRequestLookup {
+  repo: string;
+  pullRequest?: PullRequestSnapshot;
 }

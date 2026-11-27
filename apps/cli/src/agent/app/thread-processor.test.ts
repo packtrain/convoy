@@ -21,9 +21,10 @@ import type {
 } from "../runtimes/contracts.js";
 import { RunnerExecutionError } from "../runtimes/contracts.js";
 import { runGit } from "../../lib/git/exec.js";
-import { captureRunBaseline, captureRunChanges, getCurrentBranch } from "../../lib/git/index.js";
+import { captureRunBaseline, captureRunChanges, getCurrentBranch, readRepoBranches } from "../../lib/git/index.js";
 import { inspectWorktreeMoveTarget, resolveExecutionWorkspace } from "../../lib/git/worktrees.js";
 import type { ConvoyClient } from "../../lib/config/convex-client.js";
+import { lookupRepoPullRequests } from "../../lib/pull-requests.js";
 
 const TEST_ROOT = mkdtempSync(join(tmpdir(), "convoy-thread-tests-"));
 mkdirSync(join(TEST_ROOT, "repo"));
@@ -36,6 +37,8 @@ mkdirSync(join(TEST_ROOT, "repo-seq-a"));
 mkdirSync(join(TEST_ROOT, "repo-seq-b"));
 mkdirSync(join(TEST_ROOT, "repo-shutdown-a"));
 mkdirSync(join(TEST_ROOT, "repo-shutdown-b"));
+mkdirSync(join(TEST_ROOT, "multi", "old-app", ".git"), { recursive: true });
+mkdirSync(join(TEST_ROOT, "multi", "new-app", ".git"), { recursive: true });
 afterAll(() => rm(TEST_ROOT, { recursive: true, force: true }));
 
 vi.mock("../../lib/git/index.js", async (importOriginal) => {
@@ -43,9 +46,15 @@ vi.mock("../../lib/git/index.js", async (importOriginal) => {
   return {
     ...actual,
     getCurrentBranch: vi.fn().mockResolvedValue("feat/test"),
+    readRepoBranches: vi.fn(actual.readRepoBranches),
     captureRunBaseline: vi.fn(actual.captureRunBaseline),
     captureRunChanges: vi.fn(actual.captureRunChanges),
   };
+});
+
+vi.mock("../../lib/pull-requests.js", async (importOriginal) => {
+  const actual = await importOriginal<typeof import("../../lib/pull-requests.js")>();
+  return { ...actual, lookupRepoPullRequests: vi.fn(actual.lookupRepoPullRequests) };
 });
 
 function makePendingChat(overrides: Partial<PendingChat> = {}): PendingChat {
@@ -1103,6 +1112,38 @@ describe("message-handler", () => {
         })
       );
     });
+  });
+
+  it("reports each repo's branch and PR in a multi-repo folder (OS-2523)", async () => {
+    const folder = join(TEST_ROOT, "multi");
+    setQueryResponses({ pendingRuns: [[makeUserMessage()], []], continuationIds: [null] });
+    const repos = [{ repo: "new-app", branch: "feat/x" }, { repo: "old-app", branch: "main" }];
+    vi.mocked(readRepoBranches).mockResolvedValue(repos);
+    const pullRequest = {
+      provider: "github" as const, number: 3, title: "T", url: "https://github.com/acme/new-app/pull/3",
+      state: "open" as const, headBranch: "feat/x", baseBranch: "main", capturedAt: 1,
+    };
+    vi.mocked(lookupRepoPullRequests).mockResolvedValue([{ repo: "new-app", pullRequest }]);
+    const handler = createMessageHandler(() => mockRunner, mockClient, sessionId);
+    handler.enqueueChat(makePendingChat({ workingDirectory: folder }));
+    const reports = (name: string) => mockMutation.mock.calls.filter(([fn]) => getFunctionName(fn) === `cli/threads/runControl:${name}`).map(([, args]) => args);
+    try {
+      await vi.waitFor(() => expect(reports("reportPullRequest")).toHaveLength(1));
+      // At run start and after the run.
+      expect(reports("reportExecutionBranch")).toEqual([
+        expect.objectContaining({ repos, path: folder }),
+        expect.objectContaining({ repos, path: folder }),
+      ]);
+      expect(reports("reportExecutionBranch")[0]).not.toHaveProperty("branch");
+      expect(reports("reportPullRequest")[0]).toMatchObject({ repos: [{ repo: "new-app", pullRequest }], path: folder });
+      const paths = [join(folder, "new-app"), join(folder, "old-app")];
+      expect(readRepoBranches).toHaveBeenCalledWith(folder, paths);
+      expect(lookupRepoPullRequests).toHaveBeenCalledWith(folder, paths);
+    } finally {
+      await handler.shutdown();
+      vi.mocked(readRepoBranches).mockReset();
+      vi.mocked(lookupRepoPullRequests).mockReset();
+    }
   });
 
   it("completes without the multi-repo summary when an older backend rejects its fields", async () => {

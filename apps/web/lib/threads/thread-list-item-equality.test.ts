@@ -37,6 +37,8 @@ const baseline: EveryField = {
     baseBranch: "main",
     capturedAt: 1000,
   },
+  repoBranches: [{ repo: "web", branch: "main" }, { repo: "api", branch: "feat/x" }],
+  repoPullRequests: [{ repo: "api", provider: "github", number: 2, title: "API", url: "https://github.com/acme/api/pull/2", state: "open", headBranch: "feat/x", baseBranch: "main", capturedAt: 1000 }],
   attachedPullRequest: { owner: "contoso", name: "web", number: 7, ref: "contoso/web#7" },
   associatedTask: {
     _id: "task_1" as Id<"tasks">,
@@ -83,6 +85,8 @@ const changed: EveryFieldChanged = {
   linesAdded: 13,
   linesRemoved: 4,
   pullRequest: { ...baseline.pullRequest, state: "merged" },
+  repoBranches: [{ repo: "web", branch: "main" }, { repo: "api", branch: "feat/y" }],
+  repoPullRequests: [{ ...baseline.repoPullRequests[0], state: "merged" }],
   associatedTask: { ...baseline.associatedTask, name: "Something else" },
   attachedPullRequest: { ...baseline.attachedPullRequest, number: 8, ref: "contoso/web#8" },
   status: "streaming",

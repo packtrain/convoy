@@ -152,6 +152,27 @@ describe("waking the agent on failed checks", () => {
     expect(await watchMessages()).toHaveLength(1);
   });
 
+  test("in a multi-repo folder the message names the repo the PR belongs to (OS-2523)", async () => {
+    const { watch, watchMessages, github, t, threadId } = await setupWatch();
+    const snapshot = { provider: "github" as const, title: "Change", state: "open" as const, headBranch: "feat/x", baseBranch: "main", capturedAt: 0 };
+    await t.run((run) =>
+      run.db.patch("cliThreads", threadId, {
+        git: {
+          repoPullRequests: [
+            { repo: "new-app", number: 1, url: "https://github.com/acme/repo-1/pull/1", ...snapshot },
+            { repo: "old-app", number: 1, url: "https://github.com/acme/old-app/pull/1", ...snapshot },
+          ],
+        },
+      })
+    );
+    await watch("acme/repo-1#1");
+    pull(github, 1).checkRuns = [failing(1, "lint"), failing(2, "test")];
+    await checkRunCompleted(t, "head-1");
+    await drain(t);
+    const [message] = await watchMessages();
+    expect(message).toContain("Update on pull request #1 (https://github.com/acme/repo-1/pull/1) in new-app, which Convoy is watching for this thread:");
+  });
+
   test("a push starts over: a check failing again on the new head is reported again", async () => {
     const { watch, watchMessages, github, t } = await setupWatch();
     await watch("acme/repo-1#1");

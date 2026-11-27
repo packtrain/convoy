@@ -18,7 +18,7 @@ import type { ThreadPullRequest } from "@/lib/threads/pull-request";
 import type { TimelineRun } from "@/lib/threads/run-timeline";
 import { cn } from "@/lib/utils";
 import { RunTimelinePanel } from "./run-timeline-panel";
-import { ThreadPrBadge } from "./thread-pr-badge";
+import { ThreadPrBadges } from "./thread-pr-badge";
 import { ChangesViewToggles } from "@/components/custom/diff/changes-view-toggles";
 
 /**
@@ -330,8 +330,8 @@ interface ThreadChangesToolbarProps {
   diffToggles?: boolean;
   fileTreeOpen?: boolean;
   onToggleFileTree?: () => void;
-  /** Stored PR snapshot of the thread (OS-1370); renders the PR badge when set. */
-  pullRequest?: ThreadPullRequest;
+  /** Stored Branch pull requests of the thread (OS-1370, one per repo OS-2523); a badge each. */
+  pullRequests?: ThreadPullRequest[];
   /** Before the view selector: the repo switcher of a multi-repo folder. */
   leading?: ReactNode;
 }
@@ -366,7 +366,7 @@ export function ThreadChangesToolbar({
   diffToggles = true,
   fileTreeOpen = false,
   onToggleFileTree,
-  pullRequest,
+  pullRequests = [],
   leading,
 }: ThreadChangesToolbarProps) {
   const [menuOpen, setMenuOpen] = useState(false);
@@ -426,9 +426,7 @@ export function ThreadChangesToolbar({
         </PopoverContent>
       </Popover>
       <div className="ml-auto flex items-center gap-1">
-        {pullRequest ? (
-          <ThreadPrBadge pullRequest={pullRequest} className="mr-1" />
-        ) : null}
+        <ThreadPrBadges pullRequests={pullRequests} className="mr-1" />
         {diffToggles && (
           <ChangesViewToggles
             allCollapsed={allCollapsed}

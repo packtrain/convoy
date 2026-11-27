@@ -270,7 +270,7 @@ describe("ThreadComposer", () => {
     render(
       <ThreadComposer
         onSubmit={vi.fn()}
-        pullRequest={pullRequest}
+        pullRequests={[pullRequest]}
         textareaPlaceholder="Ask a follow-up question..."
         selectorsProps={selectorsProps}
       />

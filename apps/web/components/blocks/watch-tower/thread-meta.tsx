@@ -5,7 +5,9 @@ import { AppLink, appRoute } from "@/lib/navigation";
 import { TaskType } from "@/components/blocks/tasks/task-ref-with-type";
 import { ThreadWorkflowRowBadge } from "@/components/blocks/thread/thread-workflow-row-badge";
 import { renderCliIcon } from "@/lib/cli-runtime-ui/registry";
-import { ThreadPrBadge } from "@/components/blocks/thread/thread-pr-badge";
+import { ThreadPrBadges } from "@/components/blocks/thread/thread-pr-badge";
+import { threadPullRequests } from "@/lib/threads/pull-request";
+import { threadBranchLabel, type ThreadBranchLabel } from "@/lib/threads/repo-branches";
 import type { WatchTowerThreadItem } from "@/convex/cli/threads/lib/validators";
 import { cn } from "@/lib/utils";
 
@@ -60,21 +62,21 @@ function WatchTowerTaskChip({
   );
 }
 
-/** Branch name, truncated with the full value in the tooltip (OS-1257). */
+/** Branch name, or "N repos" in a multi-repo folder, truncated with the full value in the tooltip (OS-1257, OS-2523). */
 export function WatchTowerBranchLabel({
-  branch,
+  label,
   className,
 }: {
-  branch: string;
+  label: ThreadBranchLabel;
   className?: string;
 }) {
   return (
     <span
       className={cn("flex min-w-0 items-center gap-1", className)}
-      title={`Branch: ${branch}`}
+      title={label.title}
     >
       <GitBranch className="size-3 shrink-0" />
-      <span className="min-w-0 truncate font-mono">{branch}</span>
+      <span className={cn("min-w-0 truncate", label.branch && "font-mono")}>{label.text}</span>
     </span>
   );
 }
@@ -93,6 +95,8 @@ export function WatchTowerThreadMeta({
   organizationSlug: string;
   className?: string;
 }) {
+  const branchLabel = threadBranchLabel(thread);
+  const pullRequests = threadPullRequests(thread);
   return (
     <div
       className={cn(
@@ -103,17 +107,17 @@ export function WatchTowerThreadMeta({
       <span className="shrink-0">{thread.location.projectName}</span>
       {thread.ownerName ? <span className="truncate" title={thread.ownerName}>{thread.ownerName}</span> : null}
       <WatchTowerChildCount thread={thread} />
-      {thread.pullRequest ? (
+      {pullRequests.length > 0 ? (
         <>
           <span aria-hidden>·</span>
-          <ThreadPrBadge pullRequest={thread.pullRequest} />
+          <ThreadPrBadges pullRequests={pullRequests} />
         </>
       ) : null}
-      {thread.branch ? (
+      {branchLabel ? (
         <>
           <span aria-hidden>·</span>
           {/* shrink-0: a long task name must truncate itself, not crush the branch */}
-          <WatchTowerBranchLabel branch={thread.branch} className="max-w-40 shrink-0" />
+          <WatchTowerBranchLabel label={branchLabel} className="max-w-40 shrink-0" />
         </>
       ) : null}
       {thread.associatedTask ? (

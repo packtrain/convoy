@@ -1,6 +1,11 @@
-import { describe, expect, test } from "vitest";
+import { chmod, mkdir, mkdtemp, rm, writeFile } from "node:fs/promises";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
+import { describe, expect, test, vi } from "vitest";
+import { runGit } from "./git/exec.js";
 import {
   detectPullRequestProvider,
+  lookupRepoPullRequests,
   normalizeAzureDevOpsPullRequest,
   normalizeGitHubPullRequest,
   normalizeGitLabMergeRequest,
@@ -155,5 +160,55 @@ describe("parsePullRequestList", () => {
 
   test("empty output is an empty list", () => {
     expect(parsePullRequestList("", normalizeGitHubPullRequest)).toEqual([]);
+  });
+});
+
+describe("lookupRepoPullRequests (real git, OS-2523)", () => {
+  test("clears a repo on origin's default branch without a forge call and leaves out a failed lookup", async () => {
+    const root = await mkdtemp(join(tmpdir(), "convoy-repo-prs-"));
+    const repoAt = async (name: string, remote: string, branch: string) => {
+      const dir = join(root, name);
+      await mkdir(dir);
+      await runGit(dir, ["init", `--initial-branch=${branch}`]);
+      await runGit(dir, ["-c", "user.name=t", "-c", "user.email=t@t", "commit", "--allow-empty", "-m", "init"]);
+      await runGit(dir, ["remote", "add", "origin", remote]);
+      await runGit(dir, ["symbolic-ref", "refs/remotes/origin/HEAD", "refs/remotes/origin/main"]);
+      return dir;
+    };
+    try {
+      // A github remote: a forge call would fail here, so only the default-branch rule reports it.
+      const onMain = await repoAt("old-app", "https://github.com/acme/old-app.git", "main");
+      // An unknown forge host: the lookup can't run, so the repo is not reported and its PR survives.
+      const unknownHost = await repoAt("new-app", "https://forge.example/acme/new-app.git", "feat/x");
+      expect(await lookupRepoPullRequests(root, [unknownHost, onMain])).toEqual([{ repo: "old-app" }]);
+      // A repo whose git read fails (moved after the scan) is left out alone (round 2 #2).
+      expect(await lookupRepoPullRequests(root, [join(root, "gone"), onMain])).toEqual([{ repo: "old-app" }]);
+    } finally {
+      await rm(root, { recursive: true, force: true });
+    }
+  });
+});
+
+describe("lookupRepoPullRequests deadline (review #5)", () => {
+  test("leaves out the repos a hanging forge CLI didn't answer for by the deadline", async () => {
+    const root = await mkdtemp(join(tmpdir(), "convoy-repo-prs-slow-"));
+    const bin = join(root, "bin");
+    await mkdir(bin);
+    await writeFile(join(bin, "gh"), "#!/bin/sh\nsleep 5\n");
+    await chmod(join(bin, "gh"), 0o755);
+    vi.stubEnv("PATH", `${bin}:${process.env.PATH ?? ""}`);
+    try {
+      const repo = join(root, "new-app");
+      await mkdir(repo);
+      await runGit(repo, ["init", "--initial-branch=feat/x"]);
+      await runGit(repo, ["-c", "user.name=t", "-c", "user.email=t@t", "commit", "--allow-empty", "-m", "init"]);
+      await runGit(repo, ["remote", "add", "origin", "https://github.com/acme/new-app.git"]);
+      const started = Date.now();
+      expect(await lookupRepoPullRequests(root, [repo], { deadlineMs: 300 })).toEqual([]);
+      expect(Date.now() - started).toBeLessThan(2_000);
+    } finally {
+      vi.unstubAllEnvs();
+      await rm(root, { recursive: true, force: true });
+    }
   });
 });

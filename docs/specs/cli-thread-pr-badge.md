@@ -184,6 +184,10 @@ every role granting it also grants `TASK_UPDATE` today. Full rules:
 
 ## Edge cases
 
+- A thread in a multi-repo folder has one Branch pull request per repo: one
+  badge each, at most 3 then `+N`, and one task link per repo
+  ([Multi-repo projects → Branch and pull requests](cli-multi-repo-projects.md#branch-and-pull-requests)).
+
 - Worktree threads capture in the worktree cwd with the worktree's branch —
   the common, most reliable case.
 - Threads with no branch (detached HEAD, non-git paths) never capture.

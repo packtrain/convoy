@@ -9,6 +9,7 @@ import type {
   CliThreadAggregateStatus,
   CliThreadForkedFrom,
   CliThreadPullRequest,
+  CliThreadRepoPullRequest,
   CliThreadWatchStatus,
 } from "../../../lib/contracts/validators";
 import { getProjectAgentById } from "../../../agents/lib/projectAgentsRepo";
@@ -1218,13 +1219,13 @@ export async function setThreadChecklist(ctx: MutationCtx, threadId: Id<"cliThre
   await ctx.db.patch("cliThreads", threadId, { checklistId });
 }
 
-/** Set or clear the last-known PR snapshot for the thread's branch (OS-1370). */
+/** Set or clear the last-known PR snapshot for the thread's branch (OS-1370), or a multi-repo folder's per-repo list (OS-2523). */
 export async function setThreadPullRequest(
   ctx: MutationCtx,
   threadId: Id<"cliThreads">,
-  pullRequest: CliThreadPullRequest | undefined
+  patch: { pullRequest: CliThreadPullRequest | undefined; repoPullRequests?: CliThreadRepoPullRequest[] | undefined }
 ): Promise<void> {
-  await patchThreadWithStatusProjection(ctx, threadId, { git: { pullRequest } });
+  await patchThreadWithStatusProjection(ctx, threadId, { git: patch });
 }
 
 /**
@@ -1262,13 +1263,13 @@ export async function setThreadLastUsedCliSelection(
   });
 }
 
-/** Set or clear the branch snapshot captured at execution start (OS-1247). */
+/** Set or clear the branch snapshot captured at execution start (OS-1247), with a multi-repo folder's per-repo state (OS-2523). */
 export async function setThreadExecutionBranch(
   ctx: MutationCtx,
   threadId: Id<"cliThreads">,
-  executionBranch: string | undefined
+  patch: Pick<ThreadGit, "executionBranch" | "repoBranches" | "repoPullRequests" | "pullRequest">
 ): Promise<void> {
-  await patchThreadWithStatusProjection(ctx, threadId, { git: { executionBranch } });
+  await patchThreadWithStatusProjection(ctx, threadId, { git: patch });
 }
 
 /**

@@ -51,12 +51,8 @@ export async function getGitRemoteUrl(dir: string): Promise<string | null> {
  * for detached HEAD in a repo with no `origin/HEAD` ref.
  */
 export async function getDefaultBranch(dir: string): Promise<string | null> {
-  const originHead = await runGit(dir, ["symbolic-ref", "--short", "refs/remotes/origin/HEAD"], { allowNonZeroExit: true });
-  if (originHead.exitCode === 0) {
-    const shortRef = originHead.stdout.trim();
-    const separatorIndex = shortRef.indexOf("/");
-    return separatorIndex > 0 ? shortRef.slice(separatorIndex + 1) : shortRef;
-  }
+  const originHead = await getOriginHeadBranch(dir);
+  if (originHead !== null) return originHead;
 
   const head = await runGit(dir, ["rev-parse", "--abbrev-ref", "HEAD"], {
     allowNonZeroExit: true,
@@ -67,6 +63,15 @@ export async function getDefaultBranch(dir: string): Promise<string | null> {
   }
 
   return null;
+}
+
+/** The branch `origin/HEAD` points at, with no fallback; null when it is unset. */
+export async function getOriginHeadBranch(dir: string): Promise<string | null> {
+  const originHead = await runGit(dir, ["symbolic-ref", "--short", "refs/remotes/origin/HEAD"], { allowNonZeroExit: true });
+  if (originHead.exitCode !== 0) return null;
+  const shortRef = originHead.stdout.trim();
+  const separatorIndex = shortRef.indexOf("/");
+  return separatorIndex > 0 ? shortRef.slice(separatorIndex + 1) : shortRef;
 }
 
 /**
@@ -178,6 +183,21 @@ export async function listRepositoryPaths(folder: string): Promise<string[]> {
     ...children.filter((_, i) => childKinds[i] === "directory"),
     ...grandchildren.filter((_, i) => grandchildKinds[i] === "directory"),
   ].sort().slice(0, MAX_DISCOVERED_REPOS);
+}
+
+/** A multi-repo folder's repo paths; null when `cwd` is a repo itself or holds none (git's own lookup applies). */
+export async function folderRepoPaths(cwd: string): Promise<string[] | null> {
+  // Child repos win over a checkout the folder sits inside: that one's tree doesn't see their files.
+  const paths = await listRepositoryPaths(cwd).catch(() => []);
+  return paths.length === 0 || paths[0] === cwd ? null : paths;
+}
+
+/** Each repo's checked-out branch, by relative path; absent for detached HEAD. */
+export function readRepoBranches(folder: string, paths: string[]): Promise<{ repo: string; branch?: string }[]> {
+  return mapLimited(paths, async (path) => {
+    const branch = await getCurrentBranch(path);
+    return { repo: repoRelativePath(folder, path), ...(branch ? { branch } : {}) };
+  });
 }
 
 /** `/`-separated path of a repo inside the folder; "." for the folder itself. */

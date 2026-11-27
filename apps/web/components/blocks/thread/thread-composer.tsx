@@ -10,7 +10,7 @@ import type { JSONContent } from "@tiptap/react";
 import { ChevronDown, FolderGit2, GitBranch, Laptop, Paperclip, TriangleAlert, X } from "lucide-react";
 import { toast } from "sonner";
 import { BackgroundTasksPill } from "@/components/blocks/background-tasks";
-import type { CliThreadBackgroundTasks, CliStopConfirmation, CliThreadGoal } from "@/convex/lib/contracts/validators";
+import type { CliThreadBackgroundTasks, CliStopConfirmation, CliThreadGoal, CliThreadRepoBranch } from "@/convex/lib/contracts/validators";
 import { isConfiguredPath } from "@/convex/lib/contracts/validators";
 import {
   PromptInput,
@@ -36,7 +36,7 @@ import { ThreadAttachmentMenu } from "@/components/blocks/thread/thread-attachme
 import { ThreadComposerTaskDropZone } from "@/components/blocks/thread/thread-composer-task-drop-zone";
 import { ThreadAttachmentPill } from "@/components/blocks/thread/thread-attachment-pill";
 import { ThreadContextSelectors } from "@/components/blocks/thread/thread-context-selectors";
-import { ThreadPrBadge } from "@/components/blocks/thread/thread-pr-badge";
+import { ThreadPrBadges } from "@/components/blocks/thread/thread-pr-badge";
 import { ThreadPlanProgress } from "@/components/blocks/thread/thread-plan-progress";
 import { ThreadTaskSelectorDialog } from "@/components/blocks/thread/thread-task-selector-dialog";
 import { AttachedPullRequestPill, PullRequestSelectorDialog } from "@/components/blocks/integrations";
@@ -73,6 +73,7 @@ import type { FileMentionContext } from "@/lib/threads/hooks/use-file-mention-se
 import type { PlanProgress } from "@/lib/threads/plan-progress";
 import { supportsAttachedPullRequest } from "@/lib/threads/cli-version";
 import type { ThreadPullRequest } from "@/lib/threads/pull-request";
+import { threadBranchLabel } from "@/lib/threads/repo-branches";
 import { isRecord } from "@/lib/type-guards";
 import { appRoute, href, useRouteParams } from "@/lib/navigation";
 import { PromptInputTiptapTextarea, type PromptInputMentionApi } from "./prompt-input-tiptap-textarea";
@@ -265,9 +266,9 @@ interface ThreadComposerProps {
   /** Existing-thread composers show the immutable bound persona below the input. */
   readOnlyAgent?: ThreadAgentChipAgent;
   /** Started threads use their execution metadata, even after a profile path disappears. */
-  readOnlyWorkspace?: { kind: "local" | "worktree"; branch?: string };
-  /** Existing-thread composers show branch-derived PR info after the workspace controls. */
-  pullRequest?: ThreadPullRequest;
+  readOnlyWorkspace?: { kind: "local" | "worktree"; branch?: string; repoBranches?: CliThreadRepoBranch[] };
+  /** Existing-thread composers show branch-derived PR info after the workspace controls; one per repo in a multi-repo folder. */
+  pullRequests?: ThreadPullRequest[];
   /** The agent's current plan, shown as a progress chip after the PR badge. */
   planProgress?: PlanProgress | null;
 }
@@ -645,9 +646,12 @@ const WORKTREE_UNAVAILABLE_TOOLTIP =
 
 function ThreadComposerWorkspaceSummary({
   kind,
-  branch,
+  branch: knownBranch,
+  repoBranches,
   tooltip,
 }: NonNullable<ThreadComposerProps["readOnlyWorkspace"]> & { tooltip?: string }) {
+  const branchLabel = threadBranchLabel({ branch: knownBranch, repoBranches });
+  const branch = branchLabel?.branch;
   const label = kind === "worktree" ? "Worktree" : "Work locally";
   const EnvironmentIcon = kind === "worktree" ? FolderGit2 : Laptop;
   const chipClassName =
@@ -689,6 +693,11 @@ function ThreadComposerWorkspaceSummary({
           <GitBranch className="size-3.5 shrink-0 opacity-70" />
           <MiddleTruncate text={branch} />
         </button>
+      ) : branchLabel ? (
+        <span className={chipClassName} title={branchLabel.title}>
+          <GitBranch className="size-3.5 shrink-0 opacity-70" />
+          <span className="truncate">{branchLabel.text}</span>
+        </span>
       ) : null}
     </>
   );
@@ -1010,7 +1019,7 @@ function ThreadComposerContent({
   extraAttachmentPills,
   readOnlyAgent,
   readOnlyWorkspace,
-  pullRequest,
+  pullRequests,
   planProgress,
 }: ThreadComposerContentProps) {
   const runtimeSlashCommands = useMemo(
@@ -1085,7 +1094,7 @@ function ThreadComposerContent({
     showTopBarWorkingDirectory ||
     showWorkspaceSelectors ||
     showWorkspaceSummary ||
-    Boolean(pullRequest) ||
+    Boolean(pullRequests?.length) ||
     showTopBarAgentSelector ||
     showReadOnlyAgent ||
     Boolean(workflowSelector) ||
@@ -1236,12 +1245,7 @@ function ThreadComposerContent({
                 {showWorkspaceSummary && workspaceSummary ? (
                   <ThreadComposerWorkspaceSummary {...workspaceSummary} tooltip={workspaceSummaryTooltip} />
                 ) : null}
-                {pullRequest ? (
-                  <ThreadPrBadge
-                    pullRequest={pullRequest}
-                    className="h-7 px-2"
-                  />
-                ) : null}
+                {pullRequests ? <ThreadPrBadges pullRequests={pullRequests} className="h-7 px-2" /> : null}
                 <ThreadPlanProgress plan={planProgress ?? null} />
                 {showTopBarAgentSelector && selectorsProps.onProjectAgentChange ? (
                   <ThreadAgentSelector

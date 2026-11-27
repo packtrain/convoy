@@ -461,6 +461,14 @@ export const cliThreadPullRequestValidator = v.object({
 
 export type CliThreadPullRequest = Infer<typeof cliThreadPullRequestValidator>;
 
+/** A repo of a multi-repo folder by relative path, and its branch (docs/specs/cli-multi-repo-projects.md#branch-and-pull-requests). */
+export const cliThreadRepoBranchValidator = v.object({ repo: v.string(), branch: v.optional(v.string()) });
+export type CliThreadRepoBranch = Infer<typeof cliThreadRepoBranchValidator>;
+
+/** A repo's Branch pull request in a multi-repo folder: the snapshot plus the repo's relative path. */
+export const cliThreadRepoPullRequestValidator = v.object({ repo: v.string(), ...cliThreadPullRequestValidator.fields });
+export type CliThreadRepoPullRequest = Infer<typeof cliThreadRepoPullRequestValidator>;
+
 /** An image's pixel size, measured at upload so the thread can reserve its box before it loads. */
 export const imageDimensionsValidator = v.object({ width: v.number(), height: v.number() });
 export type ImageDimensions = Infer<typeof imageDimensionsValidator>;
@@ -987,6 +995,12 @@ export type CliProfilePathKind = Infer<typeof cliProfilePathKindValidator>;
 /** A path the user configured: not a synced worktree, not a detected repo. */
 export function isConfiguredPath(entry: { kind?: CliProfilePathKind }): boolean {
   return entry.kind === undefined;
+}
+
+/** A `/`-separated path strictly inside the folder: a detected repo's relative path. */
+export function isInsideRelativePath(relativePath: string): boolean {
+  return relativePath !== "" && relativePath !== "." && !relativePath.startsWith("/") && !relativePath.includes("\\")
+    && !/^[A-Za-z]:/.test(relativePath) && !relativePath.split("/").includes("..");
 }
 
 /** The detected repos of a multi-repo folder, in stored order; [] for any other path. */

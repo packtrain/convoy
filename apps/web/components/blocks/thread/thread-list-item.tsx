@@ -66,14 +66,16 @@ import type { CliThreadKind, CliType } from "@/convex/lib/contracts/validators";
 import type { CliThreadBackground } from "@/convex/cli/threads/lib/validators";
 import { ThreadAgentChip, type ThreadAgentChipAgent } from "./thread-agent-chip";
 import { ThreadDiffStat } from "./thread-diff-stat";
-import { ThreadAttachedPrBadge, ThreadPrBadge } from "./thread-pr-badge";
+import { ThreadAttachedPrBadge, ThreadPrBadges } from "./thread-pr-badge";
 import { ThreadSharedRowBadge } from "./thread-shared-row-badge";
 import { ThreadBackgroundRowBadge } from "./thread-background-row-badge";
 import { ThreadWorkflowRowBadge } from "./thread-workflow-row-badge";
 import { ThreadStatusIndicator } from "./thread-status-indicator";
 import { CompactThreadRowContent } from "./compact-thread-row-content";
 import type { AttachedPullRequest } from "@/convex/lib/contracts/github";
-import { formatThreadPullRequestRef, getThreadPullRequestPresentation, type ThreadPullRequest } from "@/lib/threads/pull-request";
+import type { CliThreadRepoBranch, CliThreadRepoPullRequest } from "@/convex/lib/contracts/validators";
+import { formatThreadPullRequestRef, formatThreadPullRequestTooltip, getThreadPullRequestPresentation, threadPullRequests, type ThreadPullRequest } from "@/lib/threads/pull-request";
+import { threadBranchLabel, type ThreadBranchLabel } from "@/lib/threads/repo-branches";
 
 export interface ThreadListItemData {
   _id: Id<"cliThreads">;
@@ -86,6 +88,9 @@ export interface ThreadListItemData {
   linesRemoved?: number;
   /** Last-known PR snapshot for the thread's branch (OS-1370). */
   pullRequest?: ThreadPullRequest;
+  /** A multi-repo folder's branches while they differ, and its repos' PRs (OS-2523). */
+  repoBranches?: CliThreadRepoBranch[];
+  repoPullRequests?: CliThreadRepoPullRequest[];
   associatedTask?: ThreadTaskSummary;
   attachedPullRequest?: AttachedPullRequest;
   status: ThreadStatus;
@@ -189,10 +194,10 @@ function PullRequestPopoverRow({ pullRequest }: { pullRequest: ThreadPullRequest
         target="_blank"
         rel="noopener noreferrer"
         title={`${presentation.stateLabel}: ${pullRequest.title}`}
-        aria-label={`${formatThreadPullRequestRef(pullRequest)} · ${presentation.stateLabel} — ${pullRequest.title}`}
+        aria-label={formatThreadPullRequestTooltip(pullRequest)}
         className="block cursor-pointer truncate hover:underline"
       >
-        {formatThreadPullRequestRef(pullRequest)} {pullRequest.title}
+        {pullRequest.repo ? `${pullRequest.repo} · ` : ""}{formatThreadPullRequestRef(pullRequest)} {pullRequest.title}
       </a>
     </ThreadPopoverValueRow>
   );
@@ -206,20 +211,20 @@ function CompactThreadBranchPopover({
   gitRemoteUrl,
   linesAdded,
   linesRemoved,
-  pullRequest,
+  pullRequests,
   agent,
   lastActivityAt,
   children,
   contextMenuTrigger = false,
 }: {
   title: string;
-  branch: string;
+  branch: ThreadBranchLabel;
   pathLabel?: string;
   pathString?: string;
   gitRemoteUrl?: string;
   linesAdded?: number;
   linesRemoved?: number;
-  pullRequest?: ThreadPullRequest;
+  pullRequests: ThreadPullRequest[];
   agent?: ThreadAgentChipAgent;
   lastActivityAt: number;
   children: ReactElement;
@@ -281,11 +286,19 @@ function CompactThreadBranchPopover({
           <ThreadPopoverValueRow
             icon={<GitBranch className="size-4" aria-hidden />}
           >
-            <p className="break-all font-mono">{branch}</p>
+            {branch.repoLines ? (
+              <ul className="space-y-0.5">
+                {branch.repoLines.map((line) => (
+                  <li key={line} className="break-all font-mono">{line}</li>
+                ))}
+              </ul>
+            ) : (
+              <p className="break-all font-mono">{branch.text}</p>
+            )}
           </ThreadPopoverValueRow>
-          {pullRequest ? (
-            <PullRequestPopoverRow pullRequest={pullRequest} />
-          ) : null}
+          {pullRequests.map((pullRequest) => (
+            <PullRequestPopoverRow key={pullRequest.url} pullRequest={pullRequest} />
+          ))}
           {agent ? (
             <div className="border-t border-border pt-2">
               <ThreadPopoverValueRow
@@ -878,8 +891,10 @@ function ThreadListItemComponent({
     isActive && !linkTarget && associatedTask
       ? () => threadNavigation.openTask(associatedTask.refId, associatedTask.isArchived ? "archived" : "active")
       : undefined;
+  const pullRequests = threadPullRequests(chat);
+  const branchLabel = threadBranchLabel(chat);
   const attachedPrBadge = chat.attachedPullRequest ? (
-    <ThreadAttachedPrBadge attached={chat.attachedPullRequest} branchPullRequest={chat.pullRequest} />
+    <ThreadAttachedPrBadge attached={chat.attachedPullRequest} branchPullRequests={pullRequests} />
   ) : null;
   const associatedTaskHref = associatedTask
     ? href(
@@ -950,7 +965,7 @@ function ThreadListItemComponent({
           agent={chat.agent}
           leadingControl={selectCheckbox}
           titlePrefix={
-            (showAssociatedTask && associatedTask) || chat.attachedPullRequest || chat.pullRequest || isShared || isWorkflowRun || chat.background ? (
+            (showAssociatedTask && associatedTask) || chat.attachedPullRequest || pullRequests.length > 0 || isShared || isWorkflowRun || chat.background ? (
               <>
                 {workflowBadge}
                 {chat.background ? <ThreadBackgroundRowBadge background={chat.background} /> : null}
@@ -963,7 +978,7 @@ function ThreadListItemComponent({
                   />
                 ) : null}
                 {attachedPrBadge}
-                {chat.pullRequest ? <ThreadPrBadge pullRequest={chat.pullRequest} /> : null}
+                <ThreadPrBadges pullRequests={pullRequests} />
                 {isShared ? <ThreadSharedRowBadge /> : null}
               </>
             ) : undefined
@@ -993,15 +1008,15 @@ function ThreadListItemComponent({
       </div>
     );
 
-    const compactRowWithBranch = chat.branch ? (
+    const compactRowWithBranch = branchLabel ? (
       <CompactThreadBranchPopover
-        branch={chat.branch}
+        branch={branchLabel}
         pathLabel={chat.pathLabel}
         pathString={chat.pathString}
         gitRemoteUrl={chat.gitRemoteUrl}
         linesAdded={chat.linesAdded}
         linesRemoved={chat.linesRemoved}
-        pullRequest={chat.pullRequest}
+        pullRequests={pullRequests}
         agent={chat.agent}
         lastActivityAt={chat.lastActivityAt}
         title={threadLabel}
@@ -1016,15 +1031,15 @@ function ThreadListItemComponent({
       return compactRowWithBranch;
     }
 
-    const compactContextMenuTrigger = chat.branch ? (
+    const compactContextMenuTrigger = branchLabel ? (
       <CompactThreadBranchPopover
-        branch={chat.branch}
+        branch={branchLabel}
         pathLabel={chat.pathLabel}
         pathString={chat.pathString}
         gitRemoteUrl={chat.gitRemoteUrl}
         linesAdded={chat.linesAdded}
         linesRemoved={chat.linesRemoved}
-        pullRequest={chat.pullRequest}
+        pullRequests={pullRequests}
         agent={chat.agent}
         lastActivityAt={chat.lastActivityAt}
         title={threadLabel}
@@ -1042,7 +1057,7 @@ function ThreadListItemComponent({
         isCurrentThread={isActive}
         organizationSlug={organizationSlug}
         projectAlias={projectAlias}
-        triggerIsComposed={Boolean(chat.branch)}
+        triggerIsComposed={Boolean(branchLabel)}
         onRenameRequest={onRenameRequest}
         onToggleReadRequest={onToggleReadRequest}
         onToggleDoneRequest={onToggleDoneRequest}
@@ -1152,16 +1167,16 @@ function ThreadListItemComponent({
           )}
         </div>
         <div className="mt-1.5 grid min-w-0 grid-cols-[minmax(0,1fr)_auto] items-center gap-2">
-          {chat.branch || chat.pullRequest || isShared || isWorkflowRun || chat.background ? (
+          {branchLabel || pullRequests.length > 0 || isShared || isWorkflowRun || chat.background ? (
             <span className="flex min-w-0 items-center gap-1.5">
               {workflowBadge}
               {chat.background ? <ThreadBackgroundRowBadge background={chat.background} /> : null}
-              {chat.pullRequest ? <ThreadPrBadge pullRequest={chat.pullRequest} /> : null}
+              <ThreadPrBadges pullRequests={pullRequests} />
               {isShared ? <ThreadSharedRowBadge /> : null}
-              {chat.branch ? (
-                <span className="flex min-w-0 items-center gap-1 text-xs text-muted-foreground/70" title={`Branch: ${chat.branch}`}>
+              {branchLabel ? (
+                <span className="flex min-w-0 items-center gap-1 text-xs text-muted-foreground/70" title={branchLabel.title}>
                   <GitBranch className="size-3.5 shrink-0" />
-                  <span className="truncate font-mono">{chat.branch}</span>
+                  <span className={cn("truncate", branchLabel.branch && "font-mono")}>{branchLabel.text}</span>
                 </span>
               ) : null}
             </span>

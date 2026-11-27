@@ -1,6 +1,6 @@
 {
   "name": "@useconvoy/cli",
-  "version": "0.187.0",
+  "version": "0.188.0",
   "description": "CLI agent for Convoy",
   "license": "Apache-2.0",
   "homepage": "https://docs.convoy.build/docs/cli/install",

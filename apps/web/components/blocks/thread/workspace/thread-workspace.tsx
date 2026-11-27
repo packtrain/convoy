@@ -116,6 +116,7 @@ import {
 } from "@/convex/lib/contracts/validators";
 import { ThreadTaskRefLink } from "@/components/blocks/thread/thread-task-link";
 import { ThreadAttachedPrRefLink } from "@/components/blocks/thread/thread-pr-badge";
+import { threadPullRequests } from "@/lib/threads/pull-request";
 import { ThreadStatusIndicator } from "@/components/blocks/thread/thread-status-indicator";
 import {
   getThreadDisplayStatus,
@@ -1902,7 +1903,7 @@ function ThreadWorkspaceBody({
     ) : (
       <div className="flex h-full min-h-0 flex-col">
         <ThreadChangesToolbar
-          pullRequest={chat?.pullRequest}
+          pullRequests={chat ? threadPullRequests(chat) : []}
           label={changesViewLabel}
           changesViewKind={changesView.kind}
           runs={timelineRuns}

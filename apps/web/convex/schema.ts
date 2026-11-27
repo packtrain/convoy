@@ -37,6 +37,8 @@ import {
   cliThreadWorktreeValidator,
   cliThreadForkedFromValidator,
   cliThreadPullRequestValidator,
+  cliThreadRepoBranchValidator,
+  cliThreadRepoPullRequestValidator,
   cliThreadMetadataValidator,
   cliWorktreeOpKindValidator,
   cliHistoryScopeValidator,
@@ -1056,6 +1058,10 @@ export default defineSchema({
         // lookup at run completion; a successful lookup that finds no PR clears
         // it, while failed lookups never reach the server (last-known survives).
         pullRequest: v.optional(cliThreadPullRequestValidator),
+        // Multi-repo folder (docs/specs/cli-multi-repo-projects.md#branch-and-pull-requests): each repo's
+        // branch, only while they differ (else `executionBranch` holds the shared one), and each repo's PR.
+        repoBranches: v.optional(v.array(cliThreadRepoBranchValidator)),
+        repoPullRequests: v.optional(v.array(cliThreadRepoPullRequestValidator)),
         // Cumulative diff-stat totals across the thread's completed runs
         // (OS-1252), incremented by the complete path from each run's
         // diffSummary. Unset when no run carried a summary.

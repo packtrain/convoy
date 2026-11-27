@@ -2,7 +2,7 @@ import type { Doc, Id } from "../../_generated/dataModel";
 import type { MutationCtx, QueryCtx } from "../../_generated/server";
 import { sameStoredValue } from "../../lib/shared/patch";
 import { getBasename } from "./paths";
-import { isConfiguredPath } from "../../lib/contracts/validators";
+import { isConfiguredPath, isInsideRelativePath } from "../../lib/contracts/validators";
 
 type Ctx = QueryCtx | MutationCtx;
 
@@ -230,12 +230,6 @@ export function mergeProfilePaths(existingPaths: ProfilePathEntry[], incomingPat
 }
 
 export type IncomingRepo = { path: string; relativePath: string; gitRemoteUrl?: string; branch?: string };
-
-/** A `/`-separated path strictly inside the folder. */
-function isInsideRelativePath(relativePath: string): boolean {
-  return relativePath !== "" && relativePath !== "." && !relativePath.startsWith("/") && !relativePath.includes("\\")
-    && !/^[A-Za-z]:/.test(relativePath) && !relativePath.split("/").includes("..");
-}
 
 /**
  * Replace the repo entries of the configured path at `parentPath` with the CLI's

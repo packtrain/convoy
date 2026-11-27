@@ -3,7 +3,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { runGit } from "./exec.js";
-import { discoverRepositories, getCurrentBranch, listRepositoryPaths } from "./repo.js";
+import { discoverRepositories, folderRepoPaths, getCurrentBranch, listRepositoryPaths, readRepoBranches } from "./repo.js";
 
 describe("getCurrentBranch (real git)", () => {
   let repo: string;
@@ -123,5 +123,16 @@ describe("discoverRepositories", () => {
   it("drops credentials from a URL remote", async () => {
     await repoAt("app", "https://x-access-token:ghp_secret@github.com/acme/app.git");
     expect((await discoverRepositories(root))[0]?.gitRemoteUrl).toBe("https://github.com/acme/app.git");
+  });
+
+  it("reads a multi-repo folder's branches; a repo folder itself is no multi-repo folder (OS-2523)", async () => {
+    await repoAt("old-app");
+    const newApp = await repoAt("new-app");
+    await runGit(newApp, ["checkout", "-b", "feat/x"]);
+    await runGit(join(root, "old-app"), ["checkout", "--detach"]);
+    const paths = await folderRepoPaths(root);
+    expect(paths).toEqual([newApp, join(root, "old-app")]);
+    expect(await readRepoBranches(root, paths ?? [])).toEqual([{ repo: "new-app", branch: "feat/x" }, { repo: "old-app" }]);
+    expect(await folderRepoPaths(newApp)).toBeNull();
   });
 });
