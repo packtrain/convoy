@@ -1748,7 +1748,8 @@ export function getToolDefinitions(
         "List CLI threads in a project, most recent activity first. Each row has the same fields as " +
         "get_thread. A thread group or workflow run appears as one row (kind, childCount, " +
         "aggregateStatus) rather than as its members; pass that row's threadId back in to list the " +
-        "members. Done threads are excluded unless includeDone is set.",
+        "members. Done threads are excluded unless includeDone is set. Returns { page, hasMore, " +
+        "continueCursor }; hasMore is pagination only, a thread's done state is its row's isDone.",
       inputSchema: {
         type: "object",
         properties: {

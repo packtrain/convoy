@@ -7015,9 +7015,8 @@ describe("handleMcpRequest list_threads", () => {
       paginationOpts: { numItems: 20, cursor: null },
       apiKey: "sk_user_test",
     });
-    // Passed through unshaped, page envelope included — the query's validator is
-    // already the agent-facing contract.
-    expect(parseToolContentJson(response)).toEqual(PAGE);
+    // `hasMore`, not Convex's `isDone`: every row carries its own done state.
+    expect(parseToolContentJson(response)).toEqual({ page: PAGE.page, hasMore: true, continueCursor: "cursor_2" });
   });
 
   /**
@@ -7057,7 +7056,7 @@ describe("handleMcpRequest list_threads", () => {
   /**
    * The array comes back as a page so a caller never branches its response
    * handling on which argument it sent — the whole reason the two queries are one
-   * tool. `isDone` is always true: there is no next page to ask for.
+   * tool. `hasMore` is always false: there is no next page to ask for.
    */
   test("wraps the group's members in a page envelope", async () => {
     const { ctx } = createActionCtx(MEMBERS);
@@ -7075,7 +7074,7 @@ describe("handleMcpRequest list_threads", () => {
     );
 
     expect(response?.error).toBeUndefined();
-    expect(parseToolContentJson(response)).toEqual({ page: MEMBERS, isDone: true, continueCursor: "" });
+    expect(parseToolContentJson(response)).toEqual({ page: MEMBERS, hasMore: false, continueCursor: "" });
   });
 
   /**
@@ -7120,7 +7119,7 @@ describe("handleMcpRequest list_threads", () => {
     );
 
     expect(response?.error).toBeUndefined();
-    expect(parseToolContentJson(response)).toEqual({ page: [], isDone: true, continueCursor: "" });
+    expect(parseToolContentJson(response)).toEqual({ page: [], hasMore: false, continueCursor: "" });
   });
 
   test("rejects a malformed threadId before reaching the query", async () => {

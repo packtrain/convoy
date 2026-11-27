@@ -1454,6 +1454,13 @@ so it needs no `projectId` either. `handleListThreads` is where the two are
 presented as one tool — it wraps the drill-down's array in a page envelope so a
 caller never branches its response handling on which argument it sent.
 
+**The envelope is `{ page, hasMore, continueCursor }`, not Convex's `isDone`.**
+Every row has its own `isDone` (the thread's done state), and agents read a
+top-level `isDone: true` as "this group is done". With `includeDone: false` a fully
+finished group lists as `{ page: [], isDone: true }`, so `/ccc` runs skipped
+`mark_thread_done` on the container. `hasMore` is `!isDone` for the project list
+and always `false` for the drill-down.
+
 **Every row is exactly what `get_thread` returns for that ID** — one validator
 (`cliThreadSummaryValidator` in `convex/cli/lib/validators.ts`), not a narrower
 list variant, so an agent can act on a row without a follow-up call. The fields a

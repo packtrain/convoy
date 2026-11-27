@@ -977,6 +977,10 @@ a group needs no `projectId` either: the container ID is enough to find it.
 
 Threads you have marked done are left out unless you set `includeDone`.
 
+The response is `{ page, hasMore, continueCursor }`. While `hasMore` is
+`true`, pass `continueCursor` back as `cursor` for the next page. `hasMore`
+is about pagination only; a thread's done state is the `isDone` on its row.
+
 Only your own threads appear in the project list, even in a project you
 share with teammates. The exception is drilling into a group a teammate
 shared with you: its members are readable, the same as opening the group

@@ -52,18 +52,20 @@ export const handleListThreads: ToolHandler = async ({ ctx, apiKey, args, getPro
       apiKey,
     });
     // The whole group, always: it is capped at 100 rows and read in one scan.
-    return { page, isDone: true, continueCursor: "" };
+    return { page, hasMore: false, continueCursor: "" };
   }
 
   const limit = should.beOptionalInteger(args, "limit", 1, 50) ?? 20;
   const cursor = should.beNullableString(args, "cursor") ?? null;
 
-  return ctx.runQuery(api.cli.threads.summaries.listSummaries, {
+  const result = await ctx.runQuery(api.cli.threads.summaries.listSummaries, {
     projectId: await getProjectId(),
     includeDone,
     paginationOpts: { numItems: limit, cursor },
     apiKey,
   });
+  // `hasMore`, not Convex's `isDone`: agents misread that as the threads' done state.
+  return { page: result.page, hasMore: !result.isDone, continueCursor: result.continueCursor };
 };
 
 /**
