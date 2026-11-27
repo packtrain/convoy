@@ -221,8 +221,8 @@ link the project made or reads a file's contents. The worker drops a runtime fro
 `loggedOut` when the profile assigns it managed credentials.
 
 **Worker codes.** Registration that throws before a response is
-`backend-unreachable`. HTTP 401 or 403 on registration or heartbeat is
-`auth-rejected`.
+`backend-unreachable`. HTTP 401 or 403 on registration, or an `unauthorized`
+heartbeat, is `auth-rejected`.
 
 **`project check <profile>`** is read-only and never prints credentials. The
 launcher's `check` operation runs the `install.py` boundary probes, then reports

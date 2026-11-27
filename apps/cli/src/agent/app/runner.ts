@@ -158,6 +158,7 @@ export async function createAgentRunner(options: AgentRunnerOptions): Promise<Ag
   let client: ConvoyClient | null = null;
   let running = false;
   let heartbeatInterval: NodeJS.Timeout | null = null;
+  let heartbeatInFlight = false;
   let sessionId: string | null = null;
   let profileId: string | null = null;
   let messageHandler: MessageHandler | null = null;
@@ -269,61 +270,70 @@ export async function createAgentRunner(options: AgentRunnerOptions): Promise<Ag
     }
   }
 
-  /**
-   * Send a heartbeat to keep the connection alive
-   */
-  async function sendHeartbeat(): Promise<void> {
-    if (!sessionId) return;
+  function reportHeartbeatRetry(message: string): void {
+    if (!running) return;
+    emitConnectEvent({ event: "status", status: "retrying", message });
+    console.log(chalk.dim(`[Heartbeat] ${message}, will retry...`));
+  }
 
-    try {
-      const response = await postJsonWithTimeout(`${httpBaseUrl}/api/agent/heartbeat`, apiKey, { sessionId }, 5000);
-
-      if (response.ok) {
-        emitConnectEvent({ event: "status", status: "online", sessionId: sessionId ?? undefined });
-        const parts = [`[Heartbeat] ${new Date().toISOString()}`];
-        if (profileKey) parts.push(`Profile: ${profileKey}`);
-        parts.push(`Endpoint: ${httpBaseUrl}`);
-        console.log(chalk.dim(parts.join(" | ")));
-      } else if (response.status === 404) {
-        // Session was deleted - either kicked by another CLI or expired
-        // (the endpoint 404s only for a missing/not-owned session).
-        // Don't try to re-register, just exit. User can restart if needed.
-        // Exit code 3 tells supervisors not to respawn (another CLI took over).
-        emitConnectEvent({
-          event: "status",
-          status: "failed",
-          message: "Session was terminated (kicked or expired)",
-        });
-        console.log(chalk.yellow("\nSession was terminated (kicked or expired)."));
-        console.log(chalk.dim("Exiting..."));
-        running = false;
-        exitAfterFlush(EXIT_SESSION_REPLACED);
-      } else if (response.status === 401 || response.status === 403) {
-        // Auth is broken (revoked API key): fatal, but a supervisor may respawn.
-        emitConnectEvent({
-          event: "status",
-          status: "failed",
-          message: `Heartbeat authentication failed (HTTP ${response.status})`,
-          reason: "auth-rejected",
-        });
-        console.log(chalk.red(`\nHeartbeat authentication failed (HTTP ${response.status}). Exiting.`));
-        running = false;
-        exitAfterFlush(EXIT_FATAL);
-      } else {
-        // Transient server trouble (5xx, 429, ...): keep the session and
-        // retry on the next interval instead of killing the agent.
-        emitConnectEvent({
-          event: "status",
-          status: "retrying",
-          message: `Heartbeat HTTP ${response.status}`,
-        });
-        console.log(chalk.dim(`[Heartbeat] HTTP ${response.status}, will retry...`));
-      }
-    } catch {
-      // Ignore heartbeat errors (network issues, etc) - will retry next interval
-      emitConnectEvent({ event: "status", status: "retrying", message: "Heartbeat failed" });
-      console.log(chalk.dim("[Heartbeat] Failed, will retry..."));
+  function handleHeartbeatResult(result: string): void {
+    if (!running) return;
+    if (result === "ok") {
+      emitConnectEvent({ event: "status", status: "online", sessionId: sessionId ?? undefined });
+      const parts = [`[Heartbeat] ${new Date().toISOString()}`];
+      if (profileKey) parts.push(`Profile: ${profileKey}`);
+      parts.push(`Endpoint: ${convexUrl}`);
+      console.log(chalk.dim(parts.join(" | ")));
+    } else if (result === "session_not_found") {
+      // Session was deleted - either kicked by another CLI or expired.
+      // Don't try to re-register, just exit. User can restart if needed.
+      // Exit code 3 tells supervisors not to respawn (another CLI took over).
+      emitConnectEvent({
+        event: "status",
+        status: "failed",
+        message: "Session was terminated (kicked or expired)",
+      });
+      console.log(chalk.yellow("\nSession was terminated (kicked or expired)."));
+      console.log(chalk.dim("Exiting..."));
+      running = false;
+      exitAfterFlush(EXIT_SESSION_REPLACED);
+    } else if (result === "unauthorized") {
+      // Auth is broken (revoked API key): fatal, but a supervisor may respawn.
+      emitConnectEvent({
+        event: "status",
+        status: "failed",
+        message: "Heartbeat authentication failed",
+        reason: "auth-rejected",
+      });
+      console.log(chalk.red("\nHeartbeat authentication failed. Exiting."));
+      running = false;
+      exitAfterFlush(EXIT_FATAL);
+    } else {
+      // A status newer than this CLI: not a reason to exit.
+      reportHeartbeatRetry(`Heartbeat status ${result}`);
     }
+  }
+
+  /**
+   * Heartbeat over the Convex client: one function call (OS-2551). The client
+   * queues a mutation while its WebSocket reconnects, so one stays in flight at
+   * a time; a slow one reports `retrying` and its reply still counts when it lands.
+   */
+  function sendHeartbeat(): void {
+    if (!sessionId || !client || heartbeatInFlight) return;
+
+    const slow = setTimeout(() => reportHeartbeatRetry("Heartbeat timed out"), 5000);
+    heartbeatInFlight = true;
+    client
+      .mutation(api.cli.sessions.heartbeatByKey, { sessionId: sessionId as Id<"cliSessions"> })
+      .then(handleHeartbeatResult, (error: unknown) => {
+        // Transient trouble (network, server error, older backend): keep the session.
+        reportHeartbeatRetry(`Heartbeat failed: ${error instanceof Error ? error.message : String(error)}`);
+      })
+      .finally(() => {
+        clearTimeout(slow);
+        heartbeatInFlight = false;
+      });
   }
 
   /**

@@ -95,8 +95,8 @@ Frontend:
    match, or `default_profile`).
 2. CLI registers a session via HTTP `POST /api/agent/register` (API-key auth,
    conflicts resolvable with `force=true`).
-3. CLI sends `POST /api/agent/heartbeat` every 30s. Sessions expire after 60s
-   of silence.
+3. CLI calls the `cli/sessions.heartbeatByKey` mutation every 30s over its
+   realtime client. Sessions expire after 60s of silence.
 4. CLI subscribes to `cliThreads.listPendingThreads` via realtime query.
 5. On SIGINT/SIGTERM, `POST /api/agent/disconnect` runs and the process exits.
 

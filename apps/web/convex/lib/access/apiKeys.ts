@@ -46,3 +46,6 @@ export function isLastUsedAtStale(key: { lastUsedAt?: number }, minIntervalMs: n
 export function isApiKeyExpired(key: { expiresAt?: number }, now = Date.now()): boolean {
   return key.expiresAt !== undefined && key.expiresAt <= now;
 }
+
+/** Agent-bridge calls stamp `lastUsedAt` at most this often. */
+export const API_KEY_USAGE_MIN_INTERVAL_MS = 5 * 60 * 1000;

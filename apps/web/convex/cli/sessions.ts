@@ -1,9 +1,11 @@
 import { v, ConvexError } from "convex/values";
-import { query, internalMutation, type QueryCtx } from "../_generated/server";
+import { mutation, query, internalMutation, type QueryCtx } from "../_generated/server";
 import type { Doc, Id } from "../_generated/dataModel";
 import { requireAuthorizedProject } from "../lib/access/permissions";
 import { ProjectPermission } from "../../lib/authz/permissions";
-import { getAuthenticatedUser } from "../lib/access/auth";
+import { getAuthenticatedUser, isApiKeyValid } from "../lib/access/auth";
+import { API_KEY_USAGE_MIN_INTERVAL_MS, hashApiKey } from "../lib/access/apiKeys";
+import { findApiKeyByHash, touchLastUsedAtIfStale } from "../apiKeys/lib/apiKeysRepo";
 import {
   apiKeyPrincipalScopeValidator,
   availableCliValidator,
@@ -242,6 +244,34 @@ export const heartbeat = internalMutation({
 
     await touchSessionHeartbeat(ctx, session);
     return true;
+  },
+});
+
+/**
+ * The CLI's 30 s heartbeat over its WebSocket client: one call where the HTTP
+ * route costs four (OS-2551). A status, not a throw, so the CLI can tell exit from retry.
+ */
+export const heartbeatByKey = mutation({
+  args: {
+    sessionId: v.id("cliSessions"),
+    apiKey: v.string(),
+  },
+  returns: v.union(v.literal("ok"), v.literal("session_not_found"), v.literal("unauthorized")),
+  handler: async (ctx, args) => {
+    const key = await findApiKeyByHash(ctx, await hashApiKey(args.apiKey));
+    // MCP OAuth keys are audience-bound to the MCP endpoint, as in `withAgentAuth`.
+    if (!key || key.kind === "mcp-oauth" || !(await isApiKeyValid(ctx, key))) {
+      return "unauthorized";
+    }
+
+    const session = await resolveOwnedSession(ctx, args.sessionId, key.userId);
+    if (!session) {
+      return "session_not_found";
+    }
+
+    await touchSessionHeartbeat(ctx, session);
+    await touchLastUsedAtIfStale(ctx, key, API_KEY_USAGE_MIN_INTERVAL_MS);
+    return "ok";
   },
 });
 

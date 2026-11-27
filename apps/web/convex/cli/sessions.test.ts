@@ -1098,6 +1098,69 @@ describe("cliSessions", () => {
     });
   });
 
+  describe("heartbeatByKey", () => {
+    async function setupKeyedSession() {
+      const ctx = createTestContext();
+      const { user, project, asUser, t } = await ctx.setupProject();
+      const key = await asUser.mutation(api.apiKeys.core.create, { name: "CLI Key", expiresAt: Date.now() + 30 * 24 * 60 * 60 * 1000 });
+      const { sessionId } = await t.mutation(internal.cli.sessions.register, {
+        instanceId: "heartbeat-by-key", userId: user._id, apiKeyId: key.id, projectId: project._id, hostname: "my-laptop",
+      });
+      return { ctx, t, key, sessionId };
+    }
+
+    test("stamps the heartbeat row and the key's stale lastUsedAt in one call (OS-2551)", async () => {
+      const { t, key, sessionId } = await setupKeyedSession();
+      const usedAt = Date.now();
+      await t.run((runCtx) => runCtx.db.patch("apiKeys", key.id, { lastUsedAt: usedAt }));
+      const before = await t.run((runCtx) => runCtx.db.get("cliSessions", sessionId));
+
+      await vi.advanceTimersByTimeAsync(30_000);
+      expect(await t.mutation(api.cli.sessions.heartbeatByKey, { sessionId, apiKey: key.key })).toBe("ok");
+      await t.run(async (runCtx) => {
+        expect(await runCtx.db.get("cliSessions", sessionId)).toEqual(before);
+        const heartbeat = await runCtx.db.query("cliSessionHeartbeats").withIndex("by_sessionId", (q) => q.eq("sessionId", sessionId)).unique();
+        expect(heartbeat?.lastHeartbeatAt).toBe(Date.now());
+        // Fresh within the 5 min usage interval: no write.
+        expect((await runCtx.db.get("apiKeys", key.id))?.lastUsedAt).toBe(usedAt);
+      });
+
+      await vi.advanceTimersByTimeAsync(5 * 60_000);
+      expect(await t.mutation(api.cli.sessions.heartbeatByKey, { sessionId, apiKey: key.key })).toBe("ok");
+      expect((await t.run((runCtx) => runCtx.db.get("apiKeys", key.id)))?.lastUsedAt).toBe(Date.now());
+    });
+
+    test("reports a deleted session as session_not_found", async () => {
+      const { t, key, sessionId } = await setupKeyedSession();
+      await t.run((runCtx) => runCtx.db.delete("cliSessions", sessionId));
+
+      expect(await t.mutation(api.cli.sessions.heartbeatByKey, { sessionId, apiKey: key.key })).toBe("session_not_found");
+    });
+
+    test("reports another user's session as session_not_found", async () => {
+      const { ctx, t, sessionId } = await setupKeyedSession();
+      const { asUser: asOther } = await ctx.setupUser();
+      const otherKey = await asOther.mutation(api.apiKeys.core.create, { name: "Other", expiresAt: Date.now() + 60_000 });
+
+      expect(await t.mutation(api.cli.sessions.heartbeatByKey, { sessionId, apiKey: otherKey.key })).toBe("session_not_found");
+    });
+
+    test.each([
+      ["an unknown key", {}, "sk_user_unknown"],
+      ["an expired key", { expiresAt: 0 }, undefined],
+      ["an MCP OAuth key", { kind: "mcp-oauth" as const }, undefined],
+    ])("rejects %s as unauthorized without touching the session", async (_label, keyFields, apiKey) => {
+      const { t, key, sessionId } = await setupKeyedSession();
+      await t.run((runCtx) => runCtx.db.patch("apiKeys", key.id, keyFields));
+      const readHeartbeat = () => t.run((runCtx) => runCtx.db.query("cliSessionHeartbeats").withIndex("by_sessionId", (q) => q.eq("sessionId", sessionId)).unique());
+      const before = await readHeartbeat();
+
+      await vi.advanceTimersByTimeAsync(30_000);
+      expect(await t.mutation(api.cli.sessions.heartbeatByKey, { sessionId, apiKey: apiKey ?? key.key })).toBe("unauthorized");
+      expect(await readHeartbeat()).toEqual(before);
+    });
+  });
+
   describe("disconnect", () => {
     test("should delete session", async () => {
       const ctx = createTestContext();

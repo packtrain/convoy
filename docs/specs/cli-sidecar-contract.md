@@ -62,7 +62,7 @@ in later without a schema break:
 | ------------ | ------------------------------------------------------------------------ |
 | `connecting` | Startup: registering with the backend                                    |
 | `online`     | Registered, heartbeat healthy (`sessionId` included)                     |
-| `retrying`   | Heartbeat failed (network); will retry on the next 30s interval          |
+| `retrying`   | Heartbeat failed or took over 5 s; will retry on the next 30s interval   |
 | `blocked`    | Session conflict — another CLI session is active (auto-force follows)    |
 | `failed`     | Fatal: registration error, session kicked/expired, or unhandled error (`message` included) |
 
@@ -73,7 +73,7 @@ for each code and never retains worker text.
 | Reason | Written by | Meaning |
 | --- | --- | --- |
 | `runtime-missing` | worker | No runtime started in the project |
-| `auth-rejected` | worker | Registration or heartbeat got HTTP 401/403 for the project key |
+| `auth-rejected` | worker | Registration got HTTP 401/403, or the heartbeat answered `unauthorized`, for the project key |
 | `backend-unreachable` | worker | The registration request failed or timed out before any response |
 | `project-active` | launcher | The project lease is held; `holder` names by whom |
 | `sandbox-failed` | launcher | bubblewrap exited before the worker command started |
@@ -128,11 +128,12 @@ emit).
 Constants live in `apps/cli/src/lib/connect-events.ts`. Note: pre-OS-1236,
 a kicked session exited `0`; supervisors must rely on code `3` now.
 
-Heartbeat responses are classified, not lumped: HTTP 404 (session missing —
-the server's positive "replaced/expired" signal) → `failed` + exit `3`;
-HTTP 401/403 (auth broken, e.g. revoked API key) → `failed` + exit `1`;
-any other non-2xx (5xx, 429) → `retrying`, keep the session and try again
-next interval.
+Heartbeat results are classified, not lumped: `session_not_found` (the
+server's positive "replaced/expired" signal) → `failed` + exit `3`;
+`unauthorized` (auth broken, e.g. revoked API key) → `failed` + exit `1`;
+a thrown call, an unknown status, or no reply within 5 s → `retrying`, keep
+the session and try again next interval. A late reply is still acted on. See
+[Heartbeat transport](../architecture/cli-bridge.md#heartbeat-transport).
 
 ## Graceful stop
 

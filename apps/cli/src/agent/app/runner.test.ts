@@ -12,6 +12,7 @@ const {
   subscribeMock,
   closeMock,
   unsubscribeMock,
+  mutationMock,
 } = vi.hoisted(() => {
   const runnerAbort = vi.fn();
   const runnerShutdown = vi.fn().mockResolvedValue(undefined);
@@ -35,10 +36,11 @@ const {
   const unsubscribe = vi.fn();
   const subscribe = vi.fn(() => unsubscribe);
   const close = vi.fn().mockResolvedValue(undefined);
+  const mutation = vi.fn();
 
   const createConvexClient = vi.fn(() => ({
     query: vi.fn(),
-    mutation: vi.fn(),
+    mutation,
     subscribe,
     close,
     client: {},
@@ -66,6 +68,7 @@ const {
     subscribeMock: subscribe,
     closeMock: close,
     unsubscribeMock: unsubscribe,
+    mutationMock: mutation,
   };
 });
 
@@ -100,12 +103,18 @@ vi.mock("../../lib/url.js", () => ({
   resolveConvexSiteUrl: async () => toConvexSiteUrlMock(),
 }));
 
+vi.mock("../../lib/connect-events.js", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("../../lib/connect-events.js")>()),
+  exitAfterFlush: vi.fn(),
+}));
+
 vi.mock("child_process", () => ({
   execFile: execFileMock,
 }));
 
 import { ConnectDiagnosticError, createAgentRunner, supportsCodexAppServer } from "./runner.js";
-import { disableConnectEvents, enableConnectEvents } from "../../lib/connect-events.js";
+import { disableConnectEvents, enableConnectEvents, exitAfterFlush, EXIT_FATAL, EXIT_SESSION_REPLACED } from "../../lib/connect-events.js";
+import { getFunctionName } from "convex/server";
 
 function okResponse(payload: unknown): Response {
   return {
@@ -119,6 +128,7 @@ describe("agent-runner shutdown lifecycle", () => {
 
   beforeEach(() => {
     vi.clearAllMocks();
+    mutationMock.mockResolvedValue("ok");
     vi.stubGlobal("fetch", fetchMock);
     fetchMock.mockImplementation(async (input: unknown) => {
       const url =
@@ -138,10 +148,6 @@ describe("agent-runner shutdown lifecycle", () => {
       }
 
       if (url.endsWith("/api/agent/disconnect")) {
-        return okResponse({});
-      }
-
-      if (url.endsWith("/api/agent/heartbeat")) {
         return okResponse({});
       }
 
@@ -478,23 +484,103 @@ describe("agent-runner shutdown lifecycle", () => {
     } finally { await runner.stop(); }
   });
 
-  it("reports a rejected key on heartbeat as auth-rejected", async () => {
+  // OS-2551: the heartbeat is one Convex mutation over the WebSocket client.
+  async function runHeartbeat(advanceMs = 30_000, during?: () => Promise<void>) {
     vi.useFakeTimers();
-    const exitSpy = vi.spyOn(process, "exit").mockImplementation((() => undefined) as never);
-    const events: string[] = [];
-    enableConnectEvents((line) => events.push(line));
-    fetchMock.mockImplementation(async (input: unknown) => String(input).endsWith("/api/agent/register")
-      ? okResponse({ sessionId: "session_123", profileId: "profile_123" })
-      : String(input).endsWith("/api/agent/heartbeat") ? { ok: false, status: 403 } as Response : okResponse({}));
+    const events: Array<Record<string, unknown>> = [];
+    enableConnectEvents((line) => events.push(JSON.parse(line) as Record<string, unknown>));
     const runner = await createAgentRunner({ convexUrl: "https://example.convex.cloud", apiKey: "api_test_123", projectId: "project_123", paths: ["/tmp/repo"] });
     try {
       const runPromise = runner.run();
-      await vi.advanceTimersByTimeAsync(30_000);
-      expect(events.map((line) => JSON.parse(line) as Record<string, unknown>)).toContainEqual(expect.objectContaining({ status: "failed", reason: "auth-rejected" }));
+      await vi.advanceTimersByTimeAsync(advanceMs);
+      await during?.();
       const stopPromise = runner.stop();
       await vi.advanceTimersByTimeAsync(2_000);
       await stopPromise; await runPromise;
-    } finally { disableConnectEvents(); exitSpy.mockRestore(); vi.useRealTimers(); }
+      return { events, fetched: fetchMock.mock.calls.map(([input]) => String(input)) };
+    } finally { disableConnectEvents(); vi.useRealTimers(); }
+  }
+
+  it("sends the heartbeat as a Convex mutation, not over HTTP", async () => {
+    const { events, fetched } = await runHeartbeat();
+    expect(mutationMock.mock.calls.map(([fn, args]) => [getFunctionName(fn), args])).toContainEqual(["cli/sessions:heartbeatByKey", { sessionId: "session_123" }]);
+    expect(fetched.filter((url) => url.endsWith("/api/agent/heartbeat"))).toEqual([]);
+    expect(events.map((event) => event.status)).toEqual(["online"]);
+    expect(exitAfterFlush).not.toHaveBeenCalled();
+  });
+
+  it("exits as replaced when the backend no longer has the session", async () => {
+    mutationMock.mockResolvedValue("session_not_found");
+    const { events } = await runHeartbeat();
+    expect(events).toContainEqual(expect.objectContaining({ status: "failed", message: "Session was terminated (kicked or expired)" }));
+    expect(exitAfterFlush).toHaveBeenCalledWith(EXIT_SESSION_REPLACED);
+  });
+
+  it("reports a rejected key on heartbeat as auth-rejected", async () => {
+    mutationMock.mockResolvedValue("unauthorized");
+    const { events } = await runHeartbeat();
+    expect(events).toContainEqual(expect.objectContaining({ status: "failed", reason: "auth-rejected" }));
+    expect(exitAfterFlush).toHaveBeenCalledWith(EXIT_FATAL);
+  });
+
+  it("reports retrying when the heartbeat waits out a WebSocket reconnect", async () => {
+    mutationMock.mockReturnValue(new Promise(() => {}));
+    const { events } = await runHeartbeat(35_000);
+    expect(events).toContainEqual(expect.objectContaining({ status: "retrying" }));
+    expect(exitAfterFlush).not.toHaveBeenCalled();
+  });
+
+  const heartbeatCalls = () => mutationMock.mock.calls.filter(([fn]) => getFunctionName(fn) === "cli/sessions:heartbeatByKey").length;
+  function deferHeartbeat() {
+    let settle!: (result: string) => void;
+    mutationMock.mockReturnValue(new Promise((resolve) => { settle = resolve; }));
+    return (result: string) => settle(result);
+  }
+
+  it("keeps one heartbeat in flight while the WebSocket is down", async () => {
+    mutationMock.mockReturnValue(new Promise(() => {}));
+    await runHeartbeat(95_000);
+    expect(heartbeatCalls()).toBe(1);
+  });
+
+  it("acts on a terminal reply that arrives after the timeout", async () => {
+    const settle = deferHeartbeat();
+    const { events } = await runHeartbeat(36_000, async () => {
+      settle("session_not_found");
+      await vi.advanceTimersByTimeAsync(0);
+    });
+    expect(events.map((event) => event.status)).toEqual(["online", "retrying", "failed"]);
+    expect(exitAfterFlush).toHaveBeenCalledWith(EXIT_SESSION_REPLACED);
+  });
+
+  it("ignores a heartbeat reply that arrives after shutdown", async () => {
+    vi.useFakeTimers();
+    const settle = deferHeartbeat();
+    const runner = await createAgentRunner({ convexUrl: "https://example.convex.cloud", apiKey: "api_test_123", projectId: "project_123", paths: ["/tmp/repo"] });
+    try {
+      const runPromise = runner.run();
+      await vi.advanceTimersByTimeAsync(31_000);
+      const stopPromise = runner.stop();
+      await vi.advanceTimersByTimeAsync(2_000);
+      await stopPromise; await runPromise;
+      settle("unauthorized");
+      await vi.advanceTimersByTimeAsync(0);
+      expect(exitAfterFlush).not.toHaveBeenCalled();
+    } finally { vi.useRealTimers(); }
+  });
+
+  it("retries on a heartbeat status it does not know", async () => {
+    mutationMock.mockResolvedValue("rate_limited");
+    const { events } = await runHeartbeat();
+    expect(events).toContainEqual(expect.objectContaining({ status: "retrying" }));
+    expect(exitAfterFlush).not.toHaveBeenCalled();
+  });
+
+  it("keeps the session on a thrown heartbeat and names the error", async () => {
+    mutationMock.mockRejectedValue(new Error("Could not find public function for 'cli/sessions:heartbeatByKey'"));
+    const { events } = await runHeartbeat();
+    expect(events).toContainEqual(expect.objectContaining({ status: "retrying", message: expect.stringContaining("Could not find public function") }));
+    expect(exitAfterFlush).not.toHaveBeenCalled();
   });
 
   it("reports registration only after the backend accepts it", async () => {
@@ -575,51 +661,5 @@ describe("agent-runner shutdown lifecycle", () => {
     await runPromise;
 
     expect(stopResolved).toBe(true);
-  });
-
-  it("keeps the session on transient heartbeat errors instead of exiting", async () => {
-    vi.useFakeTimers();
-    const exitSpy = vi
-      .spyOn(process, "exit")
-      .mockImplementation((() => undefined) as never);
-    const events: string[] = [];
-    enableConnectEvents((line) => events.push(line));
-    fetchMock.mockImplementation(async (input: unknown) => {
-      const url = typeof input === "string" ? input : String(input);
-      if (url.endsWith("/api/agent/register")) {
-        return okResponse({ sessionId: "session_123", profileId: "profile_123" });
-      }
-      if (url.endsWith("/api/agent/heartbeat")) {
-        return { ok: false, status: 500 } as Response;
-      }
-      return okResponse({});
-    });
-
-    const runner = await createAgentRunner({
-      convexUrl: "https://example.convex.cloud",
-      apiKey: "api_test_123",
-      projectId: "project_123",
-      paths: ["/tmp/repo"],
-    });
-
-    try {
-      const runPromise = runner.run();
-      await vi.advanceTimersByTimeAsync(30_000);
-
-      expect(exitSpy).not.toHaveBeenCalled();
-      const statuses = events.map(
-        (line) => (JSON.parse(line) as { status?: string }).status
-      );
-      expect(statuses).toContain("retrying");
-
-      const stopPromise = runner.stop();
-      await vi.advanceTimersByTimeAsync(2_000);
-      await stopPromise;
-      await runPromise;
-    } finally {
-      disableConnectEvents();
-      exitSpy.mockRestore();
-      vi.useRealTimers();
-    }
   });
 });

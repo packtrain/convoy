@@ -25,11 +25,10 @@ import {
   type RegisterBody,
 } from "./lib/http/registerBody";
 import { jsonError, jsonResponse } from "./lib/http/responses";
-import { isLastUsedAtStale } from "./lib/access/apiKeys";
+import { API_KEY_USAGE_MIN_INTERVAL_MS, isLastUsedAtStale } from "./lib/access/apiKeys";
 import { handleGithubWebhook } from "./integrations/github/httpHandlers";
 
 const http = httpRouter();
-const API_KEY_USAGE_MIN_INTERVAL_MS = 5 * 60 * 1000;
 
 // Applied to every /api/mcp response (including errors and 204s): browser
 // MCP clients pass preflight but still need these on the actual response,
@@ -286,8 +285,8 @@ http.route({
 });
 
 /**
- * Heartbeat to keep session alive.
- * Called periodically by CLI.
+ * Heartbeat to keep session alive. CLIs since OS-2551 call
+ * `cli/sessions.heartbeatByKey` instead; kept for older CLIs and `project check`.
  */
 http.route({
   path: "/api/agent/heartbeat",

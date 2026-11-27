@@ -375,7 +375,7 @@ Generic subprocess layer (reserved for future non-Claude runtimes):
 
 Shared:
 - CLI must continue to use existing chat-level claim/heartbeat/release invariants.
-- Session heartbeats (`/api/agent/heartbeat`) and claim-lease heartbeats (`cliThreads.heartbeatClaim`) are separate signals and must both remain healthy during streaming.
+- Session heartbeats (`cli/sessions.heartbeatByKey`) and claim-lease heartbeats (`cliThreads.heartbeatClaim`) are separate signals and must both remain healthy during streaming.
 - Streaming hot-path mutations (`cliMessages.appendRunContent`, `cliMessages.complete`, `cliMessages.fail`, and `cliThreads.heartbeatClaim`) must authorize against the already-established thread/message claim and must not read the `cliSessions` heartbeat row. `claimThread` and `startRunResponse` remain responsible for validating live session ownership before a stream starts.
 - Releasing an active streaming claim must not leave the thread in `streaming`; it must normalize to a terminal/requeue state.
 - User-initiated stop/cancel must cause prompt local subprocess abort when thread claim is no longer active.

@@ -97,13 +97,46 @@ These are strict — violating them corrupts thread state.
 ## Session management
 
 - **Registration** — `POST /api/agent/register` with API key auth
-- **Heartbeat** — every 30s via `POST /api/agent/heartbeat`; see
-  [Online status](#online-status)
+- **Heartbeat** — every 30s via the `cli/sessions.heartbeatByKey` mutation on
+  the CLI's Convex WebSocket client; see [Online status](#online-status) and
+  [Heartbeat transport](#heartbeat-transport)
 - **Disconnect** — `POST /api/agent/disconnect` (handles SIGINT/SIGTERM)
 - **Conflict resolution** — one live session per profile; `force=true`
   disconnects existing sessions. Only a session that heartbeated within
   `ONLINE_THRESHOLD_MS` conflicts; register disconnects an online session
   with a stale heartbeat either way.
+
+### Heartbeat transport
+
+OS-2551. The HTTP heartbeat costs four function calls (the action, key
+validation, the session mutation, key usage); the mutation costs one.
+
+- **Contract.** `heartbeatByKey { sessionId, apiKey }` validates the key,
+  rejects `mcp-oauth` keys as `withAgentAuth` does, stamps the heartbeat row,
+  and stamps `apiKeys.lastUsedAt` at most every 5 min, in one transaction. It
+  returns a status instead of throwing: `ok`, `session_not_found` (deleted or
+  not the key owner's) or `unauthorized` (unknown, expired or MCP-only key).
+- **CLI.** `ok` reports `online`. `session_not_found` exits with
+  `EXIT_SESSION_REPLACED`. `unauthorized` is fatal with reason
+  `auth-rejected`. A thrown call reports `retrying` with the error text, and
+  so does an unknown status. A call with no reply in 5 s reports `retrying`,
+  but its reply still counts when it lands, so a late `session_not_found`
+  still exits. A reply after shutdown is ignored.
+- **One in flight.** The Convex client queues a mutation while its WebSocket
+  reconnects and resends every queued one on reconnect. A tick skips the call
+  while the last heartbeat is unsettled, so an outage queues one heartbeat,
+  not one per 30 s.
+- **Reconnects.** Nothing relied on the heartbeat
+  being a separate HTTP connection: thread subscriptions and claim
+  heartbeats ride the same socket, so a CLI whose socket is down cannot work
+  anyway. The session shows offline only if the reconnect outlasts the
+  sweep's `ONLINE_THRESHOLD_MS`, as a failing HTTP heartbeat would.
+- **HTTP route.** `POST /api/agent/heartbeat` stays for CLIs before 0.183.0
+  and for the `project check` backend probe.
+- **Deploy order.** Deploy the backend before publishing CLI 0.183.0. Against
+  a backend without `heartbeatByKey`, the CLI reports `retrying` with
+  "Could not find public function" on every tick and goes offline after
+  `ONLINE_THRESHOLD_MS`. It has no HTTP fallback.
 
 ### Online status
 
