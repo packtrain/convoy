@@ -103,29 +103,45 @@ _Avoid_: Archive flag as the canonical domain concept
 A project hidden from the sidebar and project pickers. It still opens by URL, CLI, and MCP and stays editable. Unrelated to the Archived List.
 _Avoid_: Closed project, read-only project
 
-**Recurring List**:
-The built-in list that holds Recurring task templates. Hidden from default task queries like archived work; queried explicitly.
-_Avoid_: Templates list, schedules
-
-**Recurring task template**:
-A Task in the Recurring List whose fields and Subtasks define each Occurrence, and which carries a Recurrence. Agents may create and edit it like any Task.
-_Avoid_: Recurring task (ambiguous between template and Occurrence), parent task, series task
+**Recurring task**:
+A top-level Task that carries a Recurrence. Its fields and Subtasks define each Occurrence. It is an ordinary Task in its List, but nobody works on it; the work happens on its Occurrences.
+_Avoid_: Recurring task template, template, series task, Recurring List (dropped)
 
 **Recurrence**:
-The schedule on a Recurring task template that says when the next Occurrence is created, in a fixed timezone.
-_Avoid_: Schedule, cron, rule
+What makes a Task recurring: a Recurrence rule in a fixed timezone, the place its Occurrences are created, its Acting user, and whether a thread starts on each Occurrence.
+_Avoid_: Schedule, cron, rule (that is only its Recurrence rule), Repeat (the UI label)
+
+**Recurrence rule**:
+The cadence of a Recurrence: every N hours, days, weeks, months, or years, with the weekdays, day, and time of day that unit needs.
+_Avoid_: Cron expression, schedule
+
+**Slot**:
+A moment at which a Recurrence is due to create an Occurrence, given by its Recurrence rule and timezone.
+_Avoid_: Run, tick, fire time, due date
 
 **Occurrence**:
-A Task created from a Recurring task template for one slot of its Recurrence. Work, Artifacts, and threads attach here.
+A Task created from a Recurring task, as its Subtask or as a Task in the List the Recurrence names. Work, Artifacts, and threads attach here. It stays an Occurrence of that Recurring task wherever it is moved.
 _Avoid_: Instance, copy, child
 
-**Series notes**:
-The Artifacts of a Recurring task template, shown on every Occurrence by reference and shared across them as the series memory. Never copied.
-_Avoid_: Template artifacts, memory
+**Latest Occurrence**:
+The most recently created Occurrence of a Recurring task. It is the only one that can hold back the next Slot.
+_Avoid_: Last occurrence (the UI label for the Occurrence before a given one), current occurrence
 
 **Skipped slot**:
-A Recurrence slot at which no Occurrence was created because an Agent execution on the previous Occurrence was still unresolved. Occurrences awaiting human review do not cause skips.
+A Slot at which no Occurrence was created: Convoy reached it too late, the Latest Occurrence was still open, or the Acting user or something the thread needs was gone. It is never made up later; the next Occurrence comes at the next Slot.
 _Avoid_: Missed run, pile-up
+
+**Run now**:
+The action that creates an Occurrence immediately, outside the Slots, even while the Latest Occurrence is open. The Occurrence belongs to no Slot, and the next Slot does not move.
+_Avoid_: Trigger, manual run
+
+**Acting user**:
+The user a Recurrence acts as when it creates Occurrences and starts threads: the member who made the Task recurring, or whoever last picked its CLI profile.
+_Avoid_: Owner, runner, creator; Execution principal until OS-1040 defines it for Recurrences
+
+**Inactive project**:
+A project no member has opened in the web app for 60 days. Its Recurring tasks are paused. Unrelated to an Archived project.
+_Avoid_: Abandoned project, stale project
 
 **Table**:
 A rendering mode for viewing tasks in rows.
@@ -582,6 +598,25 @@ _Avoid_: Run detail page, full run view
 - A **Subtask** is a **Task**.
 - A **Subtask** has exactly one parent **Task**.
 - A **Task** has one rank, interpreted within its current **List**.
+- A **Recurring task** has exactly one **Recurrence**. Removing the Recurrence makes it an ordinary **Task** again.
+- Only a top-level **Task** can be a **Recurring task**. A **Subtask** cannot, and neither can an **Occurrence**. A **Recurring task** cannot be made a **Subtask**.
+- A **Recurrence** has exactly one **Acting user**. While that user is not a member of the project, every **Slot** is a **Skipped slot**, until another member saves the Recurrence and becomes its Acting user.
+- A **Recurrence** creates its **Occurrences** in one place: under the **Recurring task** as **Subtasks**, or at the top of one **List** it names. Changing the place affects new Occurrences only.
+- An **Occurrence** belongs to one **Recurring task** through its own link, not through its parent or **List**, so moving it changes nothing about that.
+- An **Occurrence** takes the **Recurring task**'s fields and **Subtasks** when it is created and is independent after that. Attachments, Artifacts, comments, and links are not carried over, and Occurrences share nothing with each other.
+- The **Occurrences** under a **Recurring task** are not among the **Subtasks** that define the next Occurrence.
+- An **Occurrence** made by a **Slot** is due at that Slot. One made by **Run now** is due at the moment Run now was used.
+- A **Slot** creates an **Occurrence** only when the **Recurring task** is open and not paused and its **Latest Occurrence** is closed. Otherwise it is a **Skipped slot**.
+- Closing an **Occurrence** never creates the next one. The next **Slot** does.
+- A paused **Recurrence** creates nothing, and neither does a **Recurring task** that is Done, Canceled, deleted, or in the **Archived List**. Resuming, reopening, or restoring continues at the next future **Slot**. Moving it to the **Backlog List** stops nothing.
+- After a **Recurrence** is removed, its **Occurrences** keep their link to the Task. A new Recurrence on the same Task starts fresh and does not count them.
+- A copy of a **Recurring task** carries its **Recurrence**, paused, and none of its **Occurrences**.
+- A copy of an **Occurrence** is an **Occurrence** of the same **Recurring task**, and becomes its **Latest Occurrence**.
+- A **Recurring task** keeps its 10 newest closed **Occurrences**. Older ones move to the **Archived List**, wherever they were.
+- Deleting or archiving a **Recurring task** takes the **Occurrences** that are its **Subtasks** with it and leaves the others.
+- A **Recurrence** may start a **CLI thread** or a **Workflow run** on each **Occurrence**. Without that, an Occurrence is a plain **Task** for a person.
+- The **Project agent** of a **Recurrence**'s thread is always the one the **Recurring task** is assigned to.
+- Archiving a project pauses its **Recurring tasks**, and so does becoming an **Inactive project**. Neither is undone automatically.
 - A **Task** stores its current container as a list key.
 - A **List** belongs to one project.
 - Every project has a default **List**.
@@ -742,6 +777,9 @@ _Avoid_: Run detail page, full run view
 > **Dev:** "If a **Task** moves from Inbox to Sprint 2, does it stay in both?"
 > **Domain expert:** "No — it has one current **List**. Inbox becomes history."
 
+> **Dev:** "A daily **Recurring task** made Monday's **Occurrence**, and it is still open on Tuesday at 09:00. Do we get a second one?"
+> **Domain expert:** "No. Tuesday is a **Skipped slot**. Wednesday's **Slot** creates the next Occurrence, if Monday's is closed by then."
+
 ## Flagged ambiguities
 
 - "agent" was ambiguous: CLI runtime language used it for connected execution surfaces, MCP discussion used it for any tool caller, while task assignment needs an organization-owned actor. Resolved: **Agent** is the organization-owned template, **Project agent** is the editable project-local copy, **Agent execution** is a concrete run, and **MCP client** is the generic tool caller.
@@ -761,3 +799,7 @@ _Avoid_: Run detail page, full run view
 - "the thread's PR" is ambiguous: the **Attached pull request** is what the work is about, the **Branch pull request** is what the thread's branch opened. Name which.
 - "environment" was used twice: the CLI used it for the place threads run, and the composer used it for the local-or-worktree choice. Resolved: **Environment** is the place, and the composer's choice is the worktree choice.
 - "reviewed" on a file is a **Reviewed mark**, not GitHub's Viewed flag: anyone can view every file, but only reviewing it earns the mark.
+- "recurring task" was ambiguous between the Task that carries the schedule and the Tasks it creates. Resolved: the **Recurring task** carries the **Recurrence** and each created Task is an **Occurrence**. "Template" was retired with the Recurring List.
+- "Repeat" is only the UI label for the control that sets a **Recurrence**. Docs and code say Recurrence.
+- "last occurrence" is ambiguous: the UI's "Last occurrence" link on an **Occurrence** points at the one created before it, while the **Latest Occurrence** is the newest one of the **Recurring task**. Name which.
+- "runner" was used for the CLI profile and Working path a **Recurrence** starts threads on, and for the user behind them. Resolved: say CLI profile and Working path, and call the user the **Acting user**. "Runs on" stays as the UI label.
