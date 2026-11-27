@@ -259,14 +259,8 @@ touches the task document.
   sidebar, MCP `get_task`, and CLI `tasks get`. `listByProject`,
   `listByParent`, `listClosed` and `listArchivedByProject` leave the field out.
 - Permanently deleting a task deletes its rows.
-- `migrations.moveAgentThreadWorkToTable` moved the legacy arrays: a legacy
-  entry without `createdAt` gets its `updatedAt`. Entries whose thread is gone,
-  soft-deleted, or now linked to another task are skipped: the sync already
-  dropped or moved their rows after the deploy. If a row was already synced
-  after the deploy, it keeps its fresher status, and the legacy `source`,
-  `createdAt` and names win, because the sync could only guess them. The
-  legacy `tasks.agentThreadWork` field stays in the schema, unread, until a
-  follow-up deploy drops it after the migration has run.
+- Before OS-2579 the entries lived in a `tasks.agentThreadWork` array. A
+  one-off migration moved them into the table, and OS-2614 dropped the field.
 
 Rules:
 

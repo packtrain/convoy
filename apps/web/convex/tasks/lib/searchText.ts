@@ -27,7 +27,6 @@ export function stripInternalTaskFields(task: Doc<"tasks">) {
     listKey: _listKey,
     assigneeId: _assigneeId,
     delegatedToAgentId: _delegatedToAgentId,
-    agentThreadWork: _legacyAgentThreadWork,
     ...taskWithoutInternalFields
   } = task;
   void _searchText;
@@ -35,6 +34,5 @@ export function stripInternalTaskFields(task: Doc<"tasks">) {
   void _listKey;
   void _assigneeId;
   void _delegatedToAgentId;
-  void _legacyAgentThreadWork;
   return taskWithoutInternalFields;
 }

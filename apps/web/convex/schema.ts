@@ -622,11 +622,6 @@ export default defineSchema({
     // A deleted checklist reads as unset (docs/specs/task-checks.md).
     checklistId: v.optional(v.union(v.id("checklists"), v.null())),
     externalLinks: v.optional(v.array(taskExternalLinkValidator)),
-    // Migration-only legacy field (OS-2579): moved to the `agentThreadWork`
-    // table by `migrations.moveAgentThreadWorkToTable`. Nothing reads it.
-    agentThreadWork: v.optional(
-      v.array(v.object({ ...agentThreadWorkEntryValidator.fields, createdAt: v.optional(v.number()) }))
-    ),
     // Denormalized counts of taskAttachments/taskArtifacts rows (OS-882),
     // maintained by the attachment/artifact mutations. Absent on legacy rows;
     // readers treat them as 0.
