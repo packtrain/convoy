@@ -1,4 +1,5 @@
 import { describe, expect, test } from "vitest";
+import { listAgentThreadWorkByTask } from "../../tasks/lib/agentThreadWorkRepo";
 import { api, internal } from "../../_generated/api";
 import { createTestContext } from "../../../convex-testing";
 import type { StepOverrides, WorkflowDefinition } from "../../lib/contracts/workflowDefinition";
@@ -402,8 +403,8 @@ describe("workflows.runs.core.start", () => {
     await t.run(async (runCtx) => {
       const container = await runCtx.db.get("cliThreads", containerThreadId);
       expect(container?.associatedTaskId).toBe(task._id);
-      const boundTask = await runCtx.db.get("tasks", task._id);
-      expect(boundTask?.agentThreadWork?.map((entry) => entry.threadId)).toContain(containerThreadId);
+      const rows = await listAgentThreadWorkByTask(runCtx, task.projectId, task._id);
+      expect(rows.map((entry) => entry.threadId)).toContain(containerThreadId);
     });
   });
 
@@ -716,7 +717,7 @@ describe("starting a workflow beside existing threads", () => {
       expect(lane?.threadId).toBeDefined();
       expect(lane?.threadId).not.toBe(source._id);
       expect(await dbCtx.db.get("cliThreads", lane!.threadId!)).toMatchObject({ parentThreadId: containerThreadId, workflowRunId: runId });
-      expect((await dbCtx.db.get("tasks", task._id))?.agentThreadWork?.map(entry => entry.threadId)).toContain(containerThreadId);
+      expect((await listAgentThreadWorkByTask(dbCtx, task.projectId, task._id)).map(entry => entry.threadId)).toContain(containerThreadId);
     });
   });
 

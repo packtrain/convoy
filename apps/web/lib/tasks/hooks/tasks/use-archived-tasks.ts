@@ -18,6 +18,7 @@ import { collectTaskAndDescendantIds } from "@/lib/tasks/tree";
 import { toTaskMutationArgs } from "@/lib/tasks/task-mutations";
 import { useMappedTasks, useTaskInputState, useTaskTreeState } from "./use-task-view-state";
 import { useTaskDeleteMutations } from "./use-task-delete-mutations";
+import { useWithAgentThreadWork } from "./internals/agent-thread-work";
 
 const PAGE_SIZE = 50;
 
@@ -107,7 +108,7 @@ export function useArchivedTasks(projectId: Id<"projects"> | undefined) {
     value: status === "LoadingFirstPage" ? undefined : results,
   });
 
-  const tasks = useMappedTasks(stableResults);
+  const tasks = useMappedTasks(useWithAgentThreadWork(projectId, stableResults));
   const {
     taskTree,
     flattenedTasks,

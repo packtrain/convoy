@@ -63,7 +63,7 @@ Related specs: `agents.md` (Agent/Project-agent model, the `prompt` field),
 - The agent prompt text is never rendered in the thread. It is not part of
   any stored message content; the thread chip plus the agent's settings page
   are the transparency surface.
-- `tasks.agentThreadWork` entries gain the bound agent's identity
+- `agentThreadWork` entries gain the bound agent's identity
   (`projectAgentId` + display name snapshot) so task surfaces can show which
   agent a thread ran as, not only which CLI.
 

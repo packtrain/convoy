@@ -271,7 +271,7 @@ export const threadSelectionArgs = {
   cliEffort: v.optional(cliEffortValidator),
   taskId: v.optional(v.id("tasks")),
   // How the task attachment was initiated (assignment automation vs manual);
-  // recorded on the task's agentThreadWork entry. Only meaningful with taskId.
+  // recorded on the thread's agentThreadWork row. Only meaningful with taskId.
   agentWorkSource: v.optional(agentThreadWorkSourceValidator),
   /** A github.com PR URL: the message's and thread's Attached pull request. */
   pullRequestUrl: v.optional(v.string()),

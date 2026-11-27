@@ -11,3 +11,6 @@ export const MAX_LABEL_NAME_LENGTH = 50;
 // Create cap and read bound for every section query.
 export const MAX_SECTIONS_PER_PROJECT = 100;
 export const MAX_SECTION_NAME_LENGTH = 100;
+
+// One index range per id in `tasks.agentThreadWork.listByTasks`; clients chunk longer lists.
+export const MAX_AGENT_THREAD_WORK_TASK_IDS = 1000;

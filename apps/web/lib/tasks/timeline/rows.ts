@@ -86,16 +86,6 @@ export interface OwnTimelineThread {
 }
 
 /**
- * A foreign entry's sort key. `createdAt` is absent on entries written before
- * OS-1588 and only backfills on the thread's next state change — a finished run
- * may never have one — so the fallback is permanent, not transitional.
- * `updatedAt` places such a row later in history than it belongs.
- */
-export function getAgentThreadWorkSortKey(entry: TaskAgentThreadWorkEntry): number {
-  return entry.createdAt ?? entry.updatedAt;
-}
-
-/**
  * Both thread sources, merged into one row list.
  *
  * **Load-order guard.** While `listByAssociatedTask` is unresolved the own-id set is
@@ -143,7 +133,7 @@ export function buildTimelineThreadRows({
         title: entry.threadTitle,
         status: entry.status,
         cliType: entry.cliType,
-        createdAt: getAgentThreadWorkSortKey(entry),
+        createdAt: entry.createdAt,
         // The entry carries no activity timestamp of its own; `updatedAt` is
         // the closest thing, and it is what the Runs column already displays.
         lastActivityAt: entry.updatedAt,

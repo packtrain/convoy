@@ -313,6 +313,7 @@ import type * as slashCommands_lib_normalize from "../slashCommands/lib/normaliz
 import type * as slashCommands_lib_slashCommandsRepo from "../slashCommands/lib/slashCommandsRepo.js";
 import type * as slashCommands_lib_validators from "../slashCommands/lib/validators.js";
 import type * as tasks_activity from "../tasks/activity.js";
+import type * as tasks_agentThreadWork from "../tasks/agentThreadWork.js";
 import type * as tasks_artifactComments from "../tasks/artifactComments.js";
 import type * as tasks_artifacts from "../tasks/artifacts.js";
 import type * as tasks_attachments from "../tasks/attachments.js";
@@ -328,6 +329,7 @@ import type * as tasks_lib_activity_coalesce from "../tasks/lib/activity/coalesc
 import type * as tasks_lib_activity_hydrate from "../tasks/lib/activity/hydrate.js";
 import type * as tasks_lib_activity_logger from "../tasks/lib/activity/logger.js";
 import type * as tasks_lib_activity_validators from "../tasks/lib/activity/validators.js";
+import type * as tasks_lib_agentThreadWorkRepo from "../tasks/lib/agentThreadWorkRepo.js";
 import type * as tasks_lib_artifactComments_anchor from "../tasks/lib/artifactComments/anchor.js";
 import type * as tasks_lib_artifactComments_artifactCommentsRepo from "../tasks/lib/artifactComments/artifactCommentsRepo.js";
 import type * as tasks_lib_artifactComments_validators from "../tasks/lib/artifactComments/validators.js";
@@ -704,6 +706,7 @@ declare const fullApi: ApiFromModules<{
   "slashCommands/lib/slashCommandsRepo": typeof slashCommands_lib_slashCommandsRepo;
   "slashCommands/lib/validators": typeof slashCommands_lib_validators;
   "tasks/activity": typeof tasks_activity;
+  "tasks/agentThreadWork": typeof tasks_agentThreadWork;
   "tasks/artifactComments": typeof tasks_artifactComments;
   "tasks/artifacts": typeof tasks_artifacts;
   "tasks/attachments": typeof tasks_attachments;
@@ -719,6 +722,7 @@ declare const fullApi: ApiFromModules<{
   "tasks/lib/activity/hydrate": typeof tasks_lib_activity_hydrate;
   "tasks/lib/activity/logger": typeof tasks_lib_activity_logger;
   "tasks/lib/activity/validators": typeof tasks_lib_activity_validators;
+  "tasks/lib/agentThreadWorkRepo": typeof tasks_lib_agentThreadWorkRepo;
   "tasks/lib/artifactComments/anchor": typeof tasks_lib_artifactComments_anchor;
   "tasks/lib/artifactComments/artifactCommentsRepo": typeof tasks_lib_artifactComments_artifactCommentsRepo;
   "tasks/lib/artifactComments/validators": typeof tasks_lib_artifactComments_validators;

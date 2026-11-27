@@ -391,7 +391,7 @@ Text output includes a `Links: <n>` count line and, when the task has external l
 Text output includes a `Runs: <n>` count line and, when the task has CLI thread
 work, a `Runs:` section listing each run as
 `[status] title (threadId) cliType userName [via agentName]`, newest activity
-first. This reads the task's denormalized `agentThreadWork` (OS-1094), so it needs
+first. This reads the `agentThreadWork` rows `getById` attaches (OS-1094, OS-2579), so it needs
 no extra query and — unlike every `cliThreads` list, which is `userId`-scoped —
 shows **all** users' runs, which is what makes it the answer to "is someone already
 working this ticket?". The `threadId` feeds `threads get` / `threads send`. Two

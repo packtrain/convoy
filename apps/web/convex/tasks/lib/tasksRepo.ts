@@ -288,7 +288,7 @@ export async function insertTask(target: TaskWriteTarget, fields: TaskInsertFiel
 
 /**
  * Patch a task, bumping `updatedAt` on every write. Pass `bumpUpdatedAt: false`
- * for denormalized-mirror syncs (e.g. `agentThreadWork`) so background
+ * for denormalized-mirror syncs (e.g. resource counts) so background
  * lifecycle churn does not make the task look user-edited.
  */
 export async function patchTask(

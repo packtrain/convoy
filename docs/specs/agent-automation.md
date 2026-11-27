@@ -11,8 +11,8 @@ task-level `agentThreadWork` visibility that comes with it:
 - The Automation section of project-agent configuration.
 - The composer-first flow triggered by delegating a task to an
   automation-enabled agent in the web UI.
-- The denormalized `tasks.agentThreadWork` summary, its lifecycle sync, and
-  its task list / board / sidebar indicators.
+- The `agentThreadWork` table (one row per task-linked thread), its
+  lifecycle sync, and its task list / board / sidebar indicators.
 
 Since the assignee/delegation split (OS-1335, see `agents.md`), the trigger
 is DELEGATION — an interactive change of the task's `delegatedToAgentId` —
@@ -212,14 +212,17 @@ When the delegating user's preference for the project is auto
 
 ## Task Work Summary (`agentThreadWork`)
 
-Tasks carry a denormalized array so list/board/sidebar render without
-per-task thread queries (thread queries are user-scoped). `agentThreadWork`
-tracks threads working on a task and is independent of delegation
+One `agentThreadWork` row per task-linked thread lets list/board/sidebar
+render without per-task thread queries (thread queries are user-scoped).
+`agentThreadWork` tracks threads working on a task and is independent of delegation
 (`delegatedToAgentId`, OS-1335) — a task can have runs without being
 delegated and vice versa:
 
 ```ts
-agentThreadWork: Array<{
+// table agentThreadWork, indexes by_thread and by_project_and_task
+{
+  projectId: Id<"projects">;
+  taskId: Id<"tasks">;
   threadId: Id<"cliThreads">;
   threadTitle: string;
   userId: Id<"users">;
@@ -227,10 +230,43 @@ agentThreadWork: Array<{
   cliType: CliTypeSlug; // runtime registry slugs
   status: CliThreadStatus; // mirrors cliThreadStatusValidator
   source: "assignment_automation" | "manual_attachment" | "workflow_run";
-  createdAt?: number; // thread's own creation time, snapshotted (OS-1588)
+  createdAt: number; // thread's own creation time, snapshotted (OS-1588)
   updatedAt: number;
-}>;
+}
 ```
+
+### Storage and readers (OS-2579)
+
+Until OS-2579 this was an array on the task document. Every status change
+patched the task, which re-ran `tasks/core.listByProject` in every open board
+of every project member, and every thread list page whose task chip reads the
+task. The rows now live in their own table, and no thread lifecycle write
+touches the task document.
+
+- **Board, list and archive view** subscribe to
+  `tasks/agentThreadWork.listByTasks({ projectId, taskIds })` next to the task
+  list, and `useWithAgentThreadWork` merges the result into each task row. The
+  query reads one `by_project_and_task` range per shown task, so a status
+  change re-runs only the views that show that task. A whole-project read was
+  rejected: it grows with every thread ever linked in the project and re-runs
+  on any status change in it. The client sends saved task ids only (optimistic
+  rows have temp ids), sorted so reordering doesn't resubscribe, in chunks of
+  `MAX_AGENT_THREAD_WORK_TASK_IDS` (1000, the server cap), one subscription per
+  chunk. While a changed id set loads, the previous result stays up.
+- **Single-task reads** (`tasks/core.getById`, `getByRefs`) attach the
+  task's rows as `agentThreadWork`. That covers the task detail view and
+  timeline when the task isn't in the loaded list, the thread workspace
+  sidebar, MCP `get_task`, and CLI `tasks get`. `listByProject`,
+  `listByParent`, `listClosed` and `listArchivedByProject` leave the field out.
+- Permanently deleting a task deletes its rows.
+- `migrations.moveAgentThreadWorkToTable` moved the legacy arrays: a legacy
+  entry without `createdAt` gets its `updatedAt`. Entries whose thread is gone,
+  soft-deleted, or now linked to another task are skipped: the sync already
+  dropped or moved their rows after the deploy. If a row was already synced
+  after the deploy, it keeps its fresher status, and the legacy `source`,
+  `createdAt` and names win, because the sync could only guess them. The
+  legacy `tasks.agentThreadWork` field stays in the schema, unread, until a
+  follow-up deploy drops it after the migration has run.
 
 Rules:
 
@@ -257,19 +293,20 @@ Rules:
 - Sync lives at the single `cliThreads` write seam
   (`convex/cli/threads/lib/cliThreadsRepo.ts` → `cli/threads/lib/agentThreadWork.ts`): every
   intent-named write that can change association, status, title, or delete
-  state re-syncs the entry. No-op syncs skip the task write.
+  state re-syncs the row. The sync reads the thread's row by `by_thread`, and
+  reads the task only when the row is new or the thread's task changed. It
+  skips the write when title and status are unchanged.
 - `createdAt` is the thread's own `createdAt`, snapshotted on first sync and
   preserved from the existing entry afterwards — the same pattern `userName`
   and `agentName` use. It exists because the task timeline sorts every source
   by creation time (`docs/specs/task-timeline.md`) and `updatedAt` is restamped
   on each status/title change, which would drift a row down the stream while
-  its agent works. Optional, so legacy entries need no migration: readers fall
-  back to `updatedAt`.
-- The no-op short-circuit has one escape: an entry **missing** `createdAt` is
-  written through so legacy rows backfill on their thread's next state change.
-  Presence-only, never a value comparison — once set the escape is dead, so hot
-  lifecycle paths keep their protection from task-doc churn.
-- Deleted tasks fail soft: lifecycle changes on their threads do nothing.
+  its agent works.
+- A thread has at most one row. If its `associatedTaskId` changes, the row
+  moves to the new task with fresh snapshots.
+- Deleted tasks fail soft: a thread whose task is gone or soft-deleted gets no
+  new row. An existing row keeps syncing, but no reader shows a deleted task's
+  rows.
 - Threads archived before OS-1561 had their entry removed at archive time, and
   the retirement migration that converted them to done did not restore it (it
   patched through the projection seam, which does not re-sync task work). Those

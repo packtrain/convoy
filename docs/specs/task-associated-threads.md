@@ -17,7 +17,8 @@ composer's task-attachment contract, and the full-page handoff.
 - Historical message-level task attachments do not participate in this lookup.
 - The sidebar row shows only the current user's non-deleted associated threads for the current task.
 - Other users' threads on the same task are visible only through the task's
-  denormalized `agentThreadWork` summary, never through this lookup — every
+  `agentThreadWork` rows (`docs/specs/agent-automation.md` → Storage and
+  readers), never through this lookup — every
   thread list index is `userId`-scoped (`docs/specs/cli-thread-sharing.md`).
   The Runs column and the timeline both read it that way.
 

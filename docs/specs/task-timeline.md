@@ -22,7 +22,7 @@ contributes layout, not new presentation. Renderers live in
 |---|---|---|
 | `activity` | `taskActivityLogs` | `TimelineActivityGroup` — icon + one line of text on a shared vertical rail; consecutive rows group under one rail |
 | `comment` | `taskComments` | `CommentItem` — the comment **is** the row, not a "added a comment" pointer to it |
-| `thread` | `cliThreads` / `tasks.agentThreadWork` | `TimelineThreadRowCard`, wrapping `CompactThreadRowContent` — title, CLI icon, status indicator, relative time, plus the owner's name on another user's thread |
+| `thread` | `cliThreads` / `agentThreadWork` | `TimelineThreadRowCard`, wrapping `CompactThreadRowContent` — title, CLI icon, status indicator, relative time, plus the owner's name on another user's thread |
 
 A thread row needs route params to build its href, so `TimelineBlockRow` skips
 thread blocks without them rather than rendering a dead row. Outside a project
@@ -209,7 +209,7 @@ order wins because the composer is at the bottom.
 | activity | `tasks.timeline.listByTask` (new) | `taskActivityLogs.by_task_and_createdAt` |
 | comments | `tasks.timeline.listByTask` (new) | `taskComments.by_task_and_createdAt` |
 | own threads | `cli.threads.lists.listByAssociatedTask` (existing) | `by_user_project_task_deleted_lastActivity` |
-| others' threads | `task.agentThreadWork` (denormalized on the task doc) | in-memory |
+| others' threads | `task.agentThreadWork` (the task's `agentThreadWork` rows, merged into the loaded task, OS-2579) | in-memory |
 
 Row payloads are **byte-identical to the single-source queries'**, because both
 callers share one hydrator per kind (`tasks/lib/activity/hydrate.ts`,
@@ -228,7 +228,9 @@ holds:
 - **Other users' threads** — the entries in `task.agentThreadWork` whose
   `threadId` is *not* among the ids that query returned. This is exactly how
   the Runs column renders foreign threads
-  (`agent-thread-work-cell.tsx`) — no extra query, and the entry shape
+  (`agent-thread-work-cell.tsx`). The entries arrive with the task: from
+  `listByTasks` when the task is in the loaded list, from `getByRefs`
+  otherwise (`agent-automation.md` → Storage and readers). The entry shape
   physically has no message content, so nothing can leak through it.
 
 `agentThreadWork` is the **only** place a task can see another user's threads.
@@ -374,16 +376,9 @@ renders.
 
 `createdAt` for a foreign thread comes from the `agentThreadWork` entry
 (OS-1588), snapshotted from the thread on first sync and preserved afterwards so
-it does not drift as the run progresses. An entry written before that field
-existed falls back to its `updatedAt`, which places it later in history than it
-belongs — acceptable for pre-existing rows, and it self-corrects on the entry's
-next sync, which backfills the field
-(`docs/specs/agent-automation.md`).
-
-That fallback is `getAgentThreadWorkSortKey`, and it is **permanent, not a
-migration window**: a legacy entry only backfills when its thread next changes
-state, and a finished run may never have one. Read a foreign row's sort key
-through that helper rather than reaching for `entry.createdAt` directly.
+it does not drift as the run progresses. Every row has it: the OS-2579 migration
+gave entries written before OS-1588 their `updatedAt`, which places them later
+in history than they belong. That is acceptable for those old rows.
 
 ## Source toggles
 

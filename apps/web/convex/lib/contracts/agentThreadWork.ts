@@ -1,10 +1,11 @@
 import { v, type Infer } from "convex/values";
+import type { Doc } from "../../_generated/dataModel";
 import { cliThreadStatusValidator, cliTypeValidator } from "./validators";
 
-// Denormalized per-task summary of linked CLI thread work (OS-1094). Stored on the task document
-// so list/board/sidebar indicators render without per-task thread queries (which are scoped to the
-// current user). Entries are keyed by the thread's `associatedTaskId` and mirrored from the thread
-// lifecycle by `cli/threads/lib/agentThreadWork.ts`.
+// Per-task summary of linked CLI thread work (OS-1094), one `agentThreadWork` row per thread so
+// indicators render without per-task thread queries (which are scoped to the current user). Rows
+// follow the thread's `associatedTaskId` and are mirrored by `cli/threads/lib/agentThreadWork.ts`.
+// Kept off the task document so a status change doesn't re-run task lists (OS-2579).
 
 export const agentThreadWorkSourceValidator = v.union(
   v.literal("assignment_automation"),
@@ -25,15 +26,28 @@ export const agentThreadWorkEntryValidator = v.object({
   projectAgentId: v.optional(v.id("projectAgents")),
   agentName: v.optional(v.string()),
   // The thread's own creation time, snapshotted on first sync (OS-1588). The task timeline
-  // sorts every source by creation time, and `updatedAt` is restamped on each status/title
-  // change — which would make a teammate's row drift down the stream while their agent works.
-  // Optional so legacy entries need no migration: absent means readers fall back to `updatedAt`.
-  createdAt: v.optional(v.number()),
+  // sorts every source by creation time; `updatedAt` is restamped on each status/title change.
+  createdAt: v.number(),
   updatedAt: v.number(),
+});
+
+export const taskAgentThreadWorkValidator = v.object({
+  taskId: v.id("tasks"),
+  entries: v.array(agentThreadWorkEntryValidator),
 });
 
 export type AgentThreadWorkSource = Infer<typeof agentThreadWorkSourceValidator>;
 export type AgentThreadWorkEntry = Infer<typeof agentThreadWorkEntryValidator>;
+export type TaskAgentThreadWork = Infer<typeof taskAgentThreadWorkValidator>;
+
+export function toAgentThreadWorkEntry(row: Doc<"agentThreadWork">): AgentThreadWorkEntry {
+  const { _id, _creationTime, projectId, taskId, ...entry } = row;
+  void _id;
+  void _creationTime;
+  void projectId;
+  void taskId;
+  return entry;
+}
 
 // Mirrored by the client in `apps/web/lib/tasks/types.ts`
 // (UNRESOLVED_AGENT_THREAD_WORK_STATUSES) — importing this module there would

@@ -119,9 +119,8 @@ export interface TaskAgentThreadWorkEntry {
   projectAgentId?: Id<"projectAgents">;
   agentName?: string;
   // The thread's creation time, snapshotted on first sync (OS-1588) — the
-  // timeline's sort key for a foreign thread row. Absent on legacy entries
-  // written before the field existed; fall back to `updatedAt`.
-  createdAt?: number;
+  // timeline's sort key for a foreign thread row.
+  createdAt: number;
   updatedAt: number;
 }
 

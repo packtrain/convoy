@@ -622,9 +622,11 @@ export default defineSchema({
     // A deleted checklist reads as unset (docs/specs/task-checks.md).
     checklistId: v.optional(v.union(v.id("checklists"), v.null())),
     externalLinks: v.optional(v.array(taskExternalLinkValidator)),
-    // Denormalized linked CLI thread work summary (OS-1094), keyed by the
-    // thread's associatedTaskId and synced from the thread lifecycle.
-    agentThreadWork: v.optional(v.array(agentThreadWorkEntryValidator)),
+    // Migration-only legacy field (OS-2579): moved to the `agentThreadWork`
+    // table by `migrations.moveAgentThreadWorkToTable`. Nothing reads it.
+    agentThreadWork: v.optional(
+      v.array(v.object({ ...agentThreadWorkEntryValidator.fields, createdAt: v.optional(v.number()) }))
+    ),
     // Denormalized counts of taskAttachments/taskArtifacts rows (OS-882),
     // maintained by the attachment/artifact mutations. Absent on legacy rows;
     // readers treat them as 0.
@@ -690,6 +692,15 @@ export default defineSchema({
     .index("by_task_and_fileName", ["taskId", "fileName"]),
 
   // Task Attachments
+  // One row per task-linked thread (OS-1094, OS-2579); see lib/contracts/agentThreadWork.ts.
+  agentThreadWork: defineTable({
+    projectId: v.id("projects"),
+    taskId: v.id("tasks"),
+    ...agentThreadWorkEntryValidator.fields,
+  })
+    .index("by_thread", ["threadId"])
+    .index("by_project_and_task", ["projectId", "taskId"]),
+
   taskAttachments: defineTable({
     taskId: v.id("tasks"),
     storageId: v.id("_storage"),

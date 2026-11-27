@@ -203,6 +203,7 @@ describe("shouldReuseRowContent", () => {
       cliType: "claude-code",
       status: "pending" as const,
       source: "manual_attachment" as const,
+      createdAt: 1,
       updatedAt: 1,
     };
     const prevProps = withTask(createProps("To Do|Done"), createTask());

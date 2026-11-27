@@ -1,4 +1,5 @@
 import { afterEach, beforeEach, describe, expect, test, vi } from "vitest";
+import { listAgentThreadWorkByTask } from "../../tasks/lib/agentThreadWorkRepo";
 import { api, internal } from "../../_generated/api";
 import type { Doc, Id } from "../../_generated/dataModel";
 import { createTestContext } from "../../../convex-testing";
@@ -646,8 +647,8 @@ describe("workflow run engine (advance)", () => {
     await t.finishAllScheduledFunctions(() => vi.runAllTimers());
 
     await t.run(async (runCtx) => {
-      const boundTask = (await runCtx.db.get("tasks", task._id))!;
-      const laneEntry = boundTask.agentThreadWork?.find((entry) => entry.source === "workflow_run");
+      const rows = await listAgentThreadWorkByTask(runCtx, task.projectId, task._id);
+      const laneEntry = rows.find((entry) => entry.source === "workflow_run");
       expect(laneEntry).toBeDefined();
       const thread = (await runCtx.db.get("cliThreads", laneEntry!.threadId))!;
       expect(thread.associatedTaskId).toBe(task._id);

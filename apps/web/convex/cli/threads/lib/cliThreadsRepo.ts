@@ -37,8 +37,8 @@ type Ctx = QueryCtx | MutationCtx;
 /**
  * DB access for the `cliThreads` table — no caller touches `ctx.db` directly.
  * Writes are intent-named, stamp `lastActivityAt`, and mirror task association,
- * status, title and delete state into the task's denormalized `agentThreadWork`
- * summary (OS-1094).
+ * status, title and delete state into the thread's `agentThreadWork` row
+ * (OS-1094, OS-2579).
  */
 
 // ---------------------------------------------------------------------------
@@ -581,7 +581,7 @@ export type ThreadInsert = {
   pullRequestChecks?: { headSha: string };
   /** A Guide run's head revision at launch (OS-2412). Set only here at creation. */
   pullRequestGuide?: { headSha: string };
-  /** How the task association was initiated — recorded on the task's `agentThreadWork` entry, not stored on the thread. */
+  /** How the task association was initiated — recorded on the thread's `agentThreadWork` row, not on the thread. */
   agentWorkSource?: AgentThreadWorkSource;
   /**
    * Immutable Project agent binding + prompt snapshot (OS-1138). Set only here

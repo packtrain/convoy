@@ -1,11 +1,11 @@
 import { expect, test, describe } from "vitest";
-import { api } from "../_generated/api";
-import type { Doc, Id } from "../_generated/dataModel";
+import { api, internal } from "../_generated/api";
+import type { Id } from "../_generated/dataModel";
 import { createTestContext } from "../../convex-testing";
 
 /**
- * OS-1094: denormalized `tasks.agentThreadWork` summary synced from the
- * cliThreads lifecycle (association, status, title, archive/delete).
+ * OS-1094 / OS-2579: the `agentThreadWork` table, one row per task-linked thread,
+ * synced from the cliThreads lifecycle (association, status, title, delete).
  */
 
 type TestContext = ReturnType<typeof createTestContext>;
@@ -19,20 +19,17 @@ async function setupThreadFixture(ctx: TestContext) {
   return { user, project, asUser, t, profile, task };
 }
 
-async function getAgentThreadWork(
-  t: Awaited<ReturnType<TestContext["setupProject"]>>["t"],
-  taskId: Id<"tasks">
-): Promise<Doc<"tasks">["agentThreadWork"]> {
-  return t.run(async (runCtx) => {
-    const task = await runCtx.db.get("tasks", taskId);
-    return task?.agentThreadWork;
-  });
+type AsUser = Awaited<ReturnType<TestContext["setupProject"]>>["asUser"];
+
+/** Reads entries the way the task detail view does, through `getById`. */
+async function getAgentThreadWork(asUser: AsUser, taskId: Id<"tasks">) {
+  return (await asUser.query(api.tasks.core.getById, { id: taskId }))?.agentThreadWork;
 }
 
 describe("agentThreadWork sync", () => {
   test("creating a thread with an attached task adds a pending manual_attachment entry", async () => {
     const ctx = createTestContext();
-    const { user, asUser, t, profile, task } = await setupThreadFixture(ctx);
+    const { user, asUser, profile, task } = await setupThreadFixture(ctx);
 
     const threadId = await asUser.mutation(api.cli.threads.core.create, {
       profileId: profile._id,
@@ -42,7 +39,7 @@ describe("agentThreadWork sync", () => {
       taskId: task._id,
     });
 
-    const entries = await getAgentThreadWork(t, task._id);
+    const entries = await getAgentThreadWork(asUser, task._id);
     expect(entries).toHaveLength(1);
     expect(entries?.[0]).toMatchObject({
       threadId,
@@ -58,7 +55,7 @@ describe("agentThreadWork sync", () => {
 
   test("creating a thread with agentWorkSource records assignment_automation", async () => {
     const ctx = createTestContext();
-    const { asUser, t, profile, task } = await setupThreadFixture(ctx);
+    const { asUser, profile, task } = await setupThreadFixture(ctx);
 
     await asUser.mutation(api.cli.threads.core.create, {
       profileId: profile._id,
@@ -69,14 +66,14 @@ describe("agentThreadWork sync", () => {
       agentWorkSource: "assignment_automation",
     });
 
-    const entries = await getAgentThreadWork(t, task._id);
+    const entries = await getAgentThreadWork(asUser, task._id);
     expect(entries?.[0]?.source).toBe("assignment_automation");
     expect(entries?.[0]?.cliType).toBe("codex");
   });
 
   test("sending a task-attached message to an unassociated thread adds an entry", async () => {
     const ctx = createTestContext();
-    const { asUser, t, profile, task } = await setupThreadFixture(ctx);
+    const { asUser, profile, task } = await setupThreadFixture(ctx);
 
     const threadId = await asUser.mutation(api.cli.threads.core.create, {
       profileId: profile._id,
@@ -84,7 +81,7 @@ describe("agentThreadWork sync", () => {
       cliType: "claude-code",
       content: "No task yet",
     });
-    expect(await getAgentThreadWork(t, task._id)).toBeFalsy();
+    expect(await getAgentThreadWork(asUser, task._id)).toEqual([]);
 
     await asUser.mutation(api.cli.messages.send, {
       threadId,
@@ -92,14 +89,14 @@ describe("agentThreadWork sync", () => {
       taskId: task._id,
     });
 
-    const entries = await getAgentThreadWork(t, task._id);
+    const entries = await getAgentThreadWork(asUser, task._id);
     expect(entries).toHaveLength(1);
     expect(entries?.[0]).toMatchObject({ threadId, status: "pending", source: "manual_attachment" });
   });
 
   test("a task-attached message to an already-associated thread does not track the other task", async () => {
     const ctx = createTestContext();
-    const { user, project, asUser, t, profile, task } = await setupThreadFixture(ctx);
+    const { user, project, asUser, profile, task } = await setupThreadFixture(ctx);
     const otherTask = await ctx.task(project._id, user._id, { name: "Other task" });
 
     const threadId = await asUser.mutation(api.cli.threads.core.create, {
@@ -116,8 +113,8 @@ describe("agentThreadWork sync", () => {
       taskId: otherTask._id,
     });
 
-    expect(await getAgentThreadWork(t, task._id)).toHaveLength(1);
-    expect(await getAgentThreadWork(t, otherTask._id)).toBeFalsy();
+    expect(await getAgentThreadWork(asUser, task._id)).toHaveLength(1);
+    expect(await getAgentThreadWork(asUser, otherTask._id)).toEqual([]);
   });
 
   test("stream lifecycle updates the entry status (streaming, completed, waiting_input)", async () => {
@@ -158,7 +155,7 @@ describe("agentThreadWork sync", () => {
         apiKey: apiKeyResult.key,
       });
 
-      const streamingEntries = await getAgentThreadWork(t, task._id);
+      const streamingEntries = await getAgentThreadWork(asUser, task._id);
       expect(streamingEntries?.[0]?.status).toBe("streaming");
 
       await t.mutation(api.cli.messages.complete, {
@@ -170,15 +167,15 @@ describe("agentThreadWork sync", () => {
     };
 
     await processRun();
-    let entries = await getAgentThreadWork(t, task._id);
+    let entries = await getAgentThreadWork(asUser, task._id);
     expect(entries?.[0]?.status).toBe("completed");
 
     await asUser.mutation(api.cli.messages.send, { threadId, content: "Follow up" });
-    entries = await getAgentThreadWork(t, task._id);
+    entries = await getAgentThreadWork(asUser, task._id);
     expect(entries?.[0]?.status).toBe("pending");
 
     await processRun("waiting_input");
-    entries = await getAgentThreadWork(t, task._id);
+    entries = await getAgentThreadWork(asUser, task._id);
     expect(entries?.[0]?.status).toBe("waiting_input");
   });
 
@@ -221,7 +218,7 @@ describe("agentThreadWork sync", () => {
 
     await asUser.mutation(api.cli.messages.send, { threadId, content: "Steer it differently" });
 
-    const entries = await getAgentThreadWork(t, task._id);
+    const entries = await getAgentThreadWork(asUser, task._id);
     expect(entries?.[0]?.status).toBe("streaming");
   });
 
@@ -262,7 +259,7 @@ describe("agentThreadWork sync", () => {
       apiKey: apiKeyResult.key,
     });
 
-    let entries = await getAgentThreadWork(t, task._id);
+    let entries = await getAgentThreadWork(asUser, task._id);
     expect(entries?.[0]?.status).toBe("streaming");
 
     await t.mutation(api.cli.interactionRequests.create, {
@@ -276,7 +273,7 @@ describe("agentThreadWork sync", () => {
       apiKey: apiKeyResult.key,
     });
 
-    entries = await getAgentThreadWork(t, task._id);
+    entries = await getAgentThreadWork(asUser, task._id);
     expect(entries?.[0]?.status).toBe("waiting_input");
 
     await asUser.mutation(api.cli.interactionRequests.respond, {
@@ -285,13 +282,13 @@ describe("agentThreadWork sync", () => {
       responseJson: JSON.stringify({ answer: "Option A" }),
     });
 
-    entries = await getAgentThreadWork(t, task._id);
+    entries = await getAgentThreadWork(asUser, task._id);
     expect(entries?.[0]?.status).toBe("streaming");
   });
 
   test("renaming a thread updates the stored entry title", async () => {
     const ctx = createTestContext();
-    const { asUser, t, profile, task } = await setupThreadFixture(ctx);
+    const { asUser, profile, task } = await setupThreadFixture(ctx);
 
     const threadId = await asUser.mutation(api.cli.threads.core.create, {
       profileId: profile._id,
@@ -303,7 +300,7 @@ describe("agentThreadWork sync", () => {
 
     await asUser.mutation(api.cli.threads.core.updateTitle, { threadId, title: "Renamed thread" });
 
-    const entries = await getAgentThreadWork(t, task._id);
+    const entries = await getAgentThreadWork(asUser, task._id);
     expect(entries?.[0]?.threadTitle).toBe("Renamed thread");
   });
 
@@ -311,7 +308,7 @@ describe("agentThreadWork sync", () => {
   // users toggle it back and forth, so entry churn on every toggle is noise.
   test("marking a thread done keeps its entry", async () => {
     const ctx = createTestContext();
-    const { asUser, t, profile, task } = await setupThreadFixture(ctx);
+    const { asUser, profile, task } = await setupThreadFixture(ctx);
 
     const threadId = await asUser.mutation(api.cli.threads.core.create, {
       profileId: profile._id,
@@ -324,14 +321,14 @@ describe("agentThreadWork sync", () => {
 
     await asUser.mutation(api.cli.threads.batch.batchMarkDone, { threadIds: [threadId] });
 
-    const entries = await getAgentThreadWork(t, task._id);
+    const entries = await getAgentThreadWork(asUser, task._id);
     expect(entries).toHaveLength(1);
     expect(entries?.[0]).toMatchObject({ threadId, source: "assignment_automation" });
   });
 
   test("soft-deleting a thread removes the entry", async () => {
     const ctx = createTestContext();
-    const { asUser, t, profile, task } = await setupThreadFixture(ctx);
+    const { asUser, profile, task } = await setupThreadFixture(ctx);
 
     const threadId = await asUser.mutation(api.cli.threads.core.create, {
       profileId: profile._id,
@@ -342,12 +339,12 @@ describe("agentThreadWork sync", () => {
     });
 
     await asUser.mutation(api.cli.threads.core.remove, { threadId });
-    expect(await getAgentThreadWork(t, task._id)).toHaveLength(0);
+    expect(await getAgentThreadWork(asUser, task._id)).toHaveLength(0);
   });
 
   test("supports multiple thread entries on the same task", async () => {
     const ctx = createTestContext();
-    const { asUser, t, profile, task } = await setupThreadFixture(ctx);
+    const { asUser, profile, task } = await setupThreadFixture(ctx);
 
     const first = await asUser.mutation(api.cli.threads.core.create, {
       profileId: profile._id,
@@ -365,13 +362,13 @@ describe("agentThreadWork sync", () => {
       agentWorkSource: "assignment_automation",
     });
 
-    const entries = await getAgentThreadWork(t, task._id);
+    const entries = await getAgentThreadWork(asUser, task._id);
     expect(entries?.map((entry) => entry.threadId).sort()).toEqual([first, second].sort());
   });
 
   test("entries carry the bound agent identity (OS-1138)", async () => {
     const ctx = createTestContext();
-    const { project, asUser, t, profile, task } = await setupThreadFixture(ctx);
+    const { project, asUser, profile, task } = await setupThreadFixture(ctx);
     const projectAgentId = await asUser.mutation(api.agents.projectAgents.create, {
       projectId: project._id,
       name: "Reviewer",
@@ -388,7 +385,7 @@ describe("agentThreadWork sync", () => {
       projectAgentId,
     });
 
-    const entries = await getAgentThreadWork(t, task._id);
+    const entries = await getAgentThreadWork(asUser, task._id);
     expect(entries).toHaveLength(1);
     expect(entries?.[0]).toMatchObject({
       threadId,
@@ -399,7 +396,7 @@ describe("agentThreadWork sync", () => {
 
   test("sync paths preserve the agent identity, including after agent deletion (OS-1138)", async () => {
     const ctx = createTestContext();
-    const { project, asUser, t, profile, task } = await setupThreadFixture(ctx);
+    const { project, asUser, profile, task } = await setupThreadFixture(ctx);
     const projectAgentId = await asUser.mutation(api.agents.projectAgents.create, {
       projectId: project._id,
       name: "Reviewer",
@@ -418,7 +415,7 @@ describe("agentThreadWork sync", () => {
     await asUser.mutation(api.agents.projectAgents.deleteProjectAgent, { projectAgentId });
     await asUser.mutation(api.cli.threads.core.updateTitle, { threadId, title: "Renamed bound thread" });
 
-    const entries = await getAgentThreadWork(t, task._id);
+    const entries = await getAgentThreadWork(asUser, task._id);
     expect(entries?.[0]).toMatchObject({
       threadTitle: "Renamed bound thread",
       projectAgentId,
@@ -428,7 +425,7 @@ describe("agentThreadWork sync", () => {
 
   test("entries for unbound threads carry no agent fields (OS-1138)", async () => {
     const ctx = createTestContext();
-    const { asUser, t, profile, task } = await setupThreadFixture(ctx);
+    const { asUser, profile, task } = await setupThreadFixture(ctx);
 
     await asUser.mutation(api.cli.threads.core.create, {
       profileId: profile._id,
@@ -438,7 +435,7 @@ describe("agentThreadWork sync", () => {
       taskId: task._id,
     });
 
-    const entries = await getAgentThreadWork(t, task._id);
+    const entries = await getAgentThreadWork(asUser, task._id);
     expect(entries?.[0]?.projectAgentId).toBeUndefined();
     expect(entries?.[0]?.agentName).toBeUndefined();
   });
@@ -463,7 +460,7 @@ describe("agentThreadWork sync", () => {
       return thread?.createdAt;
     });
 
-    const entries = await getAgentThreadWork(t, task._id);
+    const entries = await getAgentThreadWork(asUser, task._id);
     expect(entries?.[0]?.createdAt).toBe(threadCreatedAt);
   });
 
@@ -479,7 +476,7 @@ describe("agentThreadWork sync", () => {
       taskId: task._id,
     });
 
-    const snapshotted = (await getAgentThreadWork(t, task._id))?.[0]?.createdAt;
+    const snapshotted = (await getAgentThreadWork(asUser, task._id))?.[0]?.createdAt;
     expect(snapshotted).toEqual(expect.any(Number));
 
     // Move the thread's own createdAt so a re-read would produce a different
@@ -489,45 +486,9 @@ describe("agentThreadWork sync", () => {
     });
     await asUser.mutation(api.cli.threads.core.updateTitle, { threadId, title: "Renamed" });
 
-    const entries = await getAgentThreadWork(t, task._id);
+    const entries = await getAgentThreadWork(asUser, task._id);
     expect(entries?.[0]?.threadTitle).toBe("Renamed");
     expect(entries?.[0]?.createdAt).toBe(snapshotted);
-  });
-
-  test("a legacy entry without createdAt still syncs, and is backfilled", async () => {
-    const ctx = createTestContext();
-    const { asUser, t, profile, task } = await setupThreadFixture(ctx);
-
-    const threadId = await asUser.mutation(api.cli.threads.core.create, {
-      profileId: profile._id,
-      pathId: "path-1",
-      cliType: "claude-code",
-      content: "Legacy run",
-      taskId: task._id,
-    });
-
-    // Strip the field the way an entry written before OS-1588 looks.
-    const { threadCreatedAt, threadTitle } = await t.run(async (runCtx) => {
-      const stored = await runCtx.db.get("tasks", task._id);
-      const legacy = (stored?.agentThreadWork ?? []).map((entry) => {
-        const withoutCreatedAt = { ...entry };
-        delete withoutCreatedAt.createdAt;
-        return withoutCreatedAt;
-      });
-      await runCtx.db.patch("tasks", task._id, { agentThreadWork: legacy });
-      const thread = await runCtx.db.get("cliThreads", threadId);
-      return { threadCreatedAt: thread?.createdAt, threadTitle: thread?.title };
-    });
-    expect((await getAgentThreadWork(t, task._id))?.[0]?.createdAt).toBeUndefined();
-
-    // Rename to the title it already has: title, status, and source all match,
-    // so the *only* thing that can carry this write past the no-op
-    // short-circuit is the missing field. Covers the backfill escape.
-    await asUser.mutation(api.cli.threads.core.updateTitle, { threadId, title: threadTitle ?? "" });
-
-    const entries = await getAgentThreadWork(t, task._id);
-    expect(entries).toHaveLength(1);
-    expect(entries?.[0]?.createdAt).toBe(threadCreatedAt);
   });
 
   test("thread lifecycle changes after the task is deleted fail soft", async () => {
@@ -547,5 +508,188 @@ describe("agentThreadWork sync", () => {
     await expect(
       asUser.mutation(api.cli.threads.core.updateTitle, { threadId, title: "Still fine" })
     ).resolves.toBeNull();
+  });
+});
+
+async function createTaskThread(
+  asUser: AsUser,
+  profileId: Id<"cliProfiles">,
+  taskId: Id<"tasks">,
+  extra: { agentWorkSource?: "assignment_automation" } = {}
+) {
+  return asUser.mutation(api.cli.threads.core.create, {
+    profileId,
+    pathId: "path-1",
+    cliType: "claude-code",
+    content: "Run",
+    taskId,
+    ...extra,
+  });
+}
+
+describe("agentThreadWork storage (OS-2579)", () => {
+  test("thread lifecycle writes leave the task document untouched", async () => {
+    const ctx = createTestContext();
+    const { asUser, t, profile, task } = await setupThreadFixture(ctx);
+    const readTask = () => t.run((runCtx) => runCtx.db.get("tasks", task._id));
+    const before = await readTask();
+
+    const threadId = await createTaskThread(asUser, profile._id, task._id);
+    await asUser.mutation(api.cli.threads.core.updateTitle, { threadId, title: "Renamed" });
+
+    expect(await readTask()).toEqual(before);
+    expect(await getAgentThreadWork(asUser, task._id)).toMatchObject([{ threadId, threadTitle: "Renamed" }]);
+  });
+
+  test("listByProject leaves agentThreadWork out", async () => {
+    const ctx = createTestContext();
+    const { project, asUser, profile, task } = await setupThreadFixture(ctx);
+    await createTaskThread(asUser, profile._id, task._id);
+
+    const tasks = await asUser.query(api.tasks.core.listByProject, { projectId: project._id });
+    expect(tasks.find((listed) => listed._id === task._id)).not.toHaveProperty("agentThreadWork");
+  });
+
+  test("getByRefs returns the entries, like get_task", async () => {
+    const ctx = createTestContext();
+    const { project, asUser, profile, task } = await setupThreadFixture(ctx);
+    const threadId = await createTaskThread(asUser, profile._id, task._id);
+    const ref = (await asUser.query(api.tasks.core.getById, { id: task._id }))!.refId;
+
+    const result = await asUser.query(api.tasks.core.getByRefs, { projectId: project._id, refs: [ref] });
+    expect(result.results[0]?.task?.agentThreadWork).toMatchObject([{ threadId }]);
+  });
+
+  test("permanently deleting a task deletes its rows", async () => {
+    const ctx = createTestContext();
+    const { project, asUser, t, profile, task } = await setupThreadFixture(ctx);
+    await createTaskThread(asUser, profile._id, task._id);
+
+    await t.mutation(internal.tasks.core.permanentlyDelete, { taskId: task._id });
+
+    const rows = await t.run((runCtx) =>
+      runCtx.db
+        .query("agentThreadWork")
+        .withIndex("by_project_and_task", (q) => q.eq("projectId", project._id).eq("taskId", task._id))
+        .collect()
+    );
+    expect(rows).toEqual([]);
+  });
+});
+
+describe("tasks.agentThreadWork.listByTasks", () => {
+  test("returns entries for the listed tasks only, grouped by task", async () => {
+    const ctx = createTestContext();
+    const { user, project, asUser, profile, task } = await setupThreadFixture(ctx);
+    const quiet = await ctx.task(project._id, user._id, { name: "No runs" });
+    const unlisted = await ctx.task(project._id, user._id, { name: "Not on screen" });
+    const threadId = await createTaskThread(asUser, profile._id, task._id);
+    await createTaskThread(asUser, profile._id, unlisted._id);
+
+    const result = await asUser.query(api.tasks.agentThreadWork.listByTasks, {
+      projectId: project._id,
+      taskIds: [task._id, quiet._id],
+    });
+
+    expect(result).toMatchObject([{ taskId: task._id, entries: [{ threadId }] }]);
+  });
+
+  test("drops task ids from another project", async () => {
+    const ctx = createTestContext();
+    const { user, project, asUser, profile, task } = await setupThreadFixture(ctx);
+    await createTaskThread(asUser, profile._id, task._id);
+    const otherProject = await ctx.project(project.organizationId, user._id);
+
+    const result = await asUser.query(api.tasks.agentThreadWork.listByTasks, {
+      projectId: otherProject._id,
+      taskIds: [task._id],
+    });
+
+    expect(result).toEqual([]);
+  });
+
+  test("returns nothing to a user outside the project", async () => {
+    const ctx = createTestContext();
+    const { project, asUser, profile, task } = await setupThreadFixture(ctx);
+    await createTaskThread(asUser, profile._id, task._id);
+    const outsider = await ctx.user();
+
+    const result = await ctx.asUser(outsider).query(api.tasks.agentThreadWork.listByTasks, {
+      projectId: project._id,
+      taskIds: [task._id],
+    });
+
+    expect(result).toEqual([]);
+  });
+});
+
+describe("moveAgentThreadWorkToTable migration", () => {
+  test("moves legacy task arrays into rows, keeps their snapshots, and clears the field", async () => {
+    const ctx = createTestContext();
+    const { user, asUser, t, profile, task } = await setupThreadFixture(ctx);
+    // `legacyOnly` predates the deploy; `syncedSince` changed state after it,
+    // so it already has a row with a fresher status but the default source.
+    const legacyOnly = await createTaskThread(asUser, profile._id, task._id);
+    const syncedSince = await createTaskThread(asUser, profile._id, task._id);
+    const legacyEntry = (threadId: Id<"cliThreads">) => ({
+      threadId,
+      threadTitle: "Legacy title",
+      userId: user._id,
+      userName: "Legacy name",
+      cliType: "claude-code" as const,
+      status: "completed" as const,
+      source: "workflow_run" as const,
+      updatedAt: 100,
+    });
+    await t.run(async (runCtx) => {
+      const legacyRow = await runCtx.db
+        .query("agentThreadWork")
+        .withIndex("by_thread", (q) => q.eq("threadId", legacyOnly))
+        .unique();
+      await runCtx.db.delete("agentThreadWork", legacyRow!._id);
+      await runCtx.db.patch("tasks", task._id, {
+        agentThreadWork: [legacyEntry(legacyOnly), { ...legacyEntry(syncedSince), createdAt: 50 }],
+      });
+    });
+
+    await t.mutation(internal.migrations.moveAgentThreadWorkToTable, { reset: true });
+
+    const entries = await getAgentThreadWork(asUser, task._id);
+    expect(entries?.find((entry) => entry.threadId === legacyOnly)).toMatchObject({
+      ...legacyEntry(legacyOnly),
+      createdAt: 100,
+    });
+    expect(entries?.find((entry) => entry.threadId === syncedSince)).toMatchObject({
+      status: "pending",
+      source: "workflow_run",
+      createdAt: 50,
+    });
+    expect((await t.run((runCtx) => runCtx.db.get("tasks", task._id)))?.agentThreadWork).toBeUndefined();
+  });
+
+  test("skips legacy entries whose thread was deleted or moved to another task", async () => {
+    const ctx = createTestContext();
+    const { user, project, asUser, t, profile, task } = await setupThreadFixture(ctx);
+    const otherTask = await ctx.task(project._id, user._id, { name: "Other" });
+    const deleted = await createTaskThread(asUser, profile._id, task._id);
+    const moved = await createTaskThread(asUser, profile._id, otherTask._id);
+    const entry = (threadId: Id<"cliThreads">) => ({
+      threadId,
+      threadTitle: "Legacy",
+      userId: user._id,
+      userName: "Legacy name",
+      cliType: "claude-code" as const,
+      status: "completed" as const,
+      source: "manual_attachment" as const,
+      updatedAt: 100,
+    });
+    // Deleted after the deploy: its row is gone, but the legacy array still lists it.
+    await asUser.mutation(api.cli.threads.core.remove, { threadId: deleted });
+    await t.run((runCtx) => runCtx.db.patch("tasks", task._id, { agentThreadWork: [entry(deleted), entry(moved)] }));
+
+    await t.mutation(internal.migrations.moveAgentThreadWorkToTable, { reset: true });
+
+    expect(await getAgentThreadWork(asUser, task._id)).toEqual([]);
+    expect(await getAgentThreadWork(asUser, otherTask._id)).toMatchObject([{ threadId: moved, userName: user.name }]);
   });
 });

@@ -1,4 +1,5 @@
 import { expect, test, describe, vi } from "vitest";
+import { listAgentThreadWorkByTask } from "../../tasks/lib/agentThreadWorkRepo";
 import { api } from "../../_generated/api";
 import type { Id } from "../../_generated/dataModel";
 import { buildCliThread, createTestContext, setupFakeTimers } from "../../../convex-testing";
@@ -2761,8 +2762,8 @@ describe("fork", () => {
       expect(parentMessages).toHaveLength(4);
     });
     // The fork is attached to the same task.
-    const taskDoc = await t.run((runCtx) => runCtx.db.get("tasks", task._id));
-    expect(taskDoc?.agentThreadWork?.some((entry) => entry.threadId === forkId && entry.source === "manual_attachment")).toBe(true);
+    const rows = await t.run((runCtx) => listAgentThreadWorkByTask(runCtx, task.projectId, task._id));
+    expect(rows.some((entry) => entry.threadId === forkId && entry.source === "manual_attachment")).toBe(true);
   });
 
   test("copies the reply's attachment refs, so deleting the source reply keeps the fork's blob (OS-2091)", async () => {
@@ -3166,8 +3167,8 @@ describe("attachTask (OS-1713)", () => {
     await t.mutation(api.cli.threads.core.attachTask, { threadId: thread._id, taskId: task._id, apiKey: key });
 
     expect((await t.run((dbCtx) => dbCtx.db.get("cliThreads", thread._id)))?.associatedTaskId).toBe(task._id);
-    const updated = await t.run((dbCtx) => dbCtx.db.get("tasks", task._id));
-    expect(updated?.agentThreadWork).toEqual([
+    const rows = await t.run((dbCtx) => listAgentThreadWorkByTask(dbCtx, task.projectId, task._id));
+    expect(rows).toEqual([
       expect.objectContaining({ threadId: thread._id, source: "manual_attachment", status: "streaming", createdAt: thread.createdAt }),
     ]);
   });
@@ -3218,7 +3219,7 @@ describe("attachTask (OS-1713)", () => {
     await asUser.mutation(api.cli.threads.core.attachTask, { threadId: thread._id, taskId: task._id });
     await t.finishAllScheduledFunctions(vi.runAllTimers);
 
-    expect((await t.run((dbCtx) => dbCtx.db.get("tasks", task._id)))?.agentThreadWork).toBeUndefined();
+    expect(await t.run((dbCtx) => listAgentThreadWorkByTask(dbCtx, task.projectId, task._id))).toEqual([]);
     expect(await readThreadAttachedLogs(t, task._id)).toEqual([]);
   });
 

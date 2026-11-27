@@ -5,6 +5,7 @@ import { taskIdsToStrings } from "@/lib/tasks/id-utils";
 import { useMappedTasks, useTaskInputState, useTaskTreeState } from "./use-task-view-state";
 import { useTaskDeleteMutations } from "./use-task-delete-mutations";
 import { useTaskListQueryState } from "./internals/query-state";
+import { useWithAgentThreadWork } from "./internals/agent-thread-work";
 import { useOptimisticAssigneeDetails } from "./internals/optimistic-assignee-details";
 import { useTaskArchiveState } from "./internals/archive-state";
 import { useTaskRankMutationHandles } from "./internals/rank-mutations";
@@ -60,7 +61,7 @@ export function useTasks(
     restoreMutation,
   });
 
-  const tasks = useMappedTasks(archiveState.displayedTasksData);
+  const tasks = useMappedTasks(useWithAgentThreadWork(projectId, archiveState.displayedTasksData));
   const { taskTree, flattenedTasks, expandedIds, toggleExpanded, expandAll, collapseAll } = useTaskTreeState(tasks, {
     preserveRootOrder: archiveFilter === "archived",
   });

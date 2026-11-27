@@ -1,6 +1,6 @@
 import { assertSectionInList } from "./lib/taskSectionsRepo";
 import { mutation, query, internalMutation, internalQuery } from "../_generated/server";
-import type { MutationCtx } from "../_generated/server";
+import type { MutationCtx, QueryCtx } from "../_generated/server";
 import { paginationOptsValidator } from "convex/server";
 import { v, ConvexError } from "convex/values";
 import { EMPTY_PAGE } from "../lib/shared/pagination";
@@ -88,6 +88,8 @@ import { assertChecklistInProject, findTaskTypeDefault, listChecklistsByProject 
 import { listArtifactsByTaskNewestFirst, deleteArtifact } from "./lib/taskArtifactsRepo";
 import { listTaskAttachmentsByTaskId, deleteTaskAttachment } from "./lib/taskAttachmentsRepo";
 import { deleteCheckResultsByTask } from "../checks/lib/checkResultsRepo";
+import { deleteAgentThreadWorkByTask, listAgentThreadWorkByTask } from "./lib/agentThreadWorkRepo";
+import { toAgentThreadWorkEntry } from "../lib/contracts/agentThreadWork";
 import { deleteStorageIfUnreferenced } from "../lib/storageRepo";
 import { applyAndLogExternalLinkOp } from "./lib/externalLinks";
 import { taskExternalLinkInputValidator, taskExternalLinkValidator } from "../lib/contracts/taskExternalLinks";
@@ -312,7 +314,7 @@ export const getById = query({
 
     const project = access.project;
 
-    const [enriched] = await enrichTasksWithUserDetails(ctx, [task], project);
+    const [enriched] = await withAgentThreadWork(ctx, await enrichTasksWithUserDetails(ctx, [task], project));
     return enriched ?? null;
   },
 });
@@ -350,6 +352,16 @@ export const getSummariesByIds = query({
     });
   },
 });
+
+/** Single-task reads carry their runs; list queries don't, so a status change skips them (OS-2579). */
+async function withAgentThreadWork<T extends { _id: Id<"tasks">; projectId: Id<"projects"> }>(ctx: QueryCtx, tasks: T[]) {
+  return Promise.all(
+    tasks.map(async (task) => ({
+      ...task,
+      agentThreadWork: (await listAgentThreadWorkByTask(ctx, task.projectId, task._id)).map(toAgentThreadWorkEntry),
+    }))
+  );
+}
 
 // getByRefs-only helpers (single consumer — kept module-local per the
 // helper-placement rule).
@@ -421,7 +433,7 @@ export const getByRefs = query({
     );
 
     const resolvedTasks = lookupResults.map((result) => result.taskDoc).filter((taskDoc): taskDoc is Doc<"tasks"> => taskDoc !== null);
-    const enrichedTasks = await enrichTasksWithUserDetails(ctx, resolvedTasks, project);
+    const enrichedTasks = await withAgentThreadWork(ctx, await enrichTasksWithUserDetails(ctx, resolvedTasks, project));
     const enrichedTaskMap = new Map(enrichedTasks.map((task) => [task._id, task]));
 
     const results = lookupResults.map(
@@ -1087,6 +1099,7 @@ export const permanentlyDelete = internalMutation({
       await deleteStorageIfUnreferenced(ctx, storageId);
     }
 
+    await deleteAgentThreadWorkByTask(ctx, task.projectId, args.taskId);
     await deleteTask(ctx, args.taskId);
   },
 });

@@ -3,7 +3,6 @@ import type { Id } from "@/convex/_generated/dataModel";
 import type { ActivityLog, Comment, TaskAgentThreadWorkEntry } from "@/lib/tasks/types";
 import {
   buildTimelineThreadRows,
-  getAgentThreadWorkSortKey,
   groupTimelineRows,
   mergeTimelineRows,
   spliceThreadRows,
@@ -95,19 +94,6 @@ function threadRow(overrides: Partial<TimelineThreadRow> = {}): TimelineThreadRo
     ...overrides,
   };
 }
-
-describe("getAgentThreadWorkSortKey", () => {
-  test("uses the snapshotted createdAt", () => {
-    expect(getAgentThreadWorkSortKey(workEntry("t1", { createdAt: 500, updatedAt: 9_000 }))).toBe(500);
-  });
-
-  // A legacy entry (pre-OS-1588) only backfills on its thread's next state
-  // change, and a finished thread may never have one — so this fallback is
-  // permanent, not a migration window.
-  test("falls back to updatedAt on a legacy entry", () => {
-    expect(getAgentThreadWorkSortKey(workEntry("t1", { createdAt: undefined, updatedAt: 9_000 }))).toBe(9_000);
-  });
-});
 
 describe("buildTimelineThreadRows", () => {
   test("marks the viewer's own threads and attributes foreign ones", () => {

@@ -21,6 +21,7 @@ const toastMutationRejectionMock = vi.hoisted(() => vi.fn());
 
 vi.mock("convex/react", () => ({
   useQuery: (...args: unknown[]) => useQueryMock(...args),
+  useQueries: () => ({}),
   usePaginatedQuery: (...args: unknown[]) => usePaginatedQueryMock(...args),
   useMutation: (...args: unknown[]) => useMutationMock(...args),
 }));
