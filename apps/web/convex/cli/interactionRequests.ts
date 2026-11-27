@@ -18,7 +18,6 @@ import {
 import { getAccessibleThread, requireSessionOwnership } from "./lib/permissions";
 import { assertThreadClaimedBySession } from "./lib/claims";
 import { getSessionById } from "./lib/cliSessionsRepo";
-import { ONLINE_THRESHOLD_MS } from "./lib/constants";
 import { getThreadById, setThreadHasPendingInteraction } from "./threads/lib/cliThreadsRepo";
 import { emitEvent } from "../lib/events";
 import {
@@ -346,7 +345,7 @@ export const listPendingByThread = query({
           const session = await getSessionById(ctx, sessionId);
           sessionOnlineById.set(
             sessionId,
-            !!session && session.lastHeartbeatAt > now - ONLINE_THRESHOLD_MS
+            session?.isOnline === true
           );
         }
       )

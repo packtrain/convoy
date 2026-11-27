@@ -298,10 +298,14 @@ export async function buildCliSession(db: DB, profileId: Id<"cliProfiles">, apiK
     projectId: overrides.projectId ?? profile.projectId,
     availableClis: overrides.availableClis ?? [],
     startedAt: now,
-    lastHeartbeatAt: now,
+    isOnline: true,
     ...overrides,
   };
   const id = await db.insert("cliSessions", data);
+  // An online session has a heartbeat row (OS-2549).
+  if (data.isOnline) {
+    await db.insert("cliSessionHeartbeats", { sessionId: id, lastHeartbeatAt: now });
+  }
   return { ...data, _id: id };
 }
 

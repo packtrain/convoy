@@ -26,27 +26,7 @@ export interface AgentListItemData {
   userAvatarUrl?: string;
   paths: AgentPath[];
   availableClis?: AvailableCliInfo[];
-  lastHeartbeatAt: number;
   isOnline: boolean;
-}
-
-function formatLastSeen(timestamp: number): string {
-  const now = Date.now();
-  const diff = now - timestamp;
-
-  if (diff < 60 * 1000) {
-    return "Just now";
-  }
-
-  if (diff < 60 * 60 * 1000) {
-    const mins = Math.floor(diff / (60 * 1000));
-    return `${mins}m ago`;
-  }
-
-  return new Date(timestamp).toLocaleTimeString([], {
-    hour: "numeric",
-    minute: "2-digit",
-  });
 }
 
 export function truncateRepoPath(path: string): string {
@@ -173,9 +153,6 @@ export function AgentListItem({ agent, onClick, profileDetails, hideAvatar = fal
               <span title={firstPath?.gitRemoteUrl}> · {gitRemote}</span>
             )}
             {pathCount > 1 && <span> +{pathCount - 1} more</span>}
-          </span>
-          <span className="shrink-0 text-[11px] text-muted-foreground">
-            {formatLastSeen(agent.lastHeartbeatAt)}
           </span>
         </div>
       </div>

@@ -120,7 +120,6 @@ export const cliThreadSummaryValidator = v.object({
   // Whether the target machine has a live session right now. Informational: a
   // thread on an offline target stays pending until that CLI connects.
   targetOnline: v.optional(v.boolean()),
-  lastHeartbeatAt: v.optional(v.number()),
 });
 
 export type CliThreadSummary = Infer<typeof cliThreadSummaryValidator>;
@@ -187,7 +186,6 @@ export function toThreadSummary(
     queueHeldAt: thread.queueHeldAt,
     profileName: profile?.name ?? "Unknown",
     targetOnline: session !== null,
-    lastHeartbeatAt: session?.lastHeartbeatAt,
   };
 }
 

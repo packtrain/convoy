@@ -390,7 +390,7 @@ async function dispatchStep(
   } else {
     // A runtime the online CLI does not advertise fails here with the reason
     // (OS-1895); with no session online the prompt queues until one connects.
-    if (!(await sessionRunsCliType(ctx, run, reads, execution.cliType, now))) {
+    if (!(await sessionRunsCliType(ctx, run, reads, execution.cliType))) {
       await markStepFailed(ctx, step._id, errors.workflowStepRuntimeUnavailable(execution.cliType), now);
       return "failed";
     }
@@ -471,11 +471,10 @@ async function sessionRunsCliType(
   ctx: MutationCtx,
   run: Doc<"workflowRuns">,
   reads: DispatchReads,
-  cliType: NonNullable<Doc<"workflowRunSteps">["resolvedExecution"]>["cliType"],
-  now: number
+  cliType: NonNullable<Doc<"workflowRunSteps">["resolvedExecution"]>["cliType"]
 ): Promise<boolean> {
   if (reads.session === undefined) {
-    reads.session = await getOnlineSessionForProfile(ctx, run.selection.profileId, now);
+    reads.session = await getOnlineSessionForProfile(ctx, run.selection.profileId);
   }
   return reads.session === null || reads.session.availableClis.some((cli) => cli.type === cliType);
 }

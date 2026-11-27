@@ -24,7 +24,6 @@ import { ProjectPermission } from "../../../lib/authz/permissions";
 import { cliThreadPullRequestValidator } from "../../lib/contracts/validators";
 import { isThreadClaimExpired } from "../lib/claims";
 import {
-  ONLINE_THRESHOLD_MS,
   STREAM_CANCELLED_BY_USER_REASON,
   STREAM_CLAIM_LEASE_EXPIRED_REASON,
   STREAM_CLAIM_RELEASED_REASON,
@@ -40,7 +39,7 @@ import {
   listUnprocessedUserMessages,
   updateCliMessage,
 } from "../lib/cliMessagesRepo";
-import { getSessionById } from "../lib/cliSessionsRepo";
+import { isSessionLive } from "../lib/cliSessionsRepo";
 import { MAX_EXTERNAL_LINK_TEXT_LENGTH } from "@/lib/tasks/external-links";
 import { formatThreadPullRequestRef } from "@/lib/threads/pull-request";
 import {
@@ -738,10 +737,7 @@ export const streamingWatchdogTick = internalMutation({
       return null;
     }
 
-    const session = await getSessionById(ctx, chat.claimedBySessionId);
-    const isSessionOnline = !!session && session.lastHeartbeatAt > now - ONLINE_THRESHOLD_MS;
-
-    if (!isSessionOnline) {
+    if (!(await isSessionLive(ctx, chat.claimedBySessionId, now))) {
       await failStreamingChat(ctx, chat, STREAM_DISCONNECT_REASON, now);
       return null;
     }

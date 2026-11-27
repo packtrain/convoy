@@ -26,4 +26,7 @@ crons.interval("github integration reconciliation", { minutes: 15 }, internal.in
 // Keep in step with WATCH_IDLE_CRON_MINUTES; most runs find no idle watch.
 crons.interval("pull request watch idle evaluation", { minutes: 1 }, internal.integrations.github.pullRequestWatches.evaluateIdle, {});
 
+// CLI online status (OS-2549): flips silent sessions offline, deletes long-offline ones.
+crons.interval("cli offline session sweep", { seconds: 30 }, internal.cli.sessions.sweepOfflineSessions, {});
+
 export default crons;

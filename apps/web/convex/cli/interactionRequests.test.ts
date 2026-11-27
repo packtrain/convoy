@@ -193,9 +193,7 @@ describe("cliInteractionRequests", () => {
     // Answering it would write into a row nobody is subscribed to — the click
     // does nothing and the run only fails when the watchdog notices.
     await s.t.run(async (runCtx) => {
-      await runCtx.db.patch("cliSessions", s.session._id, {
-        lastHeartbeatAt: Date.now() - 5 * 60_000,
-      });
+      await runCtx.db.patch("cliSessions", s.session._id, { isOnline: false, offlineAt: Date.now() });
     });
 
     expect(

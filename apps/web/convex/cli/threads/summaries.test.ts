@@ -57,7 +57,6 @@ describe("getSummary (OS-1162)", () => {
     // No live session, so the target is offline — which is informational, not
     // an error: work queued against it starts when that CLI connects.
     expect(result?.targetOnline).toBe(false);
-    expect(result?.lastHeartbeatAt).toBeUndefined();
     // Container fields belong to containers only.
     expect(result?.kind).toBeUndefined();
     expect(result?.childCount).toBeUndefined();
@@ -124,7 +123,7 @@ describe("getSummary (OS-1162)", () => {
       name: "CLI",
       expiresAt: Date.now() + 30 * 24 * 60 * 60 * 1000,
     });
-    const session = await ctx.cliSession(profile._id, apiKeyResult.id);
+    await ctx.cliSession(profile._id, apiKeyResult.id);
     const thread = await ctx.cliThread(user._id, project._id, profile._id, {
       pathId: "path-1",
       path: "/repo/path-1",
@@ -135,7 +134,6 @@ describe("getSummary (OS-1162)", () => {
     });
 
     expect(result?.targetOnline).toBe(true);
-    expect(result?.lastHeartbeatAt).toBe(session.lastHeartbeatAt);
   });
 
   test("falls back to the thread's path snapshot when the profile path is gone", async () => {
@@ -535,7 +533,7 @@ describe("listSummaries (OS-1626)", () => {
       name: "CLI",
       expiresAt: Date.now() + 30 * 24 * 60 * 60 * 1000,
     });
-    const session = await ctx.cliSession(online._id, apiKeyId);
+    await ctx.cliSession(online._id, apiKeyId);
     const onlineThread = await ctx.cliThread(user._id, project._id, online._id, {
       lastActivityAt: 2_000,
     });
@@ -553,15 +551,13 @@ describe("listSummaries (OS-1626)", () => {
     // single read.
     const byId = new Map(result.page.map((row) => [row.threadId, row]));
     expect(byId.get(onlineThread._id)?.targetOnline).toBe(true);
-    expect(byId.get(onlineThread._id)?.lastHeartbeatAt).toBe(session.lastHeartbeatAt);
     expect(byId.get(offlineThread._id)?.targetOnline).toBe(false);
-    expect(byId.get(offlineThread._id)?.lastHeartbeatAt).toBeUndefined();
   });
 
   /**
   * `targetOnline` must not depend on *which* query asked. `cliSessions.projectId` is
   * optional, so a session predating that denorm is invisible to
-  * `by_project_and_lastHeartbeatAt` — a project-keyed scan would report the target offline
+  * a project-keyed index — a project-keyed scan would report the target offline
   * while `get_thread`, resolving by profile, reports it online. One thread, one moment, two
   * answers is the ambiguity the shared validator exists to rule out.
   */
@@ -590,7 +586,6 @@ describe("listSummaries (OS-1626)", () => {
 
     expect(single?.targetOnline).toBe(true);
     expect(list.page[0]?.targetOnline).toBe(single?.targetOnline);
-    expect(list.page[0]?.lastHeartbeatAt).toBe(single?.lastHeartbeatAt);
   });
 
   test("shows a group as one row and excludes its members", async () => {

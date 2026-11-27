@@ -6808,7 +6808,6 @@ describe("handleMcpRequest get_thread", () => {
     hasPendingInteraction: false,
     profileName: "Laptop",
     targetOnline: true,
-    lastHeartbeatAt: 3,
   };
 
   test("tools/list advertises the tool with threadId required", async () => {
@@ -6962,7 +6961,6 @@ describe("handleMcpRequest list_threads", () => {
         hasPendingInteraction: false,
         profileName: "Laptop",
         targetOnline: true,
-        lastHeartbeatAt: 3,
       },
     ],
     isDone: false,

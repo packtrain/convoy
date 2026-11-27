@@ -10,7 +10,13 @@ import {
   cliProfilePathEntryValidator,
   splitAdvertisedCatalogs,
 } from "../lib/contracts/validators";
-import { ONLINE_THRESHOLD_MS, STREAM_DISCONNECT_REASON, STREAM_SESSION_REPLACED_REASON, VISIBLE_THRESHOLD_MS } from "./lib/constants";
+import {
+  OFFLINE_SWEEP_BATCH,
+  ONLINE_THRESHOLD_MS,
+  STREAM_DISCONNECT_REASON,
+  STREAM_SESSION_REPLACED_REASON,
+  VISIBLE_THRESHOLD_MS,
+} from "./lib/constants";
 import { join } from "../lib/shared/join";
 import { getUsersByIds } from "../users/lib/usersRepo";
 import { errors } from "./errors";
@@ -20,8 +26,12 @@ import {
   getSessionById,
   getSessionByInstanceId,
   insertSession,
-  listActiveSessionsByProfile,
-  listRecentSessionsByUser,
+  isSessionLive,
+  listOnlineSessionsByProfile,
+  listOnlineSessionsByUser,
+  listSessionsOfflineSince,
+  listStaleHeartbeats,
+  markSessionOffline,
   sessionSupportsSteeringForCliType,
   touchSessionHeartbeat,
   updateSessionOnReconnect,
@@ -48,7 +58,6 @@ const cliSessionItemValidator = v.object({
   supportsInteractiveApprovals: v.boolean(),
   supportsSteering: v.boolean(),
   startedAt: v.number(),
-  lastHeartbeatAt: v.number(),
   isOnline: v.boolean(),
 });
 
@@ -163,7 +172,7 @@ export const register = internalMutation({
 
     if (existingByInstance) {
       // Update existing session (same CLI process reconnecting)
-      await updateSessionOnReconnect(ctx, existingByInstance._id, {
+      await updateSessionOnReconnect(ctx, existingByInstance, {
         profileId, // Update in case profile changed
         apiKeyId,
         userId,
@@ -178,19 +187,21 @@ export const register = internalMutation({
       return { sessionId: existingByInstance._id, profileId };
     }
 
-    // Check for active sessions on this profile (different instanceId)
-    const activeSessions = await listActiveSessionsByProfile(ctx, profileId, now - ONLINE_THRESHOLD_MS);
+    // Conflict only with sessions that heartbeated recently; one the sweep has not flipped yet is already dead.
+    const onlineSessions = await listOnlineSessionsByProfile(ctx, profileId);
+    const live = await Promise.all(onlineSessions.map((session) => isSessionLive(ctx, session._id, now)));
+    const activeSessionCount = live.filter(Boolean).length;
 
-    if (activeSessions.length > 0 && !force) {
+    if (activeSessionCount > 0 && !force) {
       throw new ConvexError({
         code: "SESSION_CONFLICT",
         message: errors.SESSION_CONFLICT,
-        activeSessionCount: activeSessions.length,
+        activeSessionCount,
       });
     }
 
-    // Force: delete existing active sessions
-    for (const session of activeSessions) {
+    // Force replaces the live ones; the dead ones go either way.
+    for (const session of onlineSessions) {
       await disconnectSession(ctx, session._id, STREAM_SESSION_REPLACED_REASON);
     }
 
@@ -213,8 +224,8 @@ export const register = internalMutation({
 });
 
 /**
- * Update heartbeat timestamp for a session.
- * Called periodically from CLI.
+ * Stamp the session's heartbeat row; flips a swept session back online.
+ * Called every 30 s from the CLI.
  */
 export const heartbeat = internalMutation({
   args: {
@@ -229,7 +240,7 @@ export const heartbeat = internalMutation({
       return false;
     }
 
-    await touchSessionHeartbeat(ctx, session._id);
+    await touchSessionHeartbeat(ctx, session);
     return true;
   },
 });
@@ -256,7 +267,7 @@ export const disconnect = internalMutation({
 });
 
 /**
- * The caller's own CLI sessions in a project, heartbeat within 5 minutes.
+ * The caller's own online CLI sessions in a project.
  * Feeds the thread sidebar's Connected CLIs section; other members' CLIs are never listed (OS-2321).
  */
 export const listByProject = query({
@@ -270,11 +281,8 @@ export const listByProject = query({
     // Check project access
     await requireAuthorizedProject(ctx, user._id, args.projectId, ProjectPermission.TASK_VIEW);
 
-    const now = Date.now();
-    const cutoff = now - VISIBLE_THRESHOLD_MS;
-
-    // User index first: the subscription ignores other members' heartbeats.
-    const sessions = (await listRecentSessionsByUser(ctx, user._id, cutoff)).filter(
+    // User index first: the subscription ignores other members' sessions.
+    const sessions = (await listOnlineSessionsByUser(ctx, user._id)).filter(
       (session) => session.projectId === args.projectId
     );
 
@@ -304,8 +312,7 @@ export const listByProject = query({
         supportsInteractiveApprovals: session.supportsInteractiveApprovals ?? false,
         supportsSteering: session.supportsSteering ?? false,
         startedAt: session.startedAt,
-        lastHeartbeatAt: session.lastHeartbeatAt,
-        isOnline: session.lastHeartbeatAt > now - ONLINE_THRESHOLD_MS,
+        isOnline: session.isOnline === true,
       }));
   },
 });
@@ -338,5 +345,25 @@ export const getSessionCapabilities = query({
           ? sessionSupportsSteeringForCliType(session, args.cliType)
           : (session.supportsSteering ?? false),
     };
+  },
+});
+
+/**
+ * Cron, every 30 s (OS-2549): flip sessions with no heartbeat for ONLINE_THRESHOLD_MS offline,
+ * and disconnect sessions offline longer than VISIBLE_THRESHOLD_MS. An idle run reads nothing.
+ */
+export const sweepOfflineSessions = internalMutation({
+  args: {},
+  returns: v.null(),
+  handler: async (ctx) => {
+    const now = Date.now();
+    // ponytail: fixed batches per tick; a backlog drains over later ticks.
+    for (const heartbeat of await listStaleHeartbeats(ctx, now - ONLINE_THRESHOLD_MS, OFFLINE_SWEEP_BATCH)) {
+      await markSessionOffline(ctx, heartbeat, now);
+    }
+    for (const session of await listSessionsOfflineSince(ctx, now - VISIBLE_THRESHOLD_MS, OFFLINE_SWEEP_BATCH)) {
+      await disconnectSession(ctx, session._id, STREAM_DISCONNECT_REASON);
+    }
+    return null;
   },
 });

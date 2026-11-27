@@ -9,10 +9,10 @@ import { ensure } from "../lib/shared/ensure";
 import { errors } from "./errors";
 import { cliHistoryScopeValidator, cliWorktreeOpKindValidator, cliWorktreeOpStatusValidator } from "../lib/contracts/validators";
 import { getCliProfileById } from "./lib/cliProfilesRepo";
-import { listActiveSessionsByProfile } from "./lib/cliSessionsRepo";
+import { listOnlineSessionsByProfile } from "./lib/cliSessionsRepo";
 import { getThreadByCheckpointRef, listThreadsClaimedBySession } from "./threads/lib/cliThreadsRepo";
 import { requireSessionOwnership } from "./lib/permissions";
-import { MAX_DOWNLOAD_FILE_BYTES, MAX_REVERT_ALL_FILES, ONLINE_THRESHOLD_MS } from "./lib/constants";
+import { MAX_DOWNLOAD_FILE_BYTES, MAX_REVERT_ALL_FILES } from "./lib/constants";
 import { deleteStorageIfUnreferenced, getStorageSize, isStorageClaimed } from "../lib/storageRepo";
 import {
   deleteWorktreeOp,
@@ -81,12 +81,11 @@ function toWorktreeOpItem(doc: Doc<"cliWorktreeOps">) {
 
 /** Whether any active session currently holds a claim on a thread in this path. */
 async function isPathInUse(
-  ctx: Parameters<typeof listActiveSessionsByProfile>[0],
+  ctx: Parameters<typeof listOnlineSessionsByProfile>[0],
   profile: Doc<"cliProfiles">,
-  pathId: string,
-  now: number
+  pathId: string
 ): Promise<boolean> {
-  const sessions = await listActiveSessionsByProfile(ctx, profile._id, now - ONLINE_THRESHOLD_MS);
+  const sessions = await listOnlineSessionsByProfile(ctx, profile._id);
   const claimedPerSession = await Promise.all(sessions.map((session) => listThreadsClaimedBySession(ctx, session._id)));
   return claimedPerSession.flat().some((thread) => !thread.isDeleted && thread.pathId === pathId);
 }
@@ -151,7 +150,7 @@ export const enqueue = mutation({
       ensure(count >= 1 && count <= MAX_REVERT_ALL_FILES).isTrue(errors.REVERT_ALL_FILE_PATHS_INVALID);
     }
     if (args.kind === "revertWorkingFile" || args.kind === "revertWorkingTree") {
-      const inUse = await isPathInUse(ctx, profile, args.pathId, now);
+      const inUse = await isPathInUse(ctx, profile, args.pathId);
       ensure(inUse).isFalse(errors.REVERT_RUN_IN_USE);
     }
     if (args.kind === "searchFiles") {
@@ -180,7 +179,7 @@ export const enqueue = mutation({
       if (args.kind === "revertFile") {
         ensure(args.filePath).notNull(errors.FILE_OP_ARGS_MISSING);
       }
-      const inUse = await isPathInUse(ctx, profile, args.pathId, now);
+      const inUse = await isPathInUse(ctx, profile, args.pathId);
       ensure(inUse).isFalse(errors.REVERT_RUN_IN_USE);
       const thread = await getThreadByCheckpointRef(ctx, args.preRef!);
       allowLegacyCheckpoint = !!thread && !thread.isDeleted &&
@@ -194,7 +193,7 @@ export const enqueue = mutation({
       const parent = await ensure(profile.paths.find((path) => path.id === entry.parentPathId)).notNull(errors.PATH_NOT_FOUND_IN_PROFILE);
       parentPath = parent.path;
 
-      const inUse = await isPathInUse(ctx, profile, args.pathId, now);
+      const inUse = await isPathInUse(ctx, profile, args.pathId);
       ensure(inUse).isFalse(errors.WORKTREE_REMOVE_IN_USE);
     }
 

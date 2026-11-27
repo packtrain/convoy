@@ -5,7 +5,7 @@ import { ONLINE_THRESHOLD_MS } from "./constants";
 
 type Ctx = QueryCtx | MutationCtx;
 
-/** A page of sessions for a profile, oldest heartbeat first, for batched cleanup. */
+/** A page of every session for a profile, for batched cleanup. */
 export async function paginateSessionsByProfile(
   ctx: Ctx,
   profileId: Id<"cliProfiles">,
@@ -13,7 +13,7 @@ export async function paginateSessionsByProfile(
 ): Promise<PaginationResult<Doc<"cliSessions">>> {
   return ctx.db
     .query("cliSessions")
-    .withIndex("by_profile_lastHeartbeat", (q) => q.eq("profileId", profileId))
+    .withIndex("by_profile_and_isOnline", (q) => q.eq("profileId", profileId))
     .paginate(opts);
 }
 
@@ -36,101 +36,83 @@ export async function getSessionByInstanceId(
     .unique();
 }
 
-/**
- * Sessions for a project whose last heartbeat is at or after `cutoff`, ordered
- * by most-recent heartbeat first (so the first per profile is the freshest).
- */
-export async function listRecentSessionsByProject(
-  ctx: Ctx,
-  projectId: Id<"projects">,
-  cutoff: number
-): Promise<Doc<"cliSessions">[]> {
+/** A user's online sessions, newest first. */
+export async function listOnlineSessionsByUser(ctx: Ctx, userId: Id<"users">): Promise<Doc<"cliSessions">[]> {
   return ctx.db
     .query("cliSessions")
-    .withIndex("by_project_and_lastHeartbeatAt", (q) =>
-      q.eq("projectId", projectId).gte("lastHeartbeatAt", cutoff)
-    )
+    .withIndex("by_user_and_isOnline", (q) => q.eq("userId", userId).eq("isOnline", true))
     .order("desc")
     .collect();
 }
 
-/**
- * Sessions owned by a user whose heartbeat is at or after `cutoff`, newest
- * first. Modern sessions always carry the denormalized user id.
- */
-export async function listRecentSessionsByUser(
-  ctx: Ctx,
-  userId: Id<"users">,
-  cutoff: number
-): Promise<Doc<"cliSessions">[]> {
+/** A profile's online sessions. */
+export async function listOnlineSessionsByProfile(ctx: Ctx, profileId: Id<"cliProfiles">): Promise<Doc<"cliSessions">[]> {
   return ctx.db
     .query("cliSessions")
-    .withIndex("by_user_and_lastHeartbeatAt", (q) =>
-      q.eq("userId", userId).gte("lastHeartbeatAt", cutoff)
-    )
-    .order("desc")
+    .withIndex("by_profile_and_isOnline", (q) => q.eq("profileId", profileId).eq("isOnline", true))
     .collect();
 }
 
-/**
- * The freshest active session for a profile (heartbeat at or after `since`), or
- * null when the profile has no live session.
- */
-export async function getLatestActiveSessionForProfile(
-  ctx: Ctx,
-  profileId: Id<"cliProfiles">,
-  since: number
-): Promise<Doc<"cliSessions"> | null> {
+/** The profile's newest online session, or null — the cross-domain "is a CLI connected" read (OS-1895). */
+export async function getOnlineSessionForProfile(ctx: Ctx, profileId: Id<"cliProfiles">): Promise<Doc<"cliSessions"> | null> {
   return ctx.db
     .query("cliSessions")
-    .withIndex("by_profile_lastHeartbeat", (q) =>
-      q.eq("profileId", profileId).gte("lastHeartbeatAt", since)
-    )
+    .withIndex("by_profile_and_isOnline", (q) => q.eq("profileId", profileId).eq("isOnline", true))
     .order("desc")
     .first();
 }
 
-/** The profile's freshest session still within the online threshold, or null — the cross-domain "is a CLI connected" read (OS-1895). */
-export async function getOnlineSessionForProfile(ctx: Ctx, profileId: Id<"cliProfiles">, now: number): Promise<Doc<"cliSessions"> | null> {
-  return getLatestActiveSessionForProfile(ctx, profileId, now - ONLINE_THRESHOLD_MS);
-}
-
 /**
-* The freshest active session per profile — the batched {@link getLatestActiveSessionForProfile},
-* one indexed read per distinct id. Profiles with no live session are absent.
-*
-* Keyed on profiles, not a project: `cliSessions.projectId` is optional, so a session predating
-* that denorm is invisible to `by_project_and_lastHeartbeatAt` and a project-keyed scan would
-* call its target offline while this calls it online. Lives here because "freshest wins" is a
-* property of the index it reads.
-*/
-export async function getLatestActiveSessionsByProfiles(
+ * The batched {@link getOnlineSessionForProfile}, one indexed read per distinct id. Profiles with
+ * no online session are absent. Keyed on profiles: `cliSessions.projectId` is optional on old rows.
+ */
+export async function getOnlineSessionsByProfiles(
   ctx: Ctx,
-  profileIds: Id<"cliProfiles">[],
-  since: number
+  profileIds: Id<"cliProfiles">[]
 ): Promise<Map<Id<"cliProfiles">, Doc<"cliSessions">>> {
   const entries = await Promise.all(
-    [...new Set(profileIds)].map(
-      async (profileId) => [profileId, await getLatestActiveSessionForProfile(ctx, profileId, since)] as const
-    )
+    [...new Set(profileIds)].map(async (profileId) => [profileId, await getOnlineSessionForProfile(ctx, profileId)] as const)
   );
-  return new Map(
-    entries.filter((entry): entry is [Id<"cliProfiles">, Doc<"cliSessions">] => entry[1] !== null)
-  );
+  return new Map(entries.filter((entry): entry is [Id<"cliProfiles">, Doc<"cliSessions">] => entry[1] !== null));
 }
 
-/** Sessions for a profile whose last heartbeat is at or after `since`. */
-export async function listActiveSessionsByProfile(
-  ctx: Ctx,
-  profileId: Id<"cliProfiles">,
-  since: number
-): Promise<Doc<"cliSessions">[]> {
+async function getHeartbeat(ctx: Ctx, sessionId: Id<"cliSessions">): Promise<Doc<"cliSessionHeartbeats"> | null> {
+  return ctx.db
+    .query("cliSessionHeartbeats")
+    .withIndex("by_sessionId", (q) => q.eq("sessionId", sessionId))
+    .unique();
+}
+
+/** Whether the session heartbeated within ONLINE_THRESHOLD_MS. Liveness gates only: it reads the hot heartbeat row. */
+export async function isSessionLive(ctx: Ctx, sessionId: Id<"cliSessions">, now: number): Promise<boolean> {
+  const heartbeat = await getHeartbeat(ctx, sessionId);
+  if (heartbeat) {
+    return heartbeat.lastHeartbeatAt > now - ONLINE_THRESHOLD_MS;
+  }
+  // A legacy row not yet heartbeated or migrated still carries its own timestamp (OS-2549).
+  const session = await getSessionById(ctx, sessionId);
+  return session?.isOnline === undefined && (session?.lastHeartbeatAt ?? 0) > now - ONLINE_THRESHOLD_MS;
+}
+
+/** Insert a session's heartbeat row. Outside this file, only the legacy-session migration calls it. */
+export async function insertHeartbeat(ctx: MutationCtx, sessionId: Id<"cliSessions">, lastHeartbeatAt: number): Promise<void> {
+  await ctx.db.insert("cliSessionHeartbeats", { sessionId, lastHeartbeatAt });
+}
+
+/** Heartbeat rows older than `before`, oldest first: the sessions the offline sweep flips. */
+export async function listStaleHeartbeats(ctx: Ctx, before: number, limit: number): Promise<Doc<"cliSessionHeartbeats">[]> {
+  return ctx.db
+    .query("cliSessionHeartbeats")
+    .withIndex("by_lastHeartbeatAt", (q) => q.lt("lastHeartbeatAt", before))
+    .take(limit);
+}
+
+/** Offline sessions whose `offlineAt` is before `before`, oldest first: the ones the sweep deletes. */
+export async function listSessionsOfflineSince(ctx: Ctx, before: number, limit: number): Promise<Doc<"cliSessions">[]> {
   return ctx.db
     .query("cliSessions")
-    .withIndex("by_profile_lastHeartbeat", (q) =>
-      q.eq("profileId", profileId).gte("lastHeartbeatAt", since)
-    )
-    .collect();
+    .withIndex("by_isOnline_and_offlineAt", (q) => q.eq("isOnline", false).lt("offlineAt", before))
+    .take(limit);
 }
 
 type InsertSessionProps = {
@@ -147,17 +129,15 @@ type InsertSessionProps = {
   steeringCliTypes?: string[];
 };
 
-/** Insert a new session, stamping `startedAt`/`lastHeartbeatAt` to now. */
+/** Insert a new online session, stamping `startedAt` and its first heartbeat to now. */
 export async function insertSession(
   ctx: MutationCtx,
   props: InsertSessionProps
 ): Promise<Id<"cliSessions">> {
   const now = Date.now();
-  return ctx.db.insert("cliSessions", {
-    ...props,
-    startedAt: now,
-    lastHeartbeatAt: now,
-  });
+  const sessionId = await ctx.db.insert("cliSessions", { ...props, startedAt: now, isOnline: true });
+  await insertHeartbeat(ctx, sessionId, now);
+  return sessionId;
 }
 
 type SessionReconnectPatch = {
@@ -189,34 +169,48 @@ export function sessionSupportsSteeringForCliType(
   return cliType === "claude-code" && session.supportsSteering === true;
 }
 
-/**
- * Update an existing session when the same CLI process reconnects, refreshing
- * its identity fields and stamping `lastHeartbeatAt` so callers never repeat it.
- */
+/** Update an existing session when the same CLI process reconnects, refreshing its identity fields and heartbeat. */
 export async function updateSessionOnReconnect(
   ctx: MutationCtx,
-  sessionId: Id<"cliSessions">,
+  session: Doc<"cliSessions">,
   patch: SessionReconnectPatch
 ): Promise<void> {
-  await ctx.db.patch("cliSessions", sessionId, {
-    ...patch,
-    lastHeartbeatAt: Date.now(),
-  });
+  await ctx.db.patch("cliSessions", session._id, patch);
+  await touchSessionHeartbeat(ctx, session);
 }
 
-/** Stamp a session's `lastHeartbeatAt` to now. */
-export async function touchSessionHeartbeat(
-  ctx: MutationCtx,
-  sessionId: Id<"cliSessions">
-): Promise<void> {
-  await ctx.db.patch("cliSessions", sessionId, {
-    lastHeartbeatAt: Date.now(),
-  });
+/**
+ * Stamp the session's heartbeat row to now. A session the sweep took offline (laptop woke up)
+ * gets its row back and flips online; a healthy heartbeat writes only the heartbeat row.
+ */
+export async function touchSessionHeartbeat(ctx: MutationCtx, session: Doc<"cliSessions">): Promise<void> {
+  const now = Date.now();
+  const heartbeat = await getHeartbeat(ctx, session._id);
+  if (heartbeat) {
+    await ctx.db.patch("cliSessionHeartbeats", heartbeat._id, { lastHeartbeatAt: now });
+  } else {
+    await insertHeartbeat(ctx, session._id, now);
+  }
+  if (session.isOnline !== true) {
+    await ctx.db.patch("cliSessions", session._id, { isOnline: true, offlineAt: undefined });
+  }
+}
+
+/** The offline sweep's flip: stamp the session offline and drop its heartbeat row. */
+export async function markSessionOffline(ctx: MutationCtx, heartbeat: Doc<"cliSessionHeartbeats">, now: number): Promise<void> {
+  await ctx.db.delete("cliSessionHeartbeats", heartbeat._id);
+  if (await ctx.db.get("cliSessions", heartbeat.sessionId)) {
+    await ctx.db.patch("cliSessions", heartbeat.sessionId, { isOnline: false, offlineAt: now });
+  }
 }
 
 export async function deleteSession(
   ctx: MutationCtx,
   sessionId: Id<"cliSessions">
 ): Promise<void> {
+  const heartbeat = await getHeartbeat(ctx, sessionId);
+  if (heartbeat) {
+    await ctx.db.delete("cliSessionHeartbeats", heartbeat._id);
+  }
   await ctx.db.delete("cliSessions", sessionId);
 }

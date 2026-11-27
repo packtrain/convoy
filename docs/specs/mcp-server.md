@@ -1358,7 +1358,8 @@ no use for. It is named for the shape it returns, not for its caller: the
 (`parentThreadId`, `spawnedByThreadId`), the runtime target (`profileId`,
 `pathId`, `path`, `cliType`, `profileName`), and its queue state
 (`processingState`, `hasPendingUserMessages`, `hasPendingInteraction`,
-`queueHeldAt`), plus `targetOnline` / `lastHeartbeatAt` for the target machine.
+`queueHeldAt`), plus `targetOnline` for the target machine. It carries no
+heartbeat timestamp: a heartbeat must not re-run the query (OS-2549).
 `targetOnline: false` is informational for the same reason as in
 `list_cli_profiles`.
 
@@ -1460,7 +1461,7 @@ list might have dropped as "per-row
 expensive" are not: the page's profiles are one batched load, and its online state
 is **one indexed read per distinct profile** on the page — never a project-keyed
 session scan, which would disagree with `get_thread` for a session predating
-`cliSessions.projectId` (see `getLatestActiveSessionsByProfiles`). Forking the tier
+`cliSessions.projectId` (see `getOnlineSessionsByProfiles`). Forking the tier
 would have bought an external contract where `targetOnline: undefined` means "not a
 thread" from one tool and "we didn't look" from the other. A field is absent for
 exactly one reason: the row is a container.

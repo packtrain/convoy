@@ -12,7 +12,7 @@ import {
   toRuntimeSummaries,
 } from "../lib/contracts/validators";
 import { ensure } from "../lib/shared/ensure";
-import { ONLINE_THRESHOLD_MS, STREAM_PROFILE_DELETED_REASON } from "./lib/constants";
+import { STREAM_PROFILE_DELETED_REASON } from "./lib/constants";
 import { errors } from "./errors";
 import { cliRuntimeCatalogValidator, toRuntimeCatalog } from "./lib/validators";
 import { deleteRuntimeCatalogsByProfile, listRuntimeCatalogsByProjectAndUser } from "./lib/cliRuntimeCatalogsRepo";
@@ -27,10 +27,10 @@ import {
   softDeleteCliProfile,
 } from "./lib/cliProfilesRepo";
 import {
-  getLatestActiveSessionForProfile,
-  listActiveSessionsByProfile,
-  listRecentSessionsByProject,
-  listRecentSessionsByUser,
+  getOnlineSessionForProfile,
+  getOnlineSessionsByProfiles,
+  listOnlineSessionsByProfile,
+  listOnlineSessionsByUser,
   paginateSessionsByProfile,
 } from "./lib/cliSessionsRepo";
 import { disconnectSession } from "./lib/disconnectSession";
@@ -193,8 +193,7 @@ export const get = query({
       return null;
     }
 
-    // Get online status from the freshest active session.
-    const session = await getLatestActiveSessionForProfile(ctx, profile._id, Date.now() - ONLINE_THRESHOLD_MS);
+    const session = await getOnlineSessionForProfile(ctx, profile._id);
 
     return {
       _id: profile._id,
@@ -232,15 +231,8 @@ export const listByProject = query({
 
     const profiles = await listActiveProfilesByUserAndProject(ctx, user._id, args.projectId);
 
-    // Fetch all online sessions for this project once, then map by profileId.
-    const onlineSessions = await listRecentSessionsByProject(ctx, args.projectId, Date.now() - ONLINE_THRESHOLD_MS);
-    const bestSessionByProfileId = new Map<Id<"cliProfiles">, Doc<"cliSessions">>();
-    for (const session of onlineSessions) {
-      // First one wins because the query ordered desc by lastHeartbeatAt.
-      if (!bestSessionByProfileId.has(session.profileId)) {
-        bestSessionByProfileId.set(session.profileId, session);
-      }
-    }
+    // The caller's own profiles only: another member's session changes never re-run this (OS-2549).
+    const bestSessionByProfileId = await getOnlineSessionsByProfiles(ctx, profiles.map((profile) => profile._id));
 
     return profiles.map((profile) => {
       const session = bestSessionByProfileId.get(profile._id);
@@ -292,7 +284,7 @@ export const listForUser = query({
   handler: async (ctx) => {
     const user = await getAuthenticatedUser(ctx);
     const profiles = await listActiveProfilesByUser(ctx, user._id);
-    const onlineSessions = await listRecentSessionsByUser(ctx, user._id, Date.now() - ONLINE_THRESHOLD_MS);
+    const onlineSessions = await listOnlineSessionsByUser(ctx, user._id);
 
     const bestSessionByProfileId = new Map<Id<"cliProfiles">, Doc<"cliSessions">>();
     for (const session of onlineSessions) {
@@ -416,7 +408,7 @@ export const remove = mutation({
     const user = await getAuthenticatedUser(ctx);
     const profile = await requireOwnedActiveProfile(ctx, args.profileId, user._id);
 
-    const sessions = await listActiveSessionsByProfile(ctx, profile._id, Date.now() - ONLINE_THRESHOLD_MS);
+    const sessions = await listOnlineSessionsByProfile(ctx, profile._id);
     await disconnectSessions(ctx, sessions);
 
     await deleteRuntimeCatalogsByProfile(ctx, profile._id);

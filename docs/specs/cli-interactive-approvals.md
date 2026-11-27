@@ -147,7 +147,8 @@ No URL opens automatically. Completion-only notifications remain silent.
   `heartbeatClaim` extends pending request expiry with the lease, and
   `listPendingByThread` filters out lease-expired rows.
 - `listPendingByThread` additionally drops rows whose claiming session is
-  offline (no heartbeat within `ONLINE_THRESHOLD_MS`). The lease outlives a
+  offline (`cliSessions.isOnline` false, set by the offline sweep; see
+  [cli-bridge.md](../architecture/cli-bridge.md#online-status)). The lease outlives a
   killed CLI process by up to its full duration, and answering such a row
   writes into a request nobody is subscribed to: the click silently does
   nothing and the run only fails minutes later when the watchdog notices

@@ -5,7 +5,6 @@ import { getAuthenticatedAccess, getOptionalAuthenticatedAccess } from "../../li
 import { requireAuthorizedProject, hasProjectAccess } from "../../lib/access/permissions";
 import { clampPageSize, EMPTY_PAGE } from "../../lib/shared/pagination";
 import { ProjectPermission } from "../../../lib/authz/permissions";
-import { ONLINE_THRESHOLD_MS } from "../lib/constants";
 import { getViewableThread } from "../lib/permissions";
 import { paginateServiceThreads } from "./lib/cliThreadsRepo";
 import { enrichServiceThreadSummaries, enrichThreadSummaries } from "../lib/threadSummaries";
@@ -16,7 +15,7 @@ import {
   type CliThreadSummary,
 } from "../lib/validators";
 import { getCliProfileById } from "../lib/cliProfilesRepo";
-import { getLatestActiveSessionForProfile } from "../lib/cliSessionsRepo";
+import { getOnlineSessionForProfile } from "../lib/cliSessionsRepo";
 import { listGroupRows, normalizeThreadId, paginateProjectThreads } from "./lib/cliThreadsRepo";
 import { isContainerThread, isThreadDone } from "../lib/watchStatus";
 
@@ -62,7 +61,7 @@ export const getSummary = query({
     }
 
     const profile = await getCliProfileById(ctx, thread.profileId);
-    const session = await getLatestActiveSessionForProfile(ctx, thread.profileId, Date.now() - ONLINE_THRESHOLD_MS);
+    const session = await getOnlineSessionForProfile(ctx, thread.profileId);
     return toThreadSummary(thread, profile, session);
   },
 });

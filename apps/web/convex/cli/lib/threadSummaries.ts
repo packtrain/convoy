@@ -3,8 +3,7 @@ import type { Doc } from "../../_generated/dataModel";
 import type { QueryCtx } from "../../_generated/server";
 import { join } from "../../lib/shared/join";
 import { getCliProfilesByIds } from "./cliProfilesRepo";
-import { getLatestActiveSessionsByProfiles } from "./cliSessionsRepo";
-import { ONLINE_THRESHOLD_MS } from "./constants";
+import { getOnlineSessionsByProfiles } from "./cliSessionsRepo";
 import { toContainerSummary, toThreadSummary, type CliThreadSummary } from "./validators";
 import { isContainerThread } from "./watchStatus";
 
@@ -21,16 +20,12 @@ import { isContainerThread } from "./watchStatus";
  * state once per distinct profile.
  *
  * Resolved **by profile** like the single read, so the two cannot disagree about
- * `targetOnline` — see `getLatestActiveSessionsByProfiles`. Containers skip both
+ * `targetOnline` — see `getOnlineSessionsByProfiles`. Containers skip both
  * lookups, so an all-container page reads nothing extra.
  */
 export async function enrichThreadSummaries(ctx: QueryCtx, threads: Doc<"cliThreads">[]): Promise<CliThreadSummary[]> {
   const targets = threads.filter((thread) => !isContainerThread(thread));
-  const sessionsByProfile = await getLatestActiveSessionsByProfiles(
-    ctx,
-    targets.map((thread) => thread.profileId),
-    Date.now() - ONLINE_THRESHOLD_MS
-  );
+  const sessionsByProfile = await getOnlineSessionsByProfiles(ctx, targets.map((thread) => thread.profileId));
 
   return join(threads)
     .on((thread) => (isContainerThread(thread) ? undefined : thread.profileId))

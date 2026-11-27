@@ -2,6 +2,7 @@ import { expect, test, describe, vi, beforeEach, afterEach } from "vitest";
 import { api, internal } from "../_generated/api";
 import { createTestContext } from "../../convex-testing";
 import type { Id } from "../_generated/dataModel";
+import { isSessionLive } from "./lib/cliSessionsRepo";
 
 describe("cliSessions", () => {
   beforeEach(() => {
@@ -103,7 +104,12 @@ describe("cliSessions", () => {
         expect(session?.apiKeyId).toBe(apiKeyResult.id);
         expect(session?.availableClis).toEqual([]);
         expect(session?.startedAt).toBeDefined();
-        expect(session?.lastHeartbeatAt).toBeDefined();
+        expect(session?.isOnline).toBe(true);
+        const heartbeat = await runCtx.db
+          .query("cliSessionHeartbeats")
+          .withIndex("by_sessionId", (q) => q.eq("sessionId", result.sessionId))
+          .unique();
+        expect(heartbeat?.lastHeartbeatAt).toBe(session?.startedAt);
 
         // Verify profile
         const profile = await runCtx.db.get("cliProfiles", result.profileId);
@@ -868,7 +874,7 @@ describe("cliSessions", () => {
   });
 
   describe("heartbeat", () => {
-    test("should update lastHeartbeatAt", async () => {
+    test("stamps the heartbeat row and leaves the session row alone (OS-2549)", async () => {
       const ctx = createTestContext();
       const { user, project, asUser, t } = await ctx.setupProject();
 
@@ -885,15 +891,8 @@ describe("cliSessions", () => {
         projectId: project._id,
         hostname: "my-laptop",
       });
+      const before = await t.run((runCtx) => runCtx.db.get("cliSessions", result.sessionId));
 
-      // Get initial heartbeat time
-      let initialHeartbeat: number | undefined;
-      await t.run(async (runCtx) => {
-        const session = await runCtx.db.get("cliSessions", result.sessionId);
-        initialHeartbeat = session?.lastHeartbeatAt;
-      });
-
-      // Advance time and send heartbeat
       await vi.advanceTimersByTimeAsync(30000);
 
       const success = await t.mutation(internal.cli.sessions.heartbeat, {
@@ -902,12 +901,33 @@ describe("cliSessions", () => {
       });
 
       expect(success).toBe(true);
-
-      // Verify heartbeat was updated
       await t.run(async (runCtx) => {
-        const session = await runCtx.db.get("cliSessions", result.sessionId);
-        expect(session?.lastHeartbeatAt).toBeGreaterThan(initialHeartbeat!);
+        // An unchanged session row is what keeps online-status subscriptions from re-running.
+        expect(await runCtx.db.get("cliSessions", result.sessionId)).toEqual(before);
+        const heartbeat = await runCtx.db
+          .query("cliSessionHeartbeats")
+          .withIndex("by_sessionId", (q) => q.eq("sessionId", result.sessionId))
+          .unique();
+        expect(heartbeat?.lastHeartbeatAt).toBe(Date.now());
       });
+    });
+
+    test("brings a legacy session without online state online", async () => {
+      const ctx = createTestContext();
+      const { user, project, asUser, t } = await ctx.setupProject();
+      const { id: apiKeyId } = await asUser.mutation(api.apiKeys.core.create, {
+        name: "CLI Key",
+        expiresAt: Date.now() + 30 * 24 * 60 * 60 * 1000,
+      });
+      const profile = await ctx.cliProfile(user._id, project._id);
+      const session = await ctx.cliSession(profile._id, apiKeyId, { isOnline: undefined, lastHeartbeatAt: Date.now() });
+
+      expect(await asUser.query(api.cli.sessions.listByProject, { projectId: project._id })).toHaveLength(0);
+
+      await t.mutation(internal.cli.sessions.heartbeat, { sessionId: session._id, userId: user._id });
+
+      const agents = await asUser.query(api.cli.sessions.listByProject, { projectId: project._id });
+      expect(agents.map((agent) => agent.isOnline)).toEqual([true]);
     });
 
     test("should reject heartbeat from wrong user", async () => {
@@ -1369,7 +1389,7 @@ describe("cliSessions", () => {
       expect(agents[0].profileKey).toBe("os-local");
     });
 
-    test("should mark session as offline after 60s", async () => {
+    test("drops a session once the sweep takes it offline", async () => {
       const ctx = createTestContext();
       const { user, project, asUser, t } = await ctx.setupProject();
 
@@ -1387,43 +1407,13 @@ describe("cliSessions", () => {
         hostname: "my-laptop",
       });
 
-      // Advance time past online threshold (60s)
+      // Silence alone changes nothing a query reads; the sweep does.
       await vi.advanceTimersByTimeAsync(61 * 1000);
+      expect(await asUser.query(api.cli.sessions.listByProject, { projectId: project._id })).toHaveLength(1);
 
-      const agents = await asUser.query(api.cli.sessions.listByProject, {
-        projectId: project._id,
-      });
+      await t.mutation(internal.cli.sessions.sweepOfflineSessions, {});
 
-      expect(agents).toHaveLength(1);
-      expect(agents[0].isOnline).toBe(false);
-    });
-
-    test("should hide session after 5 minutes", async () => {
-      const ctx = createTestContext();
-      const { user, project, asUser, t } = await ctx.setupProject();
-
-      const expiresAt = Date.now() + 30 * 24 * 60 * 60 * 1000;
-      const apiKeyResult = await asUser.mutation(api.apiKeys.core.create, {
-        name: "CLI Key",
-        expiresAt,
-      });
-
-      await t.mutation(internal.cli.sessions.register, {
-        instanceId: "list-hide-instance",
-        userId: user._id,
-        apiKeyId: apiKeyResult.id,
-        projectId: project._id,
-        hostname: "my-laptop",
-      });
-
-      // Advance time past visible threshold (5min)
-      await vi.advanceTimersByTimeAsync(5 * 60 * 1000 + 1000);
-
-      const agents = await asUser.query(api.cli.sessions.listByProject, {
-        projectId: project._id,
-      });
-
-      expect(agents).toHaveLength(0);
+      expect(await asUser.query(api.cli.sessions.listByProject, { projectId: project._id })).toHaveLength(0);
     });
 
     test("should not return another member's sessions (OS-2321)", async () => {
@@ -1727,12 +1717,8 @@ describe("cliSessions", () => {
         hostname: "my-laptop",
       });
 
-      // Make the first session "offline" by setting lastHeartbeatAt to old value
-      await t.run(async (runCtx) => {
-        await runCtx.db.patch("cliSessions", result1.sessionId, {
-          lastHeartbeatAt: Date.now() - 120 * 1000, // 2 minutes ago (beyond 60s threshold)
-        });
-      });
+      // The first CLI dies; the sweep has not flipped it yet, but its heartbeat is stale.
+      await vi.advanceTimersByTimeAsync(61 * 1000);
 
       // Second session should succeed (first is offline)
       const result2 = await t.mutation(internal.cli.sessions.register, {
@@ -1744,6 +1730,8 @@ describe("cliSessions", () => {
       });
 
       expect(result2.sessionId).not.toBe(result1.sessionId);
+      // The dead session is cleaned up rather than left online beside the new one.
+      expect(await t.run((runCtx) => runCtx.db.get("cliSessions", result1.sessionId))).toBeNull();
     });
 
     test("should kick multiple sessions when force=true", async () => {
@@ -1771,8 +1759,9 @@ describe("cliSessions", () => {
           projectId: project._id,
           availableClis: [],
           startedAt: Date.now(),
-          lastHeartbeatAt: Date.now(),
+          isOnline: true,
         });
+        await runCtx.db.insert("cliSessionHeartbeats", { sessionId: session1Id, lastHeartbeatAt: Date.now() });
         session2Id = await runCtx.db.insert("cliSessions", {
           profileId: profile._id,
           instanceId: "multi-kick-2",
@@ -1781,8 +1770,9 @@ describe("cliSessions", () => {
           projectId: project._id,
           availableClis: [],
           startedAt: Date.now(),
-          lastHeartbeatAt: Date.now(),
+          isOnline: true,
         });
+        await runCtx.db.insert("cliSessionHeartbeats", { sessionId: session2Id, lastHeartbeatAt: Date.now() });
       });
 
       // Third session with force=true should succeed
@@ -1805,5 +1795,106 @@ describe("cliSessions", () => {
         expect(oldSession2).toBeNull();
       });
     });
+  });
+
+  describe("sweepOfflineSessions (OS-2549)", () => {
+    async function setup() {
+      const ctx = createTestContext();
+      const { user, project, asUser, t } = await ctx.setupProject();
+      const { id: apiKeyId } = await asUser.mutation(api.apiKeys.core.create, {
+        name: "CLI Key",
+        expiresAt: Date.now() + 30 * 24 * 60 * 60 * 1000,
+      });
+      const { sessionId } = await t.mutation(internal.cli.sessions.register, {
+        instanceId: "sweep-instance",
+        userId: user._id,
+        apiKeyId,
+        projectId: project._id,
+        hostname: "my-laptop",
+      });
+      const listOnline = async () =>
+        (await asUser.query(api.cli.sessions.listByProject, { projectId: project._id })).map((agent) => agent.sessionId);
+      return { ctx, user, project, t, sessionId, listOnline };
+    }
+
+    test("leaves a session that keeps heartbeating online", async () => {
+      const { user, t, sessionId, listOnline } = await setup();
+
+      await vi.advanceTimersByTimeAsync(30_000);
+      await t.mutation(internal.cli.sessions.heartbeat, { sessionId, userId: user._id });
+      await vi.advanceTimersByTimeAsync(45_000);
+      await t.mutation(internal.cli.sessions.sweepOfflineSessions, {});
+
+      expect(await listOnline()).toEqual([sessionId]);
+    });
+
+    test("brings a swept session back online when it heartbeats again", async () => {
+      const { user, t, sessionId, listOnline } = await setup();
+
+      await vi.advanceTimersByTimeAsync(61_000);
+      await t.mutation(internal.cli.sessions.sweepOfflineSessions, {});
+      expect(await listOnline()).toEqual([]);
+      expect((await t.run((runCtx) => runCtx.db.get("cliSessions", sessionId)))?.offlineAt).toBe(Date.now());
+
+      expect(await t.mutation(internal.cli.sessions.heartbeat, { sessionId, userId: user._id })).toBe(true);
+
+      expect(await listOnline()).toEqual([sessionId]);
+      expect((await t.run((runCtx) => runCtx.db.get("cliSessions", sessionId)))?.offlineAt).toBeUndefined();
+    });
+
+    test("deletes a session offline longer than VISIBLE_THRESHOLD_MS and releases its claims", async () => {
+      const { ctx, user, project, t, sessionId } = await setup();
+      const session = await t.run((runCtx) => runCtx.db.get("cliSessions", sessionId));
+      const thread = await ctx.cliThread(user._id, project._id, session!.profileId, {
+        claimedBySessionId: sessionId,
+        claimedAt: Date.now(),
+        claimLeaseExpiresAt: Date.now() + 10 * 60_000,
+      });
+
+      await vi.advanceTimersByTimeAsync(61_000);
+      await t.mutation(internal.cli.sessions.sweepOfflineSessions, {});
+      await vi.advanceTimersByTimeAsync(5 * 60_000 - 1_000);
+      await t.mutation(internal.cli.sessions.sweepOfflineSessions, {});
+      expect(await t.run((runCtx) => runCtx.db.get("cliSessions", sessionId))).not.toBeNull();
+
+      await vi.advanceTimersByTimeAsync(2_000);
+      await t.mutation(internal.cli.sessions.sweepOfflineSessions, {});
+
+      await t.run(async (runCtx) => {
+        expect(await runCtx.db.get("cliSessions", sessionId)).toBeNull();
+        expect(await runCtx.db.query("cliSessionHeartbeats").collect()).toEqual([]);
+        expect((await runCtx.db.get("cliThreads", thread._id))?.claimedBySessionId).toBeUndefined();
+      });
+    });
+  });
+
+  test("migrateLegacySessionHeartbeats keeps fresh legacy sessions online and lets the sweep delete dead ones (OS-2549)", async () => {
+    const ctx = createTestContext();
+    const { user, project, asUser, t } = await ctx.setupProject();
+    const { id: apiKeyId } = await asUser.mutation(api.apiKeys.core.create, {
+      name: "CLI Key",
+      expiresAt: Date.now() + 30 * 24 * 60 * 60 * 1000,
+    });
+    const profile = await ctx.cliProfile(user._id, project._id);
+    const dead = await ctx.cliSession(profile._id, apiKeyId, { isOnline: undefined, lastHeartbeatAt: Date.now() - 60 * 60_000 });
+    // A live legacy CLI heartbeated after the deploy, before the migration reached its row.
+    const live = await ctx.cliSession(profile._id, apiKeyId, { isOnline: undefined, lastHeartbeatAt: Date.now() });
+    await t.mutation(internal.cli.sessions.heartbeat, { sessionId: live._id, userId: user._id });
+    // A live legacy CLI the migration reaches before its first post-deploy heartbeat.
+    const fresh = await ctx.cliSession(profile._id, apiKeyId, { isOnline: undefined, lastHeartbeatAt: Date.now() - 10_000 });
+
+    await t.mutation(internal.migrations.migrateLegacySessionHeartbeats, { reset: true });
+    await t.mutation(internal.cli.sessions.sweepOfflineSessions, {});
+
+    await t.run(async (runCtx) => {
+      expect(await runCtx.db.get("cliSessions", dead._id)).toBeNull();
+      const liveRow = await runCtx.db.get("cliSessions", live._id);
+      expect(liveRow?.isOnline).toBe(true);
+      expect(liveRow?.lastHeartbeatAt).toBeUndefined();
+      const freshRow = await runCtx.db.get("cliSessions", fresh._id);
+      expect(freshRow?.isOnline).toBe(true);
+      expect(freshRow?.lastHeartbeatAt).toBeUndefined();
+    });
+    expect(await t.run((runCtx) => isSessionLive(runCtx, fresh._id, Date.now()))).toBe(true);
   });
 });

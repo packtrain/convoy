@@ -73,11 +73,54 @@ These are strict — violating them corrupts thread state.
 ## Session management
 
 - **Registration** — `POST /api/agent/register` with API key auth
-- **Heartbeat** — every 30s via `POST /api/agent/heartbeat`; a session expires
-  after 60s of silence
+- **Heartbeat** — every 30s via `POST /api/agent/heartbeat`; see
+  [Online status](#online-status)
 - **Disconnect** — `POST /api/agent/disconnect` (handles SIGINT/SIGTERM)
-- **Conflict resolution** — one active session per profile; `force=true`
-  disconnects existing sessions
+- **Conflict resolution** — one live session per profile; `force=true`
+  disconnects existing sessions. Only a session that heartbeated within
+  `ONLINE_THRESHOLD_MS` conflicts; register disconnects an online session
+  with a stale heartbeat either way.
+
+### Online status
+
+OS-2549. A heartbeat must not re-run any subscription, so it never writes a
+`cliSessions` row.
+
+- **Heartbeat row.** The heartbeat stamps `cliSessionHeartbeats { sessionId,
+  lastHeartbeatAt }`. A row exists only while its session is online. Only
+  liveness code reads it: the stream watchdog (`streamingWatchdogTick`), the
+  register conflict check, and the offline sweep.
+- **Stored state.** `cliSessions.isOnline` changes only on connect, disconnect
+  and the sweep. Every web, CLI and MCP reader (`profiles.get`,
+  `profiles.listByProject`, `sessions.listByProject`, thread summaries,
+  `listPendingByThread`, workflow dispatch) reads it through the
+  `by_profile_and_isOnline` / `by_user_and_isOnline` indexes, never a
+  timestamp, so no query depends on `Date.now()`. `profiles.listByProject`
+  reads only the caller's own profiles' sessions.
+- **Offline sweep.** A cron runs `cli/sessions.sweepOfflineSessions` every
+  30 s. It takes heartbeat rows older than `ONLINE_THRESHOLD_MS` from
+  `by_lastHeartbeatAt`, sets their session `isOnline: false` with an
+  `offlineAt` stamp, and deletes the row. It then runs `disconnectSession` on
+  sessions offline longer than `VISIBLE_THRESHOLD_MS`, which deletes them and
+  releases their claims. An idle run reads nothing, and it never touches a
+  healthy heartbeat row. Each phase handles at most `OFFLINE_SWEEP_BATCH`
+  rows per tick.
+- **Coming back.** A swept session that heartbeats again (laptop woke up)
+  gets its row back and flips online without re-registering.
+- **Latency.** A killed CLI shows offline 60–90 s after its last heartbeat.
+  Drop the cron to 15 s if that needs to be tighter.
+- **Why a cron.** A per-session scheduled check is a self-rescheduling chain:
+  one thrown tick or dropped deploy leaves that session online forever, and
+  it needs a stored scheduled-function id deduped on every reconnect. The
+  cron costs about 86K calls a month however many CLIs are connected.
+- **Legacy rows.** Rows from before OS-2549 have no `isOnline`. Readers
+  treat them as offline until their CLI heartbeats. Liveness gates fall back
+  to their legacy `lastHeartbeatAt`, so the deploy does not fail a run whose
+  CLI has not heartbeated yet. The `migrateLegacySessionHeartbeats` migration
+  moves a fresh legacy heartbeat into `cliSessionHeartbeats` and marks the
+  session online. It marks stale ones offline, and the sweep deletes them.
+  `cliSessions.lastHeartbeatAt` is no longer written; drop it, and the
+  fallback, once the migration has run in prod.
 
 ## Profile-based configuration
 
@@ -149,7 +192,8 @@ Remember to bump `apps/cli/package.json` for any `apps/cli` change.
 
 | Table | Purpose |
 |---|---|
-| `cliSessions` | Active CLI connections (one per process, heartbeat-tracked) |
+| `cliSessions` | CLI connections (one per process) with stored online state |
+| `cliSessionHeartbeats` | The 30 s heartbeat, one row per online session; liveness code only |
 | `cliProfiles` | User+project identity with hostname, paths, git remote URLs |
 | `cliThreads` | Chat threads with queue flags, claim lease state, processing status |
 | `cliMessages` | User/assistant message envelopes and run processing markers |

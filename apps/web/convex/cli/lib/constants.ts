@@ -4,11 +4,14 @@ import { MAX_ATTACHMENT_SIZE, MAX_ATTACHMENT_SIZE_MB } from "../../lib/constants
  * Shared constants for CLI endpoints and sessions.
  */
 
-// Session is considered online if heartbeat within this threshold
+// The offline sweep flips a session offline after this long without a heartbeat (OS-2549).
 export const ONLINE_THRESHOLD_MS = 60 * 1000; // 60 seconds
 
-// Session is visible in list if heartbeat within this threshold
+// The offline sweep disconnects (deletes) a session offline this long.
 export const VISIBLE_THRESHOLD_MS = 5 * 60 * 1000; // 5 minutes
+
+// Rows the offline sweep handles per tick, per phase.
+export const OFFLINE_SWEEP_BATCH = 50;
 
 // Frequency for chat streaming watchdog checks
 export const STREAM_WATCHDOG_INTERVAL_MS = 2 * 60 * 1000; // 2 minutes

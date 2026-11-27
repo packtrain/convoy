@@ -2,6 +2,7 @@ import { expect, test, describe, vi } from "vitest";
 import { api, internal } from "../../_generated/api";
 import type { Id } from "../../_generated/dataModel";
 import { createTestContext, setupFakeTimers } from "../../../convex-testing";
+import { deleteSession } from "../lib/cliSessionsRepo";
 import { MAX_EXTERNAL_LINKS_PER_TASK } from "@/lib/tasks/external-links";
 
 setupFakeTimers();
@@ -874,6 +875,42 @@ describe("reportPullRequest (OS-1370)", () => {
 });
 
 describe("streamingWatchdogTick", () => {
+  test("keeps a run alive on a legacy session that has not heartbeated since the deploy (OS-2549)", async () => {
+    const ctx = createTestContext();
+    const { user, project, asUser, t } = await ctx.setupProject();
+    const profile = await ctx.cliProfile(user._id, project._id);
+    const apiKeyResult = await asUser.mutation(api.apiKeys.core.create, {
+      name: "CLI Key",
+      expiresAt: Date.now() + 30 * 24 * 60 * 60 * 1000,
+    });
+    // Pre-deploy shape: fresh legacy timestamp, no stored state, no heartbeat row.
+    const session = await ctx.cliSession(profile._id, apiKeyResult.id, { isOnline: undefined, lastHeartbeatAt: Date.now() });
+    const chat = await ctx.cliThread(user._id, project._id, profile._id, { hasPendingUserMessages: true, status: "pending" });
+    const userMessage = await ctx.cliMessage(chat._id, profile._id, { role: "user" });
+    await t.mutation(api.cli.threads.runControl.claimThread, {
+      threadId: chat._id,
+      sessionId: session._id,
+      leaseMs: 60_000,
+      apiKey: apiKeyResult.key,
+    });
+    const started = await t.mutation(api.cli.messages.startRunResponse, {
+      threadId: chat._id,
+      sessionId: session._id,
+      userMessageIds: [userMessage._id],
+      apiKey: apiKeyResult.key,
+    });
+
+    await vi.advanceTimersByTimeAsync(10_000);
+    await t.mutation(internal.cli.threads.runControl.streamingWatchdogTick, {
+      threadId: chat._id,
+      intervalMs: 120_000,
+      messageId: started.assistantMessageId,
+    });
+
+    const assistant = await t.run((runCtx) => runCtx.db.get("cliMessages", started.assistantMessageId));
+    expect(assistant?.status).toBe("streaming");
+  });
+
   test("reschedules watchdog when session is still online", async () => {
     const ctx = createTestContext();
     const { user, project, asUser, t } = await ctx.setupProject();
@@ -976,7 +1013,9 @@ describe("streamingWatchdogTick", () => {
     // Stale chain from an earlier run: the session is offline, but this tick
     // no longer owns the thread, so it must not fail the live run.
     await t.run(async (runCtx) => {
-      await runCtx.db.patch("cliSessions", session._id, { lastHeartbeatAt: 0 });
+      for (const heartbeat of await runCtx.db.query("cliSessionHeartbeats").collect()) {
+        await runCtx.db.patch("cliSessionHeartbeats", heartbeat._id, { lastHeartbeatAt: 0 });
+      }
     });
 
     const staleMessage = await ctx.cliMessage(chat._id, profile._id, {
@@ -1033,7 +1072,7 @@ describe("streamingWatchdogTick", () => {
     });
 
     await t.run(async (runCtx) => {
-      await runCtx.db.delete("cliSessions", session._id);
+      await deleteSession(runCtx, session._id);
     });
 
     await t.mutation(internal.cli.threads.runControl.streamingWatchdogTick, {

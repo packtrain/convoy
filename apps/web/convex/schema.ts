@@ -896,12 +896,27 @@ export default defineSchema({
     // on older sessions, where `supportsSteering` meant Claude Code only.
     steeringCliTypes: v.optional(v.array(v.string())),
     startedAt: v.number(),
+    // Changes only on connect, disconnect and the offline sweep, never on a heartbeat (OS-2549).
+    // Absent on legacy rows, which read as offline until their CLI heartbeats again.
+    isOnline: v.optional(v.boolean()),
+    // Stamped by the offline sweep; the sweep deletes the session VISIBLE_THRESHOLD_MS later.
+    offlineAt: v.optional(v.number()),
+    // Legacy, no longer written: heartbeats live in `cliSessionHeartbeats` (OS-2549).
+    lastHeartbeatAt: v.optional(v.number()),
+  })
+    .index("by_profile_and_isOnline", ["profileId", "isOnline"])
+    .index("by_user_and_isOnline", ["userId", "isOnline"])
+    .index("by_isOnline_and_offlineAt", ["isOnline", "offlineAt"])
+    .index("by_instanceId", ["instanceId"]),
+
+  // The 30 s CLI heartbeat, one row per online session (OS-2549). Only liveness code reads it,
+  // so a heartbeat re-runs no subscription. Spec: docs/architecture/cli-bridge.md#online-status.
+  cliSessionHeartbeats: defineTable({
+    sessionId: v.id("cliSessions"),
     lastHeartbeatAt: v.number(),
   })
-    .index("by_profile_lastHeartbeat", ["profileId", "lastHeartbeatAt"])
-    .index("by_project_and_lastHeartbeatAt", ["projectId", "lastHeartbeatAt"])
-    .index("by_user_and_lastHeartbeatAt", ["userId", "lastHeartbeatAt"])
-    .index("by_instanceId", ["instanceId"]),
+    .index("by_sessionId", ["sessionId"])
+    .index("by_lastHeartbeatAt", ["lastHeartbeatAt"]),
 
   // CLI Chats (conversations with CLIs)
   cliThreads: defineTable({

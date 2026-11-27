@@ -811,12 +811,10 @@ describe("cliProfiles", () => {
       await t.run(async (runCtx) => {
         const session = await runCtx.db
           .query("cliSessions")
-          .withIndex("by_profile_lastHeartbeat", (q) => q.eq("profileId", profile._id))
+          .withIndex("by_profile_and_isOnline", (q) => q.eq("profileId", profile._id))
           .first();
         if (session) {
-          await runCtx.db.patch("cliSessions", session._id, {
-            lastHeartbeatAt: Date.now() - 61_000,
-          });
+          await runCtx.db.patch("cliSessions", session._id, { isOnline: false, offlineAt: Date.now() });
         }
       });
 

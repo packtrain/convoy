@@ -12,7 +12,7 @@ export async function requireRuntimeCommandRunner(
   args: { profileId: Id<"cliProfiles">; cliType?: string; content: string; runtimeCommand?: boolean },
 ): Promise<void> {
   if (!args.runtimeCommand || (args.cliType !== "codex" && args.cliType !== "claude-code") || !/^\/usage(?:\s|$)/.test(args.content)) return;
-  await ensure(getOnlineSessionForProfile(ctx, args.profileId, Date.now())).notNull(errors.USAGE_RUNNER_OFFLINE);
+  await ensure(getOnlineSessionForProfile(ctx, args.profileId)).notNull(errors.USAGE_RUNNER_OFFLINE);
 }
 
 /** The PR a create, send, or attach names, parsed; unset stays unset. */

@@ -421,7 +421,9 @@ freshness** below for the rule that guarantees it.
 - Named "Connected CLIs", not "agents", because **Agent** means the
   organization-owned template (see `CONTEXT.md`).
 - It lists the caller's own online CLI sessions in the project
-  (`cli/sessions.listByProject`, filtered to `isOnline`), sorted by profile
+  (`cli/sessions.listByProject`, which returns only online sessions; see
+  [cli-bridge.md](../architecture/cli-bridge.md#online-status)). A row
+  shows no last-seen time: heartbeats are not readable there. Sorted by profile
   key, falling back to the name. Other members' CLIs are never listed
   (OS-2321); shared remote environments will be listed on purpose by OS-2245.
   Clicking a row toggles its checkouts, the same as the chevron (below); it
