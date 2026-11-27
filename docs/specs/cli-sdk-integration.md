@@ -146,7 +146,7 @@ Delta transport protocol (CLI → Convex):
 - Chunks arriving while a send is in flight accumulate in a CLI-side buffer and
   go out together in the next call (`chunks[]` batch).
 - Deferrable chunks (runtime-defined; Claude: `stream_event`) wait for a flush
-  window: ~250ms since last flush or ~16KB buffered. Whole messages, tool
+  window: ~500ms since last flush or ~16KB buffered. Whole messages, tool
   lifecycle, and result chunks flush immediately.
 - Redacted thinking progress is dropped in the Claude Code runner and never
   reaches Convex: `system`/`thinking_tokens` frames and `thinking_delta`s with

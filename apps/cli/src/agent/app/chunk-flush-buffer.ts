@@ -3,7 +3,7 @@ import type { ChunkStreamPolicy, ContentChunk } from "../runtimes/contracts.js";
 import { scrubOversizedChunk } from "./chunk-scrub.js";
 import { redactAuth } from "../../lib/config/convex-client.js";
 
-const DEFAULT_FLUSH_INTERVAL_MS = 250;
+const DEFAULT_FLUSH_INTERVAL_MS = 500;
 const DEFAULT_MAX_BUFFER_BYTES = 16 * 1024;
 
 /**

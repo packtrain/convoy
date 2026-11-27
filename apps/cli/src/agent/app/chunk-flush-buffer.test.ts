@@ -83,10 +83,27 @@ describe("chunk-flush-buffer", () => {
     expect(strip(sent)).toEqual([[{ type: "delta", data: "aaaabb" }]]);
   });
 
+  test("the default flush window is 500 ms (OS-2581)", async () => {
+    const sent: StampedContentChunk[][] = [];
+    const buffer = createChunkFlushBuffer({
+      policy: testPolicy,
+      send: async (chunks) => {
+        sent.push(chunks);
+      },
+    });
+
+    buffer.enqueue({ type: "delta", data: "aaa" });
+    await vi.advanceTimersByTimeAsync(499);
+    expect(sent).toHaveLength(0);
+    await vi.advanceTimersByTimeAsync(1);
+    expect(strip(sent)).toEqual([[{ type: "delta", data: "aaa" }]]);
+  });
+
   test("non-mergeable deltas stay separate chunks in one batch", async () => {
     const sent: StampedContentChunk[][] = [];
     const buffer = createChunkFlushBuffer({
       policy: testPolicy,
+      flushIntervalMs: 250,
       send: async (chunks) => {
         sent.push(chunks);
       },
@@ -524,6 +541,7 @@ describe("chunk-flush-buffer", () => {
       const buffer = createChunkFlushBuffer({
         policy,
         secrets: [secret],
+        flushIntervalMs: 250,
         // The Convex client redacts each batch; see convex-client.ts.
         send: async (chunks) => {
           sent.push(redactSecrets(chunks, [secret]));
