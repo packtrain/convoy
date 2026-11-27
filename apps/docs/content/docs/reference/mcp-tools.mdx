@@ -901,7 +901,8 @@ session reported), `availableClis` (`{ type, version, provider?, cliModels? }` â
 values that runtime accepts on that machine, each with its valid `cliEffort`
 values; omit either to use the runtime's own defaults), and `paths` (`{ pathId, path, label, gitRemoteUrl?, kind?,
 parentPathId?, branch? }`, where `kind: "worktree"` marks a worktree
-rather than a repo checkout).
+rather than a repo checkout, and `kind: "repo"` marks a git repo inside a
+project folder; start a thread on its `parentPathId`, not on the repo).
 
 API keys are personal, so this returns only profiles you own. An offline
 profile is still a usable target â€” work queued against it starts once

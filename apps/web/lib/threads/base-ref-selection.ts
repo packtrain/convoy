@@ -1,3 +1,4 @@
+import type { CliProfilePathEntry } from "@/convex/lib/contracts/validators";
 import { isRecord } from "@/lib/type-guards";
 import {
   deriveTaskWorktreeBranchName,
@@ -27,7 +28,7 @@ export interface BaseRefPathEntry {
   path: string;
   label: string;
   gitRemoteUrl?: string;
-  kind?: "worktree";
+  kind?: CliProfilePathEntry["kind"];
   parentPathId?: string;
   branch?: string;
 }

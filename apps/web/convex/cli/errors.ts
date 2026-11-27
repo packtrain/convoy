@@ -76,6 +76,7 @@ export const errors = {
   titleTooLong: (max: number) => `Title must be ${max} characters or less`,
   THREAD_PROFILE_NOT_OWNED: "Cannot create chat for another user's profile",
   PATH_NOT_FOUND_IN_PROFILE: "Path not found in profile",
+  PATH_IS_DETECTED_REPO: "That path is a git repository inside a project folder. Start the thread on its parentPathId",
   THREAD_CLAIM_PROFILE_MISMATCH: "Session cannot claim threads for a different profile",
   batchTooLarge: (max: number) => `Batch actions are limited to ${max} threads`,
   batchFanOutTooLarge: (max: number) =>

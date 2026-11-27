@@ -1,5 +1,6 @@
 "use client";
 
+import { isConfiguredPath, type CliProfilePathEntry } from "@/convex/lib/contracts/validators";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { useMutation } from "convex/react";
 import { createPortal } from "react-dom";
@@ -26,6 +27,7 @@ import { toProfileDetails } from "@/components/blocks/cli/profiles/profile-detai
 import { cn } from "@/lib/utils";
 import type { Id } from "@/convex/_generated/dataModel";
 import type { AvailableCliInfo } from "@/lib/threads/types";
+import { RepoCount } from "@/components/blocks/cli/profiles/repo-count";
 
 export type WorkingDirectorySelectorProfile = {
   _id: Id<"cliProfiles">;
@@ -43,7 +45,7 @@ export type WorkingDirectorySelectorProfile = {
     path: string;
     label: string;
     gitRemoteUrl?: string;
-    kind?: "worktree";
+    kind?: CliProfilePathEntry["kind"];
     parentPathId?: string;
     branch?: string;
   }>;
@@ -332,10 +334,10 @@ export function WorkingDirectorySelector({
                   </span>
                 }
               >
-                {/* Worktree entries are selected via the base-ref selector,
-                    not as working directories. */}
+                {/* Worktrees are selected via the base-ref selector; detected
+                    repos run in their folder, shown as its repo count. */}
                 {profile.paths
-                  .filter((path) => path.kind !== "worktree")
+                  .filter(isConfiguredPath)
                   .map((path) => (
                     <ModelSelectorDropdownItem
                       key={path.id}
@@ -346,7 +348,10 @@ export function WorkingDirectorySelector({
                       <ModelSelectorDropdownName>
                         <span className="flex flex-col gap-0.5">
                           <span>{path.label}</span>
-                          <span className="text-[10px] text-muted-foreground/60">{truncatePath(path.path)}</span>
+                          <span className="flex gap-2 text-[10px] text-muted-foreground/60">
+                            <span className="truncate">{truncatePath(path.path)}</span>
+                            <RepoCount paths={profile.paths} parentId={path.id} />
+                          </span>
                         </span>
                       </ModelSelectorDropdownName>
                     </ModelSelectorDropdownItem>

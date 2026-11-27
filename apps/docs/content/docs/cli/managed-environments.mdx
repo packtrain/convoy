@@ -119,8 +119,11 @@ environment does not mount or change ownership of your host checkout.
 
 In a shared environment, the project folder must sit under `/workspace` or under
 a mounted folder, for example `~/code/app` with `~/code` mounted. A relative path
-lands in `/workspace`. Convoy refuses a mount root itself, because the project's
-worktrees go beside it in `<repo>-worktrees` and must stay inside the mount.
+lands in `/workspace`. Convoy refuses a mount root that is a git repo, because the
+project's worktrees go beside it in `<repo>-worktrees` and must stay inside the
+mount. A mount root that holds several repos, such as `~/code/acme` with
+`old-app` and `new-app` in it, is accepted: Convoy lists the repos it finds, and
+each repo's worktrees stay inside the mount.
 
 For explicit creation, use the same flags as the direct project command:
 

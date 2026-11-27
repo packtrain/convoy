@@ -379,6 +379,10 @@ _Avoid_: Delegate (that is task delegation to an agent), fork, transfer
 A git worktree requested when a CLI thread is created and created by the CLI on first claim, which then repoints the thread's Working path at it.
 _Avoid_: Branch, checkout
 
+**Detected repo**:
+A git repo the CLI found inside a project folder that isn't a repo itself, e.g. `acme/new-app`. It is reported as a path entry of that folder; threads still run in the folder.
+_Avoid_: Sub-repo, child project
+
 **Execution branch**:
 The branch actually checked out when the thread's last Thread run started. Absent for detached HEAD, non-Git paths, and threads that never ran.
 _Avoid_: Worktree branch, target branch

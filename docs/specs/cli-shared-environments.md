@@ -457,11 +457,14 @@ reused and a clone target must be missing or empty, as in
 [Registration](#registration). An environment without mounts keeps every
 project in the `/workspace` volume. Adding a project never needs a rebuild.
 
-A project folder that is itself a mount root is refused, with a message to
-mount its parent. Worktrees sit beside the repo in `<repo>-worktrees`
-([worktrees](cli-worktrees.md)). With a parent mounted they are inside the
-mount and visible on the host. With only the repo mounted they would fall
-outside every mount and volume, and a rebuild would delete them.
+A mount root is refused as a project folder when it is a git repo, or would
+become one through `--clone`. The message says to mount its parent. Worktrees
+sit beside the repo in `<repo>-worktrees` ([worktrees](cli-worktrees.md)).
+With a parent mounted they are inside the mount and visible on the host. With
+only the repo mounted they would fall outside every mount and volume, and a
+rebuild would delete them. A mount root that isn't a repo is accepted as a
+[multi-repo folder](cli-multi-repo-projects.md): its repos' worktrees go to
+`<mount>/<repo>-worktrees/`, inside the mount.
 
 ### Git
 

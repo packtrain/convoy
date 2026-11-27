@@ -2,6 +2,7 @@ import type { Doc, Id } from "../../_generated/dataModel";
 import type { MutationCtx, QueryCtx } from "../../_generated/server";
 import { sameStoredValue } from "../../lib/shared/patch";
 import { getBasename } from "./paths";
+import { isConfiguredPath } from "../../lib/contracts/validators";
 
 type Ctx = QueryCtx | MutationCtx;
 
@@ -195,15 +196,14 @@ export function buildInitialProfilePaths(incomingPaths: IncomingPath[]): Profile
 /**
  * Merge incoming paths into an existing set, keeping stable ids/labels for paths
  * already known and minting fresh entries for new ones. Only regular paths in
- * the incoming list survive (paths not reported are dropped). Worktree entries
- * are managed by the worktree sync, not by the CLI's configured-path list, so
- * they are carried over as long as their parent path survives.
+ * the incoming list survive (paths not reported are dropped). Worktree and repo
+ * entries have their own syncs, so they are carried over while their parent survives.
  */
 export function mergeProfilePaths(existingPaths: ProfilePathEntry[], incomingPaths: IncomingPath[]): ProfilePathEntry[] {
   const existingByPath = new Map(existingPaths.map((p) => [p.path, p]));
   const mergedRegular = incomingPaths.map((incoming) => {
     const existing = existingByPath.get(incoming.path);
-    if (!existing || existing.kind === "worktree") {
+    if (!existing || !isConfiguredPath(existing)) {
       return newProfilePathEntry(incoming);
     }
     return {
@@ -216,17 +216,68 @@ export function mergeProfilePaths(existingPaths: ProfilePathEntry[], incomingPat
 
   const survivingParentIds = new Set(mergedRegular.map((entry) => entry.id));
   const regularPathStrings = new Set(mergedRegular.map((entry) => entry.path));
-  const keptWorktrees = existingPaths.filter(
+  const keptChildren = existingPaths.filter(
     (entry) =>
-      entry.kind === "worktree" &&
+      !isConfiguredPath(entry) &&
       entry.parentPathId !== undefined &&
       survivingParentIds.has(entry.parentPathId) &&
       // A path promoted to a regular configured entry wins over its old
-      // worktree entry.
+      // worktree or repo entry.
       !regularPathStrings.has(entry.path)
   );
 
-  return [...mergedRegular, ...keptWorktrees];
+  return [...mergedRegular, ...keptChildren];
+}
+
+export type IncomingRepo = { path: string; relativePath: string; gitRemoteUrl?: string; branch?: string };
+
+/** A `/`-separated path strictly inside the folder. */
+function isInsideRelativePath(relativePath: string): boolean {
+  return relativePath !== "" && relativePath !== "." && !relativePath.startsWith("/") && !relativePath.includes("\\")
+    && !/^[A-Za-z]:/.test(relativePath) && !relativePath.split("/").includes("..");
+}
+
+/**
+ * Replace the repo entries of the configured path at `parentPath` with the CLI's
+ * latest scan, ids stable by path. An unknown parent is a no-op. Output order is
+ * configured paths, repos by folder, worktrees, as `mergeWorktreeEntries` keeps
+ * it, so a repeated scan writes nothing. Spec: docs/specs/cli-multi-repo-projects.md#server
+ */
+export function mergeRepoEntries(
+  existingPaths: ProfilePathEntry[],
+  input: { parentPath: string; repos: IncomingRepo[] }
+): ProfilePathEntry[] {
+  const parent = existingPaths.find((entry) => isConfiguredPath(entry) && entry.path === input.parentPath);
+  if (!parent) {
+    return existingPaths;
+  }
+  const isOwnRepo = (entry: ProfilePathEntry) => entry.kind === "repo" && entry.parentPathId === parent.id;
+  const existingByPath = new Map(existingPaths.filter(isOwnRepo).map((entry) => [entry.path, entry]));
+  // Never shadow another entry (a configured path or worktree at the same path).
+  const takenPaths = new Set(existingPaths.filter((entry) => !isOwnRepo(entry)).map((entry) => entry.path));
+
+  const repos: ProfilePathEntry[] = [];
+  for (const repo of input.repos) {
+    if (!isInsideRelativePath(repo.relativePath) || takenPaths.has(repo.path)) {
+      continue;
+    }
+    takenPaths.add(repo.path);
+    repos.push({
+      id: existingByPath.get(repo.path)?.id ?? crypto.randomUUID(),
+      path: repo.path,
+      label: repo.relativePath,
+      gitRemoteUrl: repo.gitRemoteUrl,
+      kind: "repo",
+      parentPathId: parent.id,
+      branch: repo.branch,
+    });
+  }
+
+  // Repos grouped by their folder in configured order, so the order never depends on which folder synced last.
+  const configured = existingPaths.filter(isConfiguredPath);
+  const reposOf = (folder: ProfilePathEntry) =>
+    folder.id === parent.id ? repos : existingPaths.filter((entry) => entry.kind === "repo" && entry.parentPathId === folder.id);
+  return [...configured, ...configured.flatMap(reposOf), ...existingPaths.filter(isWorktreeEntry)];
 }
 
 /**
@@ -296,9 +347,11 @@ export function mergeWorktreeEntries(
   existingPaths: ProfilePathEntry[],
   input: { scannedParentPaths: string[]; worktrees: IncomingWorktree[] }
 ): ProfilePathEntry[] {
+  // Repo entries pass through; only configured paths are worktree parents in slice 0.
   const regularPaths = existingPaths.filter((entry) => !isWorktreeEntry(entry));
-  const parentByPath = new Map(regularPaths.map((entry) => [entry.path, entry]));
-  const regularIds = new Set(regularPaths.map((entry) => entry.id));
+  const parents = existingPaths.filter(isConfiguredPath);
+  const parentByPath = new Map(parents.map((entry) => [entry.path, entry]));
+  const regularIds = new Set(parents.map((entry) => entry.id));
   const regularPathStrings = new Set(regularPaths.map((entry) => entry.path));
 
   const scannedParentIds = new Set(
@@ -354,7 +407,7 @@ export function upsertWorktreePathEntry(
     return { paths: existingPaths, entryId: existing.id };
   }
 
-  const parent = existingPaths.find((entry) => entry.id === input.parentPathId && !isWorktreeEntry(entry));
+  const parent = existingPaths.find((entry) => entry.id === input.parentPathId && isConfiguredPath(entry));
   const entry: ProfilePathEntry = {
     id: crypto.randomUUID(),
     path: input.path,

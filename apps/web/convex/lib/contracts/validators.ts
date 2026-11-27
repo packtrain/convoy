@@ -957,13 +957,22 @@ export type CliInteractionKind = Infer<typeof cliInteractionKindValidator>;
 export const cliInteractionStatusValidator = v.union(v.literal("pending"), v.literal("answered"), v.literal("cancelled"));
 export type CliInteractionStatus = Infer<typeof cliInteractionStatusValidator>;
 
-// A profile path entry as returned to clients (regular path or synced worktree)
+// Absent = a configured path; "repo" = a git repo inside one (docs/specs/cli-multi-repo-projects.md).
+export const cliProfilePathKindValidator = v.union(v.literal("worktree"), v.literal("repo"));
+export type CliProfilePathKind = Infer<typeof cliProfilePathKindValidator>;
+
+/** A path the user configured: not a synced worktree, not a detected repo. */
+export function isConfiguredPath(entry: { kind?: CliProfilePathKind }): boolean {
+  return entry.kind === undefined;
+}
+
+// A profile path entry as returned to clients (regular path, synced worktree or detected repo)
 export const cliProfilePathEntryValidator = v.object({
   id: v.string(),
   path: v.string(),
   label: v.string(),
   gitRemoteUrl: v.optional(v.string()),
-  kind: v.optional(v.literal("worktree")),
+  kind: v.optional(cliProfilePathKindValidator),
   parentPathId: v.optional(v.string()),
   branch: v.optional(v.string()),
 });

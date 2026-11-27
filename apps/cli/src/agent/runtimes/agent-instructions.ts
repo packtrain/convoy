@@ -62,6 +62,16 @@ export function withRunAttachmentInstructions(
     " For a chart or table page, attach an .html file with --inline and follow the Convoy skill's inline HTML guide." +
     " To report a check, add --check <key> and one of --passed, --warning, --failed or --not-performed (the last three need --note <why>), plus --value <answer> or --artifact <artifactId> when the check asks for one;" +
     ` \`convoy threads checks ${ids.threadId}\` lists the checks.`;
+  return withPromptLine(execution, line);
+}
+
+/** A multi-repo folder's repos, by relative path. Spec: docs/specs/cli-multi-repo-projects.md#agent-context */
+export function repositoryContextInstruction(relativePaths: string[]): string {
+  return `This folder contains git repositories: ${relativePaths.join(", ")}.`;
+}
+
+/** Append one line to a run's prompt, on every runtime's input format. */
+export function withPromptLine(execution: PreparedRuntimeExecution, line: string): PreparedRuntimeExecution {
   // Claude's stream-json input replaces the text prompt, so the line rides in its last frame too.
   // Other bootstrap input (Antigravity's image blocks) goes alongside the text prompt and stays as is.
   const frames = execution.inputFormat === "stream-json"

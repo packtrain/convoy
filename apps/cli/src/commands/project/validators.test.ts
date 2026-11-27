@@ -32,8 +32,11 @@ describe("shared Docker project paths (OS-2251)", () => {
   it.each(["/workspace/app", "/workspace/a/b", "/Users/me/code/app"])("accepts %s", target => {
     expect(() => assertManagedPath(target, mounts)).not.toThrow();
   });
-  it("refuses a mount root and says to mount its parent", () => {
-    expect(() => assertManagedPath("/Users/me/code", mounts)).toThrow(/Mount its parent/);
+  it("accepts a mount root that is not a git repo, as a multi-repo folder (OS-2521)", () => {
+    expect(() => assertManagedPath("/Users/me/code", mounts)).not.toThrow();
+  });
+  it("refuses a mount root that is or will be a git repo and says to mount its parent", () => {
+    expect(() => assertManagedPath("/Users/me/code", mounts, true)).toThrow(/Mount its parent/);
   });
   it.each(["/workspace", "/home/node/app", "/Users/me/other", "/Users/me/codex"])("refuses %s, which a rebuild would delete", target => {
     expect(() => assertManagedPath(target, mounts)).toThrow(/under \/workspace or a mounted folder/);

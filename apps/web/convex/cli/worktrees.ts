@@ -1,3 +1,4 @@
+import { isConfiguredPath } from "../lib/contracts/validators";
 import { mutation, query } from "../_generated/server";
 import { ConvexError, v } from "convex/values";
 import { getAuthenticatedAccess } from "../lib/access/auth";
@@ -49,7 +50,7 @@ export const resolveExecutionWorkspace = mutation({
     const worktree = await ensure(workspace.worktree).notNull(errors.WORKTREE_SPEC_MISSING);
     ensure(worktree.status).eq("created", errors.WORKTREE_SPEC_MISSING);
     const parent = await ensure(
-      profile.paths.find((path) => path.id === worktree.parentPathId && path.kind !== "worktree")
+      profile.paths.find((path) => path.id === worktree.parentPathId && isConfiguredPath(path))
     ).notNull(errors.WORKSPACE_PARENT_MISSING);
     ensure(worktree.parentPath).eq(parent.path, errors.WORKSPACE_REPOSITORY_CHANGED);
     if (worktree.repositoryId) {
@@ -111,7 +112,7 @@ export const moveThread = mutation({
       ensure(args.repositoryId).eq(current.repositoryId, errors.WORKSPACE_REPOSITORY_CHANGED);
     }
     const parent = await ensure(
-      profile.paths.find((path) => path.id === (current?.parentPathId ?? thread.pathId) && path.kind !== "worktree")
+      profile.paths.find((path) => path.id === (current?.parentPathId ?? thread.pathId) && isConfiguredPath(path))
     ).notNull(errors.WORKSPACE_PARENT_MISSING);
     const target = upsertWorktreePathEntry(profile.paths, { parentPathId: parent.id, path: args.path, branch: args.branch });
     ensure(target.paths.find((path) => path.id === target.entryId))

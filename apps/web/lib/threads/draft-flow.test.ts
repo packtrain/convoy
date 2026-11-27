@@ -100,3 +100,19 @@ describe("resolveNewThreadDraftState Codex on AWS (OS-2105)", () => {
     expect(resolve(undefined, "default", { codex: "gpt-6-luna" })).toBe("default");
   });
 });
+
+describe("resolveNewThreadDraftState detected repos (OS-2521)", () => {
+  test("a draft on a repo entry falls back to the profile's folder", () => {
+    const state = resolveNewThreadDraftState({
+      profiles: [{ _id: "profile-1", isOnline: true, availableClis: [{ type: "codex", version: "0.156.1" }],
+        paths: [{ id: "top" }, { id: "repo", kind: "repo", parentPathId: "top" }] }],
+      draft: { text: "", cliType: "codex", profileId: "profile-1", pathId: "repo" } as never,
+      preselection: null,
+      fallbackCliType: "codex",
+      fallbackProfileId: "profile-1",
+      fallbackPathId: "top",
+      rememberedCliModels: {},
+    });
+    expect(state.pathId).toBe("top");
+  });
+});

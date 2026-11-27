@@ -107,6 +107,7 @@ export const start = mutation({
     ensure(profile.userId).eq(user._id, cliErrors.THREAD_PROFILE_NOT_OWNED);
     ensure(profile.projectId).eq(workflow.projectId, errors.WORKFLOW_RUN_PROFILE_DIFFERENT_PROJECT);
     const pathEntry = await ensure(profile.paths.find((p) => p.id === args.pathId)).notNull(cliErrors.PATH_NOT_FOUND_IN_PROFILE);
+    ensure(pathEntry.kind).notEq("repo", cliErrors.PATH_IS_DETECTED_REPO);
     if (args.worktree) {
       ensure(args.worktree.parentPathId).eq(args.pathId, cliErrors.WORKTREE_PARENT_PATH_MISMATCH);
       ensure(pathEntry.kind).notEq("worktree", cliErrors.WORKTREE_PARENT_NOT_REPO_PATH);

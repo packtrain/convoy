@@ -3,13 +3,14 @@
 import { useState, type ReactNode } from "react";
 import { ChevronRight, GitBranch, Laptop, Loader2, Trash2 } from "lucide-react";
 import type { Id } from "@/convex/_generated/dataModel";
-import type { CliProfilePathEntry } from "@/convex/lib/contracts/validators";
+import { isConfiguredPath, type CliProfilePathEntry } from "@/convex/lib/contracts/validators";
 import { Button } from "@/components/ui/button";
 import { truncateRepoPath } from "@/components/blocks/project/agent-list-item";
 import { AppLink, appRoute, href, parseWorktreeChangesTarget, useNavigation } from "@/lib/navigation";
 import { readExpandedProfileIds, writeExpandedProfileIds } from "@/lib/worktrees/storage";
 import { useWorktreeRemoval } from "@/lib/worktrees/hooks/use-worktree-removal";
 import { cn } from "@/lib/utils";
+import { RepoCount } from "@/components/blocks/cli/profiles/repo-count";
 import { RemoveWorktreeDialog } from "./worktree-remove-dialog";
 
 interface WorktreeListProps {
@@ -127,7 +128,8 @@ function CheckoutRows({
   // Alphabetical (OS-2038): checkouts by label, worktrees by branch.
   const byName = (a: CliProfilePathEntry, b: CliProfilePathEntry) =>
     (a.kind === "worktree" ? (a.branch ?? a.label) : a.label).localeCompare(b.kind === "worktree" ? (b.branch ?? b.label) : b.label);
-  const checkouts = paths.filter((entry) => entry.kind !== "worktree").sort(byName);
+  // Detected repos show as a count on their folder's row (cli-multi-repo-projects.md#web).
+  const checkouts = paths.filter(isConfiguredPath).sort(byName);
   const worktreesOf = (parentId: string) =>
     paths.filter((entry) => entry.kind === "worktree" && entry.parentPathId === parentId).sort(byName);
   const orphans = paths
@@ -170,6 +172,7 @@ function CheckoutRows({
           )}
           <span className="truncate">{name}</span>
           <span className="truncate text-xs font-normal text-muted-foreground/70">{truncateRepoPath(entry.path)}</span>
+          <RepoCount paths={paths} parentId={entry.id} className="ml-auto text-xs font-normal" />
         </AppLink>
         {removable && (
           <Button

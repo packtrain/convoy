@@ -15,7 +15,7 @@ import {
 } from "../runtimes/contracts.js";
 import { createScriptRunner } from "./script-runner.js";
 import { prepareWorktree, unapprovedWorktreeSetupMessage, unapprovedWorktreeSetupNotice } from "./worktree-setup.js";
-import { withRunAttachmentInstructions } from "../runtimes/agent-instructions.js";
+import { repositoryContextInstruction, withPromptLine, withRunAttachmentInstructions } from "../runtimes/agent-instructions.js";
 import type { InteractionRouter } from "./interaction-router.js";
 import { getDebugLevel } from "../runtimes/debug.js";
 import { getChunkStreamPolicy, isInlineImageAttachment, normalizeCliRuntimeModel, prepareRunExecution, signalsVcsStateChange } from "../runtimes/registry.js";
@@ -59,6 +59,8 @@ export interface MessageHandlerOptions {
   attachmentCacheGcIntervalMs?: number;
   maxConcurrentChats?: number;
   interactionRouter?: InteractionRouter;
+  /** The working directory's repos by relative path, [] unless it is a multi-repo folder; syncs them in the background. */
+  syncRepos?: (folder: string) => Promise<string[]>;
   /** One per script run (OS-1886), so abort stays scoped to its chat; defaults to the real `bash -c` runner. */
   createScriptRunner?: () => CliRuntimeRunner;
 }
@@ -472,7 +474,7 @@ export function createMessageHandler(
         }
 
         emitConnectEvent({ event: "thread", phase: "streaming", threadId: chat._id as string, runId: started.runId });
-        const runExecution = isPlainRun
+        let runExecution = isPlainRun
           ? withRunAttachmentInstructions(runtimeExecution, {
               threadId: chat._id as string,
               messageId: started.assistantMessageId as string,
@@ -701,6 +703,13 @@ export function createMessageHandler(
             createdWorktreeThisRun ? undefined : workspace,
           ));
           let checkpointCaptured = await captureRunBaseline(workingDirectory, checkpointRunId);
+          if (isPlainRun) {
+            const repos = await options.syncRepos?.(workingDirectory).catch((error: unknown) => {
+              console.warn(chalk.yellow(`[Repos] chat ${shortId} scan failed: ${error instanceof Error ? error.message : String(error)}`));
+              return [];
+            }) ?? [];
+            if (repos.length > 0) runExecution = withPromptLine(runExecution, repositoryContextInstruction(repos));
+          }
 
           const interactionRouter = options.interactionRouter;
           const interactionCreates = new Map<string, Promise<unknown>>();

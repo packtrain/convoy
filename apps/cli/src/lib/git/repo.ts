@@ -1,6 +1,6 @@
 import { randomUUID } from "node:crypto";
-import { link, readFile, rm, writeFile } from "node:fs/promises";
-import { join } from "node:path";
+import { link, readdir, readFile, rm, stat, writeFile } from "node:fs/promises";
+import { join, relative, sep } from "node:path";
 import { runGit } from "./exec.js";
 
 /** Persistent local identity survives moves and remounts. Spec: cli-worktrees.md. */
@@ -138,4 +138,96 @@ export async function listBranchRefs(dir: string): Promise<BranchRef[]> {
     });
   }
   return refs;
+}
+
+export interface DiscoveredRepo {
+  path: string;
+  /** "." when the folder is the repo itself; `/`-separated. */
+  relativePath: string;
+  gitRemoteUrl?: string;
+  branch?: string;
+}
+
+const MAX_DISCOVERED_REPOS = 128;
+const DISCOVERY_CONCURRENCY = 8;
+
+/**
+ * The git repos in a project folder, with remote and branch. Throws when the
+ * folder or a folder below it can't be read. Spec: docs/specs/cli-multi-repo-projects.md#discovery
+ */
+export async function discoverRepositories(folder: string): Promise<DiscoveredRepo[]> {
+  return describeRepositories(folder, await listRepositoryPaths(folder));
+}
+
+/** Remote and branch for repo paths `listRepositoryPaths` found (two git calls each). */
+export function describeRepositories(folder: string, paths: string[]): Promise<DiscoveredRepo[]> {
+  return mapLimited(paths, (repo) => describeRepo(folder, repo));
+}
+
+/** Repo paths only, from `stat`/`readdir` (no git): the folder itself if it is one, else its children and grandchildren. */
+export async function listRepositoryPaths(folder: string): Promise<string[]> {
+  await stat(folder);
+  if ((await gitEntryKind(folder)) !== null) return [folder];
+  const children = await childFolders(folder);
+  const childKinds = await mapLimited(children, gitEntryKind);
+  const plain = children.filter((_, i) => childKinds[i] === null);
+  const grandchildren = (await mapLimited(plain, childFolders)).flat();
+  const grandchildKinds = await mapLimited(grandchildren, gitEntryKind);
+  // ponytail: two levels only, as t3code; deeper layouts register a subfolder instead.
+  return [
+    ...children.filter((_, i) => childKinds[i] === "directory"),
+    ...grandchildren.filter((_, i) => grandchildKinds[i] === "directory"),
+  ].sort().slice(0, MAX_DISCOVERED_REPOS);
+}
+
+/** `/`-separated path of a repo inside the folder; "." for the folder itself. */
+export function repoRelativePath(folder: string, repo: string): string {
+  return relative(folder, repo).split(sep).join("/") || ".";
+}
+
+async function describeRepo(folder: string, repo: string): Promise<DiscoveredRepo> {
+  const [remote, branch] = await Promise.all([getGitRemoteUrl(repo), getCurrentBranch(repo)]);
+  const gitRemoteUrl = remote ? withoutCredentials(remote) : undefined;
+  return { path: repo, relativePath: repoRelativePath(folder, repo), ...(gitRemoteUrl ? { gitRemoteUrl } : {}), ...(branch ? { branch } : {}) };
+}
+
+/** A URL remote's user and token never leave the machine. */
+function withoutCredentials(remote: string): string {
+  try {
+    const url = new URL(remote);
+    if (!url.username && !url.password) return remote;
+    url.username = ""; url.password = "";
+    return url.href;
+  } catch {
+    return remote; // scp-style `git@host:path` has no secret
+  }
+}
+
+/** A `.git` directory is a repo; a `.git` file is a linked worktree or submodule. Other stat errors throw. */
+async function gitEntryKind(folder: string): Promise<"directory" | "file" | null> {
+  try {
+    return (await stat(join(folder, ".git"))).isDirectory() ? "directory" : "file";
+  } catch (error) {
+    if ((error as NodeJS.ErrnoException).code === "ENOENT") return null;
+    throw error;
+  }
+}
+
+async function childFolders(folder: string): Promise<string[]> {
+  const entries = await readdir(folder, { withFileTypes: true });
+  return entries
+    .filter((entry) => entry.isDirectory() && !entry.name.startsWith(".") && entry.name !== "node_modules" && !entry.name.endsWith("-worktrees"))
+    .map((entry) => join(folder, entry.name));
+}
+
+async function mapLimited<T, R>(items: T[], fn: (item: T) => Promise<R>): Promise<R[]> {
+  const results: R[] = new Array(items.length);
+  let next = 0;
+  await Promise.all(Array.from({ length: Math.min(DISCOVERY_CONCURRENCY, items.length) }, async () => {
+    while (next < items.length) {
+      const index = next++;
+      results[index] = await fn(items[index]);
+    }
+  }));
+  return results;
 }

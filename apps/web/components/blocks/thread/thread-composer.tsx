@@ -11,6 +11,7 @@ import { ChevronDown, FolderGit2, GitBranch, Laptop, Paperclip, TriangleAlert, X
 import { toast } from "sonner";
 import { BackgroundTasksPill } from "@/components/blocks/background-tasks";
 import type { CliThreadBackgroundTasks, CliStopConfirmation, CliThreadGoal } from "@/convex/lib/contracts/validators";
+import { isConfiguredPath } from "@/convex/lib/contracts/validators";
 import {
   PromptInput,
   PromptInputFooter,
@@ -1061,7 +1062,7 @@ function ThreadComposerContent({
   const onBaseRefChange = selectorsProps.onBaseRefChange;
   const baseRefProfile = onBaseRefChange ? selectorsProps.profiles.find((profile) => profile._id === selectorsProps.profileId) : undefined;
   const showWorkspaceSelectors = Boolean(
-    baseRefProfile?.paths.some((path) => path.id === selectorsProps.pathId && path.kind !== "worktree" && path.gitRemoteUrl)
+    baseRefProfile?.paths.some((path) => path.id === selectorsProps.pathId && isConfiguredPath(path) && path.gitRemoteUrl)
   );
   // A stored id with no active agents left (last agent deleted) must stay clearable.
   const showTopBarAgentSelector =

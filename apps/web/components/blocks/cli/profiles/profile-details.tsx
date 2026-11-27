@@ -1,9 +1,10 @@
 import { format, formatDistanceToNow } from "date-fns";
 import { Bot, CalendarDays, Clock3, FolderGit2, KeyRound, Monitor, SquareTerminal } from "lucide-react";
-import { toRuntimeSummaries, type CliRuntimeSummary } from "@/convex/lib/contracts/validators";
+import { isConfiguredPath, toRuntimeSummaries, type CliProfilePathEntry, type CliRuntimeSummary } from "@/convex/lib/contracts/validators";
 import { isCliType } from "@/lib/cli-runtime-ui/registry";
 import { CLI_TYPE_MAP, type AvailableCliInfo } from "@/lib/threads/types";
 import { cn } from "@/lib/utils";
+import { RepoCount } from "./repo-count";
 
 export type ProfileDetailsData = {
   name: string;
@@ -19,7 +20,8 @@ export type ProfileDetailsData = {
     id: string;
     path: string;
     label: string;
-    kind?: "worktree";
+    kind?: CliProfilePathEntry["kind"];
+    parentPathId?: string;
   }>;
 };
 
@@ -101,8 +103,8 @@ function DetailLine({ icon: Icon, label, value }: { icon: typeof Monitor; label:
 }
 
 export function ProfileDetails({ profile, className }: { profile: ProfileDetailsData; className?: string }) {
-  const regularPaths = profile.paths.filter((path) => path.kind !== "worktree");
-  const worktreeCount = profile.paths.length - regularPaths.length;
+  const regularPaths = profile.paths.filter(isConfiguredPath);
+  const worktreeCount = profile.paths.filter((path) => path.kind === "worktree").length;
   const connectionValue = formatProfileConnectionStatus(profile);
 
   return (
@@ -149,7 +151,10 @@ export function ProfileDetails({ profile, className }: { profile: ProfileDetails
           <div className="max-h-32 space-y-1.5 overflow-y-auto pr-1">
             {regularPaths.map((path) => (
               <div key={path.id} className="min-w-0 text-xs">
-                <div className="truncate font-medium text-foreground">{path.label}</div>
+                <div className="flex min-w-0 items-baseline justify-between gap-2">
+                  <span className="truncate font-medium text-foreground">{path.label}</span>
+                  <RepoCount paths={profile.paths} parentId={path.id} className="text-[11px]" />
+                </div>
                 <div className="truncate font-mono text-[11px] text-muted-foreground" title={path.path}>{path.path}</div>
               </div>
             ))}

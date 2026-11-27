@@ -1920,3 +1920,29 @@ Update CLI in the environment's Actions installs the client's version.
 No Convex or socket requests: the row uses the observation Details already has.
 `tui/formatters.test.ts` covers an older selected version, an older connected
 service and a matching one.
+
+## Multi-repo review, CLI 0.186.0, OS-2521
+
+With Reuse existing directory selected, Add project's review lists the folder's
+git repos above the failure note, in the same lines `project add` prints
+([multi-repo projects](cli-multi-repo-projects.md#when-it-runs)). It shows
+`Looking for git repositories…` until the list arrives. A target that can't
+answer shows no repo lines, for example an older CLI in the container. Empty
+directory and Clone repository show none, since the folder doesn't exist yet.
+The list is information only and has no focusable rows. It gets the rows left
+after the other review lines; a longer list ends with `… and N more`, so
+Register always fits. Each repo line is cut to the width rather than wrapped.
+Only the answer for the latest requested path is shown. An isolated Local
+target offers no list, because the folder is private to the project's account.
+
+### Request cost
+
+One `project repos --json` per review on a Docker target (`docker exec`), and an
+in-process scan on Local. The list is kept per path, so returning to the review
+with the same path doesn't scan again. No Convex requests.
+
+### Verification
+
+`__tests__/onboarding-review.tsx reuse-repos` checks the listed repos and the
+`reuse` flag sent on Register; `reuse-many-repos` checks that 20 repos at 24 rows
+still leave Register reachable.

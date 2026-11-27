@@ -461,9 +461,10 @@ describe("project login", () => {
 
 describe("shared Docker project paths (OS-2251)", () => {
   beforeEach(() => { mocks.state.mode = "shared"; mocks.state.managedMounts = ["/Users/me/code"]; });
-  it.each([["/Users/me/code", /Mount its parent/], ["/home/node/app", /under \/workspace or a mounted folder/]])("refuses %s before contacting the backend", async (directory, message) => {
-    await expect(addProject(directory, options)).rejects.toThrow(message);
-    await expect(addProjectGuided(directory, options)).resolves.toMatchObject({ ok: false, reason: "path" });
+  // A mount root is refused only when it is or would become a git repo (OS-2521).
+  it.each([["/Users/me/code", /Mount its parent/, "https://github.com/acme/app.git"], ["/home/node/app", /under \/workspace or a mounted folder/, undefined]])("refuses %s before contacting the backend", async (directory, message, clone) => {
+    await expect(addProject(directory, { ...options, clone })).rejects.toThrow(message);
+    await expect(addProjectGuided(directory, { ...options, clone })).resolves.toMatchObject({ ok: false, reason: "path" });
     expect(mocks.client).not.toHaveBeenCalled();
   });
 });

@@ -1,4 +1,4 @@
-import { mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
+import { mkdir, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
@@ -198,5 +198,62 @@ describe("worktree op processor", () => {
     it("fails commitPatch without a commit", async () => {
       expect(await result(op("commitPatch", {}))).toMatchObject({ error: "Missing commit hash" });
     });
+  });
+});
+
+describe("syncRepos (OS-2521)", () => {
+  let root: string;
+  beforeEach(async () => {
+    root = await mkdtemp(join(tmpdir(), "convoy-sync-repos-"));
+    for (const name of ["old-app", "packages/api"]) {
+      await mkdir(join(root, name), { recursive: true });
+      await runGit(join(root, name), ["init", "--initial-branch=main"]);
+    }
+  });
+  afterEach(async () => {
+    await rm(root, { recursive: true, force: true });
+  });
+
+  it("answers from the local scan while the publish is still pending", async () => {
+    const mutation = vi.fn((..._args: unknown[]) => new Promise(() => {}));
+    const processor = createWorktreeOpProcessor({ mutation } as never, "session_1", "profile_1");
+
+    expect(await processor.syncRepos(root)).toEqual(["old-app", "packages/api"]);
+    await vi.waitFor(() => expect(mutation).toHaveBeenCalledTimes(1));
+    expect(mutation.mock.calls[0][1]).toMatchObject({
+      path: root,
+      repos: [{ path: join(root, "old-app"), relativePath: "old-app" }, { path: join(root, "packages/api"), relativePath: "packages/api" }],
+    });
+  });
+
+  it("publishes an unchanged scan once, and retries after a failed publish", async () => {
+    const mutation = vi.fn().mockRejectedValueOnce(new Error("offline")).mockResolvedValue(null);
+    const processor = createWorktreeOpProcessor({ mutation } as never, "session_1", "profile_1");
+
+    await processor.syncRepos(root);
+    await vi.waitFor(() => expect(mutation).toHaveBeenCalledTimes(1));
+    await processor.syncRepos(root);
+    await vi.waitFor(() => expect(mutation).toHaveBeenCalledTimes(2));
+    await processor.syncRepos(root);
+    await new Promise((resolve) => setTimeout(resolve, 50));
+    expect(mutation).toHaveBeenCalledTimes(2);
+  });
+
+  it("a folder it can't scan publishes nothing", async () => {
+    const mutation = vi.fn().mockResolvedValue(null);
+    const processor = createWorktreeOpProcessor({ mutation } as never, "session_1", "profile_1");
+
+    await expect(processor.syncRepos(join(root, "missing"))).rejects.toThrow(/ENOENT/);
+    await new Promise((resolve) => setTimeout(resolve, 50));
+    expect(mutation).not.toHaveBeenCalled();
+  });
+
+  it("a single-repo folder has no repo line and clears stored repos", async () => {
+    const mutation = vi.fn().mockResolvedValue(null);
+    const processor = createWorktreeOpProcessor({ mutation } as never, "session_1", "profile_1");
+
+    expect(await processor.syncRepos(join(root, "old-app"))).toEqual([]);
+    await vi.waitFor(() => expect(mutation).toHaveBeenCalledTimes(1));
+    expect(mutation.mock.calls[0][1]).toMatchObject({ path: join(root, "old-app"), repos: [] });
   });
 });

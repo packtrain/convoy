@@ -83,6 +83,30 @@ describe("WorktreeList", () => {
     expect(links[1].getAttribute("href")).toContain("profileId=profile_1&pathId=wt&view=changes");
   });
 
+  test("a multi-repo folder shows its repo count, not a row per repo", () => {
+    window.localStorage.setItem("convoy.worktree-list-expanded-profiles", JSON.stringify(["profile_1"]));
+    render(
+      <WorktreeList
+        profileId={"profile_1" as Id<"cliProfiles">}
+        paths={[
+          { id: "acme", path: "/code/acme", label: "acme" },
+          { id: "r1", path: "/code/acme/new-app", label: "new-app", kind: "repo", parentPathId: "acme" },
+          { id: "r2", path: "/code/acme/packages/api", label: "packages/api", kind: "repo", parentPathId: "acme" },
+        ]}
+        organizationSlug="org"
+        projectAlias="ABC"
+        compactLayout={false}
+        avatar={<span>avatar</span>}
+      >
+        {() => <span>row</span>}
+      </WorktreeList>
+    );
+
+    const links = screen.getAllByRole("link").filter((link) => link.getAttribute("href")?.includes("view=changes"));
+    expect(links.map((link) => link.getAttribute("title"))).toEqual(["/code/acme"]);
+    expect(screen.getByText("2 repos").getAttribute("title")).toBe("new-app\npackages/api");
+  });
+
   test("the row toggles the checkouts like the chevron", () => {
     renderList();
 

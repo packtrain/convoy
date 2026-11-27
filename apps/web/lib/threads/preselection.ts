@@ -1,5 +1,8 @@
+import type { CliProfilePathEntry } from "@/convex/lib/contracts/validators";
+
 interface ProfilePath {
   id: string;
+  kind?: CliProfilePathEntry["kind"];
 }
 
 interface ProfileWithPaths {
@@ -33,7 +36,7 @@ export function resolveAgentContextPreselection(
   }
 
   const matchingPath = matchingProfile.paths.find(
-    (path) => path.id === query.pathId
+    (path) => path.id === query.pathId && path.kind !== "repo"
   );
   if (!matchingPath) {
     return null;

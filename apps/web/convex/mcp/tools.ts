@@ -1713,7 +1713,8 @@ export function getToolDefinitions(
       description:
         "List the caller's CLI profiles (connected machines) in a project, with online state, " +
         "available CLI runtimes, and the checkouts each one exposes. Use it to pick a spawn target: " +
-        "a profileId, one of its pathIds, and a cliType from availableClis.",
+        "a profileId, one of its pathIds, and a cliType from availableClis. A path with kind \"repo\" is a git repo " +
+        "inside a project folder: it is not a spawn target, its parentPathId is.",
       inputSchema: {
         type: "object",
         properties: {
@@ -1858,7 +1859,7 @@ export function getToolDefinitions(
           pathId: {
             type: "string",
             description:
-              "Checkout on that profile, from the profile's paths. Required without sourceThreadId, " +
+              "Checkout on that profile, from the profile's paths; not a kind \"repo\" entry, whose thread runs in its parent folder. Required without sourceThreadId, " +
               "and whenever profileId names a different machine.",
           },
           cliType: {

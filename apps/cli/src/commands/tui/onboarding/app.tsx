@@ -9,6 +9,7 @@ import { savedDeploymentUrls, loadChoices, validateForm } from "./workflow.js";
 
 import { RuntimeAccess } from "./runtime-access.js";
 import { resultMessage } from "./formatters.js";
+import { repoLines } from "../../project/formatters.js";
 import { Caret, Clickable, Dialog, editText } from "../dialog/index.js";
 import { useLeave, useWheel, type LeaveRef } from "../mouse.js";
 import { MODE_COPY, prerequisiteFailure, prerequisiteLines } from "../../environment/formatters.js";
@@ -65,6 +66,9 @@ export function Onboarding({ browser, leave, width: columns, height: rows, load 
   const [done, setDone] = useState(Boolean(session));
   const [retained, setRetained] = useState(false);
   const [discard, setDiscard] = useState(false);
+  // The reused folder's repos, keyed by the path they were read for. Spec: docs/specs/cli-multi-repo-projects.md#when-it-runs
+  const [repos, setRepos] = useState<{ directory: string; lines: string[] }>();
+  const reposRequested = useRef<string | undefined>(undefined); // Only the latest request's answer is shown.
   const leaving = useRef<() => void>(undefined); // The sidebar click to run after Discard.
   const mounted = useRef(true);
   const discovery = useRef<AbortController | undefined>(undefined);
@@ -154,11 +158,20 @@ export function Onboarding({ browser, leave, width: columns, height: rows, load 
     catch (error) { lines.push(error instanceof Error ? error.message : "Setup failed."); }
     return lines.join("\n");
   }).catch(() => { if (mounted.current) setMessage("Cannot hand over the terminal. Run convoy project add in a terminal to choose isolated mode."); });
-  const confirmation = [
+  const wrap = (lines: string[]) => lines.flatMap(line => wrapLines(plain(line), Math.max(1, width - 6)));
+  const reviewHead = wrap([
     `${options.create ? "Create" : "Link"} ${options.projectName ?? options.project}`,
     `Profile: ${options.profileName} / ${options.profileKey}`, `Target workspace child: ${directory}`,
-    `Workspace: ${workspaceModes[mode].label}`, "Remote data and prepared files remain after failure.",
-  ].flatMap(line => wrapLines(plain(line), Math.max(1, width - 6)));
+    `Workspace: ${workspaceModes[mode].label}`,
+  ]);
+  const reviewTail = wrap(["Remote data and prepared files remain after failure."]);
+  // One row per repo line, cut to the rows left, so Register always fits.
+  const repoRows = (mode === 1 && target.repos ? repos?.directory === directory ? repos.lines : ["Looking for git repositories…"] : [])
+    .map(line => plain(line).slice(0, Math.max(1, width - 6)));
+  const repoBudget = Math.max(0, height - 7 - reviewHead.length - reviewTail.length);
+  const shownRepoRows = repoRows.length <= repoBudget ? repoRows
+    : repoBudget > 0 ? [...repoRows.slice(0, repoBudget - 1), `… and ${repoRows.length - repoBudget + 1} more`] : [];
+  const confirmation = [...reviewHead, ...shownRepoRows, ...reviewTail];
   const dropdownOptions = step === "auth" ? [...deployments, "Enter a new URL"] : workspaceModes.map(option => option.label);
   const explanation = dropdown !== undefined && step === "details" ? wrapLines(workspaceModes[dropdown].description, width - 6) : [];
   const small = columns < 36 || height < 12 || (explanation.length > 0 && height < 14 + explanation.length) || (step === "confirm" && confirmation.length > height - 7);
@@ -170,7 +183,16 @@ export function Onboarding({ browser, leave, width: columns, height: rows, load 
     if (at < fields.length) return;
     if (at === fields.length) { close(); return; }
     if (step === "auth") { void authenticate(); return; }
-    try { validateForm(directory, payload(), mode === 2); move("confirm"); }
+    try {
+      validateForm(directory, payload(), mode === 2); move("confirm");
+      if (mode === 1 && target.repos && repos?.directory !== directory && reposRequested.current !== directory) {
+        const requested = directory;
+        reposRequested.current = requested;
+        void target.repos(requested).then(found => repoLines(found), () => []).then(lines => {
+          if (mounted.current && reposRequested.current === requested) setRepos({ directory: requested, lines });
+        });
+      }
+    }
     catch (error) { setMessage(error instanceof Error ? error.message : "Check inputs."); }
   };
   const pressConfirm = (at: number) => { if (at === 0) move("details"); else void submit(); };

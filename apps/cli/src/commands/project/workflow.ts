@@ -21,7 +21,8 @@ import { resolveSetupProject, validateProjectSelection, type ProjectSelectionOpt
 import { promptApiKey, promptProfileKey, promptUrl } from "../setup/prompts.js";
 import { checkLauncher, inspectProjectEnvironment, isProjectEnvironment, prepareProject, projectRequest, projectShell } from "./launcher.js";
 import { ProjectAddError, assertChildPath, assertManagedPath, assertNoTraversal, assertDeploymentUrl, validateProfileKey, projectIdentity, registrationIdentity, requireProjectScope, requireVisibleProject, loginRuntimeLabels, type LoginRuntime, type ProjectAccounts, type ProjectEnvironment, type ProjectAddResult, type ProjectCheck } from "./validators.js";
-import { projectChecks, sharedProjectChecks, type BackendProbe } from "./formatters.js";
+import { projectChecks, repoLines, sharedProjectChecks, type BackendProbe } from "./formatters.js";
+import { discoverRepositories, type DiscoveredRepo } from "../../lib/git/index.js";
 import { authDescriptor } from "../../lib/config/credentials/resolution.js";
 import { CredentialStore } from "../../lib/config/credentials/store.js";
 
@@ -57,8 +58,8 @@ export async function addProject(directory: string, options: ProjectAddOptions, 
   }
   // Spec: docs/specs/cli-shared-environments.md#registration
   const mounts = shared ? managedMounts() : undefined;
-  const target = environment ? assertChildPath(directory, environment.workspace) : canonicalPath(path.resolve(mounts ? "/workspace" : ".", directory));
-  if (mounts) assertManagedPath(target, mounts);
+  const target = projectTarget(directory, environment, mounts);
+  if (mounts) assertManagedPath(target, mounts, Boolean(options.clone) || existsSync(path.join(target, ".git")));
   if (options.profileKey) validateProfileKey(options.profileKey);
 
   const url = normalizeConvexUrl(options.url ?? await promptUrl());
@@ -107,6 +108,8 @@ export async function addProject(directory: string, options: ProjectAddOptions, 
         if (prepared.path !== target) throw new Error("Launcher returned a different workspace path.");
       }
     }
+    // Information only; the worker reports the list to Convoy. Spec: docs/specs/cli-multi-repo-projects.md#when-it-runs
+    if (!result) await discoverRepositories(target).then(repos => { for (const line of repoLines(repos)) log(line); }, () => {});
     if (result) result.phase = "key";
     let workerKey = apiKey;
     if (broadScope) {
@@ -151,6 +154,18 @@ export async function addProject(directory: string, options: ProjectAddOptions, 
   } finally {
     await client.close();
   }
+}
+
+/** The folder `project add <directory>` registers. */
+function projectTarget(directory: string, environment: ProjectEnvironment | undefined, mounts: string[] | undefined): string {
+  return environment ? assertChildPath(directory, environment.workspace) : canonicalPath(path.resolve(mounts ? "/workspace" : ".", directory));
+}
+
+/** The repos `project add <directory>` would list, without registering. Spec: docs/specs/cli-multi-repo-projects.md#when-it-runs */
+export async function projectRepos(directory: string): Promise<DiscoveredRepo[]> {
+  const shared = environmentMode() === "shared";
+  if (shared) assertNoTraversal(directory); else assertChildPath(directory);
+  return discoverRepositories(projectTarget(directory, shared ? undefined : inspectProjectEnvironment(), shared ? managedMounts() : undefined));
 }
 
 function overlaps(left: string, right: string): boolean {

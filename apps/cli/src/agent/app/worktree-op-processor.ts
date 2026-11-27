@@ -6,6 +6,7 @@ import type { ConvoyClient } from "../../lib/config/convex-client.js";
 import { getContentType } from "../../lib/content-type.js";
 import { uploadToStorage } from "../../lib/storage-upload.js";
 import {
+  describeRepositories,
   diffBetweenRefs,
   diffWorkingTree,
   findBranchFork,
@@ -21,6 +22,8 @@ import {
   revertWorkingFile,
   revertWorkingTree,
   searchWorkspaceFiles,
+  listRepositoryPaths,
+  repoRelativePath,
   type BranchRef,
 } from "../../lib/git/index.js";
 
@@ -38,6 +41,8 @@ export interface WorktreeOpProcessor {
   enqueue(ops: PendingWorktreeOp[]): void;
   /** Scan the given repo paths and sync their worktrees to the profile. */
   scanAndSync(parentPaths: string[]): Promise<void>;
+  /** A configured folder's repos by relative path ([] for a single-repo folder); syncs them in the background. Throws when the folder can't be scanned. */
+  syncRepos(folder: string): Promise<string[]>;
 }
 
 /**
@@ -107,6 +112,27 @@ export function createWorktreeOpProcessor(client: ConvoyClient, sessionId: strin
           }))
       ),
     });
+  }
+
+  // Per folder: the list last sent, and the publish chain, so publishes never overlap.
+  const sentRepos = new Map<string, string>();
+  const publishes = new Map<string, Promise<void>>();
+  async function publishRepos(folder: string, paths: string[]): Promise<void> {
+    const repos = (await describeRepositories(folder, paths)).map(({ path, relativePath, gitRemoteUrl, branch }) => ({ path, relativePath, gitRemoteUrl, branch }));
+    const key = JSON.stringify(repos);
+    if (sentRepos.get(folder) === key) return;
+    await client.mutation(api.cli.profiles.syncRepos, { profileId: typedProfileId, sessionId: typedSessionId, path: folder, repos });
+    sentRepos.set(folder, key);
+  }
+  /** Spec: docs/specs/cli-multi-repo-projects.md#when-it-runs. The local scan answers; git and the server run behind it. */
+  async function syncRepos(folder: string): Promise<string[]> {
+    const found = await listRepositoryPaths(folder);
+    const paths = found.length === 1 && found[0] === folder ? [] : found;
+    const next = (publishes.get(folder) ?? Promise.resolve()).then(() => publishRepos(folder, paths)).catch((error: unknown) => {
+      console.error(chalk.yellow(`[Repos] Sync failed for ${folder}: ${error instanceof Error ? error.message : String(error)}`));
+    });
+    publishes.set(folder, next);
+    return paths.map((path) => repoRelativePath(folder, path));
   }
 
   async function completeOp(
@@ -302,5 +328,6 @@ export function createWorktreeOpProcessor(client: ConvoyClient, sessionId: strin
       }
     },
     scanAndSync,
+    syncRepos,
   };
 }
