@@ -311,8 +311,7 @@ describe("chat claiming loop", () => {
     await t.run(async (runCtx) => {
       const updated = await runCtx.db.get("cliThreads", chat._id);
       expect(updated?.claimedBySessionId).toBeUndefined();
-      expect(updated?.claimedAt).toBeUndefined();
-      expect(updated?.claimLeaseExpiresAt).toBeUndefined();
+      expect(await runCtx.db.query("cliThreadClaimLeases").collect()).toEqual([]);
       expect(updated?.activeAssistantMessageId).toBeUndefined();
       expect(updated?.processingState).toBe("idle");
     });
@@ -495,6 +494,105 @@ describe("chat claiming loop", () => {
       expect(updatedChat?.processingState).toBe("idle");
       expect(updatedChat?.claimedBySessionId).toBeUndefined();
     });
+  });
+});
+
+describe("claim lease storage (OS-2550)", () => {
+  async function setup(threadOverrides: Record<string, unknown> = {}) {
+    const ctx = createTestContext();
+    const { user, project, asUser, t } = await ctx.setupProject();
+    const profile = await ctx.cliProfile(user._id, project._id);
+    const apiKey = await asUser.mutation(api.apiKeys.core.create, {
+      name: "CLI Key",
+      expiresAt: Date.now() + 30 * 24 * 60 * 60 * 1000,
+    });
+    const session = await ctx.cliSession(profile._id, apiKey.id);
+    const chat = await ctx.cliThread(user._id, project._id, profile._id, {
+      hasPendingUserMessages: true,
+      status: "pending",
+      ...threadOverrides,
+    });
+    const lease = () =>
+      t.run((c) => c.db.query("cliThreadClaimLeases").withIndex("by_threadId", (q) => q.eq("threadId", chat._id)).unique());
+    const thread = () => t.run((c) => c.db.get("cliThreads", chat._id));
+    return { t, ctx, session, chat, key: apiKey.key, lease, thread, user, project, profile };
+  }
+
+  test("claim and renewal write the lease row, never the thread row", async () => {
+    const s = await setup();
+    const threadId = s.chat._id;
+    const claimedAt = Date.now();
+    await s.t.mutation(api.cli.threads.runControl.claimThread, { threadId, sessionId: s.session._id, leaseMs: 60_000, apiKey: s.key });
+    expect((await s.lease())?.expiresAt).toBeGreaterThanOrEqual(claimedAt + 60_000);
+    const before = await s.thread();
+    expect(before?.claimLeaseExpiresAt).toBeUndefined();
+
+    await vi.advanceTimersByTimeAsync(30_000);
+    const renewedAt = Date.now();
+    expect(await s.t.mutation(api.cli.threads.runControl.heartbeatClaim, {
+      threadId, sessionId: s.session._id, leaseMs: 60_000, apiKey: s.key,
+    })).toBe(true);
+
+    expect(await s.thread()).toEqual(before);
+    expect((await s.lease())?.expiresAt).toBeGreaterThanOrEqual(renewedAt + 60_000);
+  });
+
+  test("release deletes the lease row", async () => {
+    const s = await setup();
+    const threadId = s.chat._id;
+    await s.t.mutation(api.cli.threads.runControl.claimThread, { threadId, sessionId: s.session._id, leaseMs: 60_000, apiKey: s.key });
+    await s.t.mutation(api.cli.threads.runControl.releaseClaim, { threadId, sessionId: s.session._id, apiKey: s.key });
+    expect(await s.lease()).toBeNull();
+  });
+
+  test("an expired lease row ends the claim even with a live legacy lease on the thread", async () => {
+    const s = await setup();
+    const threadId = s.chat._id;
+    await s.t.mutation(api.cli.threads.runControl.claimThread, { threadId, sessionId: s.session._id, leaseMs: 1_000, apiKey: s.key });
+    await s.t.run((c) => c.db.patch("cliThreads", threadId, { claimLeaseExpiresAt: Date.now() + 60_000 }));
+    await vi.advanceTimersByTimeAsync(1_100);
+    expect(await s.t.query(api.cli.threads.runControl.isClaimActiveForSession, {
+      threadId, sessionId: s.session._id, apiKey: s.key,
+    })).toBe(false);
+    expect(await s.t.mutation(api.cli.threads.runControl.heartbeatClaim, {
+      threadId, sessionId: s.session._id, leaseMs: 60_000, apiKey: s.key,
+    })).toBe(false);
+  });
+
+  test("a legacy lease on the thread row stays live, and renewal moves it to the lease row", async () => {
+    const s = await setup({ processingState: "claimed", claimLeaseExpiresAt: Date.now() + 60_000 });
+    const threadId = s.chat._id;
+    await s.t.run((c) => c.db.patch("cliThreads", threadId, { claimedBySessionId: s.session._id }));
+    expect(await s.t.query(api.cli.threads.runControl.isClaimActiveForSession, {
+      threadId, sessionId: s.session._id, apiKey: s.key,
+    })).toBe(true);
+    const renewedAt = Date.now();
+    expect(await s.t.mutation(api.cli.threads.runControl.heartbeatClaim, {
+      threadId, sessionId: s.session._id, leaseMs: 120_000, apiKey: s.key,
+    })).toBe(true);
+    expect((await s.lease())?.expiresAt).toBeGreaterThanOrEqual(renewedAt + 120_000);
+  });
+
+  test("the claimed-threads migration moves the lease and Codex cursor off the thread row", async () => {
+    const cursor = { inputTokens: 10, cachedInputTokens: 2, outputTokens: 3 };
+    const leaseExpiresAt = Date.now() + 60_000;
+    const s = await setup({ processingState: "claimed", claimedAt: Date.now(), claimLeaseExpiresAt: leaseExpiresAt, codexUsageCursor: cursor });
+    const idle = await s.ctx.cliThread(s.user._id, s.project._id, s.profile._id, { claimLeaseExpiresAt: Date.now() - 1 });
+    await s.t.run((c) => c.db.patch("cliThreads", s.chat._id, { claimedBySessionId: s.session._id }));
+
+    await s.t.mutation(internal.migrations.moveThreadClaimLeases, { reset: true });
+
+    const moved = await s.thread();
+    expect(moved?.claimLeaseExpiresAt).toBeUndefined();
+    expect(moved?.claimedAt).toBeUndefined();
+    expect(moved?.codexUsageCursor).toBeUndefined();
+    expect((await s.lease())?.expiresAt).toBe(leaseExpiresAt);
+    const cursorRow = await s.t.run((c) =>
+      c.db.query("cliThreadCodexUsageCursors").withIndex("by_threadId", (q) => q.eq("threadId", s.chat._id)).unique());
+    expect(cursorRow?.cursor).toEqual(cursor);
+    // An unclaimed thread's stale lease is dropped, not moved.
+    expect((await s.t.run((c) => c.db.get("cliThreads", idle._id)))?.claimLeaseExpiresAt).toBeUndefined();
+    expect(await s.t.run((c) => c.db.query("cliThreadClaimLeases").collect())).toHaveLength(1);
   });
 });
 

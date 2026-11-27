@@ -50,8 +50,32 @@ Processing: idle → claimed → streaming → claimed → ... → idle
 ```
 
 - Queue signal: `cliThreads.hasPendingUserMessages`
-- Lease fields: `claimedBySessionId`, `claimedAt`, `claimLeaseExpiresAt`
+- Claim: `cliThreads.claimedBySessionId`, plus a lease row; see [Claim lease](#claim-lease)
 - Streaming target: `activeAssistantMessageId`
+
+### Claim lease
+
+OS-2550. Almost every thread query reads the `cliThreads` row, so the 30 s
+lease renewal must not write it.
+
+- **Lease row.** `cliThreadClaimLeases { threadId, expiresAt }` holds the
+  expiry. `claimThread` sets `claimedBySessionId` on the thread and writes the
+  row; `heartbeatClaim` writes only the row. Every path that releases a claim
+  (`resetThreadClaim`: release, stop, delete, disconnect, watchdog) deletes it.
+- **Readers.** Only claim gates read the row: `claimThread`, `heartbeatClaim`,
+  `isClaimActiveForSession`, `assertThreadClaimedBySession` (start, append,
+  complete, fail, interaction requests, worktree ops), steer availability,
+  `listSteerRequestedUserMessages` and `streamingWatchdogTick`. The CLI's two
+  claim subscriptions (`isClaimActiveForSession`, `listSteerRequestedUserMessages`)
+  still re-run on each renewal: the CLI steers before `consumeSteeredMessages`
+  re-checks the lease, so the steering query must hide an expired claim.
+- **Codex usage cursor.** `cliThreadCodexUsageCursors { threadId, cursor }`
+  is off the thread row for the same reason. Only `appendRunContent` reads it.
+- **Legacy fields.** `cliThreads.claimedAt`, `claimLeaseExpiresAt` and
+  `codexUsageCursor` are no longer written. Readers fall back to them while no
+  row exists, so the deploy does not drop in-flight runs. The
+  `moveThreadClaimLeases` migration moves them into rows and clears them;
+  OS-2621 drops the fields and the fallback.
 
 ## Claiming invariants
 
@@ -195,7 +219,9 @@ Remember to bump `apps/cli/package.json` for any `apps/cli` change.
 | `cliSessions` | CLI connections (one per process) with stored online state |
 | `cliSessionHeartbeats` | The 30 s heartbeat, one row per online session; liveness code only |
 | `cliProfiles` | User+project identity with hostname, paths, git remote URLs |
-| `cliThreads` | Chat threads with queue flags, claim lease state, processing status |
+| `cliThreads` | Chat threads with queue flags, claim identity, processing status |
+| `cliThreadClaimLeases` | A claimed thread's lease expiry, renewed every 30 s; claim gates only |
+| `cliThreadCodexUsageCursors` | A Codex thread's cumulative-usage cursor; `appendRunContent` only |
 | `cliMessages` | User/assistant message envelopes and run processing markers |
 | `cliMessageChunks` | Streamed chunk rows with `normalizedEvent` (the render source) |
 

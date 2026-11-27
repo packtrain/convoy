@@ -1636,8 +1636,7 @@ describe("remove", () => {
       expect(deleted?.processingState).toBe("idle");
       expect(deleted?.hasPendingUserMessages).toBe(false);
       expect(deleted?.claimedBySessionId).toBeUndefined();
-      expect(deleted?.claimedAt).toBeUndefined();
-      expect(deleted?.claimLeaseExpiresAt).toBeUndefined();
+      expect(await runCtx.db.query("cliThreadClaimLeases").collect()).toEqual([]);
       expect(deleted?.activeAssistantMessageId).toBeUndefined();
       expect(deleted?.streamWatchdogId).toBeUndefined();
 

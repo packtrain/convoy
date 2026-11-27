@@ -474,7 +474,6 @@ const cliPendingChatItemValidator = v.object({
   processingState: cliThreadProcessingStateValidator,
   hasPendingUserMessages: v.boolean(),
   claimedBySessionId: v.optional(v.id("cliSessions")),
-  claimLeaseExpiresAt: v.optional(v.number()),
   lastActivityAt: v.number(),
   // Bound Project agent delivery fields (OS-1138): the CLI passes the display
   // name and prompt snapshot to the runtime runner (Phase 2 wiring).
@@ -533,7 +532,6 @@ export const listPendingThreads = query({
         processingState: chat.processingState,
         hasPendingUserMessages: chat.hasPendingUserMessages,
         claimedBySessionId: chat.claimedBySessionId,
-        claimLeaseExpiresAt: chat.claimLeaseExpiresAt,
         lastActivityAt: chat.lastActivityAt,
         agentName: threadAgents.get(chat.projectAgentId)?.name,
         agentPromptSnapshot: chat.agentPromptSnapshot,

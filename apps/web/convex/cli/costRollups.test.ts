@@ -74,6 +74,13 @@ async function setupClaimedRun(options?: {
   return { ctx, user, project, asUser, t, session, chat, apiKeyResult, started, userMessage };
 }
 
+async function readCodexCursor(base: Awaited<ReturnType<typeof setupClaimedRun>>) {
+  const row = await base.t.run((runCtx) =>
+    runCtx.db.query("cliThreadCodexUsageCursors").withIndex("by_threadId", (q) => q.eq("threadId", base.chat._id)).unique()
+  );
+  return row?.cursor;
+}
+
 describe("cost rollup sink (appendRunContent)", () => {
   beforeEach(() => {
     vi.useFakeTimers();
@@ -271,8 +278,7 @@ describe("cost rollup sink (appendRunContent)", () => {
       } }) }],
       apiKey: base.apiKeyResult.key,
     });
-    const thread = await base.t.run((runCtx) => runCtx.db.get("cliThreads", base.chat._id));
-    expect(thread?.codexUsageCursor?.inputTokens).toBe(0);
+    expect((await readCodexCursor(base))?.inputTokens).toBe(0);
     vi.advanceTimersByTime(1);
     await base.t.finishInProgressScheduledFunctions();
     expect(await base.t.run((runCtx) => runCtx.db.query("costRollups").collect())).toEqual([]);
@@ -463,10 +469,9 @@ describe("cost rollup sink (appendRunContent)", () => {
       outputTokens: 65,
     });
 
-    const thread = await base.t.run(async (runCtx) =>
-      runCtx.db.get("cliThreads", base.chat._id)
-    );
-    expect(thread?.codexUsageCursor).toMatchObject({
+    // The cursor lives off the thread row, so a usage batch re-runs no thread query (OS-2550).
+    expect((await base.t.run((runCtx) => runCtx.db.get("cliThreads", base.chat._id)))?.codexUsageCursor).toBeUndefined();
+    expect(await readCodexCursor(base)).toMatchObject({
       inputTokens: 260,
       cachedInputTokens: 170,
       outputTokens: 65,

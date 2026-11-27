@@ -111,7 +111,7 @@ describe("live background tasks", () => {
       if (end === "stop") {
         await resetThreadClaim(c, thread._id, { status: "completed", hasPendingUserMessages: false, queueHeldAt: Date.now(), now: Date.now() });
       } else if (end === "new-claim") {
-        await applyThreadClaim(c, thread._id, { sessionId: session._id, claimedAt: Date.now(), claimLeaseExpiresAt: Date.now() + 1000, processingState: "claimed", now: Date.now() });
+        await applyThreadClaim(c, thread._id, { sessionId: session._id, claimLeaseExpiresAt: Date.now() + 1000, processingState: "claimed", now: Date.now() });
       } else {
         await markThreadStreamEnded(c, thread._id, { status: end === "fail" ? "failed" : "waiting_input", hasPendingUserMessages: false, processingState: "idle", lastActivityAt: Date.now() });
       }

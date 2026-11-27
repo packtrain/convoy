@@ -978,33 +978,43 @@ export async function setThreadPendingUserMessages(
 
 type ThreadClaimPatch = {
   sessionId: Id<"cliSessions">;
-  claimedAt: number;
   claimLeaseExpiresAt: number;
   processingState: Doc<"cliThreads">["processingState"];
   now: number;
 };
 
-/** Record a fresh claim lease on a thread (the `claimThread` path). */
+/** Record a fresh claim on a thread (the `claimThread` path). */
 export async function applyThreadClaim(ctx: MutationCtx, threadId: Id<"cliThreads">, patch: ThreadClaimPatch): Promise<void> {
   await patchThreadWithStatusProjection(ctx, threadId, {
     claimedBySessionId: patch.sessionId,
-    claimedAt: patch.claimedAt,
-    claimLeaseExpiresAt: patch.claimLeaseExpiresAt,
     processingState: patch.processingState,
     lastActivityAt: patch.now,
   });
+  await extendThreadClaimLease(ctx, threadId, patch.claimLeaseExpiresAt);
 }
 
-/** Extend an active claim lease (the `heartbeatClaim` path; no activity stamp). */
-export async function extendThreadClaimLease(
-  ctx: MutationCtx,
-  threadId: Id<"cliThreads">,
-  patch: { claimedAt: number; claimLeaseExpiresAt: number }
-): Promise<void> {
-  await ctx.db.patch("cliThreads", threadId, {
-    claimedAt: patch.claimedAt,
-    claimLeaseExpiresAt: patch.claimLeaseExpiresAt,
-  });
+async function getClaimLease(ctx: Ctx, threadId: Id<"cliThreads">): Promise<Doc<"cliThreadClaimLeases"> | null> {
+  return ctx.db
+    .query("cliThreadClaimLeases")
+    .withIndex("by_threadId", (q) => q.eq("threadId", threadId))
+    .unique();
+}
+
+/** When the thread's claim lease ends, or undefined. Claim gates only: it reads the hot lease row (OS-2550). */
+export async function getThreadClaimLeaseExpiresAt(ctx: Ctx, thread: Doc<"cliThreads">): Promise<number | undefined> {
+  const lease = await getClaimLease(ctx, thread._id);
+  // A claim from before OS-2550, not yet renewed or migrated, keeps its lease on the thread row.
+  return lease ? lease.expiresAt : thread.claimLeaseExpiresAt;
+}
+
+/** Set the claim lease expiry (the `heartbeatClaim` path). Writes only the lease row, never the thread. */
+export async function extendThreadClaimLease(ctx: MutationCtx, threadId: Id<"cliThreads">, expiresAt: number): Promise<void> {
+  const lease = await getClaimLease(ctx, threadId);
+  if (lease) {
+    await ctx.db.patch("cliThreadClaimLeases", lease._id, { expiresAt });
+  } else {
+    await ctx.db.insert("cliThreadClaimLeases", { threadId, expiresAt });
+  }
 }
 
 type ThreadStreamingPatch = {
@@ -1097,12 +1107,17 @@ export async function resetThreadClaim(ctx: MutationCtx, threadId: Id<"cliThread
     hasPendingUserMessages: patch.hasPendingUserMessages,
     queueHeldAt: patch.queueHeldAt,
     claimedBySessionId: undefined,
+    // Legacy pre-OS-2550 lease fields.
     claimedAt: undefined,
     claimLeaseExpiresAt: undefined,
     activeAssistantMessageId: undefined,
     streamWatchdogId: undefined,
     lastActivityAt: patch.now,
   });
+  const lease = await getClaimLease(ctx, threadId);
+  if (lease) {
+    await ctx.db.delete("cliThreadClaimLeases", lease._id);
+  }
   await syncAgentThreadWorkById(ctx, threadId);
   await scheduleWorkflowAdvance(ctx, threadId);
 }
@@ -1435,16 +1450,34 @@ export async function setThreadWorkflowWaitParked(
   await syncAgentThreadWorkById(ctx, threadId);
 }
 
-/**
- * Persist the Codex exec cumulative-usage cursor (OS-1527). Plain patch: not a
- * `statusProjection` input. See `docs/specs/cost-tracking.md`.
- */
+async function getCodexUsageCursorRow(
+  ctx: Ctx,
+  threadId: Id<"cliThreads">
+): Promise<Doc<"cliThreadCodexUsageCursors"> | null> {
+  return ctx.db
+    .query("cliThreadCodexUsageCursors")
+    .withIndex("by_threadId", (q) => q.eq("threadId", threadId))
+    .unique();
+}
+
+/** The Codex cumulative-usage cursor (OS-1527), kept off the thread row (OS-2550). See `docs/specs/cost-tracking.md`. */
+export async function getThreadCodexUsageCursor(ctx: Ctx, thread: Doc<"cliThreads">): Promise<CodexUsageCursor | undefined> {
+  const row = await getCodexUsageCursorRow(ctx, thread._id);
+  // Legacy until the moveThreadClaimLeases migration has run; OS-2621 drops it.
+  return row ? row.cursor : thread.codexUsageCursor;
+}
+
 export async function setThreadCodexUsageCursor(
   ctx: MutationCtx,
   threadId: Id<"cliThreads">,
-  codexUsageCursor: CodexUsageCursor
+  cursor: CodexUsageCursor
 ): Promise<void> {
-  await ctx.db.patch("cliThreads", threadId, { codexUsageCursor });
+  const row = await getCodexUsageCursorRow(ctx, threadId);
+  if (row) {
+    await ctx.db.patch("cliThreadCodexUsageCursors", row._id, { cursor });
+  } else {
+    await ctx.db.insert("cliThreadCodexUsageCursors", { threadId, cursor });
+  }
 }
 
 /** Set or clear a thread's streaming-watchdog scheduled-job id. */

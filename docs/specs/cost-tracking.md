@@ -80,8 +80,9 @@ summaries).
      resolved run model attributes the total.
    - **Codex** reports tokens, with `costUsd: 0` and `reportedCost: false`. Both exec
      `turn.completed.usage` and app-server `thread/tokenUsage/updated.total`
-     are cumulative thread snapshots. Diff each snapshot against the optional
-     `cliThreads.codexUsageCursor`, persisted through `cliThreadsRepo`.
+     are cumulative thread snapshots. Diff each snapshot against the thread's
+     optional `cliThreadCodexUsageCursors` row, persisted through `cliThreadsRepo`
+     (OS-2550: off `cliThreads`, so a usage batch re-runs no thread query).
      Keep each positive delta as its own extraction entry until cost resolution.
      Processing snapshots in order also preserves usage on both sides of a
      counter reset. A known different continuation starts a new baseline;

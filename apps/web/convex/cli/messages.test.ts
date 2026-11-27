@@ -4958,7 +4958,8 @@ describe("cliMessages", () => {
       const { asUser, t, chat, queuedMessageId } = await setupStreamingRun();
 
       await t.run(async (runCtx) => {
-        await runCtx.db.patch("cliThreads", chat._id, { claimLeaseExpiresAt: Date.now() - 1000 });
+        const lease = await runCtx.db.query("cliThreadClaimLeases").withIndex("by_threadId", (q) => q.eq("threadId", chat._id)).unique();
+        await runCtx.db.patch("cliThreadClaimLeases", lease!._id, { expiresAt: Date.now() - 1000 });
       });
 
       await expect(asUser.mutation(api.cli.messages.requestSteer, { messageId: queuedMessageId })).rejects.toThrow(
@@ -5129,9 +5130,11 @@ describe("cliMessages", () => {
       });
       expect(otherView).toEqual([]);
 
-      // Claim expiry silences the query for the old claimant.
+      // Lease expiry silences the query for the old claimant, even with claim identity still set:
+      // the CLI steers before `consumeSteeredMessages` re-checks the lease.
       await t.run(async (runCtx) => {
-        await runCtx.db.patch("cliThreads", chat._id, { claimLeaseExpiresAt: Date.now() - 1000 });
+        const lease = await runCtx.db.query("cliThreadClaimLeases").withIndex("by_threadId", (q) => q.eq("threadId", chat._id)).unique();
+        await runCtx.db.patch("cliThreadClaimLeases", lease!._id, { expiresAt: Date.now() - 1000 });
       });
       const expiredView = await t.query(api.cli.messages.listSteerRequestedUserMessages, {
         threadId: chat._id,

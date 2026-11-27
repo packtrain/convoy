@@ -5,6 +5,12 @@ import { internalMutation } from "./_generated/server";
 import schema from "./schema";
 import { insertHeartbeat } from "./cli/lib/cliSessionsRepo";
 import { ONLINE_THRESHOLD_MS } from "./cli/lib/constants";
+import {
+  extendThreadClaimLease,
+  getThreadClaimLeaseExpiresAt,
+  getThreadCodexUsageCursor,
+  setThreadCodexUsageCursor,
+} from "./cli/threads/lib/cliThreadsRepo";
 
 /** Define data migrations here with `migrations.define` and list them in a `runAll` runner. */
 export const migrations = new Migrations<DataModel, typeof schema>(components.migrations, {
@@ -32,4 +38,30 @@ export const migrateLegacySessionHeartbeats = migrations.define({
   },
 });
 
-export const runAll = migrations.runner([internal.migrations.migrateLegacySessionHeartbeats]);
+/**
+ * OS-2550: move a live claim's lease and the Codex usage cursor off `cliThreads` into their own
+ * rows, and clear the legacy fields so a follow-up can drop them. An unclaimed thread's lease is dropped.
+ */
+export const moveThreadClaimLeases = migrations.define({
+  table: "cliThreads",
+  migrateOne: async (ctx, thread) => {
+    if (thread.claimedAt === undefined && thread.claimLeaseExpiresAt === undefined && thread.codexUsageCursor === undefined) {
+      return undefined;
+    }
+    // Both getters prefer an existing row, so a renewal made since the deploy is kept.
+    const expiresAt = await getThreadClaimLeaseExpiresAt(ctx, thread);
+    if (thread.claimedBySessionId && expiresAt !== undefined) {
+      await extendThreadClaimLease(ctx, thread._id, expiresAt);
+    }
+    const cursor = await getThreadCodexUsageCursor(ctx, thread);
+    if (cursor) {
+      await setThreadCodexUsageCursor(ctx, thread._id, cursor);
+    }
+    return { claimedAt: undefined, claimLeaseExpiresAt: undefined, codexUsageCursor: undefined };
+  },
+});
+
+export const runAll = migrations.runner([
+  internal.migrations.migrateLegacySessionHeartbeats,
+  internal.migrations.moveThreadClaimLeases,
+]);

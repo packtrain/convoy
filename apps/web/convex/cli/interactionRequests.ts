@@ -18,7 +18,7 @@ import {
 import { getAccessibleThread, requireSessionOwnership } from "./lib/permissions";
 import { assertThreadClaimedBySession } from "./lib/claims";
 import { getSessionById } from "./lib/cliSessionsRepo";
-import { getThreadById, setThreadHasPendingInteraction } from "./threads/lib/cliThreadsRepo";
+import { getThreadById, getThreadClaimLeaseExpiresAt, setThreadHasPendingInteraction } from "./threads/lib/cliThreadsRepo";
 import { emitEvent } from "../lib/events";
 import {
   getInteractionRequestByRequestId,
@@ -158,13 +158,13 @@ export const create = mutation({
     );
     ensure(chat.profileId).eq(session.profileId, errors.SESSION_PROFILE_MISMATCH);
     ensure(chat.userId).eq(user._id, errors.NOT_AUTHORIZED);
-    assertThreadClaimedBySession(chat, args.sessionId);
+    await assertThreadClaimedBySession(ctx, chat, args.sessionId);
 
     const now = Date.now();
     // Expiry is tied to the claim lease: never trust the CLI clock beyond it.
     const expiresAt = Math.min(
       args.expiresAt,
-      chat.claimLeaseExpiresAt ?? args.expiresAt
+      (await getThreadClaimLeaseExpiresAt(ctx, chat)) ?? args.expiresAt
     );
     const existing = await getInteractionRequestByRequestId(
       ctx,

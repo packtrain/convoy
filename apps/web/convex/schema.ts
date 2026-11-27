@@ -918,6 +918,20 @@ export default defineSchema({
     .index("by_sessionId", ["sessionId"])
     .index("by_lastHeartbeatAt", ["lastHeartbeatAt"]),
 
+  // A claimed thread's lease, renewed every 30 s (OS-2550). Only claim gates read it, so a
+  // renewal re-runs no thread query. Deleted on release. Spec: docs/architecture/cli-bridge.md#claim-lease.
+  cliThreadClaimLeases: defineTable({
+    threadId: v.id("cliThreads"),
+    expiresAt: v.number(),
+  }).index("by_threadId", ["threadId"]),
+
+  // Last cumulative Codex usage snapshot, diffed per append batch to de-cumulate token
+  // counts (OS-1527). Only `appendRunContent` reads it (OS-2550); see docs/specs/cost-tracking.md.
+  cliThreadCodexUsageCursors: defineTable({
+    threadId: v.id("cliThreads"),
+    cursor: codexUsageCursorValidator,
+  }).index("by_threadId", ["threadId"]),
+
   // CLI Chats (conversations with CLIs)
   cliThreads: defineTable({
     userId: v.id("users"),
@@ -998,6 +1012,7 @@ export default defineSchema({
     // the next send / retry clears the hold (or the queue empties by delete).
     queueHeldAt: v.optional(v.number()),
     claimedBySessionId: v.optional(v.id("cliSessions")),
+    // Legacy, no longer written: the lease lives in `cliThreadClaimLeases` (OS-2550).
     claimedAt: v.optional(v.number()),
     claimLeaseExpiresAt: v.optional(v.number()),
     activeAssistantMessageId: v.optional(v.id("cliMessages")),
@@ -1045,8 +1060,7 @@ export default defineSchema({
         linesRemoved: v.optional(v.number()),
       })
     ),
-    // Last cumulative Codex exec usage snapshot, diffed per append batch to
-    // de-cumulate token counts (OS-1527); see docs/specs/cost-tracking.md.
+    // Legacy, no longer written: the cursor lives in `cliThreadCodexUsageCursors` (OS-2550).
     codexUsageCursor: v.optional(codexUsageCursorValidator),
     // Denormalized thread-level state derived from the chunk stream (OS-1442) or the message
     // stream (OS-1454). Lives here because both lists are paginated: anything computed by

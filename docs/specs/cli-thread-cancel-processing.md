@@ -84,7 +84,7 @@ pending interaction requests first, because their count decides rules 4, 7 and
      runs are excluded from automatic stranded-tail recovery, even without a
      continuation ID. Explicit Retry can requeue them. See `docs/specs/cli-message-context.md`.
 6. Clear chat claim/streaming fields:
-   - `claimedBySessionId`, `claimedAt`, `claimLeaseExpiresAt`
+   - `claimedBySessionId`, and delete the `cliThreadClaimLeases` row
    - `activeAssistantMessageId`, `streamWatchdogId`
    - `processingState = "idle"`
 7. Queue/state outcome — `status = "failed"` unless the turn ends as finished
@@ -179,7 +179,7 @@ Behavior:
    - mark the active assistant message `failed` with `CLI thread deleted during response generation`
    - clear assistant claim fields
    - clear thread claim/streaming fields:
-     - `claimedBySessionId`, `claimedAt`, `claimLeaseExpiresAt`
+     - `claimedBySessionId`, and delete the `cliThreadClaimLeases` row
      - `activeAssistantMessageId`, `streamWatchdogId`
      - `processingState = "idle"`
 3. If the thread is claimed but not actively streaming:

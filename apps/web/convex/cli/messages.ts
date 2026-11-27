@@ -134,6 +134,7 @@ import {
   reopenThreadForUserTurn,
   requeueThreadForRetry,
   resetThreadClaim,
+  getThreadCodexUsageCursor,
   setThreadCodexUsageCursor,
   setThreadLastUsedCliSelection,
   setThreadPendingUserMessages,
@@ -1398,7 +1399,7 @@ export const listUnprocessedUserMessages = query({
 async function steerAvailable(ctx: QueryCtx, thread: Doc<"cliThreads">, now: number): Promise<boolean> {
   if (!cliTypeSupportsSteering(thread.cliType)) return false;
   if (thread.processingState !== "streaming") return false;
-  if (!thread.claimedBySessionId || isThreadClaimExpired(thread, now)) return false;
+  if (!thread.claimedBySessionId || (await isThreadClaimExpired(ctx, thread, now))) return false;
   const session = await getSessionById(ctx, thread.claimedBySessionId);
   return session !== null && sessionSupportsSteeringForCliType(session, thread.cliType);
 }
@@ -1732,7 +1733,7 @@ export const listSteerRequestedUserMessages = query({
       return [];
     }
 
-    if (chat.claimedBySessionId !== args.sessionId || isThreadClaimExpired(chat, Date.now())) {
+    if (chat.claimedBySessionId !== args.sessionId || (await isThreadClaimExpired(ctx, chat, Date.now()))) {
       return [];
     }
 
@@ -1785,7 +1786,7 @@ export const consumeSteeredMessages = mutation({
     const session = await requireSessionOwnership(ctx, user._id, args.sessionId);
     const chat = await ensure(getThreadById(ctx, args.threadId)).notDeleted(errors.THREAD_NOT_FOUND);
     ensure(chat.profileId).eq(session.profileId, errors.SESSION_PROFILE_MISMATCH);
-    assertThreadClaimedBySession(chat, args.sessionId);
+    await assertThreadClaimedBySession(ctx, chat, args.sessionId);
 
     await requireAuthorizedProject(ctx, principal, chat.projectId, ProjectPermission.CLI_THREAD);
 
@@ -2097,7 +2098,7 @@ async function appendRunContentHandler(ctx: MutationCtx, args: AppendRunContentA
     const message = await requireMessageClaimedBySession(ctx, args.messageId, args.sessionId);
     const chat = await ensure(getThreadById(ctx, message.threadId)).notDeleted(errors.THREAD_NOT_FOUND);
     assertThreadOwnedByUser(chat, user._id);
-    assertThreadClaimedBySession(chat, args.sessionId);
+    await assertThreadClaimedBySession(ctx, chat, args.sessionId);
 
     // Intentionally skipped: appending chunks is a high-frequency in-flight operation on a
     // message already created through an authorized `startRunResponse`. Project/scope
@@ -2128,7 +2129,7 @@ async function appendRunContentHandler(ctx: MutationCtx, args: AppendRunContentA
             cliModel: message.cliModel,
           }) ?? (message.cliType === "codex" ? undefined : message.cliModel),
         continuationId: message.cliContext?.continuationId ?? newContinuationId ?? undefined,
-        usageCursor: chat.codexUsageCursor,
+        usageCursor: message.cliType === "codex" ? await getThreadCodexUsageCursor(ctx, chat) : undefined,
         modelState: message.codexModelState,
       });
       if (costExtraction && (costExtraction.usage.byModel.length || costExtraction.usage.reportedCost)) {
@@ -2259,7 +2260,7 @@ export const complete = mutation({
     const message = await requireMessageClaimedBySession(ctx, args.messageId, args.sessionId);
     const chat = await ensure(getThreadById(ctx, message.threadId)).notDeleted(errors.THREAD_NOT_FOUND);
     assertThreadOwnedByUser(chat, user._id);
-    assertThreadClaimedBySession(chat, args.sessionId);
+    await assertThreadClaimedBySession(ctx, chat, args.sessionId);
 
     await requireAuthorizedProject(ctx, principal, chat.projectId, ProjectPermission.CLI_THREAD);
 
@@ -2486,7 +2487,7 @@ export const fail = mutation({
     const message = await requireMessageClaimedBySession(ctx, args.messageId, args.sessionId);
     const chat = await ensure(getThreadById(ctx, message.threadId)).notDeleted(errors.THREAD_NOT_FOUND);
     assertThreadOwnedByUser(chat, user._id);
-    assertThreadClaimedBySession(chat, args.sessionId);
+    await assertThreadClaimedBySession(ctx, chat, args.sessionId);
 
     await requireAuthorizedProject(ctx, principal, chat.projectId, ProjectPermission.CLI_THREAD);
 

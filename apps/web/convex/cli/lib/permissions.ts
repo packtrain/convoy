@@ -31,7 +31,7 @@ export async function requireThreadClaimedBySession(
   const thread = await ensure(getThreadById(ctx, threadId)).notDeleted(errors.THREAD_NOT_FOUND);
   ensure(thread.userId).eq(userId, errors.NOT_AUTHORIZED);
   ensure(thread.profileId).eq(session.profileId, errors.SESSION_PROFILE_MISMATCH);
-  assertThreadClaimedBySession(thread, sessionId);
+  await assertThreadClaimedBySession(ctx, thread, sessionId);
   await requireAuthorizedProject(ctx, principal, thread.projectId, ProjectPermission.CLI_THREAD);
   return { thread, session, profile };
 }

@@ -154,8 +154,13 @@ function getNextProcessingState(chat: Doc<"cliThreads">): "claimed" | "streaming
   return chat.activeAssistantMessageId ? "streaming" : "claimed";
 }
 
-function canSessionMutateChatClaim(chat: Doc<"cliThreads">, sessionId: Id<"cliSessions">, now: number): boolean {
-  return !chat.claimedBySessionId || chat.claimedBySessionId === sessionId || isThreadClaimExpired(chat, now);
+async function canSessionMutateChatClaim(
+  ctx: MutationCtx,
+  chat: Doc<"cliThreads">,
+  sessionId: Id<"cliSessions">,
+  now: number
+): Promise<boolean> {
+  return !chat.claimedBySessionId || chat.claimedBySessionId === sessionId || (await isThreadClaimExpired(ctx, chat, now));
 }
 
 /**
@@ -196,13 +201,12 @@ export const claimThread = mutation({
       return false;
     }
 
-    if (!canSessionMutateChatClaim(chat, args.sessionId, now)) {
+    if (!(await canSessionMutateChatClaim(ctx, chat, args.sessionId, now))) {
       return false;
     }
 
     await applyThreadClaim(ctx, args.threadId, {
       sessionId: args.sessionId,
-      claimedAt: now,
       claimLeaseExpiresAt: now + args.leaseMs,
       processingState: getNextProcessingState(chat),
       now,
@@ -236,14 +240,11 @@ export const heartbeatClaim = mutation({
     // chat.projectId, ProjectPermission.CLI_THREAD)`.
 
     const now = Date.now();
-    if (chat.claimedBySessionId !== args.sessionId || isThreadClaimExpired(chat, now)) {
+    if (chat.claimedBySessionId !== args.sessionId || (await isThreadClaimExpired(ctx, chat, now))) {
       return false;
     }
 
-    await extendThreadClaimLease(ctx, args.threadId, {
-      claimedAt: now,
-      claimLeaseExpiresAt: now + args.leaseMs,
-    });
+    await extendThreadClaimLease(ctx, args.threadId, now + args.leaseMs);
 
     // Pending approval requests live exactly as long as the claim lease.
     await extendPendingInteractionRequestExpiry(ctx, args.threadId, now + args.leaseMs, now);
@@ -656,8 +657,9 @@ export const isClaimActiveForSession = query({
     }
 
     const now = Date.now();
-    return chat.claimedBySessionId === args.sessionId && !isThreadClaimExpired(chat, now) &&
-      (args.messageId === undefined || chat.activeAssistantMessageId === args.messageId);
+    return chat.claimedBySessionId === args.sessionId &&
+      (args.messageId === undefined || chat.activeAssistantMessageId === args.messageId) &&
+      !(await isThreadClaimExpired(ctx, chat, now));
   },
 });
 
@@ -732,7 +734,7 @@ export const streamingWatchdogTick = internalMutation({
       return null;
     }
 
-    if (!chat.claimLeaseExpiresAt || chat.claimLeaseExpiresAt <= now) {
+    if (await isThreadClaimExpired(ctx, chat, now)) {
       await failStreamingChat(ctx, chat, STREAM_CLAIM_LEASE_EXPIRED_REASON, now);
       return null;
     }

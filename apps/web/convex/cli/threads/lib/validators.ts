@@ -65,8 +65,6 @@ export const cliThreadItemValidator = v.object({
   // won't pick them up until the user's next send.
   queueHeldAt: v.optional(v.number()),
   claimedBySessionId: v.optional(v.id("cliSessions")),
-  claimedAt: v.optional(v.number()),
-  claimLeaseExpiresAt: v.optional(v.number()),
   activeAssistantMessageId: v.optional(v.id("cliMessages")),
   linesAdded: v.optional(v.number()),
   linesRemoved: v.optional(v.number()),
@@ -225,8 +223,6 @@ export function toThreadItem(
     hasPendingUserMessages: chat.hasPendingUserMessages,
     queueHeldAt: chat.queueHeldAt,
     claimedBySessionId: chat.claimedBySessionId,
-    claimedAt: chat.claimedAt,
-    claimLeaseExpiresAt: chat.claimLeaseExpiresAt,
     activeAssistantMessageId: chat.activeAssistantMessageId,
     linesAdded: chat.git?.linesAdded,
     linesRemoved: chat.git?.linesRemoved,
