@@ -8,6 +8,7 @@ export type AgentAuthResult = {
   userId: Id<"users">;
   apiKeyId: Id<"apiKeys">;
   apiKeyScope: ApiKeyScope;
+  lastUsedAt?: number;
 };
 
 export async function withAgentAuth<T>(

@@ -37,6 +37,11 @@ export function getKeyPrefix(apiKey: string): string {
   return apiKey.substring(0, 16);
 }
 
+/** True when `lastUsedAt` is unset or at least `minIntervalMs` old. */
+export function isLastUsedAtStale(key: { lastUsedAt?: number }, minIntervalMs: number, now = Date.now()): boolean {
+  return key.lastUsedAt === undefined || now - key.lastUsedAt >= Math.max(0, minIntervalMs);
+}
+
 /** A key without `expiresAt` never expires. */
 export function isApiKeyExpired(key: { expiresAt?: number }, now = Date.now()): boolean {
   return key.expiresAt !== undefined && key.expiresAt <= now;

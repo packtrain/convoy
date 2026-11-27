@@ -313,6 +313,7 @@ export const validateByKey = internalQuery({
       apiKeyId: v.id("apiKeys"),
       apiKeyScope: apiKeyPrincipalScopeValidator,
       kind: v.optional(apiKeyKindValidator),
+      lastUsedAt: v.optional(v.number()),
     }),
     v.null()
   ),
@@ -328,6 +329,7 @@ export const validateByKey = internalQuery({
       apiKeyId: apiKey._id,
       apiKeyScope: normalizeApiKeyScope(apiKey),
       kind: apiKey.kind,
+      lastUsedAt: apiKey.lastUsedAt,
     };
   },
 });

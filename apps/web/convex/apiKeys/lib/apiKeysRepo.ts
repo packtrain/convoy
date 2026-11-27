@@ -2,6 +2,7 @@ import type { PaginationOptions, PaginationResult } from "convex/server";
 import type { MutationCtx, QueryCtx } from "../../_generated/server";
 import type { Doc, Id } from "../../_generated/dataModel";
 import type { ApiKeyScope } from "../../lib/access/permissions";
+import { isLastUsedAtStale } from "../../lib/access/apiKeys";
 
 type Ctx = QueryCtx | MutationCtx;
 
@@ -97,18 +98,6 @@ export async function deleteApiKey(ctx: MutationCtx, apiKeyId: Id<"apiKeys">): P
   await ctx.db.delete("apiKeys", apiKeyId);
 }
 
-function shouldUpdateLastUsedAt(
-  apiKey: Pick<Doc<"apiKeys">, "lastUsedAt">,
-  minIntervalMs: number,
-  now: number
-): boolean {
-  if (apiKey.lastUsedAt === undefined) {
-    return true;
-  }
-
-  return now - apiKey.lastUsedAt >= Math.max(0, minIntervalMs);
-}
-
 /**
  * Stamp `lastUsedAt` unless it was already stamped within `minIntervalMs`
  * (usage recording is high-frequency; staleness gating bounds the writes).
@@ -123,7 +112,7 @@ export async function touchLastUsedAtIfStale(
   }
 
   const now = Date.now();
-  if (!shouldUpdateLastUsedAt(apiKey, minIntervalMs, now)) {
+  if (!isLastUsedAtStale(apiKey, minIntervalMs, now)) {
     return;
   }
 

@@ -1,7 +1,7 @@
 import { afterEach, expect, test, describe, vi } from "vitest";
 import { api, internal } from "../_generated/api";
 import { createTestContext } from "../../convex-testing";
-import { hashApiKey } from "../lib/access/apiKeys";
+import { hashApiKey, isLastUsedAtStale } from "../lib/access/apiKeys";
 import { mintApiKey } from "../lib/access/mintApiKey";
 import type { MutationCtx } from "../_generated/server";
 
@@ -815,6 +815,20 @@ describe("apiKeys", () => {
       });
     });
 
+    test("validateByKey returns lastUsedAt so HTTP callers can skip a fresh usage touch", async () => {
+      const ctx = createTestContext();
+      const { asUser, t } = await ctx.setupUser();
+      const result = await asUser.mutation(api.apiKeys.core.create, {
+        name: "Usage", expiresAt: Date.now() + 86400000,
+      });
+
+      expect((await t.query(internal.apiKeys.core.validateByKey, { apiKey: result.key }))?.lastUsedAt).toBeUndefined();
+      await t.mutation(internal.apiKeys.core.recordUsage, { apiKeyId: result.id });
+      const stamped = await t.run(async (runCtx) => (await runCtx.db.get("apiKeys", result.id))?.lastUsedAt);
+      expect(stamped).toBeDefined();
+      expect((await t.query(internal.apiKeys.core.validateByKey, { apiKey: result.key }))?.lastUsedAt).toBe(stamped);
+    });
+
     test("filters project discovery and project lookup by scoped allowlist", async () => {
       const ctx = createTestContext();
       const { org, project, user, asUser } = await ctx.setupProject();
@@ -995,6 +1009,14 @@ describe("apiKeys", () => {
         apiKey: "sk_user_invalid_key_12345",
       });
     });
+  });
+
+  test("isLastUsedAtStale is true when never used or the interval has passed", () => {
+    const now = 1_000_000;
+    expect(isLastUsedAtStale({}, 5000, now)).toBe(true);
+    expect(isLastUsedAtStale({ lastUsedAt: now - 4999 }, 5000, now)).toBe(false);
+    expect(isLastUsedAtStale({ lastUsedAt: now - 5000 }, 5000, now)).toBe(true);
+    expect(isLastUsedAtStale({ lastUsedAt: now }, -1, now)).toBe(true);
   });
 
   describe("recordUsageIfStale", () => {

@@ -25,6 +25,7 @@ import {
   type RegisterBody,
 } from "./lib/http/registerBody";
 import { jsonError, jsonResponse } from "./lib/http/responses";
+import { isLastUsedAtStale } from "./lib/access/apiKeys";
 import { handleGithubWebhook } from "./integrations/github/httpHandlers";
 
 const http = httpRouter();
@@ -81,14 +82,16 @@ async function handleMcpPost(ctx: ActionCtx, request: Request): Promise<Response
   try {
     const response = await handleMcpRequest(ctx, apiKey, body, request.url);
 
-    // Record API key usage
-    try {
-      await ctx.runMutation(internal.apiKeys.core.recordUsageByKeyIfStale, {
-        apiKey,
-        minIntervalMs: API_KEY_USAGE_MIN_INTERVAL_MS,
-      });
-    } catch (e) {
-      console.error("Failed to record API key usage:", e);
+    // Record API key usage; skip the mutation while the stamp is fresh (OS-2626)
+    if (isLastUsedAtStale(auth, API_KEY_USAGE_MIN_INTERVAL_MS)) {
+      try {
+        await ctx.runMutation(internal.apiKeys.core.recordUsageByKeyIfStale, {
+          apiKey,
+          minIntervalMs: API_KEY_USAGE_MIN_INTERVAL_MS,
+        });
+      } catch (e) {
+        console.error("Failed to record API key usage:", e);
+      }
     }
 
     // Notifications don't get responses (handler returns null)
@@ -252,14 +255,15 @@ http.route({
         force: scalars.force,
       });
 
-      // Record API key usage
-      try {
-        await ctx.runMutation(internal.apiKeys.core.recordUsageIfStale, {
-          apiKeyId: auth.apiKeyId,
-          minIntervalMs: API_KEY_USAGE_MIN_INTERVAL_MS,
-        });
-      } catch (e) {
-        console.error("Failed to record API key usage:", e);
+      if (isLastUsedAtStale(auth, API_KEY_USAGE_MIN_INTERVAL_MS)) {
+        try {
+          await ctx.runMutation(internal.apiKeys.core.recordUsageIfStale, {
+            apiKeyId: auth.apiKeyId,
+            minIntervalMs: API_KEY_USAGE_MIN_INTERVAL_MS,
+          });
+        } catch (e) {
+          console.error("Failed to record API key usage:", e);
+        }
       }
 
       return jsonResponse({ sessionId: result.sessionId, profileId: result.profileId });
@@ -308,13 +312,15 @@ http.route({
       return jsonError("Session not found or not owned by this user", 404);
     }
 
-    try {
-      await ctx.runMutation(internal.apiKeys.core.recordUsageIfStale, {
-        apiKeyId: auth.apiKeyId,
-        minIntervalMs: API_KEY_USAGE_MIN_INTERVAL_MS,
-      });
-    } catch (e) {
-      console.error("Failed to record API key usage:", e);
+    if (isLastUsedAtStale(auth, API_KEY_USAGE_MIN_INTERVAL_MS)) {
+      try {
+        await ctx.runMutation(internal.apiKeys.core.recordUsageIfStale, {
+          apiKeyId: auth.apiKeyId,
+          minIntervalMs: API_KEY_USAGE_MIN_INTERVAL_MS,
+        });
+      } catch (e) {
+        console.error("Failed to record API key usage:", e);
+      }
     }
 
     return jsonResponse({ ok: true });

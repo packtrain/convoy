@@ -109,7 +109,7 @@ Authentication uses user-scoped API keys passed as Bearer tokens.
 - **Maximum**: none; expired automated keys are swept by cron (see `permissions-system.md#api-key-lifecycle`)
 - **Expiry**: Configurable, up to 1 year
 - **Storage**: SHA-256 hashed server-side (not recoverable after creation)
-- **Tracking**: `lastUsedAt` is a best-effort, throttled recency signal for successful MCP and CLI usage
+- **Tracking**: `lastUsedAt` is a best-effort, throttled recency signal for successful MCP and CLI usage. It advances at most once per 5 minutes; HTTP handlers read it from `validateByKey` and skip the usage mutation while it is fresh
 
 ### Auth Flow
 
