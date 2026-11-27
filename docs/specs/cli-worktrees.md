@@ -647,6 +647,10 @@ precedence order:
 3. `cliThreads.git.worktree.branch` — while a worktree is pending or after its
    synced profile path has been removed.
 
+In a multi-repo folder the CLI reports each repo's branch instead, and the
+thread shows `N repos` while they differ ([Multi-repo projects → Branch and
+pull requests](cli-multi-repo-projects.md#branch-and-pull-requests)).
+
 Threads that predate the snapshot (or whose CLI has not run since) fall back
 to 2/3 and may show no branch at all — rows fail soft. Resolving this field
 reuses the existing grouped thread-to-profile enrichment; it does not add

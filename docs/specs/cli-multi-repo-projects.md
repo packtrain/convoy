@@ -6,8 +6,9 @@ top folder, and threads run there. The CLI detects the repos inside it and
 reports each one to Convoy as its own path entry.
 
 Epic: OS-2520. Slice 0: OS-2521 (detection). Slice 1: OS-2522 (Changes,
-History and revert per repo, [repo switcher](#repo-switcher)). Later slices
-point branch, PR and worktree features at repo entries.
+History and revert per repo, [repo switcher](#repo-switcher)). Slice 2:
+OS-2523 ([branch and pull requests](#branch-and-pull-requests) per repo).
+Slice 3 points worktree features at repo entries.
 
 ## Related specs
 
@@ -15,6 +16,7 @@ point branch, PR and worktree features at repo entries.
 - [Worktrees](cli-worktrees.md): the path entry model repo entries reuse
 - [TUI](cli-tui.md#multi-repo-review-cli-01860-os-2521): the Add project review
 - [Thread run diffs](cli-thread-run-diffs.md#multi-repo-folders): per-repo checkpoints and the grouped Changes card
+- [Worktrees → Thread List Branch Display](cli-worktrees.md#thread-list-branch-display), [Thread PR badge](cli-thread-pr-badge.md), [Pull request watch](pull-request-watch.md): the single-repo rules this slice extends
 
 ## Discovery
 
@@ -164,6 +166,85 @@ picks the repo, listing the folder's repo entries in stored order:
 No CLI command: the switcher only picks which existing path entry the web
 views target.
 
+## Branch and pull requests
+
+Slice 2 (OS-2523, CLI 0.188.0). A thread in a multi-repo folder has a branch
+and a Branch pull request per repo. A single-repo folder, a worktree, and a
+thread on an older CLI behave as before.
+
+- **Branch.** Where `reportExecutionBranch` runs today (run start, after the
+  run, and on a mid-run VCS signal), the CLI sends `repos: [{ repo, branch? }]`
+  instead of `branch`: each repo's relative path and checked-out branch, one
+  `git rev-parse` per repo, 8 at a time. The repo list is the stat-only scan
+  the checkpoints use (`folderRepoPaths`). The server stores the shared branch
+  in `git.executionBranch` when every repo is on the same one, so the thread's
+  `branch` and every surface that shows it work unchanged. Otherwise
+  `executionBranch` is cleared and `git.repoBranches` lists each repo, capped
+  at 128. When no repo is on a branch (all detached), both are cleared, as for
+  a detached single repo. A report without `repos` clears both lists, and one
+  with `repos` clears the single-repo `git.pullRequest`. The server drops a
+  `repo` that is empty, `.`, absolute, has a `..` segment or is over 256
+  characters, the same rule as `syncRepos`.
+- **Display.** Where the thread shows its branch (the full row, the compact
+  row's hover card, the composer's branch chip, Watch Tower rows and cards),
+  it shows `N repos` while the repos differ, and each repo as
+  `old-app · main` on hover (`threadBranchLabel`,
+  `lib/threads/repo-branches.ts`). A repo on a detached HEAD reads
+  `no branch`. The `N repos` chip in the composer copies nothing.
+- **Pull requests.** After a run and on a mid-run VCS signal, the CLI runs the
+  [PR lookup](cli-thread-pr-badge.md#capture-cli) in each repo with that
+  repo's branch and remote, 4 repos at a time (`lookupRepoPullRequests`), with
+  one 30-second deadline for the whole folder. A repo that hasn't answered by
+  then is left out, and no lookup starts after it. A repo whose git read
+  fails (moved or deleted after the scan) is left out alone. A repo on the branch
+  `origin/HEAD` names is cleared without a forge call, so a cloned folder whose
+  repos sit on `main` costs no `gh` runs; unlike a single repo, an open PR
+  whose head is the default branch is not shown. `git clone` sets
+  `origin/HEAD` and `git init` + `remote add` does not (`git remote set-head
+  origin --auto` adds it), so a repo without it gets a forge call on every
+  run. It reports
+  `reportPullRequest({ repos: [{ repo, pullRequest? }] })` for the repos whose
+  lookup succeeded: a PR sets that repo's, an absent one clears it, and a
+  failed lookup leaves the repo out so its last-known PR survives. The
+  server merges this into `git.repoPullRequests` (sorted by repo, capped at
+  128), and a branch report drops the PRs of repos no longer in the folder.
+  `git.pullRequest` is for single-repo threads only.
+- **Badges.** Every surface with the PR badge (both row layouts, the composer
+  bar, the Changes toolbar, Watch Tower) shows one badge per repo's PR, at most
+  3, then `+N` with the rest in a native tooltip (`ThreadPrBadges`). A fourth
+  PR is reachable from the compact row's hover card only, which lists every
+  PR; folders with 4+ open PRs in one thread are expected to be rare. A badge's tooltip and
+  the hover card's PR rows start with the repo: `new-app · PR #12 · Open — …`.
+  The Attached pull request's muted `#N` is hidden when it is any of them.
+- **Task links.** A repo's PR mirrors onto the task as
+  `pr:<provider>:<repo>:<number>` with identifier `new-app PR #12`, so two
+  repos' PR #12 are two links. In the id, the repo is its path with each run
+  of characters outside `[A-Za-z0-9_-]` turned into `-`, cut at 80, then `.`
+  and the first 16 hex digits of the full path's SHA-256
+  (`packages/api` → `packages-api.<hash>`), so two paths never share a link
+  and the id stays within the 160-character rule. Every report of
+  a present PR schedules the upsert, as for a single repo: an unchanged link
+  writes nothing, and a task attached since the last report gets it.
+- **Watch.** The watch stays on the thread's one Attached pull request
+  ([Pull request watch](pull-request-watch.md)): the agent names the PR with
+  `convoy threads watch-pr <url>`, so there is nothing to pick. When the
+  watched PR is one of the thread's repo PRs, every watch message names its
+  repo: `Update on pull request #12 (https://…) in new-app, which Convoy is
+  watching…`. Its repository must still be connected to the project, as
+  before.
+
+No new CLI command or MCP tool: branches and PRs are reported by the worker,
+and `watch-pr` already takes a PR URL.
+
+Cost: no new mutation calls, queries or subscriptions. The two reports carry
+the per-repo lists in the calls they already make. Thread list items grow by
+each repo's branch only while the repos differ, and by each repo's PR. A run
+start scans the folder with `stat` twice (branch report and checkpoint). Per
+run, the CLI adds one `git rev-parse` per repo at start and end. At the end, a
+repo on its default branch adds one `rev-parse` and one `symbolic-ref`; any
+other repo adds two more of each plus a forge call. A post-run report
+schedules one task-link upsert per repo PR when the thread has a task.
+
 ## Verification
 
 Unit tests: `lib/git/repo.test.ts` (discovery rules, cap, missing folder),
@@ -175,7 +256,13 @@ Slice 1: `lib/git/checkpoint.test.ts` (multi-repo checkpoints),
 (repo in use), `run-changes-card.test.tsx` (groups), `run-diff-repos.test.ts`,
 `use-changes-repo.test.tsx`, `worktree-changes-view.test.tsx` and
 `thread-workspace.test.tsx` (switcher), `thread-processor.test.ts` (older
-backend).
+backend). Slice 2: `convex/cli/threads/runControl.test.ts` (shared and
+per-repo branches, PR merge, pruning, task link ids),
+`pullRequestWatches.test.ts` (repo in the message), `lib/git/repo.test.ts`
+(`folderRepoPaths`, `readRepoBranches`), `lib/pull-requests.test.ts`
+(default branch skips the forge, a failed lookup is left out, the deadline),
+`thread-processor.test.ts` (per-repo reports), `thread-pr-badge.test.tsx`
+(`+N`), `repo-branches.test.ts`.
 
 By hand: in a shared environment, mount `~/code/acme` holding `old-app`,
 `new-app` and `packages/api`, then add `~/code/acme` itself in the TUI with

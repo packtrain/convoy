@@ -112,6 +112,10 @@ Update on pull request #482 (https://github.com/contoso/convoy/pull/482), which 
 Look into each item and act on it as your task requires. The watch stays on, so don't run `convoy threads watch-pr` again. End your turn when you're done; Convoy messages you on the next change.
 ```
 
+- In a multi-repo folder, the first line names the repo after the URL when
+  the PR is one of the thread's repo PRs: `… (https://…) in new-app, which
+  Convoy is watching…`. So do the final and read-failure messages
+  ([Multi-repo projects](cli-multi-repo-projects.md#branch-and-pull-requests)).
 - A check line names the check and links its run. At most 10 checks or
   comments are listed, then "and 4 more".
 - A fork's author writes its workflow's job names, so Convoy passes a check

@@ -2,7 +2,7 @@ import { mkdtemp, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { GitCommandError, runGit } from "./exec.js";
-import { getCheckoutIdentity, listRepositoryPaths, mapLimited, repoRelativePath } from "./repo.js";
+import { folderRepoPaths, getCheckoutIdentity, mapLimited, repoRelativePath } from "./repo.js";
 
 /**
  * Hidden-ref git checkpoints around a thread run (OS-1142).
@@ -180,9 +180,8 @@ const baselineTimeouts = new Map<string, number>();
 export async function captureRunBaseline(
   cwd: string, threadId: string, runId: string, options: { baselineTimeoutMs?: number } = {},
 ): Promise<RunBaseline | null> {
-  // Child repos win over a checkout the folder sits inside: that one's tree doesn't see their files.
-  const paths = await listRepositoryPaths(cwd).catch(() => []);
-  if (paths.length === 0 || paths[0] === cwd) {
+  const paths = await folderRepoPaths(cwd);
+  if (!paths) {
     return (await capturePreRunCheckpoint(cwd, threadId, runId)) ? { kind: "repo" } : null;
   }
   const ref = checkpointRef(threadId, runId, "pre");

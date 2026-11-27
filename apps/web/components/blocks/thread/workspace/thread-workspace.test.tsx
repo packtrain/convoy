@@ -971,7 +971,7 @@ describe("ThreadWorkspace", () => {
       )
     ).toBeNull();
     expect(detailThreadComposerRenderMock).toHaveBeenLastCalledWith(
-      expect.objectContaining({ pullRequest })
+      expect.objectContaining({ pullRequests: [pullRequest] })
     );
   });
 

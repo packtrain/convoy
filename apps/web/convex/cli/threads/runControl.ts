@@ -21,7 +21,7 @@ import { settleAssistantStreamHead } from "../lib/chunks/lifecycle";
 import { ensure } from "../../lib/shared/ensure";
 import { errors } from "../errors";
 import { ProjectPermission } from "../../../lib/authz/permissions";
-import { cliThreadPullRequestValidator } from "../../lib/contracts/validators";
+import { cliThreadPullRequestValidator, cliThreadRepoBranchValidator, type CliThreadPullRequest } from "../../lib/contracts/validators";
 import { isThreadClaimExpired } from "../lib/claims";
 import {
   STREAM_CANCELLED_BY_USER_REASON,
@@ -29,6 +29,7 @@ import {
   STREAM_CLAIM_RELEASED_REASON,
   STREAM_DISCONNECT_REASON,
   STREAM_WATCHDOG_INTERVAL_MS,
+  MAX_PROFILE_REPOS,
 } from "../lib/constants";
 import { isParkedWindDown, resolveRunWindDown } from "../lib/parkedWindDown";
 import { emitEvent } from "../../lib/events";
@@ -55,7 +56,7 @@ import {
   setThreadPullRequest,
   setThreadWatchdog,
 } from "./lib/cliThreadsRepo";
-import { normalizeExecutionBranch } from "./lib/naming";
+import { isRepoPath, normalizeExecutionBranch, toRepoBranchSnapshot } from "./lib/naming";
 import type { Doc, Id } from "../../_generated/dataModel";
 import { isContainerThread } from "../lib/watchStatus";
 
@@ -269,6 +270,8 @@ export const reportExecutionBranch = mutation({
     threadId: v.id("cliThreads"),
     sessionId: v.id("cliSessions"),
     branch: v.optional(v.string()),
+    // A multi-repo folder's repos, instead of `branch` (OS-2523).
+    repos: v.optional(v.array(cliThreadRepoBranchValidator)),
     // The checkout the report was read from (OS-2622).
     path: v.optional(v.string()),
     apiKey: v.optional(v.string()),
@@ -287,11 +290,60 @@ export const reportExecutionBranch = mutation({
       return null;
     }
 
-    const branch = normalizeExecutionBranch(args.branch);
-    await setThreadExecutionBranch(ctx, args.threadId, branch);
+    if (!args.repos) {
+      await setThreadExecutionBranch(ctx, args.threadId, {
+        executionBranch: normalizeExecutionBranch(args.branch),
+        repoBranches: undefined,
+        repoPullRequests: undefined,
+      });
+      return null;
+    }
+    const { executionBranch, repoBranches } = toRepoBranchSnapshot(args.repos);
+    // A repo that left the folder takes its PR with it.
+    const repos = new Set(args.repos.map((entry) => entry.repo));
+    const repoPullRequests = chat.git?.repoPullRequests?.filter((pr) => repos.has(pr.repo));
+    await setThreadExecutionBranch(ctx, args.threadId, {
+      // A multi-repo folder has no single-repo PR.
+      pullRequest: undefined,
+      executionBranch,
+      repoBranches,
+      repoPullRequests: repoPullRequests?.length ? repoPullRequests : undefined,
+    });
     return null;
   },
 });
+
+/** A repo path in a link id: a readable start, then 16 hex of the full path's SHA-256, so distinct paths never share a link. */
+async function toLinkIdPart(repo: string): Promise<string> {
+  const digest = new Uint8Array(await crypto.subtle.digest("SHA-256", new TextEncoder().encode(repo)));
+  const hash = Array.from(digest.slice(0, 8), (byte) => byte.toString(16).padStart(2, "0")).join("");
+  return `${repo.replace(/[^a-zA-Z0-9_-]+/g, "-").slice(0, 80)}.${hash}`;
+}
+
+/**
+ * Mirror a PR onto the thread's associated task's external links (OS-1455). A cleared snapshot never removes the
+ * link: "lookup found no PR" must not erase a merged PR from task history. `originTaskId` is deliberately not used,
+ * since those threads never run. The task write rides on the caller's CLI_THREAD authorization; if the roles
+ * granting CLI_THREAD and TASK_UPDATE ever diverge, this needs its own check. A repo PR's id names its repo (OS-2523).
+ */
+async function linkPullRequest(ctx: MutationCtx, chat: Doc<"cliThreads">, userId: Id<"users">, pullRequest: CliThreadPullRequest, repo?: string) {
+  if (!chat.associatedTaskId) return;
+  const ref = formatThreadPullRequestRef(pullRequest);
+  await ctx.scheduler.runAfter(0, internal.tasks.core.upsertExternalLink, {
+    taskId: chat.associatedTaskId,
+    userId,
+    // Deterministic id: repeated captures and refresh sweeps upsert in place instead of accumulating links.
+    id: repo === undefined ? `pr:${pullRequest.provider}:${pullRequest.number}` : `pr:${pullRequest.provider}:${await toLinkIdPart(repo)}:${pullRequest.number}`,
+    link: {
+      kind: "pull_request",
+      url: pullRequest.url,
+      // Forge titles are unbounded; links cap text fields. Truncate rather than drop the link.
+      title: pullRequest.title.slice(0, MAX_EXTERNAL_LINK_TEXT_LENGTH),
+      identifier: repo === undefined ? ref : `${repo} ${ref}`.slice(0, MAX_EXTERNAL_LINK_TEXT_LENGTH),
+      branch: pullRequest.headBranch,
+    },
+  });
+}
 
 /**
  * Store the last-known PR snapshot for the thread's branch (OS-1370). Called only
@@ -304,6 +356,8 @@ export const reportPullRequest = mutation({
     threadId: v.id("cliThreads"),
     sessionId: v.id("cliSessions"),
     pullRequest: v.optional(cliThreadPullRequestValidator),
+    // A multi-repo folder, instead of `pullRequest` (OS-2523): repos whose lookup succeeded; an absent PR clears that repo's.
+    repos: v.optional(v.array(v.object({ repo: v.string(), pullRequest: v.optional(cliThreadPullRequestValidator) }))),
     // The checkout the report was read from (OS-2622).
     path: v.optional(v.string()),
     apiKey: v.optional(v.string()),
@@ -322,31 +376,24 @@ export const reportPullRequest = mutation({
       return null;
     }
 
-    await setThreadPullRequest(ctx, args.threadId, args.pullRequest);
-
-    // Mirror onto the associated task's external links (OS-1455). A cleared snapshot
-    // never removes the link: "lookup found no PR" must not erase a merged PR from task
-    // history. `originTaskId` is deliberately not used — those threads never run.
-    // The task write rides on this handler's CLI_THREAD authorization; if the roles
-    // granting CLI_THREAD and TASK_UPDATE ever diverge, this needs its own check.
-    if (args.pullRequest && chat.associatedTaskId) {
-      await ctx.scheduler.runAfter(0, internal.tasks.core.upsertExternalLink, {
-        taskId: chat.associatedTaskId,
-        userId: user._id,
-        // Deterministic id: repeated captures and refresh sweeps upsert in
-        // place instead of accumulating one link per report.
-        id: `pr:${args.pullRequest.provider}:${args.pullRequest.number}`,
-        link: {
-          kind: "pull_request",
-          url: args.pullRequest.url,
-          // Forge titles are unbounded; links cap text fields. Truncate here
-          // rather than let an oversized title drop the link entirely.
-          title: args.pullRequest.title.slice(0, MAX_EXTERNAL_LINK_TEXT_LENGTH),
-          identifier: formatThreadPullRequestRef(args.pullRequest),
-          branch: args.pullRequest.headBranch,
-        },
-      });
+    if (args.repos) {
+      const stored = new Map((chat.git?.repoPullRequests ?? []).map((pr) => [pr.repo, pr]));
+      for (const { repo, pullRequest } of args.repos.filter((entry) => isRepoPath(entry.repo)).slice(0, MAX_PROFILE_REPOS)) {
+        if (!pullRequest) {
+          stored.delete(repo);
+          continue;
+        }
+        stored.set(repo, { repo, ...pullRequest });
+        // Every report, as for one repo: the upsert writes nothing when unchanged, and links a task attached since.
+        await linkPullRequest(ctx, chat, user._id, pullRequest, repo);
+      }
+      const repoPullRequests = [...stored.values()].sort((a, b) => (a.repo < b.repo ? -1 : 1)).slice(0, MAX_PROFILE_REPOS);
+      await setThreadPullRequest(ctx, args.threadId, { pullRequest: undefined, repoPullRequests: repoPullRequests.length > 0 ? repoPullRequests : undefined });
+      return null;
     }
+
+    await setThreadPullRequest(ctx, args.threadId, { pullRequest: args.pullRequest });
+    if (args.pullRequest) await linkPullRequest(ctx, chat, user._id, args.pullRequest);
     return null;
   },
 });

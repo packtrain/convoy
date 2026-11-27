@@ -4,7 +4,9 @@ import { AppLink, appRoute } from "@/lib/navigation";
 import { Checkbox } from "@/components/ui/checkbox";
 import { ThreadAgentChip } from "@/components/blocks/thread/thread-agent-chip";
 import { ThreadDiffStat } from "@/components/blocks/thread/thread-diff-stat";
-import { ThreadPrBadge } from "@/components/blocks/thread/thread-pr-badge";
+import { ThreadPrBadges } from "@/components/blocks/thread/thread-pr-badge";
+import { threadPullRequests } from "@/lib/threads/pull-request";
+import { threadBranchLabel } from "@/lib/threads/repo-branches";
 import { ThreadStatusIndicator } from "@/components/blocks/thread/thread-status-indicator";
 import { ThreadTaskRefLink } from "@/components/blocks/thread/thread-task-link";
 import { formatRelativeTime } from "@/lib/format-relative-time";
@@ -48,6 +50,7 @@ export function WatchTowerThreadCard({
   const waitingForAgent = isWaitingForAgent(thread);
   const displayStatus = getThreadDisplayStatus(thread);
   const statusMeta = THREAD_STATUS_META[displayStatus];
+  const branchLabel = threadBranchLabel(thread);
 
   return (
     <div
@@ -154,10 +157,8 @@ export function WatchTowerThreadCard({
             <span className="shrink-0">{thread.location.projectName}</span>
             {thread.ownerName ? <span className="truncate" title={thread.ownerName}>{thread.ownerName}</span> : null}
             <WatchTowerChildCount thread={thread} />
-            {thread.pullRequest ? <ThreadPrBadge pullRequest={thread.pullRequest} /> : null}
-            {thread.branch ? (
-              <WatchTowerBranchLabel branch={thread.branch} className="text-muted-foreground/70" />
-            ) : null}
+            <ThreadPrBadges pullRequests={threadPullRequests(thread)} />
+            {branchLabel ? <WatchTowerBranchLabel label={branchLabel} className="text-muted-foreground/70" /> : null}
           </span>
           <span className="flex shrink-0 items-center justify-end gap-1.5">
             {/* Unlike the list's fixed Changes column, an unset diff renders

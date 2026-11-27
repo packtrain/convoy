@@ -62,6 +62,13 @@ function areFlatValuesEqual(
   );
 }
 
+/** Arrays of flat value objects (a multi-repo folder's branches and PRs), item by item. */
+function areFlatArraysEqual(prev: readonly object[] | undefined, next: readonly object[] | undefined): boolean {
+  if (prev === next) return true;
+  if (!prev || !next || prev.length !== next.length) return false;
+  return prev.every((item, index) => areFlatValuesEqual(item, next[index]));
+}
+
 const THREAD_FIELD_CHECKS: ThreadFieldChecks = {
   _id: field("_id"),
   title: field("title"),
@@ -72,6 +79,8 @@ const THREAD_FIELD_CHECKS: ThreadFieldChecks = {
   linesAdded: field("linesAdded"),
   linesRemoved: field("linesRemoved"),
   pullRequest: field("pullRequest", areFlatValuesEqual),
+  repoBranches: field("repoBranches", areFlatArraysEqual),
+  repoPullRequests: field("repoPullRequests", areFlatArraysEqual),
   associatedTask: field("associatedTask", areThreadTasksEqual),
   attachedPullRequest: field("attachedPullRequest", areFlatValuesEqual),
   status: field("status"),

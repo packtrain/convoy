@@ -2391,3 +2391,172 @@ describe.each(["claude-code", "codex"] as const)("%s stop confirmation", (cliTyp
   });
 
 });
+
+describe("multi-repo folder branch and PR reports (OS-2523)", () => {
+  const pr = (repo: string, number: number) => ({
+    repo,
+    pullRequest: {
+      provider: "github" as const,
+      number,
+      title: `${repo} change`,
+      url: `https://github.com/acme/${repo}/pull/${number}`,
+      state: "open" as const,
+      headBranch: "feat/x",
+      baseBranch: "main",
+      capturedAt: 1_700_000_000_000,
+    },
+  });
+
+  async function setupWithoutTask() {
+    const setupResult = await setup();
+    await setupResult.t.run((c) => c.db.patch("cliThreads", setupResult.chat._id, { associatedTaskId: undefined }));
+    return setupResult;
+  }
+
+  async function setup() {
+    const ctx = createTestContext();
+    const { user, project, asUser, t } = await ctx.setupProject();
+    const profile = await ctx.cliProfile(user._id, project._id, {
+      paths: [{ id: "folder", path: "/code/acme", label: "acme" }],
+    });
+    const key = await asUser.mutation(api.apiKeys.core.create, { name: "CLI Key", expiresAt: Date.now() + 86_400_000 });
+    const session = await ctx.cliSession(profile._id, key.id);
+    const task = await ctx.task(project._id, user._id);
+    const chat = await ctx.cliThread(user._id, project._id, profile._id, {
+      pathId: "folder",
+      path: "/code/acme",
+      hasPendingUserMessages: true,
+      processingState: "idle",
+      status: "pending",
+      associatedTaskId: task._id,
+    });
+    await t.mutation(api.cli.threads.runControl.claimThread, { threadId: chat._id, sessionId: session._id, leaseMs: 60_000, apiKey: key.key });
+    const base = { threadId: chat._id, sessionId: session._id, apiKey: key.key };
+    const get = () => asUser.query(api.cli.threads.core.get, { threadId: chat._id });
+    return { t, base, get, task, chat };
+  }
+
+  test("repos on one branch show that branch, with no per-repo list", async () => {
+    const { t, base, get } = await setup();
+    await t.mutation(api.cli.threads.runControl.reportExecutionBranch, {
+      ...base,
+      repos: [{ repo: "new-app", branch: "main" }, { repo: "old-app", branch: "main" }],
+    });
+    const thread = await get();
+    expect(thread?.branch).toBe("main");
+    expect(thread?.repoBranches).toBeUndefined();
+  });
+
+  test("repos on different branches list each repo and show no single branch", async () => {
+    const { t, base, get } = await setup();
+    await t.mutation(api.cli.threads.runControl.reportExecutionBranch, {
+      ...base,
+      repos: [{ repo: "new-app", branch: "feat/x" }, { repo: "old-app", branch: "main" }, { repo: "packages/api" }],
+    });
+    const thread = await get();
+    expect(thread?.branch).toBeUndefined();
+    expect(thread?.repoBranches).toEqual([{ repo: "new-app", branch: "feat/x" }, { repo: "old-app", branch: "main" }, { repo: "packages/api" }]);
+  });
+
+  test("a repo report sets and clears one repo's PR and keeps the others", async () => {
+    const { t, base, get } = await setup();
+    await t.mutation(api.cli.threads.runControl.reportPullRequest, { ...base, repos: [pr("old-app", 7), pr("new-app", 7)] });
+    expect((await get())?.repoPullRequests?.map((p) => [p.repo, p.number])).toEqual([["new-app", 7], ["old-app", 7]]);
+
+    // A failed lookup in new-app is not reported; old-app's lookup found none.
+    await t.mutation(api.cli.threads.runControl.reportPullRequest, { ...base, repos: [{ repo: "old-app" }] });
+    const thread = await get();
+    expect(thread?.repoPullRequests?.map((p) => p.repo)).toEqual(["new-app"]);
+    expect(thread?.pullRequest).toBeUndefined();
+  });
+
+  test("a branch report drops the PRs of repos that left the folder, and a single-repo report clears both lists", async () => {
+    const { t, base, get } = await setup();
+    await t.mutation(api.cli.threads.runControl.reportPullRequest, { ...base, repos: [pr("old-app", 1), pr("new-app", 2)] });
+    await t.mutation(api.cli.threads.runControl.reportExecutionBranch, {
+      ...base,
+      repos: [{ repo: "new-app", branch: "feat/x" }, { repo: "packages/api", branch: "main" }],
+    });
+    expect((await get())?.repoPullRequests?.map((p) => p.repo)).toEqual(["new-app"]);
+
+    await t.mutation(api.cli.threads.runControl.reportExecutionBranch, { ...base, branch: "main" });
+    const thread = await get();
+    expect(thread?.branch).toBe("main");
+    expect(thread?.repoBranches).toBeUndefined();
+    expect(thread?.repoPullRequests).toBeUndefined();
+  });
+
+  test("a nested repo's PR gets a task link whose id fits the link id rule (review #1)", async () => {
+    const { t, base, task } = await setup();
+    await t.mutation(api.cli.threads.runControl.reportPullRequest, { ...base, repos: [pr("packages/api", 4)] });
+    await t.finishAllScheduledFunctions(vi.runAllTimers);
+    const links = await t.run(async (c) => (await c.db.get("tasks", task._id))?.externalLinks ?? []);
+    expect(links.map((link) => link.kind === "pull_request" ? link.identifier : null)).toEqual(["packages/api PR #4"]);
+    expect(links[0].id).toMatch(/^pr:github:packages-api\.[0-9a-f]{16}:4$/);
+  });
+
+  test("repo paths that escape or truncate alike still get two task links (round 2 #1)", async () => {
+    const { t, base, task } = await setup();
+    const long = "a".repeat(130);
+    await t.mutation(api.cli.threads.runControl.reportPullRequest, {
+      ...base,
+      repos: [pr("x/ab", 1), pr("x\u2fab", 1), pr(`${long}/one`, 1), pr(`${long}/two`, 1)],
+    });
+    await t.finishAllScheduledFunctions(vi.runAllTimers);
+    const links = await t.run(async (c) => (await c.db.get("tasks", task._id))?.externalLinks ?? []);
+    expect(new Set(links.map((link) => link.id)).size).toBe(4);
+  });
+
+  test("a PR reported again links a task attached after its first report (review #2)", async () => {
+    const { t, base, chat, task } = await setupWithoutTask();
+    await t.mutation(api.cli.threads.runControl.reportPullRequest, { ...base, repos: [pr("new-app", 7)] });
+    await t.run((c) => c.db.patch("cliThreads", chat._id, { associatedTaskId: task._id }));
+    await t.mutation(api.cli.threads.runControl.reportPullRequest, { ...base, repos: [pr("new-app", 7)] });
+    await t.finishAllScheduledFunctions(vi.runAllTimers);
+    const links = await t.run(async (c) => (await c.db.get("tasks", task._id))?.externalLinks ?? []);
+    expect(links.map((link) => link.id)).toEqual([expect.stringMatching(/^pr:github:new-app\.[0-9a-f]{16}:7$/)]);
+  });
+
+  test("a multi-repo report clears a single-repo PR left from before (review #3)", async () => {
+    const { t, base, chat, get } = await setup();
+    const single = pr("x", 9).pullRequest;
+    await t.run((c) => c.db.patch("cliThreads", chat._id, { git: { pullRequest: single } }));
+    await t.mutation(api.cli.threads.runControl.reportExecutionBranch, { ...base, repos: [{ repo: "new-app", branch: "main" }] });
+    expect((await get())?.pullRequest).toBeUndefined();
+
+    await t.run((c) => c.db.patch("cliThreads", chat._id, { git: { pullRequest: single } }));
+    await t.mutation(api.cli.threads.runControl.reportPullRequest, { ...base, repos: [{ repo: "new-app" }] });
+    expect((await get())?.pullRequest).toBeUndefined();
+  });
+
+  test("drops a repo path that is empty, absolute or leaves the folder (review #8)", async () => {
+    const { t, base, get } = await setup();
+    const bad = ["", ".", "/etc", "../up", "a/../../b"];
+    await t.mutation(api.cli.threads.runControl.reportExecutionBranch, {
+      ...base,
+      repos: [...bad.map((repo) => ({ repo, branch: "x" })), { repo: "new-app", branch: "feat/x" }, { repo: "old-app", branch: "main" }],
+    });
+    expect((await get())?.repoBranches?.map((entry) => entry.repo)).toEqual(["new-app", "old-app"]);
+    await t.mutation(api.cli.threads.runControl.reportPullRequest, { ...base, repos: [...bad.map((repo) => pr(repo, 1)), pr("new-app", 2)] });
+    expect((await get())?.repoPullRequests?.map((entry) => entry.repo)).toEqual(["new-app"]);
+  });
+
+  test("repos with no branch at all show no branch, not a repo count (review #10)", async () => {
+    const { t, base, get } = await setup();
+    await t.mutation(api.cli.threads.runControl.reportExecutionBranch, { ...base, repos: [{ repo: "new-app" }] });
+    const thread = await get();
+    expect(thread?.branch).toBeUndefined();
+    expect(thread?.repoBranches).toBeUndefined();
+  });
+
+  test("each repo's PR gets its own task link, even with the same number", async () => {
+    const { t, base, task } = await setup();
+    await t.mutation(api.cli.threads.runControl.reportPullRequest, { ...base, repos: [pr("old-app", 7), pr("new-app", 7)] });
+    await t.finishAllScheduledFunctions(vi.runAllTimers);
+    const links = await t.run(async (c) => (await c.db.get("tasks", task._id))?.externalLinks ?? []);
+    expect(links.map((link) => [link.id.replace(/\.[0-9a-f]{16}:/, ":"), link.kind === "pull_request" ? link.identifier : null]).sort()).toEqual([
+      ["pr:github:new-app:7", "new-app PR #7"],
+      ["pr:github:old-app:7", "old-app PR #7"],
+    ]);
+  });
+});

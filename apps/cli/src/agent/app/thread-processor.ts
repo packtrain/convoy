@@ -21,8 +21,8 @@ import { getDebugLevel } from "../runtimes/debug.js";
 import { getChunkStreamPolicy, isInlineImageAttachment, normalizeCliRuntimeModel, prepareRunExecution, signalsVcsStateChange } from "../runtimes/registry.js";
 import { createChunkFlushBuffer, type ChunkFlushBuffer } from "./chunk-flush-buffer.js";
 import { createThreadAttachmentCache } from "./thread-attachment-cache.js";
-import { captureRunBaseline, captureRunChanges, createWorktree, getCurrentBranch, type RunBaseline, type RunDiffSummary } from "../../lib/git/index.js";
-import { lookupThreadPullRequest } from "../../lib/pull-requests.js";
+import { captureRunBaseline, captureRunChanges, createWorktree, folderRepoPaths, getCurrentBranch, readRepoBranches, type RunBaseline, type RunDiffSummary } from "../../lib/git/index.js";
+import { lookupRepoPullRequests, lookupThreadPullRequest } from "../../lib/pull-requests.js";
 import { DEFAULT_MAX_CONCURRENT_CHATS, MESSAGE_HANDLER_SHUTDOWN_TIMEOUT_MS } from "./runtime-config.js";
 import { emitConnectEvent } from "../../lib/connect-events.js";
 import { formatWorkspaceNotice, resolveRunWorkspace } from "./workspace-resolution.js";
@@ -324,24 +324,39 @@ export function createMessageHandler(
       ? { previousPath: chat.previousWorkingDirectory, path: workingDirectory }
       : undefined;
 
-    // Branch (OS-1247) + last-known PR (OS-1370) snapshot. Display metadata
-    // only — strictly fail-soft, must never interfere with execution.
-    const reportVcsSnapshot = async (): Promise<void> => {
+    // Branch snapshot (OS-1247), per repo in a multi-repo folder (OS-2523); null (detached HEAD / non-Git)
+    // clears it. Display metadata only — fail soft, never block the run.
+    const reportBranch = async (path: string, repoPaths: string[] | null): Promise<void> => {
       try {
-        const branch = await getCurrentBranch(workingDirectory);
         await client.mutation(api.cli.threads.runControl.reportExecutionBranch, {
           threadId: chat._id,
           sessionId: typedSessionId,
-          branch: branch ?? undefined,
-          path: workingDirectory,
+          ...(repoPaths ? { repos: await readRepoBranches(path, repoPaths) } : { branch: (await getCurrentBranch(path)) ?? undefined }),
+          path,
         });
       } catch {
         // ignore: branch display must never interfere with execution
       }
+    };
+
+    // Branch + last-known PR (OS-1370) snapshot. Display metadata
+    // only — strictly fail-soft, must never interfere with execution.
+    const reportVcsSnapshot = async (): Promise<void> => {
+      const repoPaths = await folderRepoPaths(workingDirectory);
+      await reportBranch(workingDirectory, repoPaths);
 
       // A failed lookup reports nothing (last-known snapshot survives); only
       // a successful lookup writes — or clears — the snapshot.
       try {
+        if (repoPaths) {
+          const repos = await lookupRepoPullRequests(workingDirectory, repoPaths);
+          if (repos.length > 0) {
+            await client.mutation(api.cli.threads.runControl.reportPullRequest, {
+              threadId: chat._id, sessionId: typedSessionId, repos, path: workingDirectory,
+            });
+          }
+          return;
+        }
         const lookup = await lookupThreadPullRequest(workingDirectory);
         if (lookup) {
           await client.mutation(api.cli.threads.runControl.reportPullRequest, {
@@ -671,20 +686,8 @@ export function createMessageHandler(
             return resolved;
           };
           const snapshotRunStart = async (path: string, runId: string): Promise<RunBaseline | null> => {
-            // Branch snapshot (OS-1247): record the checkout actually used for
-            // this run; null (detached HEAD / non-Git) clears the snapshot.
-            // Display metadata only — fail soft, never block the run.
-            try {
-              const branch = await getCurrentBranch(path);
-              await client.mutation(api.cli.threads.runControl.reportExecutionBranch, {
-                threadId: chat._id,
-                sessionId: typedSessionId,
-                branch: branch ?? undefined,
-                path,
-              });
-            } catch {
-              // ignore: branch display must never interfere with execution
-            }
+            // Record the checkout actually used for this run.
+            await reportBranch(path, await folderRepoPaths(path));
 
             // Pre-run git checkpoint (OS-1142), per repo in a multi-repo folder. Fail soft:
             // a checkpoint problem must never block the run; null also covers non-git directories.

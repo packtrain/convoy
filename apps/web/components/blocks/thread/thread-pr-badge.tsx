@@ -53,6 +53,28 @@ export function ThreadPrBadge({
   );
 }
 
+const MAX_SHOWN_PULL_REQUESTS = 3;
+
+/** A thread's Branch pull requests, one badge each: at most 3, then "+N" listing the rest on hover (OS-2523). */
+export function ThreadPrBadges({
+  pullRequests,
+  ...badge
+}: { pullRequests: ThreadPullRequest[] } & Omit<Parameters<typeof ThreadPrBadge>[0], "pullRequest">) {
+  const rest = pullRequests.slice(MAX_SHOWN_PULL_REQUESTS);
+  return (
+    <>
+      {pullRequests.slice(0, MAX_SHOWN_PULL_REQUESTS).map((pullRequest) => (
+        <ThreadPrBadge key={pullRequest.url} pullRequest={pullRequest} {...badge} />
+      ))}
+      {rest.length > 0 ? (
+        <span className={cn("inline-flex shrink-0 items-center text-xs tabular-nums text-muted-foreground", badge.className)} title={rest.map(formatThreadPullRequestTooltip).join("\n")}>
+          +{rest.length}
+        </span>
+      ) : null}
+    </>
+  );
+}
+
 /** The Attached pull request's `#number` in the thread header; a plain click opens the PR tab, a modified one GitHub (OS-2405). */
 export function ThreadAttachedPrRefLink({ attached, onOpen }: { attached: AttachedPullRequest; onOpen: () => void }) {
   const label = `Attached pull request ${attachedPullRequestName(attached)}`;
@@ -76,9 +98,9 @@ export function ThreadAttachedPrRefLink({ attached, onOpen }: { attached: Attach
   );
 }
 
-/** The Attached pull request's `#number` on thread rows, muted like the task ref; hidden when it is the branch's PR (OS-2193). */
-export function ThreadAttachedPrBadge({ attached, branchPullRequest }: { attached: AttachedPullRequest; branchPullRequest?: ThreadPullRequest }) {
-  if (branchPullRequest && parseAttachedPullRequest(branchPullRequest.url)?.ref === attached.ref) return null;
+/** The Attached pull request's `#number` on thread rows, muted like the task ref; hidden when it is a Branch pull request (OS-2193). */
+export function ThreadAttachedPrBadge({ attached, branchPullRequests }: { attached: AttachedPullRequest; branchPullRequests: ThreadPullRequest[] }) {
+  if (branchPullRequests.some((pullRequest) => parseAttachedPullRequest(pullRequest.url)?.ref === attached.ref)) return null;
   const label = `Attached pull request ${attachedPullRequestName(attached)}`;
   return (
     <PullRequestLink

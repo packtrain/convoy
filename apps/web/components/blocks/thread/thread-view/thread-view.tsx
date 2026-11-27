@@ -65,6 +65,7 @@ import { ThreadMessageList } from "./thread-message-list";
 import { useThreadDetailMessageActions } from "./use-thread-detail-message-actions";
 import { useThreadDetailMessageVisibility } from "./use-thread-detail-message-visibility";
 import { useThreadProfileClis } from "./use-thread-profile-clis";
+import { threadPullRequests } from "@/lib/threads/pull-request";
 
 const ThreadViewComposer = memo(function ThreadViewComposer(
   props: ComponentProps<typeof ThreadComposer>
@@ -790,8 +791,8 @@ export function ThreadView({
           chat.metadata?.backgroundTasks?.messageId === chat.activeAssistantMessageId
           ? chat.metadata?.backgroundTasks : undefined,
         readOnlyAgent: chat.agent,
-        readOnlyWorkspace: { kind: chatWorkspaceKind, branch: chat.branch },
-        pullRequest: chat.pullRequest,
+        readOnlyWorkspace: { kind: chatWorkspaceKind, branch: chat.branch, repoBranches: chat.repoBranches },
+        pullRequests: threadPullRequests({ pullRequest: chat.pullRequest, repoPullRequests: chat.repoPullRequests }),
         planProgress,
         // Undefined keeps the composer's default placeholder.
         textareaPlaceholder: isForkCopying ? "Copying the original response…" : undefined,
@@ -852,7 +853,9 @@ export function ThreadView({
       chat.agent,
       chatWorkspaceKind,
       chat.branch,
+      chat.repoBranches,
       chat.pullRequest,
+      chat.repoPullRequests,
       chat._id,
       chat.associatedTask?._id,
       lockedProfiles,

@@ -5,9 +5,15 @@ import {
   GitPullRequestDraft,
   type LucideIcon,
 } from "lucide-react";
-import type { CliThreadPullRequest } from "@/convex/lib/contracts/validators";
+import type { CliThreadPullRequest, CliThreadRepoPullRequest } from "@/convex/lib/contracts/validators";
 
-export type ThreadPullRequest = CliThreadPullRequest;
+/** A Branch pull request; `repo` names its repo in a multi-repo folder (OS-2523). */
+export type ThreadPullRequest = CliThreadPullRequest & { repo?: string };
+
+/** A thread's Branch pull requests: one per repo in a multi-repo folder, else the branch's one. */
+export function threadPullRequests(thread: { pullRequest?: CliThreadPullRequest; repoPullRequests?: CliThreadRepoPullRequest[] }): ThreadPullRequest[] {
+  return thread.repoPullRequests ?? (thread.pullRequest ? [thread.pullRequest] : []);
+}
 
 export interface ThreadPullRequestPresentation {
   icon: LucideIcon;
@@ -71,8 +77,8 @@ export function formatThreadPullRequestRef(pullRequest: Pick<ThreadPullRequest, 
   return `PR #${pullRequest.number}`;
 }
 
-/** Native-tooltip text: `PR #123 · Open — <title>`. */
+/** Native-tooltip text: `PR #123 · Open — <title>`, after `<repo> · ` in a multi-repo folder. */
 export function formatThreadPullRequestTooltip(pullRequest: ThreadPullRequest): string {
   const { stateLabel } = getThreadPullRequestPresentation(pullRequest.state);
-  return `${formatThreadPullRequestRef(pullRequest)} · ${stateLabel} — ${pullRequest.title}`;
+  return `${pullRequest.repo ? `${pullRequest.repo} · ` : ""}${formatThreadPullRequestRef(pullRequest)} · ${stateLabel} — ${pullRequest.title}`;
 }
