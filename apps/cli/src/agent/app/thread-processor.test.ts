@@ -734,6 +734,26 @@ describe("message-handler", () => {
     }
   });
 
+  it("lists a multi-repo folder's repos in each plain run, not in runtime commands", async () => {
+    setQueryResponses({ pendingRuns: [
+      [makeUserMessage({ runtimeCommand: true, content: [{ type: "text", data: "/compact", timestamp: 1000 }] })],
+      [makeUserMessage()], [],
+    ], continuationIds: ["session", "session"] });
+    const syncRepos = vi.fn(async () => ["old-app", "packages/api"]);
+    const handler = createMessageHandler(() => mockRunner, mockClient, sessionId, { syncRepos });
+    handler.enqueueChat(makePendingChat());
+    try {
+      await vi.waitFor(() => expect(handler.isProcessing()).toBe(false));
+      const runs = vi.mocked(mockRunner.execute).mock.calls;
+      expect(runs[0][1]).toBe("/compact");
+      expect(runs[1][1]).toContain("This folder contains git repositories: old-app, packages/api.");
+      expect(syncRepos).toHaveBeenCalledTimes(1);
+      expect(syncRepos).toHaveBeenCalledWith(runs[1][0]);
+    } finally {
+      await handler.shutdown();
+    }
+  });
+
   it("reports a missing parent before attempting pending worktree creation", async () => {
     const chat = makePendingChat({ workingDirectory: join(TEST_ROOT, "missing"), worktree: {
       parentPathId: "parent", branch: "new-feature", status: "pending",

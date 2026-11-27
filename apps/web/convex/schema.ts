@@ -50,6 +50,7 @@ import {
   cliFavoriteComboValidator,
   cliCatalogModelValidator,
   codexModelStateValidator,
+  cliProfilePathKindValidator,
 } from "./lib/contracts/validators";
 import { taskExternalLinkValidator } from "./lib/contracts/taskExternalLinks";
 import { agentThreadWorkEntryValidator } from "./lib/contracts/agentThreadWork";
@@ -847,10 +848,10 @@ export default defineSchema({
         path: v.string(), // Absolute filesystem path
         label: v.string(), // Display name (defaults to basename)
         gitRemoteUrl: v.optional(v.string()),
-        // Git worktree entries (synced from `git worktree list` by the CLI).
-        // Absent kind = regular user-configured path.
-        kind: v.optional(v.literal("worktree")),
-        parentPathId: v.optional(v.string()), // id of the repo path this worktree belongs to
+        // Absent = configured path; "worktree" = synced from `git worktree list`;
+        // "repo" = a git repo detected inside a configured path (cli-multi-repo-projects.md).
+        kind: v.optional(cliProfilePathKindValidator),
+        parentPathId: v.optional(v.string()), // id of the path this worktree or repo belongs to
         branch: v.optional(v.string()), // checked-out branch
       })
     ),

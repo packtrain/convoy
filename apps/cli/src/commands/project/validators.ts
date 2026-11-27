@@ -2,6 +2,7 @@ import * as path from "node:path";
 import { createHash } from "node:crypto";
 import { MANAGED_RUNTIME_LABELS, antigravityAuthSchema, claudeAuthSchema, codexAuthSchema, cursorAuthSchema, keyRuntimeSchema, opencodeAuthSchema } from "../../lib/config/credentials/validators.js";
 import { z } from "zod";
+import type { DiscoveredRepo } from "../../lib/git/index.js";
 
 export const projectRegistrationSchema = z.object({
   identity: z.string().regex(/^[a-f0-9]{64}$/),
@@ -133,9 +134,12 @@ export function assertNoTraversal(directory: string): void {
   }
 }
 
-/** A shared Docker project sits under `/workspace` or a mount, never at a mount root. Spec: docs/specs/cli-shared-environments.md#projects */
-export function assertManagedPath(target: string, mounts: string[]): void {
-  if (mounts.includes(target)) throw new ProjectAddError("path", `${target} is a mounted folder. Mount its parent instead, so the project's worktrees stay on the host.`);
+/** A shared Docker project sits under `/workspace` or a mount; a mount root only as a multi-repo folder. Spec: docs/specs/cli-shared-environments.md#projects */
+export function assertManagedPath(target: string, mounts: string[], gitRepo = false): void {
+  if (mounts.includes(target) && gitRepo) {
+    throw new ProjectAddError("path", `${target} is a mounted folder and a git repo. Mount its parent instead, so the project's worktrees stay on the host.`);
+  }
+  if (mounts.includes(target)) return;
   if (!["/workspace", ...mounts].some(root => target.startsWith(root + "/"))) {
     throw new ProjectAddError("path", `Use a folder under /workspace or a mounted folder (${mounts.join(", ") || "none"}). A rebuild deletes anything else.`);
   }
@@ -150,6 +154,11 @@ export function assertChildPath(directory: string, workspace?: string): string {
   if (workspace && path.dirname(target) !== workspace) throw new ProjectAddError("path", "Project path must be a direct child of the workspace.");
   return target;
 }
+
+/** `project repos --json` output, read back from a managed environment; not strict, so a newer container CLI may add fields. */
+export const discoveredReposSchema: z.ZodType<DiscoveredRepo[]> = z.array(z.object({
+  path: z.string(), relativePath: z.string(), gitRemoteUrl: z.string().optional(), branch: z.string().optional(),
+}));
 
 const nativeAccountSchema = z.object({
   status: z.enum(["signed-in", "signed-out", "unknown"]),

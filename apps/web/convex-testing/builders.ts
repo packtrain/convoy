@@ -247,7 +247,7 @@ export function buildPathEntry(
     path?: string;
     label?: string;
     gitRemoteUrl?: string;
-    kind?: "worktree";
+    kind?: "worktree" | "repo";
     parentPathId?: string;
     branch?: string;
   } = {}

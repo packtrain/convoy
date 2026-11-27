@@ -6,7 +6,7 @@ import { targetLifecycle, targetShell } from "./command.js";
 import { EnvironmentController } from "./workflow.js";
 import { environmentDirectory, readEnvironment, withEnvironmentLock } from "./paths.js";
 import { containerName, type Environment } from "./validators.js";
-import { projectCheckSchema, projectAccountsSchema, type LoginRuntime } from "../project/validators.js";
+import { discoveredReposSchema, projectCheckSchema, projectAccountsSchema, type LoginRuntime } from "../project/validators.js";
 import { managedCredentialStatusSchema } from "../../lib/config/credentials/validators.js";
 import { logSchema } from "../service/validators.js";
 import { docker, helperArgs } from "./docker.js";
@@ -35,6 +35,9 @@ export const targetCommands = {
     withEnvironmentLock(environmentDirectory(environment.name), () => targetShell(environment, profile, undefined, { login: runtime, cli: ["project", "login", profile, "--runtime", runtime, ...(interrupt ? ["--interrupt"] : [])] })),
   account: async (environment: Environment, profile: string, identity: string) => projectAccountsSchema.parse(JSON.parse(
     await docker(["exec", "--user", "node", containerName(environment), "convoy", "project", "account", profile, "--expected-identity", identity], { timeout: 25_000, diagnostics: false }),
+  )),
+  repos: async (environment: Environment, directory: string) => discoveredReposSchema.parse(JSON.parse(
+    await docker(["exec", "--user", "node", containerName(environment), "convoy", "project", "repos", directory, "--json"], { timeout: 30_000, diagnostics: false }),
   )),
   check: async (environment: Environment, profile: string, diagnostics = true) => projectCheckSchema.parse(JSON.parse(
     await docker(["exec", "--user", "node", containerName(environment), "convoy", "project", "check", profile, "--json"], { timeout: 120_000, diagnostics }),

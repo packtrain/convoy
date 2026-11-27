@@ -98,6 +98,7 @@ vi.mock("./worktree-op-processor.js", () => ({
   createWorktreeOpProcessor: vi.fn(() => ({
     enqueue: vi.fn(),
     scanAndSync: vi.fn().mockResolvedValue(undefined),
+    syncRepos: vi.fn().mockResolvedValue([]),
   })),
 }));
 

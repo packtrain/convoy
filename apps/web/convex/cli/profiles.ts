@@ -22,6 +22,7 @@ import {
   listActiveProfilesByUser,
   listActiveProfilesByUserAndProject,
   mergeProfilePaths,
+  mergeRepoEntries,
   setProfileName,
   setProfilePathsIfChanged,
   softDeleteCliProfile,
@@ -34,6 +35,8 @@ import {
   paginateSessionsByProfile,
 } from "./lib/cliSessionsRepo";
 import { disconnectSession } from "./lib/disconnectSession";
+import { requireSessionOwnership } from "./lib/permissions";
+import { MAX_PROFILE_REPOS } from "./lib/constants";
 import { getActiveOrganizationsByIds } from "../organizations/lib/organizationsRepo";
 
 const PROFILE_SESSION_CLEANUP_BATCH_SIZE = 100;
@@ -168,6 +171,39 @@ export const syncPaths = internalMutation({
     await setProfilePathsIfChanged(ctx, profile, newPaths);
 
     return newPaths.map((p) => ({ id: p.id, path: p.path }));
+  },
+});
+
+/**
+ * CLI: replace the repo entries of one configured path with its latest scan.
+ * Called after register and before each run. Spec: docs/specs/cli-multi-repo-projects.md#server
+ */
+export const syncRepos = mutation({
+  args: {
+    profileId: v.id("cliProfiles"),
+    sessionId: v.id("cliSessions"),
+    path: v.string(),
+    repos: v.array(
+      v.object({
+        path: v.string(),
+        relativePath: v.string(), // `/`-separated, inside `path`'s folder
+        gitRemoteUrl: v.optional(v.string()),
+        branch: v.optional(v.string()),
+      })
+    ),
+    apiKey: v.optional(v.string()),
+  },
+  returns: v.null(),
+  handler: async (ctx, args) => {
+    const { user, principal } = await getAuthenticatedAccess(ctx, args.apiKey);
+    const session = await requireSessionOwnership(ctx, user._id, args.sessionId);
+    ensure(session.profileId).eq(args.profileId, errors.SESSION_PROFILE_MISMATCH);
+    const profile = await requireOwnedActiveProfile(ctx, args.profileId, user._id);
+    await requireAuthorizedProject(ctx, principal, profile.projectId, ProjectPermission.CLI_THREAD);
+
+    const merged = mergeRepoEntries(profile.paths, { parentPath: args.path, repos: args.repos.slice(0, MAX_PROFILE_REPOS) });
+    await setProfilePathsIfChanged(ctx, profile, merged);
+    return null;
   },
 });
 

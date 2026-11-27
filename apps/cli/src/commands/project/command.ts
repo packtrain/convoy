@@ -3,8 +3,8 @@ import { serviceRequest, serviceEndpoint } from "../service/client.js";
 import { confirm } from "@inquirer/prompts";
 import { Command, InvalidArgumentError, Option } from "commander";
 import { addGlobalOptions } from "../../cli.js";
-import { addProject, checkProject, setProjectConcurrency, readProjectAccounts, listProjects, loginProject, openProjectShell, removeProject, type ProjectAddOptions } from "./workflow.js";
-import { checkLines } from "./formatters.js";
+import { addProject, checkProject, setProjectConcurrency, readProjectAccounts, listProjects, loginProject, openProjectShell, projectRepos, removeProject, type ProjectAddOptions } from "./workflow.js";
+import { checkLines, repoLines } from "./formatters.js";
 import { loginRuntimeSchema, parseConcurrency, type LoginRuntime } from "./validators.js";
 
 async function report(action: () => void | Promise<void>): Promise<void> {
@@ -27,6 +27,13 @@ addGlobalOptions(projectCommand.command("add <path>"))
   .option("--non-interactive", "Require complete inputs and never prompt")
   .addOption(new Option("--mode <mode>", "Environment mode on first Linux setup (default: shared)").choices(["shared", "isolated"]))
   .action((directory: string, _options: ProjectAddOptions, cmd: Command) => report(() => targetEnvironment() ? targetCommands.addProject(targetEnvironment()!, directory, cmd.optsWithGlobals()) : addProject(directory, cmd.optsWithGlobals())));
+projectCommand.command("repos <path>").description("List the git repos a project folder holds, as project add and the worker detect them")
+  .option("--json", "Print JSON")
+  .action((directory: string, options: { json?: boolean }) => report(async () => {
+    const repos = targetEnvironment() ? await targetCommands.repos(targetEnvironment()!, directory) : await projectRepos(directory);
+    if (options.json) { console.log(JSON.stringify(repos)); return; }
+    for (const line of repoLines(repos)) console.log(line);
+  }));
 projectCommand.command("list").option("--json", "Print JSON")
   .action((options: { json?: boolean }) => report(async () => {
     if (!targetEnvironment()) return listProjects(Boolean(options.json));

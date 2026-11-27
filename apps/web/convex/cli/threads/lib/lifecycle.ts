@@ -71,6 +71,7 @@ async function resolveThreadSelection(
 
   // Validate pathId exists in the profile's paths
   const pathEntry = await ensure(profile.paths.find((p) => p.id === args.pathId)).notNull(errors.PATH_NOT_FOUND_IN_PROFILE);
+    ensure(pathEntry.kind).notEq("repo", errors.PATH_IS_DETECTED_REPO);
 
   // A pending worktree spec targets the selected path as its parent repo;
   // the CLI creates the worktree on claim and repoints the thread.

@@ -1,5 +1,6 @@
 "use client";
 
+import type { CliProfilePathEntry } from "@/convex/lib/contracts/validators";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import {
   buildProjectAgentDraftPatch,
@@ -17,7 +18,7 @@ interface NewThreadComposerProfile {
   _id: string;
   isOnline: boolean;
   availableClis?: AvailableCliInfo[];
-  paths: Array<{ id: string; kind?: "worktree"; parentPathId?: string }>;
+  paths: Array<{ id: string; kind?: CliProfilePathEntry["kind"]; parentPathId?: string }>;
 }
 
 interface UseNewThreadComposerParams {

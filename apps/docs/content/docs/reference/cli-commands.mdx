@@ -198,6 +198,7 @@ allows overwriting an existing definition. This command writes files, whereas
 | --- | --- |
 | `project add <path>` | Register an isolated workspace and remote project; prompts on the control host |
 | `project list` | List registrations and observed service state; accepts `--json` |
+| `project repos <path>` | List the git repos in a project folder (the folder itself, or repos one and two levels down), as `project add` and the worker detect them; accepts `--json` |
 | `project remove <profile>` | Unregister while retaining files; `--yes` confirms and `--interrupt` separately permits stopping active work |
 | `project shell <profile>` | Open the private HOME/workspace for login and diagnostics; pause its connection first. `--login codex\|claude-code\|cursor\|antigravity\|opencode` runs only that runtime's login |
 | `project login <profile> --runtime codex\|claude-code\|cursor\|antigravity\|opencode` | Pause the project, run the runtime's login in its private shell, reload it and wait until online; `--interrupt` permits stopping active runs |

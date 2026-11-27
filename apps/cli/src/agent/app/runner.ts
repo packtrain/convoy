@@ -408,6 +408,13 @@ export async function createAgentRunner(options: AgentRunnerOptions): Promise<Ag
     void worktreeOps.scanAndSync(paths).catch((error) => {
       console.error(chalk.red(`[Worktree] Initial scan failed: ${error instanceof Error ? error.message : String(error)}`));
     });
+    // Repos in a multi-repo folder, refreshed before each run too (cli-multi-repo-projects.md#when-it-runs).
+    const syncRepos = (folder: string) => (paths.includes(folder) ? worktreeOps.syncRepos(folder) : Promise.resolve([]));
+    for (const folder of paths) {
+      void syncRepos(folder).catch((error: unknown) => {
+        console.error(chalk.yellow(`[Repos] Scan of ${folder} failed: ${error instanceof Error ? error.message : String(error)}`));
+      });
+    }
     const unsubscribeWorktreeOps = client!.subscribe(
       api.cli.worktreeOps.listPending,
       { profileId: profileId! as Id<"cliProfiles"> },
@@ -462,6 +469,7 @@ export async function createAgentRunner(options: AgentRunnerOptions): Promise<Ag
       {
         maxConcurrentChats,
         interactionRouter,
+        syncRepos,
       }
     );
 

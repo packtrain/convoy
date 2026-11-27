@@ -13,6 +13,9 @@ export const VISIBLE_THRESHOLD_MS = 5 * 60 * 1000; // 5 minutes
 // Rows the offline sweep handles per tick, per phase.
 export const OFFLINE_SWEEP_BATCH = 50;
 
+// Repos one configured path may report; the CLI caps its scan at the same count.
+export const MAX_PROFILE_REPOS = 128;
+
 // Frequency for chat streaming watchdog checks
 export const STREAM_WATCHDOG_INTERVAL_MS = 2 * 60 * 1000; // 2 minutes
 

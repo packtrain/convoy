@@ -1,6 +1,6 @@
 import { readFileSync } from "node:fs";
-import { expect, it } from "vitest";
-import { ANTIGRAVITY_BUILD, guidance, installCommand, projectChecks, runtimeInstall, sharedProjectChecks } from "./formatters.js";
+import { describe, expect, it } from "vitest";
+import { ANTIGRAVITY_BUILD, guidance, installCommand, projectChecks, repoLines, runtimeInstall, sharedProjectChecks } from "./formatters.js";
 import type { LauncherCheck } from "./validators.js";
 
 const facts = (patch: Partial<LauncherCheck> = {}): LauncherCheck => ({ sandbox: null, holder: null, runtimes: {
@@ -130,4 +130,15 @@ it("checks Antigravity in an isolated project with its project login (OS-2475)",
     { id: "antigravity-installed", status: "pass", label: "Antigravity installed root-owned" },
     { id: "antigravity-home", status: "pass", label: "Antigravity config folder" },
     { id: "antigravity-login", status: "fail", label: "Antigravity logged in", fix: "Run project login a --runtime antigravity." }]);
+});
+
+describe("repoLines (OS-2521)", () => {
+  it("lists a multi-repo folder, names a single repo's remote, and warns about none", () => {
+    expect(repoLines([
+      { path: "/c/a/old-app", relativePath: "old-app", gitRemoteUrl: "git@github.com:acme/old-app.git" },
+      { path: "/c/a/packages/api", relativePath: "packages/api" },
+    ])).toEqual(["Git repositories (2):", "  old-app  git@github.com:acme/old-app.git", "  packages/api"]);
+    expect(repoLines([{ path: "/c/a", relativePath: "." }])).toEqual(["Git repository: no remote"]);
+    expect(repoLines([])[0]).toMatch(/^No git repositories found\. Changes, History/);
+  });
 });

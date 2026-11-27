@@ -1,4 +1,5 @@
 import { TESTED_OPENCODE_PACKAGE } from "../../agent/runtimes/opencode/server.js";
+import type { DiscoveredRepo } from "../../lib/git/index.js";
 import { LOGIN_COMMANDS, loginRuntimeLabels, loginRuntimeSchema, type LauncherCheck, type LoginRuntime, type ProjectCheck, type SharedCheck } from "./validators.js";
 
 // One wording for service warnings and project check fixes. Spec: docs/specs/cli-service.md#worker-failure-reasons
@@ -150,4 +151,11 @@ function leaseAndBackend(profile: string, holder: string | null, backend: Backen
     : backend === "rejected" ? fail("backend", "Backend rejected the project key", guidance.authRejected(profile))
       : backend === "unreachable" ? fail("backend", "Backend unreachable", guidance.unreachable())
         : fail("backend", `Backend answered HTTP ${backend.status}`, "Check the profile's deployment URL, then retry.")];
+}
+
+/** The repos `project add` found, for its output and the TUI review. Spec: docs/specs/cli-multi-repo-projects.md#when-it-runs */
+export function repoLines(repos: DiscoveredRepo[]): string[] {
+  if (repos.length === 0) return ["No git repositories found. Changes, History, branch, PR and worktree features won't be available."];
+  if (repos[0].relativePath === ".") return [`Git repository: ${repos[0].gitRemoteUrl ?? "no remote"}`];
+  return [`Git repositories (${repos.length}):`, ...repos.map(repo => `  ${repo.relativePath}${repo.gitRemoteUrl ? `  ${repo.gitRemoteUrl}` : ""}`)];
 }

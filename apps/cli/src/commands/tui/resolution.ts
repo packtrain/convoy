@@ -18,7 +18,8 @@ import { readRemotes, remoteTarget } from "../remote/index.js";
 import { supportsGuidedProject, addTargetProjectGuided } from "../environment/projects.js";
 import type { ProjectAddOptions } from "../project/workflow.js";
 import { unavailableProjectResult, type LoginRuntime, type ProjectAddResult, type ProjectCheck, type ProjectAccounts } from "../project/validators.js";
-import { checkProject, openProjectShell, readProjectAccounts } from "../project/workflow.js";
+import { checkProject, openProjectShell, projectRepos, readProjectAccounts } from "../project/workflow.js";
+import type { DiscoveredRepo } from "../../lib/git/index.js";
 import { localManagedStatus } from "../keys/workflow.js";
 import type { ManagedCredentialStatus } from "../../lib/config/credentials/validators.js";
 export interface Connection {
@@ -33,6 +34,8 @@ export interface Connection {
   /** Shown by Add project when this target cannot register projects here, or its CLI is too old to. */
   addProjectUnavailable?: string;
   addProject?: (directory: string, options: ProjectAddOptions) => Promise<ProjectAddResult>;
+  /** The git repos Add project's review lists for a reused folder. */
+  repos?: (directory: string) => Promise<DiscoveredRepo[]>;
   id: string;
   name: string;
   transport: string;
@@ -60,6 +63,8 @@ export function connections(selected?: string, home = homedir()): { targets: Con
   const targets: Connection[] = [{
     id: "local", name: "Local", transport: "unix", endpoint: join(home, ".convoy/service/control.sock"),
     addProject: runnable ? addLocalProject : undefined,
+    // An isolated project's folder is private to its account; its worker reports the repos.
+    repos: mode === "shared" ? projectRepos : undefined,
     start: runnable && Boolean(process.getuid?.()) ? () => startService(true, true) : undefined,
     mode,
     chooseMode: {
@@ -102,6 +107,7 @@ export function connections(selected?: string, home = homedir()): { targets: Con
       targets.push({
         maintenance: environmentMaintenance(environment, home),
         checkProject: async () => supportsGuidedProject(await running()),
+        repos: async directory => targetCommands.repos(await running(), directory),
         mode: environment.mode ?? "isolated",
         id: name, name, transport: "docker", endpoint: `docker exec ${containerName(environment)} /home/node/.convoy/service/control.sock`,
         addProject: async (directory, options) => {

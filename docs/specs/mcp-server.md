@@ -1318,8 +1318,10 @@ entry per profile the caller owns in the project:
   discover them. Display labels are omitted (an opencode catalog is
   tens of KB — OS-1721). Omitting `cliModel`/`cliEffort` runs the runtime's defaults
 - `paths` — `{ pathId, path, label, gitRemoteUrl?, kind?, parentPathId?,
-  branch? }`; `pathId` is the `pathId` argument, and `kind: "worktree"`
-  distinguishes a worktree from a repo checkout
+  branch? }`; `pathId` is the `pathId` argument. `kind: "worktree"`
+  marks a worktree, and `kind: "repo"` a git repo detected inside a project
+  folder: not a spawn target, its `parentPathId` is
+  ([multi-repo projects](cli-multi-repo-projects.md#server))
 
 Ids are renamed from the query's shape (`_id` → `profileId`, `paths[].id` →
 `pathId`) to match the argument names the write tools take, so an agent can

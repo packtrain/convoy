@@ -1,3 +1,4 @@
+import type { CliProfilePathEntry } from "@/convex/lib/contracts/validators";
 import {
   getAvailableCli,
   getCliModes,
@@ -21,7 +22,7 @@ import { isBaseRefSelectionValid, type BaseRefSelection } from "./base-ref-selec
 
 interface ProfilePath {
   id: string;
-  kind?: "worktree";
+  kind?: CliProfilePathEntry["kind"];
   parentPathId?: string;
 }
 
@@ -78,7 +79,8 @@ function isValidProfilePath(profiles: DraftProfile[], profileId: string, pathId:
     return false;
   }
 
-  return profile.paths.some((path) => path.id === pathId);
+  // A detected repo is never a working directory (cli-multi-repo-projects.md#server).
+  return profile.paths.some((path) => path.id === pathId && path.kind !== "repo");
 }
 
 function hasModeForCli(cliType: CliTypeSlug, mode: string | undefined): boolean {

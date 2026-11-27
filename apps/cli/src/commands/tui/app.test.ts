@@ -70,7 +70,7 @@ it.skipIf(process.platform !== "linux")("records guided onboarding in a real PTY
   expect(result.stdout).toMatch(/PTY recording: \/tmp\/convoy-onboarding-[^\s]+\.log/);
 });
 
-it.each(["sidebar-names", "target-incompatible", "creation-form", "form-visibility", "form-paging", "repository-form", "button-arrows", "project-order", "workspace-dropdown", "deployments", "popup", "input-enter", "entry-row", "entry-row-space", "entry-plus", "clone", "discovery-cancel", "discovery-unmount", "defaults", "defaults-billing", "overrides", "narrow", "recovery", "uncertain", "link-back", "pending", "ctrl-c", "safe-preflight"])("onboarding review regression: %s", async scenario => {
+it.each(["sidebar-names", "target-incompatible", "creation-form", "form-visibility", "form-paging", "repository-form", "button-arrows", "project-order", "workspace-dropdown", "deployments", "popup", "input-enter", "entry-row", "entry-row-space", "entry-plus", "clone", "reuse-repos", "reuse-many-repos", "discovery-cancel", "discovery-unmount", "defaults", "defaults-billing", "overrides", "narrow", "recovery", "uncertain", "link-back", "pending", "ctrl-c", "safe-preflight"])("onboarding review regression: %s", async scenario => {
   const result = await tsx("onboarding-review.tsx", [scenario]);
   expect(result.stdout).toContain("Onboarding review checks passed: " + scenario);
 });

@@ -14,6 +14,7 @@ const stderr = new PassThrough();
 let frame = "", rawFrame = "", output = "", signal: AbortSignal | undefined, disposed = 0;
 stdout.on("data", chunk => { output += chunk.toString(); if (plain(chunk.toString()).trim()) { rawFrame = chunk.toString(); frame = stripVTControlCharacters(rawFrame); } });
 const requests: { directory: string; options: ProjectAddOptions }[] = [];
+const repoRequests: string[] = [];
 const browser = new Browser([{ id: "fixture", name: "Fixture", transport: "unix", endpoint: "/socket", open: async () => { throw new Error(); },
   addProject: async (directory, options) => {
     requests.push({ directory, options });
@@ -22,6 +23,11 @@ const browser = new Browser([{ id: "fixture", name: "Fixture", transport: "unix"
     if (scenario === "safe-preflight") return { ok: false, registered: false, applied: false, retrySafe: true, phase: "validation", reason: "environment-unavailable" };
     if (scenario === "pending") return { ok: true, registered: true, applied: false, retrySafe: true, phase: "complete", projectId: options.project };
     return { ok: false, registered: false, applied: false, retrySafe: true, phase: "preparation", projectId: options.project ?? "created-project" };
+  },
+  repos: async directory => {
+    repoRequests.push(directory);
+    const names = scenario === "reuse-many-repos" ? Array.from({ length: 20 }, (_, i) => `repo-${String(i).padStart(2, "0")}`) : ["old-app", "new-app", "packages/api"];
+    return names.map(relativePath => ({ path: `/code/acme/${relativePath}`, relativePath, ...(relativePath === "old-app" ? { gitRemoteUrl: "git@github.com:acme/old-app.git" } : {}) }));
   },
 }]);
 if (scenario.startsWith("entry-")) {
@@ -231,8 +237,19 @@ try {
       } else {
         for (let i = 0; i < steps - 1; i++) await key("\t");
         if (scenario === "clone") { await key(" "); await key("\u001b[B"); await key("\u001b[B"); await key("\r"); await key("\t"); await key("\t"); await key("\t"); }
+        else if (scenario === "reuse-repos" || scenario === "reuse-many-repos") { await key(" "); await key("\u001b[B"); await key("\r"); await key("\t"); await key("\t"); }
         else { await key("\t"); await key("\t"); }
-        if (scenario === "clone") {
+        if (scenario === "reuse-many-repos") {
+          await resize(100, 24);
+          await key("\r"); await wait(() => frame.includes("and 1"));
+          assert(frame.includes("Git repositories (20):") && frame.includes("[ Register ]"), "A long repo list must leave Register reachable: " + frame);
+          await key("\t"); await key("\r"); await wait(() => frame.includes("result")); assert.equal(requests[0].options.reuse, true);
+        } else if (scenario === "reuse-repos") {
+          await key("\r"); await wait(() => frame.includes("packages/api"));
+          assert(frame.includes("Git repositories (3):") && frame.includes("old-app  git@github.com:acme/old-app.git"), "Review must list the reused folder's repos: " + frame);
+          assert.deepEqual(repoRequests, ["ex"]);
+          await key("\t"); await key("\r"); await wait(() => frame.includes("result")); assert.equal(requests[0].options.reuse, true);
+        } else if (scenario === "clone") {
           await key("\r"); assert(!frame.includes("Register"), "Blank clone must not reach confirmation");
           assert(frame.toLowerCase().includes("clone url")); assert.equal(requests.length, 0);
         } else {

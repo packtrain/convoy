@@ -1,6 +1,7 @@
 import { expect, test, describe, vi, beforeEach, afterEach } from "vitest";
 import { api, internal } from "../_generated/api";
 import { createTestContext } from "../../convex-testing";
+import { buildPathEntry } from "../../convex-testing/builders";
 import type { Id } from "../_generated/dataModel";
 
 describe("cliProfiles", () => {
@@ -333,6 +334,148 @@ describe("cliProfiles", () => {
           "git@github.com:user/repo.git",
         );
       });
+    });
+  });
+
+  describe("syncRepos", () => {
+    async function setup() {
+      const ctx = createTestContext();
+      const { user, project, asUser, t } = await ctx.setupProject();
+      const apiKey = await asUser.mutation(api.apiKeys.core.create, { name: "CLI Key", expiresAt: Date.now() + 86_400_000 });
+      const top = buildPathEntry({ path: "/code/acme" });
+      const other = buildPathEntry({ path: "/code/other" });
+      const profile = await ctx.cliProfile(user._id, project._id, { paths: [top, other] });
+      const session = await ctx.cliSession(profile._id, apiKey.id);
+      // relativePath defaults to the path below the folder, as the CLI sends it.
+      const sync = (path: string, repos: { path: string; relativePath?: string; gitRemoteUrl?: string; branch?: string }[]) =>
+        t.mutation(api.cli.profiles.syncRepos, {
+          profileId: profile._id, sessionId: session._id, apiKey: apiKey.key, path,
+          repos: repos.map((repo) => ({ ...repo, relativePath: repo.relativePath ?? repo.path.slice(path.length + 1) })),
+        });
+      const paths = () => t.run(async (runCtx) => (await runCtx.db.get("cliProfiles", profile._id))!.paths);
+      return { t, asUser, user, project, top, other, profile, session, apiKey, sync, paths };
+    }
+
+    test("adds repo entries under the top folder with stable ids", async () => {
+      const s = await setup();
+      await s.sync("/code/acme", [
+        { path: "/code/acme/new-app", gitRemoteUrl: "git@github.com:acme/new-app.git", branch: "main" },
+        { path: "/code/acme/packages/api" },
+      ]);
+      const first = await s.paths();
+      expect(first.filter((p) => p.kind === "repo")).toEqual([
+        expect.objectContaining({ path: "/code/acme/new-app", label: "new-app", kind: "repo", parentPathId: s.top.id, gitRemoteUrl: "git@github.com:acme/new-app.git", branch: "main" }),
+        expect.objectContaining({ path: "/code/acme/packages/api", label: "packages/api", kind: "repo", parentPathId: s.top.id }),
+      ]);
+
+      // A repo cloned later shows up; the known one keeps its id; a removed one drops.
+      await s.sync("/code/acme", [
+        { path: "/code/acme/new-app", branch: "feat/x" },
+        { path: "/code/acme/old-app" },
+      ]);
+      const second = (await s.paths()).filter((p) => p.kind === "repo");
+      expect(second.map((p) => p.path)).toEqual(["/code/acme/new-app", "/code/acme/old-app"]);
+      expect(second[0]!.id).toBe(first.find((p) => p.path === "/code/acme/new-app")!.id);
+      expect(second[0]!.branch).toBe("feat/x");
+    });
+
+    test("leaves other paths alone and ignores relative paths that leave the folder", async () => {
+      const s = await setup();
+      await s.sync("/code/other", [{ path: "/code/other/web" }]);
+      await s.sync("/code/acme", [
+        { path: "/code/acme/app" },
+        { path: "/elsewhere/app", relativePath: "../../elsewhere/app" },
+        { path: "/abs", relativePath: "/abs" },
+        { path: "/code/acme", relativePath: "." },
+      ]);
+
+      const repos = (await s.paths()).filter((p) => p.kind === "repo");
+      // Grouped by folder in configured order, not by sync order.
+      expect(repos.map((p) => [p.path, p.parentPathId])).toEqual([
+        ["/code/acme/app", s.top.id],
+        ["/code/other/web", s.other.id],
+      ]);
+    });
+
+    test("labels a repo by the relative path the CLI sends, whatever the separator", async () => {
+      const s = await setup();
+      await s.t.run(async (runCtx) => {
+        await runCtx.db.patch("cliProfiles", s.profile._id, { paths: [buildPathEntry({ id: s.top.id, path: "C:\\code\\acme" })] });
+      });
+      await s.sync("C:\\code\\acme", [{ path: "C:\\code\\acme\\packages\\api", relativePath: "packages/api" }]);
+      expect((await s.paths()).filter((p) => p.kind === "repo").map((p) => [p.path, p.label])).toEqual([["C:\\code\\acme\\packages\\api", "packages/api"]]);
+    });
+
+    test("an unchanged repo sync after a worktree sync writes nothing (OS-1721)", async () => {
+      const s = await setup();
+      await s.sync("/code/acme", [{ path: "/code/acme/app" }]);
+      await s.t.mutation(api.cli.worktrees.sync, {
+        profileId: s.profile._id, sessionId: s.session._id, apiKey: s.apiKey.key,
+        scannedParentPaths: ["/code/acme", "/code/acme/app"],
+        worktrees: [
+          { parentPath: "/code/acme", path: "/code/acme-worktrees/x", branch: "x" },
+          // A repo entry is not a worktree parent in this slice.
+          { parentPath: "/code/acme/app", path: "/code/acme/app-worktrees/y", branch: "y" },
+        ],
+      });
+      const before = await s.paths();
+      expect(before.map((p) => [p.path, p.kind])).toEqual([
+        ["/code/acme", undefined], ["/code/other", undefined], ["/code/acme/app", "repo"], ["/code/acme-worktrees/x", "worktree"],
+      ]);
+      await s.sync("/code/acme", [{ path: "/code/acme/app" }]);
+      expect(await s.paths()).toEqual(before);
+      const written = await s.t.run(async (runCtx) => {
+        const profile = (await runCtx.db.get("cliProfiles", s.profile._id))!;
+        const { mergeRepoEntries } = await import("./lib/cliProfilesRepo");
+        return mergeRepoEntries(profile.paths, { parentPath: "/code/acme", repos: [{ path: "/code/acme/app", relativePath: "app" }] });
+      });
+      expect(written).toEqual(before);
+    });
+
+    test("an unchanged sync of one folder keeps the other folder's repos in place", async () => {
+      const s = await setup();
+      await s.sync("/code/acme", [{ path: "/code/acme/app" }]);
+      await s.sync("/code/other", [{ path: "/code/other/web" }]);
+      const before = await s.paths();
+      await s.sync("/code/acme", [{ path: "/code/acme/app" }]);
+      expect(await s.paths()).toEqual(before);
+    });
+
+    test("an empty scan clears the folder's repos and an unknown folder is a no-op", async () => {
+      const s = await setup();
+      await s.sync("/code/acme", [{ path: "/code/acme/app" }]);
+      await s.sync("/code/acme", []);
+      await s.sync("/nowhere", [{ path: "/nowhere/app" }]);
+      expect(await s.paths()).toEqual([s.top, s.other].map((p) => expect.objectContaining({ id: p.id, path: p.path })));
+    });
+
+    test("register keeps repo entries of a surviving folder", async () => {
+      const s = await setup();
+      await s.sync("/code/acme", [{ path: "/code/acme/app" }]);
+      await s.t.run(async (runCtx) => {
+        const { findOrCreateProfile } = await import("./lib/cliProfilesRepo");
+        await findOrCreateProfile(runCtx, { userId: s.user._id, projectId: s.project._id, profileKey: s.profile.profileKey, incomingPaths: [{ path: "/code/acme" }] });
+      });
+      expect((await s.paths()).map((p) => [p.path, p.kind])).toEqual([["/code/acme", undefined], ["/code/acme/app", "repo"]]);
+    });
+
+    test("a repo entry is not a working directory", async () => {
+      const s = await setup();
+      await s.sync("/code/acme", [{ path: "/code/acme/app" }]);
+      const repo = (await s.paths()).find((p) => p.kind === "repo")!;
+      await expect(
+        s.asUser.mutation(api.cli.threads.core.create, { profileId: s.profile._id, pathId: repo.id, cliType: "claude-code", content: "hi" })
+      ).rejects.toThrow(/repository inside a project folder.*parentPathId/);
+    });
+
+    test("rejects a session of another profile", async () => {
+      const s = await setup();
+      const other = await s.t.run((runCtx) => runCtx.db.insert("cliProfiles", {
+        userId: s.user._id, projectId: s.project._id, profileKey: "other", name: "Other", paths: [], createdAt: 0, isDeleted: false,
+      }));
+      await expect(
+        s.t.mutation(api.cli.profiles.syncRepos, { profileId: other, sessionId: s.session._id, apiKey: s.apiKey.key, path: "/code/acme", repos: [] })
+      ).rejects.toThrow("Session cannot process threads for a different profile");
     });
   });
 

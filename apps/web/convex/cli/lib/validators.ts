@@ -11,6 +11,7 @@ import {
   cliThreadKindValidator,
   cliThreadAggregateStatusValidator,
   cliCatalogModelValidator,
+  isConfiguredPath,
 } from "../../lib/contracts/validators";
 import { resolvePathInfo } from "./paths";
 import { attachedPullRequestValidator } from "../../lib/contracts/github";
@@ -56,7 +57,7 @@ export function toExecutionWorkspace(
   const worktree = thread.git?.worktree ?? (entry?.kind === "worktree" && entry.parentPathId && entry.branch
     ? { parentPathId: entry.parentPathId, branch: entry.branch, status: "created" as const }
     : undefined);
-  const parent = profile.paths.find((path) => path.id === worktree?.parentPathId && path.kind !== "worktree");
+  const parent = profile.paths.find((path) => path.id === worktree?.parentPathId && isConfiguredPath(path));
   return {
     pathId: thread.pathId,
     path: entry?.path ?? thread.path,
