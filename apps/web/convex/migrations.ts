@@ -1,7 +1,8 @@
 import { Migrations } from "@convex-dev/migrations";
 import { components, internal } from "./_generated/api";
 import type { DataModel } from "./_generated/dataModel";
-import { internalMutation } from "./_generated/server";
+import { v } from "convex/values";
+import { internalMutation, internalQuery } from "./_generated/server";
 import schema from "./schema";
 import { insertHeartbeat } from "./cli/lib/cliSessionsRepo";
 import { ONLINE_THRESHOLD_MS } from "./cli/lib/constants";
@@ -61,8 +62,34 @@ export const moveThreadClaimLeases = migrations.define({
   },
 });
 
-/** Every deploy calls this (docs/specs/automatic-migrations.md). An empty list throws, so keep one entry. */
-export const runAll = migrations.runner([
+const RUN_ALL = [
   internal.migrations.migrateLegacySessionHeartbeats,
   internal.migrations.moveThreadClaimLeases,
-]);
+];
+
+/** Every deploy calls this (docs/specs/automatic-migrations.md). An empty list throws, so keep one entry. */
+export const runAll = migrations.runner(RUN_ALL);
+
+/** The state of each `runAll` migration, in order; one not started yet is `unknown`. `start.sh` waits on it. */
+export const runAllStatus = internalQuery({
+  args: {},
+  returns: v.array(
+    v.object({
+      name: v.string(),
+      isDone: v.boolean(),
+      state: v.union(
+        v.literal("inProgress"),
+        v.literal("success"),
+        v.literal("failed"),
+        v.literal("canceled"),
+        v.literal("unknown"),
+      ),
+      processed: v.number(),
+      error: v.optional(v.string()),
+    }),
+  ),
+  handler: async (ctx) => {
+    const statuses = await migrations.getStatus(ctx, { migrations: RUN_ALL });
+    return statuses.map(({ name, isDone, state, processed, error }) => ({ name, isDone, state, processed, error }));
+  },
+});

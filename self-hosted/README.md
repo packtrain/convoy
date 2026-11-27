@@ -32,9 +32,12 @@ Convoy's functions and schema (from inside Docker — no Node.js needed on the
 host), and starts the web app. Re-running it is always safe; it skips what is
 already done.
 
-To upgrade, pull the new version and re-run `./start.sh`. The deploy starts
-any pending data migrations, which then run in the background. Their state is
-in the Convex dashboard: Data, component `migrations`, table `migrations`.
+To upgrade, run `./upgrade.sh` instead of `git pull`. It deploys each upgrade
+stop between your version and the latest `main` with `./start.sh`, which
+waits for the data migrations to finish and names any that fail. Their state
+is also in the Convex dashboard: Data, component `migrations`, table
+`migrations`. See
+[Upgrade stops](https://docs.convoy.build/docs/operations/upgrading#upgrade-stops).
 
 Open http://127.0.0.1:3000 (app) and http://127.0.0.1:6791 (Convex dashboard,
 log in with `CONVEX_SELF_HOSTED_ADMIN_KEY` from `.env`).

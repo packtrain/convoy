@@ -153,7 +153,7 @@ say "Deploying Convoy functions and schema to your backend, then starting data m
 # Values travel as env vars to avoid quoting. Convex rejects empty values, so a
 # cleared optional one is removed from the deployment instead.
 [ "$AUTH_MODE" = "clerk" ] || ISSUER="https://convex.invalid"
-docker compose run --rm --no-deps \
+if ! docker compose run --rm --no-deps \
   -e CONVEX_SELF_HOSTED_URL=http://backend:3210 \
   -e CONVEX_SELF_HOSTED_ADMIN_KEY="$ADMIN_KEY" \
   -e AUTH_MODE="$AUTH_MODE" \
@@ -167,7 +167,13 @@ docker compose run --rm --no-deps \
       AUTH_GOOGLE_CLIENT_ID AUTH_GOOGLE_CLIENT_SECRET AUTH_EMAIL_VERIFICATION RESEND_API_KEY EMAIL_FROM; do
     v="$(printenv "$k")"
     if [ -n "$v" ]; then npx convex env set "$k" "$v"; else npx convex env remove "$k"; fi || exit 1
-  done && node scripts/convexDeploy.mjs -y'
+  done && node scripts/convexDeploy.mjs -y'; then
+  echo
+  echo "The deploy failed. If the error above is a schema validation error, this install"
+  echo "skipped an upgrade stop: run ./upgrade.sh instead of git pull."
+  echo "See https://docs.convoy.build/docs/operations/upgrading#upgrade-stops"
+  exit 1
+fi
 
 if [ -n "$CLAIM_EMAIL" ]; then
   say "Giving the demo user its account..."
@@ -177,6 +183,12 @@ fi
 
 say "Starting the web app..."
 docker compose up -d web
+
+say "Waiting for data migrations to finish..."
+docker compose run --rm --no-deps \
+  -e CONVEX_SELF_HOSTED_URL=http://backend:3210 \
+  -e CONVEX_SELF_HOSTED_ADMIN_KEY="$ADMIN_KEY" \
+  web sh -c 'cd apps/web && node scripts/waitForMigrations.mjs'
 
 APP_URL="$(env_get APP_URL)"
 say "Convoy is running."

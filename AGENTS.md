@@ -139,6 +139,13 @@ These apply to every task, no exceptions.
     text (Convex Auth) keeps that text only as the plain-text part. Add the
     template to the playground preview list. See
     [Email templates](docs/specs/email-templates.md).
+21. **Tag an upgrade stop before a schema-narrowing commit lands on `main`.**
+    A commit that removes a field or union value, makes a field required, or
+    otherwise stops accepting stored data needs the `main` commit it lands on
+    tagged `upgrade-stop-YYYY-MM-DD` (annotated, `git tag -a`). Without the tag,
+    self-hosted installs that skip versions can't deploy. Agents don't push, so
+    tell the user to push the tag with the commit. See
+    [Backend development → Schema changes](docs/guidelines/convex/backend-development.md#schema-changes-widen-migrate-narrow).
 
 ## Working on Convoy tasks
 

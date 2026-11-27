@@ -330,6 +330,27 @@ Semantics to know:
 - Values are computed eagerly and mappers are sync. Fields needing async validation (e.g. the org slug uniqueness check) stay as explicit code and assign onto the built patch afterward.
 - Fields whose repo contract passes `null` through (e.g. `OrganizationUpdatePatch.color`) don't need `clearable` — `buildPatch` only drops `undefined`, never `null`.
 
+## Schema Changes: Widen, Migrate, Narrow
+
+A change that existing documents might not fit ships in two commits. The
+widened commit accepts both shapes and adds a migration to `runAll` in
+`convex/migrations.ts`. The narrowing commit removes the old shape once the
+migration has finished. Narrowing means a field or union value removed, a
+field made required, or a type made stricter.
+
+Before the narrowing commit lands on `main`, tag the `main` commit it lands on
+as an upgrade stop, and push the tag. Without it, a self-hosted install that
+skips both commits cannot deploy:
+
+```bash
+git tag -a upgrade-stop-YYYY-MM-DD <commit> -m "Upgrade stop before <what narrows>"
+git push origin upgrade-stop-YYYY-MM-DD
+```
+
+Naming, pruning `runAll`, and how `self-hosted/upgrade.sh` uses the tags:
+[Automatic migrations → Upgrade stops](../../specs/automatic-migrations.md#upgrade-stops).
+Writing the migration itself: `apps/docs/content/docs/operations/migrations.mdx`.
+
 ## Checklist For A New Domain
 
 1. Create `convex/<domain>/` with callable modules split by sub-entity/capability.

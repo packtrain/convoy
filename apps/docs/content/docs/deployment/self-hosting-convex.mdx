@@ -63,9 +63,10 @@ modes.
 Then it does the rest: writes `.env`, generates the instance secret and admin
 key, starts the backend and dashboard, builds the web image, deploys Convoy's
 functions from inside Docker (no Node.js needed on the host), starts pending
-[data migrations](/docs/operations/migrations), and starts the web app.
-On later runs, review the existing `.env` and back up the data before
-upgrading.
+[data migrations](/docs/operations/migrations), starts the web app, and waits
+for the migrations to finish.
+To upgrade, back up the data and run `./self-hosted/upgrade.sh` instead of
+`git pull` (see [`Upgrade stops`](/docs/operations/upgrading#upgrade-stops)).
 
 ## Manual walkthrough
 

@@ -26,4 +26,18 @@ describe("migrations.runAll", () => {
 
     expect(await deploy()).toEqual(first);
   });
+
+  // self-hosted/start.sh waits on this; a migration runAll hasn't reached yet must count as pending.
+  test("runAllStatus reports every runAll migration, started or not", async () => {
+    const { t } = createTestContext();
+    const before = await t.query(internal.migrations.runAllStatus, {});
+    expect(before.length).toBeGreaterThan(0);
+    expect(before.every((m) => !m.isDone && m.state === "unknown")).toBe(true);
+
+    await t.mutation(internal.migrations.runAll, {});
+    await t.finishAllScheduledFunctions(vi.runAllTimers);
+    const after = await t.query(internal.migrations.runAllStatus, {});
+    expect(after.map((m) => m.name)).toEqual(before.map((m) => m.name));
+    expect(after.every((m) => m.isDone && m.state === "success")).toBe(true);
+  });
 });

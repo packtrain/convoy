@@ -69,7 +69,7 @@ The script has to pick the target for `convex run` itself, because
 |---|---|
 | Vercel production | `vercel-build` calls the deploy step |
 | Vercel preview | `--preview-run migrations:runAll`, passed by the deploy step |
-| Self-hosted Docker | `self-hosted/start.sh` calls the deploy step inside the `web` image |
+| Self-hosted Docker | `self-hosted/start.sh` calls the deploy step inside the `web` image, then waits for the migrations |
 | Contributors | `pnpm web:convex:dev` passes `--run migrations:runAll`, which runs once after the first push |
 | Worktree previews | `scripts/worktree-setup.mjs` runs `runAll` by deployment name after the snapshot import and after each `deploy` |
 | Manual deploy | `pnpm convex:deploy` from `apps/web` |
@@ -92,13 +92,80 @@ rely on `--preview-run`. It knows the deployment name and starts
 `convex run --deployment <name> migrations:runAll` through the deploy step's
 `startMigrations`, with the same first-batch check.
 
+## Upgrade stops
+
+A narrowing commit fails `convex deploy` on any install that has not run the
+migration it depends on, and that migration ships with the failed deploy. An
+install that skips from before the widened commit to after the narrowing one
+is stuck. An upgrade stop is a git tag on a commit such an install must deploy,
+and wait on, before going further.
+
+### The rule
+
+Before a commit that narrows the schema lands on `main`, tag the `main` commit
+it lands on. Narrowing means stored data might no longer fit: a field or union
+value removed, a field made required, a type made stricter.
+
+```bash
+git tag -a upgrade-stop-YYYY-MM-DD <commit> -m "Upgrade stop before <what narrows>"
+git push origin upgrade-stop-YYYY-MM-DD
+```
+
+- The tag must be on `main`: `upgrade.sh` only follows tags merged into
+  `origin/main`. A squash-merged pull request lands on main's tip at merge
+  time, so tag that commit, not the branch's parent.
+- Use the UTC date. A second stop on the same day gets `-2`, then `-3`.
+  `upgrade.sh` sorts with `version:refname`, so `-10` sorts after `-9`.
+- Annotated tags only (`-a`), so `git push --follow-tags` carries them.
+- A migration may leave the `runAll` list once a stop exists at a commit that
+  lists it. Every install past that stop has waited for it to finish. Keep
+  one entry in the list (see [The registry](#the-registry)).
+- The first stop is the commit that added `upgrade.sh`, so every stop has
+  the script and the wait.
+
+### The wait
+
+`start.sh` starts the web app, then runs `apps/web/scripts/waitForMigrations.mjs`
+inside the `web` image. It polls `migrations:runAllStatus`, which reports each
+`runAll` migration in order, with `unknown` for one the series has not reached
+yet. The component's `lib:getStatus` lists only migrations that have started,
+so between two migrations it would look finished.
+
+- It exits 0 when every migration is done.
+- It exits 1 naming a migration that failed or was canceled, and `start.sh`
+  fails with it.
+- It exits 1 when three polls in a row find nothing running and a migration
+  still pending. One idle poll is normal: the next migration is scheduled, not
+  yet started.
+
+### `upgrade.sh`
+
+`self-hosted/upgrade.sh` replaces `git pull` for Docker installs:
+
+1. Refuse to run with uncommitted changes to tracked files.
+2. `git fetch --tags origin`.
+3. For each tag from
+   `git tag --merged origin/main --no-merged HEAD --list 'upgrade-stop-*' --sort=version:refname`,
+   check it out and run `start.sh`.
+4. Check out `main`, fast-forward to `origin/main`, run `start.sh`.
+
+A failed `start.sh` stops the script and leaves HEAD detached at that stop.
+`--no-merged HEAD` would then skip it, so a run that starts detached deploys
+the stop at HEAD first. The body is one function called on the last line,
+because the checkout rewrites the file while bash is reading it.
+
+When the deploy step fails, `start.sh` prints a pointer to `upgrade.sh` and
+the "Upgrade stops" section of the public upgrading doc. Installs on Vercel
+and Convex cloud deploy each stop tag by hand, as that section describes.
+
 ## What the automatic path leaves out
 
 - No dry run on production. The migration's tests and its run on the dev
   deployment replace it. A maintainer can still dry-run a risky migration by
   hand before pushing.
-- No waiting. The step reports that migrations started, not that they
-  finished. OS-2618 makes `start.sh` wait.
+- No waiting on Vercel or in `pnpm convex:deploy`. They report that
+  migrations started, not that they finished. Only `start.sh` waits (see
+  [Upgrade stops](#upgrade-stops)).
 - No `verify*` queries. They stay the maintainer's check before a narrowing
   commit.
 - No `convoy` CLI command (hard rule 19). This is deploy tooling for operators,

@@ -104,6 +104,18 @@ schema shape and the code that read it. `convex deploy` refuses a schema the
 stored data doesn't fit and pushes nothing, so a narrowing commit fails on
 any install that has not finished the migration.
 
+Before the narrowing commit lands on `main`, tag the `main` commit it lands
+on as an [upgrade stop](/docs/operations/upgrading#upgrade-stops), so an
+install that skips versions deploys the migration first:
+
+```bash
+git tag -a upgrade-stop-YYYY-MM-DD <commit> -m "Upgrade stop before <what narrows>"
+git push origin upgrade-stop-YYYY-MM-DD
+```
+
+A migration can leave the `runAll` list once a stop exists at a commit that
+lists it.
+
 Keep at least one migration in the `runAll` list. An empty list throws, and
 every deploy calls it.
 

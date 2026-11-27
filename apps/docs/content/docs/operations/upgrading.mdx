@@ -40,6 +40,11 @@ A plain `npx convex deploy` skips the migrations. They run in the background;
 [`Migrations`](/docs/operations/migrations#check-progress) shows how to
 check them.
 
+With the [self-hosted Docker setup](/docs/deployment/self-hosting-convex),
+run `./self-hosted/upgrade.sh` instead of `git pull`. It deploys each
+[upgrade stop](#upgrade-stops) on the way to the latest `main`, and waits
+for each one's migrations to finish.
+
 ### 2. Update CLI workers
 
 Each machine running `convoy connect` should update its checkout and
@@ -67,6 +72,52 @@ retryable.
 - Run a quick smoke pass from the
   [`Production checklist`](/docs/deployment/production-checklist): sign-in,
   task CRUD, one streamed thread.
+
+## Upgrade stops
+
+Some upgrades remove an old data shape from the schema. Convex refuses to
+deploy a schema the stored data doesn't fit, so the migration that converts
+the data has to run first, from an earlier commit. A commit you must deploy,
+and whose migrations must finish, before going further is tagged
+`upgrade-stop-YYYY-MM-DD`.
+
+If you skip one, the deploy fails with a schema validation error and pushes
+nothing, along these lines:
+
+```
+Schema validation failed.
+Document with ID "..." in table "cliSessions" does not match the schema: ...
+```
+
+Nothing changed on your deployment. Deploy the stops in order, then the
+latest commit.
+
+### Docker installs
+
+```bash
+./self-hosted/upgrade.sh
+```
+
+It refuses to run over uncommitted changes, then checks out each stop you
+don't have yet, runs `start.sh` there, and finishes on the latest `main`.
+`start.sh` waits for the data migrations and exits with an error naming any
+that failed. The script then stops and leaves the checkout at that stop.
+Fix the cause and run it again: it starts from that stop.
+
+### Other installs
+
+List the stops between your deployed commit and `main`, oldest first:
+
+```bash
+git fetch --tags
+git tag --merged origin/main --no-merged <deployed-commit> --list 'upgrade-stop-*' --sort=version:refname
+```
+
+For each one, deploy it the way you normally deploy, then wait until
+`lib:getStatus` shows every migration done (see
+[`Check progress`](/docs/operations/migrations#check-progress)). Then deploy
+`main`. On Vercel, deploy a stop by promoting or redeploying a build of that
+tag's commit.
 
 ## Rebuild the docs site
 
