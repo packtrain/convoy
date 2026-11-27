@@ -2075,6 +2075,68 @@ describe("message-handler", () => {
     expect(releaseCalls).toHaveLength(2);
   });
 
+  it("does not claim again a chat that left the pending list during its run (OS-2625)", async () => {
+    const chat = makePendingChat({
+      _id: "chat_left_pending" as PendingChat["_id"],
+      workingDirectory: join(TEST_ROOT, "repo-deferred"),
+    });
+    const msg = makeUserMessage({
+      _id: "msg_left_pending" as UnprocessedUserMessage["_id"],
+      threadId: chat._id as UnprocessedUserMessage["threadId"],
+    });
+    const gate = createDeferred();
+    setPerThreadQueryResponses(
+      new Map<string, UnprocessedUserMessage[]>([[chat._id as string, [msg]]])
+    );
+    mockMutation.mockImplementation(async (_fn, args) => {
+      if (args && "leaseMs" in args && "threadId" in args && "sessionId" in args) {
+        return true;
+      }
+      if (args && "userMessageIds" in args) {
+        return { assistantMessageId: "msg_assistant_left", runId: "run_left" };
+      }
+      return null;
+    });
+
+    const executeMock = vi.fn().mockImplementation(async function* () {
+      yield { type: "assistant", data: "chunk" };
+      await gate.promise;
+      return {} satisfies RunnerExecutionResult;
+    });
+
+    const handler = createMessageHandler(
+      () => ({
+        execute: executeMock,
+        abort: vi.fn(),
+        shutdown: vi.fn().mockResolvedValue(undefined),
+      }),
+      mockClient,
+      sessionId,
+      { maxConcurrentChats: 1 }
+    );
+
+    handler.syncPendingChats([chat]);
+    await vi.waitFor(() => {
+      expect(executeMock).toHaveBeenCalledTimes(1);
+    });
+
+    // claimThread's lastActivityAt bump re-fires the subscription with the
+    // chat still listed; startRun then clears it from the list.
+    handler.syncPendingChats([chat]);
+    handler.syncPendingChats([]);
+
+    gate.resolve();
+    await vi.waitFor(() => {
+      expect(handler.isProcessing()).toBe(false);
+    });
+
+    const callsTo = (ref: Parameters<typeof getFunctionName>[0]) =>
+      mockMutation.mock.calls.filter(([fn]) => getFunctionName(fn) === getFunctionName(ref));
+    expect(callsTo(api.cli.messages.complete)).toHaveLength(1);
+    expect(callsTo(api.cli.messages.fail)).toHaveLength(0);
+    expect(callsTo(api.cli.threads.runControl.claimThread)).toHaveLength(1);
+  });
+
   it("aborts active runners and prevents queued chats from starting during shutdown", async () => {
     const chatA = makePendingChat({
       _id: "chat_shutdown_a" as PendingChat["_id"],

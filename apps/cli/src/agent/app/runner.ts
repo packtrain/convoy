@@ -359,10 +359,7 @@ export async function createAgentRunner(options: AgentRunnerOptions): Promise<Ag
       { profileId: profileId as Id<"cliProfiles"> },
       {
         onUpdate: (threads) => {
-          if (!messageHandler) return;
-          for (const chat of threads) {
-            messageHandler.enqueueChat(chat);
-          }
+          messageHandler?.syncPendingChats(threads);
         },
         onError: (error) => {
           console.error(chalk.red(`[Subscription] ${error.message}`));

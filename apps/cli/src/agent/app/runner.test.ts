@@ -50,6 +50,7 @@ const {
     createFileStreamRunnerMock: createFileStreamRunner,
     createMessageHandlerMock: vi.fn(() => ({
       enqueueChat: vi.fn(),
+      syncPendingChats: vi.fn(),
       isProcessing: vi.fn(() => false),
       shutdown: vi.fn().mockResolvedValue(undefined),
     })),
@@ -537,6 +538,7 @@ describe("agent-runner shutdown lifecycle", () => {
     let resolveShutdown!: () => void;
     createMessageHandlerMock.mockReturnValueOnce({
       enqueueChat: vi.fn(),
+      syncPendingChats: vi.fn(),
       isProcessing: vi.fn(() => false),
       shutdown: vi.fn(
         () =>

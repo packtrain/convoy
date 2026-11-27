@@ -156,8 +156,9 @@ Retry immediately after Stop). The pending-list subscription fires at a
 moment the worker is still marked active — and never again afterwards — so
 the message handler defers such an enqueue instead of dropping it and
 re-enqueues the thread when the worker exits (`deferredChats` in
-`thread-processor.ts`); the follow-up claim is a no-op when nothing is
-pending by then.
+`thread-processor.ts`). A later pending-list result that no longer lists
+the thread drops the deferred entry, so a thread that stopped being pending
+during the run is not claimed again (OS-2625).
 
 ## Non-goals
 

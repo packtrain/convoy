@@ -45,6 +45,8 @@ export type ThreadResumeHandle = FunctionReturnType<typeof api.cli.messages.getR
 export interface MessageHandler {
   /** Add a pending chat to the processing queue */
   enqueueChat(chat: PendingChat): void;
+  /** Apply a full `listPendingThreads` result: enqueue each chat, drop parked ones no longer pending (OS-2625). */
+  syncPendingChats(chats: PendingChat[]): void;
   /** Whether a chat is currently being processed */
   isProcessing(): boolean;
   /** Cleanup background resources. */
@@ -1151,6 +1153,18 @@ export function createMessageHandler(
 
   return {
     enqueueChat,
+
+    syncPendingChats(chats: PendingChat[]): void {
+      const pendingIds = new Set(chats.map((chat) => chat._id as string));
+      for (const threadId of deferredChats.keys()) {
+        if (!pendingIds.has(threadId)) {
+          deferredChats.delete(threadId);
+        }
+      }
+      for (const chat of chats) {
+        enqueueChat(chat);
+      }
+    },
 
     isProcessing(): boolean {
       return activeChatIds.size > 0 || queue.length > 0;
