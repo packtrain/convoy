@@ -62,6 +62,8 @@ lease renewal must not write it.
   expiry. `claimThread` sets `claimedBySessionId` on the thread and writes the
   row; `heartbeatClaim` writes only the row. Every path that releases a claim
   (`resetThreadClaim`: release, stop, delete, disconnect, watchdog) deletes it.
+  The same reset settles a `pending` thread with an empty queue to
+  `completed`, so a queue emptied mid-claim can't leave it reading busy.
 - **Readers.** Only claim gates read the row: `claimThread`, `heartbeatClaim`,
   `isClaimActiveForSession`, `assertThreadClaimedBySession` (start, append,
   complete, fail, interaction requests, worktree ops), steer availability,

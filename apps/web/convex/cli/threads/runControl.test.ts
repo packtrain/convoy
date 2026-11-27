@@ -317,6 +317,38 @@ describe("chat claiming loop", () => {
     });
   });
 
+  test("releaseClaim settles a pending thread whose queue emptied during the claim", async () => {
+    const ctx = createTestContext();
+    const { user, project, asUser, t } = await ctx.setupProject();
+    const profile = await ctx.cliProfile(user._id, project._id);
+    const apiKeyResult = await asUser.mutation(api.apiKeys.core.create, {
+      name: "CLI Key",
+      expiresAt: Date.now() + 30 * 24 * 60 * 60 * 1000,
+    });
+    const session = await ctx.cliSession(profile._id, apiKeyResult.id);
+    const chat = await ctx.cliThread(user._id, project._id, profile._id, { status: "completed" });
+    const messageId = await asUser.mutation(api.cli.messages.send, { threadId: chat._id, content: "hi" });
+
+    await t.mutation(api.cli.threads.runControl.claimThread, {
+      threadId: chat._id,
+      sessionId: session._id,
+      leaseMs: 60_000,
+      apiKey: apiKeyResult.key,
+    });
+    // Deleted after the CLI claimed it but before the run started.
+    await asUser.mutation(api.cli.messages.removeQueued, { messageId });
+    await t.mutation(api.cli.threads.runControl.releaseClaim, {
+      threadId: chat._id,
+      sessionId: session._id,
+      apiKey: apiKeyResult.key,
+    });
+
+    const updated = await t.run((runCtx) => runCtx.db.get("cliThreads", chat._id));
+    expect(updated?.processingState).toBe("idle");
+    expect(updated?.hasPendingUserMessages).toBe(false);
+    expect(updated?.status).toBe("completed");
+  });
+
   test("releaseClaim fails an active streaming assistant response", async () => {
     const ctx = createTestContext();
     const { user, project, asUser, t } = await ctx.setupProject();
@@ -1473,6 +1505,24 @@ describe("cancelProcessing", () => {
       expect(after?.activeAssistantMessageId).toBe(before?.activeAssistantMessageId);
       expect(after?.claimedBySessionId).toBe(before?.claimedBySessionId);
     });
+  });
+
+  test("settles a stuck pending thread with no run and no queue", async () => {
+    const ctx = createTestContext();
+    const { user, project, asUser, t } = await ctx.setupProject();
+    const profile = await ctx.cliProfile(user._id, project._id);
+    const chat = await ctx.cliThread(user._id, project._id, profile._id, {
+      status: "pending",
+      processingState: "idle",
+      hasPendingUserMessages: false,
+    });
+
+    await asUser.mutation(api.cli.threads.runControl.cancelProcessing, { threadId: chat._id });
+
+    const after = await t.run((runCtx) => runCtx.db.get("cliThreads", chat._id));
+    expect(after?.status).toBe("completed");
+    expect(after?.processingState).toBe("idle");
+    expect(after?.hasPendingUserMessages).toBe(false);
   });
 
   test("fails the sent run in place on a stop with no active run (OS-1459)", async () => {

@@ -475,6 +475,8 @@ async function cancelThreadProcessing(
   }
 
   if (!activeAssistant && pendingUserMessages.length === 0 && chat.processingState === "idle") {
+    // Nothing to stop, but a stale `pending` would keep the Stop button up forever.
+    if (chat.status === "pending") await setThreadPendingUserMessages(ctx, chat._id, false, now);
     return;
   }
 

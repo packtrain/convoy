@@ -99,7 +99,9 @@ pending interaction requests first, because their count decides rules 4, 7 and
    to `pending` or re-stamp the hold. A second stop after a **parked** stop
    (rule 10) is a no-op too, through the other guard: that thread is idle with
    no active assistant and nothing unprocessed, so it keeps `waiting_input`
-   rather than being recomputed into a failure.
+   rather than being recomputed into a failure. The one exception is a stale
+   `pending` thread (idle, nothing queued, no run): Stop settles it to
+   `completed`, otherwise the thread reads busy with nothing to stop.
 9. `superseded: true` (OS-1461) means the user took the turn over rather than
    stopping it — sending a message while parked on a prompt (which is also how
    "keep planning" works, so it has no button). Everything above still happens (claim released, watchdog cancelled,

@@ -1094,9 +1094,11 @@ type ThreadClaimResetPatch = {
 /**
  * Release a claim and clear every streaming pointer, returning the thread to
  * `idle` (Chat Processing invariant #3). The caller computes the resulting
- * `status`/`hasPendingUserMessages` and cancels the watchdog job.
+ * `status`/`hasPendingUserMessages` and cancels the watchdog job; an empty
+ * queue never stays `pending` (cli-thread-cancel-processing.md).
  */
 export async function resetThreadClaim(ctx: MutationCtx, threadId: Id<"cliThreads">, patch: ThreadClaimResetPatch): Promise<void> {
+  const status = patch.status === "pending" && !patch.hasPendingUserMessages ? "completed" : patch.status;
   const thread = await getThreadById(ctx, threadId);
   if (thread?.metadata?.proposedPlan &&
       (thread.processingState === "streaming" || patch.status !== "waiting_input" || !thread.metadata.proposedPlan.ready)) {
@@ -1107,7 +1109,7 @@ export async function resetThreadClaim(ctx: MutationCtx, threadId: Id<"cliThread
     await settleGuideRun(ctx, thread, patch.runError);
   }
   await patchThreadWithStatusProjection(ctx, threadId, {
-    status: patch.status,
+    status,
     processingState: "idle",
     hasPendingUserMessages: patch.hasPendingUserMessages,
     queueHeldAt: patch.queueHeldAt,
