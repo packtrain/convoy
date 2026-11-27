@@ -16,7 +16,7 @@ vi.mock("../setup/prompts.js", () => ({
 vi.mock("@inquirer/prompts", () => ({ select: vi.fn().mockResolvedValue("org"), input: vi.fn().mockResolvedValue("NEW") }));
 const originalTTY = process.stdin.isTTY;
 afterEach(() => { Object.defineProperty(process.stdin, "isTTY", { value: originalTTY, configurable: true }); });
-vi.mock("../service/client.js", () => ({ serviceRequest: mocks.service }));
+vi.mock("../service/client.js", () => ({ serviceRequest: mocks.service, serviceEndpoint: () => "endpoint" }));
 vi.mock("./launcher.js", () => ({ isProjectEnvironment: () => mocks.state.launcher, inspectProjectEnvironment: mocks.inspect, prepareProject: mocks.prepare, projectRequest: mocks.request, projectShell: mocks.shell, sharedShell: mocks.sharedShell, checkLauncher: mocks.check, projectAccounts: mocks.accounts, sharedRuntimeStates: mocks.runtimes }));
 vi.mock("../../lib/config/toml.js", () => ({
   readConfig: () => mocks.state.config,
@@ -36,7 +36,7 @@ import { ServiceUnavailableError } from "../service/errors.js";
 import { acquireLock, leasePath } from "../service/paths.js";
 import { projectIdentity } from "./validators.js";
 import { chooseEnvironmentMode } from "../environment/resolution.js";
-import { addProjectGuided, addProject, checkProject, readProjectAccounts, listProjects, loginProject, openProjectShell, removeProject } from "./workflow.js";
+import { addProjectGuided, addProject, checkProject, readProjectAccounts, listProjects, loginProject, openProjectShell, removeProject, configureProject, setProjectConcurrency } from "./workflow.js";
 import { CredentialStore } from "../../lib/config/credentials/store.js";
 
 const options = { url: "https://example.convex.cloud", apiKey: "secret", project: "project-a", profileKey: "a", nonInteractive: true };
@@ -130,6 +130,22 @@ describe("local project workflow", () => {
     mocks.state.config.profiles.a = { name: "Legacy", url: options.url, api_key: "old", project_id: "other", paths: ["/other"] };
     await expect(addProject("a", options)).rejects.toThrow("different registration");
     expect(mocks.prepare).not.toHaveBeenCalled();
+  });
+  it("saves and clears a profile's concurrency without a service, never on a remote target (OS-2612)", async () => {
+    await addProject("a", options);
+    expect(await setProjectConcurrency("a", 8, false)).toContain("next connects");
+    expect(mocks.state.config.profiles.a.concurrency).toBe(8);
+    await setProjectConcurrency("a", null, false);
+    expect(mocks.state.config.profiles.a).not.toHaveProperty("concurrency");
+    await expect(setProjectConcurrency("a", 8, false, false)).rejects.toThrow("offline");
+    expect(mocks.state.config.profiles.a).not.toHaveProperty("concurrency");
+    expect(() => configureProject("missing", 3)).toThrow("Unknown service profile");
+  });
+  it("reports a running project's saved concurrency as pending until reload (OS-2612)", async () => {
+    mocks.service.mockResolvedValueOnce({ applied: false }).mockResolvedValueOnce({ applied: true });
+    expect(await setProjectConcurrency("a", 8, false)).toContain("convoy service reload --profile a --interrupt");
+    expect(await setProjectConcurrency("a", 8, true)).toContain("reloaded");
+    expect(mocks.service).toHaveBeenLastCalledWith("endpoint", { op: "project.configure", profile: "a", concurrency: 8, interrupt: true });
   });
   it("refuses active removal without losing the profile or default", async () => {
     await addProject("a", options);

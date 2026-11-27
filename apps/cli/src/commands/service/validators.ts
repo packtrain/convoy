@@ -6,7 +6,7 @@ import { z } from "zod";
 
 export const requestSchema = z.object({
   v: z.literal(1), id: z.string().min(1).max(80),
-  op: z.enum(["status", "inspect", "logs", "stop", "reconcile", "project.remove", "project.add", "credentials.mutate", "hello", "subscribe", "outcome", "runs.list", "runs.get", "runs.history", "runs.logs", "runs.cancel"]),
+  op: z.enum(["status", "inspect", "logs", "stop", "reconcile", "project.remove", "project.add", "credentials.mutate", "project.configure", "hello", "subscribe", "outcome", "runs.list", "runs.get", "runs.history", "runs.logs", "runs.cancel"]),
   epoch: z.string().uuid().optional(),
   requestId: z.string().min(1).max(80).optional(),
   threadId: z.string().min(1).max(256).optional(), runId: z.string().min(1).max(256).optional(),
@@ -22,6 +22,8 @@ export const requestSchema = z.object({
   registration: z.object({ key: profileKeySchema, profile: ProfileSchema }).optional(),
   after: z.number().int().nonnegative().optional(),
   profile: profileKeySchema.optional(),
+  /** `project.configure`: null clears the key, so the default applies. */
+  concurrency: z.number().int().min(1).max(50).nullable().optional(),
 }).strict();
 export type ServiceRequest = z.infer<typeof requestSchema>;
 export const statusSchema = z.enum(["connecting", "online", "retrying", "blocked", "failed", "stopped"]);
@@ -110,4 +112,6 @@ export interface ServiceManagement {
   register?(registration: ProjectRegistration): void | Promise<void>;
   removal?(profile: string): { identity: string; last: boolean };
   remove?(profile: string, identity: string): void;
+  /** Writes `profiles.<key>.concurrency`; null clears it. */
+  configure?(profile: string, concurrency: number | null): void | Promise<void>;
 }

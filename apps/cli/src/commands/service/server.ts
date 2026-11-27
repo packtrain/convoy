@@ -5,8 +5,8 @@ import { ServiceOperationError } from "./errors.js";
 import { frameParser } from "./parsers.js";
 import { FRAME_LIMIT, RESPONSE_LIMIT, requestSchema, type ServiceRequest, type ServiceResponse } from "./validators.js";
 
-export const CAPABILITIES = ["credentials-v1", "attach-v1", "runs-v1", "outcomes-v1", "host-cli-v1", "inspect-v1", "raw-logs-v1", "project-setup-v1", "local-shared-v1", "credentials-shared-v1"];
-const MUTATIONS = new Set(["stop", "reconcile", "project.add", "project.remove", "credentials.mutate", "runs.cancel"]);
+export const CAPABILITIES = ["credentials-v1", "attach-v1", "runs-v1", "outcomes-v1", "host-cli-v1", "inspect-v1", "raw-logs-v1", "project-setup-v1", "local-shared-v1", "credentials-shared-v1", "project-configure-v1"];
+const MUTATIONS = new Set(["stop", "reconcile", "project.add", "project.remove", "credentials.mutate", "project.configure", "runs.cancel"]);
 
 export function serviceServer(
   snapshot: () => Omit<ServiceResponse, "v" | "id" | "ok">,

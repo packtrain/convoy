@@ -5,12 +5,15 @@ import type { Browser } from "../workflow.js";
 import type { BrowseState, Row } from "../validators.js";
 import { palette, plain, scrollWindow, terminalJson, wrapLines } from "../formatters.js";
 import { confirmationLines } from "./formatters.js";
-import { Clickable, Dialog } from "../dialog/index.js";
+import { Clickable, Dialog, editText } from "../dialog/index.js";
+import { parseConcurrency } from "../../project/validators.js";
+import { DEFAULT_MAX_CONCURRENT_CHATS } from "../../../agent/app/runtime-config.js";
 
-const labels: Record<Action, string> = { status: "Service status", logs: "Saved service JSON logs", start: "Start shared service", stop: "Stop shared service", pause: "Pause project", reload: "Reload project", shell: "Private project shell", "login-codex": "Log in to Codex", "login-claude-code": "Log in to Claude Code", "login-antigravity": "Log in to Antigravity", check: "Check project", remove: "Remove project from environment", cancel: "Cancel selected run" };
+const labels: Record<Action, string> = { status: "Service status", logs: "Saved service JSON logs", start: "Start shared service", stop: "Stop shared service", pause: "Pause project", reload: "Reload project", shell: "Private project shell", "login-codex": "Log in to Codex", "login-claude-code": "Log in to Claude Code", "login-antigravity": "Log in to Antigravity", check: "Check project", concurrency: "Set concurrency", remove: "Remove project from environment", cancel: "Cancel selected run" };
 export function ActionDialog({ state, browser, width, height, inline = false }: { state: BrowseState; browser: Browser; width: number; height: number; inline?: boolean }) {
   const action = state.action;
   if (!action || action.entries || Boolean(action.pending) === inline) return null;
+  if (action.pending && action.kind === "concurrency") return <ConcurrencyDialog state={state} browser={browser} width={width} height={height} />;
   const close = () => browser.dismissAction();
   const lines = action.pending ? confirmationLines(state, browser.targets[state.scope.connection].name)
     : [`${plain(browser.targets[state.scope.connection].name)}${action.profile && !action.environment ? ` / ${plain(action.profile)}` : ""}`, ...(action.busy ? `Working: ${labels[action.kind]}` : action.message ?? "").split("\n"), "↑/↓ PgUp/PgDn scroll · Esc back"];
@@ -18,6 +21,23 @@ export function ActionDialog({ state, browser, width, height, inline = false }: 
     onCancel={close} buttons={action.pending ? [{ label: "Cancel", activate: close },
       { label: action.environment ? "Sign in" : action.pauseBeforeShell ? loginRuntime(action.kind) ? "Pause and log in" : "Pause and enter shell" : labels[action.kind], activate: () => browser.confirmAction() }]
       : action.busy ? [] : [{ label: "Back", activate: close }]} />;
+}
+
+/** Prefilled with the value the connection runs with; empty clears the setting. Spec: docs/specs/cli-tui.md#project-concurrency-cli-01840-os-2612 */
+function ConcurrencyDialog({ state, browser, width, height }: { state: BrowseState; browser: Browser; width: number; height: number }) {
+  const current = state.observations[state.scope.connection].inspection?.profiles.find(p => p.profile === state.action?.profile)?.concurrency;
+  const [value, setValue] = useState(current === undefined ? "" : String(current));
+  const [error, setError] = useState<string>();
+  const close = () => browser.dismissAction();
+  const save = (interrupt: boolean) => {
+    const concurrency = value ? parseConcurrency(value) : null;
+    if (concurrency === undefined) { setError(`Enter a whole number from 1 to 50, or leave it empty for the default (${DEFAULT_MAX_CONCURRENT_CHATS}).`); return; }
+    browser.confirmAction({ concurrency, interrupt });
+  };
+  return <Dialog width={width} height={height} error={error} onCancel={close} onSubmit={() => save(false)}
+    lines={[...confirmationLines(state, browser.targets[state.scope.connection].name).slice(0, -1), `Concurrency: ${value}▏`]}
+    onText={(input, key) => setValue(old => editText(old, undefined, input, key, 8)?.value ?? old)}
+    buttons={[{ label: "Cancel", activate: close }, { label: "Save", activate: () => save(false) }, { label: "Save and reload", activate: () => save(true) }]} />;
 }
 
 type Control = { key: string; label: string; section: string }
@@ -38,6 +58,7 @@ const maintenance: Control[] = [
 const project: Control[] = [
   { type: "action", kind: "pause", key: "p", label: labels.pause, section: "Project" },
   { type: "action", kind: "reload", key: "u", label: labels.reload, section: "Project" },
+  { type: "action", kind: "concurrency", key: "l", label: labels.concurrency, section: "Project" },
   { type: "action", kind: "shell", key: "h", label: labels.shell, section: "Project" },
   { type: "action", kind: "login-codex", key: "i", label: labels["login-codex"], section: "Project" },
   { type: "action", kind: "login-claude-code", key: "o", label: labels["login-claude-code"], section: "Project" },

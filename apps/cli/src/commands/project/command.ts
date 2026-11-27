@@ -3,9 +3,9 @@ import { serviceRequest, serviceEndpoint } from "../service/client.js";
 import { confirm } from "@inquirer/prompts";
 import { Command, InvalidArgumentError, Option } from "commander";
 import { addGlobalOptions } from "../../cli.js";
-import { addProject, checkProject, readProjectAccounts, listProjects, loginProject, openProjectShell, removeProject, type ProjectAddOptions } from "./workflow.js";
+import { addProject, checkProject, setProjectConcurrency, readProjectAccounts, listProjects, loginProject, openProjectShell, removeProject, type ProjectAddOptions } from "./workflow.js";
 import { checkLines } from "./formatters.js";
-import { loginRuntimeSchema, type LoginRuntime } from "./validators.js";
+import { loginRuntimeSchema, parseConcurrency, type LoginRuntime } from "./validators.js";
 
 async function report(action: () => void | Promise<void>): Promise<void> {
   try { await action(); }
@@ -38,6 +38,18 @@ projectCommand.command("remove <profile>").option("--yes", "Confirm local unregi
     if (!options.yes && (!process.stdin.isTTY || !await confirm({ message: `Unregister ${profile}? Files are retained.`, default: false }))) throw new Error("Removal cancelled. Use --yes for non-interactive removal.");
     await serviceRequest(serviceEndpoint(), { op: "project.remove", profile, interrupt: options.interrupt });
     console.log(`Unregistered ${profile}. Files retained.`);
+  }));
+const concurrency = (value: string) => {
+  const parsed = value === "default" ? value : parseConcurrency(value);
+  if (parsed === undefined) throw new InvalidArgumentError("Use a whole number from 1 to 50, or default.");
+  return parsed;
+};
+projectCommand.command("set <profile>").description("Change a project's settings; a running connection applies them at its next reload")
+  .requiredOption("--concurrency <n|default>", "Max simultaneous runs, 1-50; default clears the setting (5)", concurrency)
+  .option("--interrupt", "Reload the project now, stopping its active runs")
+  .action((profile: string, options: { concurrency: number | "default"; interrupt?: boolean }) => report(async () => {
+    const value = options.concurrency === "default" ? null : options.concurrency;
+    console.log(await setProjectConcurrency(profile, value, Boolean(options.interrupt), !targetEnvironment()));
   }));
 const RUNTIMES = loginRuntimeSchema.options.join(", ");
 const runtime = (value: string) => {

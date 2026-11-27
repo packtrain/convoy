@@ -4,7 +4,7 @@ import { join } from "node:path";
 import { afterEach, expect, it, vi } from "vitest";
 import { serviceServer } from "../../service/server.js";
 import { ServiceClient } from "../../service/client.js";
-import type { ServiceRequest, WorkerState } from "../../service/validators.js";
+import type { ServiceInspection, ServiceRequest, WorkerState } from "../../service/validators.js";
 import { Browser } from "../workflow.js";
 
 const cleanups: (() => void | Promise<void>)[] = [];
@@ -15,14 +15,24 @@ async function fixture(shell = vi.fn(async () => {})) {
   const projects: WorkerState[] = ["a", "b"].map(profile => ({ profile, identity: profile, status: "online", attempts: 1, activeRuns: 1 }));
   const requests: ServiceRequest[] = [];
   const hooks: { beforeStatus?: () => Promise<void>; afterPause?: () => void } = {};
+  const inspection: ServiceInspection = { nodeVersion: "v22", profiles: [] };
+  // A saved concurrency reaches inspection only when the worker restarts.
+  let saved: number | undefined;
+  const apply = (profile: string) => { inspection.profiles = [{ profile, projectId: "p", endpoint: "https://example.convex.cloud", concurrency: saved }]; };
   const snapshot = () => ({ pid: 1, stopping: false, profiles: projects });
   const control = serviceServer(snapshot, async request => {
     requests.push(request);
     if (request.op === "status") { await hooks.beforeStatus?.(); return snapshot(); }
-    if (request.op === "inspect") return { result: { nodeVersion: "v22", profiles: [] } };
+    if (request.op === "inspect") return { result: inspection };
+    if (request.op === "project.configure") {
+      saved = request.concurrency ?? undefined;
+      if (request.interrupt) apply(request.profile!);
+      return { applied: Boolean(request.interrupt) };
+    }
     if (request.op === "reconcile") {
       const project = projects.find(p => p.profile === request.profile)!;
       project.paused = Boolean(request.pause); project.status = request.pause ? "stopped" : "online";
+      if (!request.pause) apply(request.profile!);
       if (request.pause) hooks.afterPause?.();
       control.publish({ phase: "released" }, request.profile);
       return { applied: true };
@@ -44,7 +54,7 @@ async function fixture(shell = vi.fn(async () => {})) {
   browser.select({ connection: 0, details: false, profile: "a" });
   await vi.waitFor(() => expect(browser.getSnapshot().rows).toHaveLength(1));
   browser.showActions(true);
-  return { browser, projects, requests, control, shell, handoff, connection, hooks };
+  return { browser, projects, requests, control, shell, handoff, connection, hooks, inspection };
 }
 async function settle(browser: Browser) { await vi.waitFor(() => expect(browser.getSnapshot().action?.busy).toBe(false)); }
 
@@ -62,6 +72,27 @@ it("confirms targeted pause, shell and reload while leaving another project unch
   expect(b.getSnapshot().action?.message).toContain("Reload project");
   b.beginAction("reload"); b.confirmAction(); await settle(b);
   expect(f.projects[0].paused).toBe(false); expect(f.projects[1]).toMatchObject({ profile: "b", status: "online", activeRuns: 1 });
+});
+
+it("saves concurrency after the identity preflight, reloading only on request (OS-2612)", async () => {
+  const f = await fixture(); const b = f.browser;
+  f.requests.length = 0;
+  b.beginAction("concurrency");
+  expect(b.getSnapshot().action).toMatchObject({ pending: true, profile: "a", identity: "a" });
+  b.confirmAction({ concurrency: 8 }); await settle(b);
+  expect(f.requests.map(r => r.op)).toEqual(["status", "project.configure", "status", "inspect"]);
+  expect(f.requests[1]).toMatchObject({ profile: "a", concurrency: 8, interrupt: false });
+  expect(b.getSnapshot().action?.message).toContain("pending config");
+  b.dismissAction();
+  b.beginAction("reload"); b.confirmAction(); await settle(b);
+  expect(b.getSnapshot().observations[0].inspection?.profiles[0]).toMatchObject({ profile: "a", concurrency: 8 });
+  b.dismissAction(); f.requests.length = 0;
+  b.beginAction("concurrency"); b.confirmAction({ concurrency: null, interrupt: true }); await settle(b);
+  expect(f.requests[1]).toMatchObject({ op: "project.configure", profile: "a", concurrency: null, interrupt: true });
+  expect(b.getSnapshot().action?.message).toContain("reloaded");
+  expect(b.getSnapshot().observations[0].inspection?.profiles).toEqual([expect.objectContaining({ profile: "a" })]);
+  expect(b.getSnapshot().observations[0].inspection?.profiles[0].concurrency).toBeUndefined();
+  expect(f.projects[1]).toMatchObject({ profile: "b", status: "online", activeRuns: 1 });
 });
 
 it("offers pause and shell together, cancels without work, then verifies pause before launch", async () => {

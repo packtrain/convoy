@@ -2,6 +2,7 @@ import { plain, wrapLines } from "../formatters.js";
 import type { BrowseState } from "../validators.js";
 import { loginRuntimeLabels } from "../../project/validators.js";
 import { loginRuntime } from "./validators.js";
+import { DEFAULT_MAX_CONCURRENT_CHATS } from "../../../agent/app/runtime-config.js";
 
 export function confirmationLines(state: BrowseState, target: string, width?: number): string[] {
   const action = state.action;
@@ -18,6 +19,12 @@ export function confirmationLines(state: BrowseState, target: string, width?: nu
     case "login-codex": case "login-claude-code": case "login-antigravity": question = action.environment
       ? `Sign in to ${loginRuntimeLabels[loginRuntime(action.kind)!]} once for every project in ${target}? Afterwards all ${projects.length} projects reload, stopping their active work (${projects.reduce((sum, p) => sum + (p.activeRuns ?? 0), 0)} observed active runs).`
       : `${action.pauseBeforeShell ? `Pause this project connection and stop its active work? ${impact} Other projects stay connected. Then r` : "R"}un only ${loginRuntimeLabels[loginRuntime(action.kind)!]}'s own login in the private shell, and reload the project when it finishes.`; break;
+    case "concurrency": {
+      // Inspection reports the applied value; no entry means the service never reported it.
+      const config = state.observations[state.scope.connection].inspection?.profiles.find(p => p.profile === action.profile);
+      const now = config ? ` Now ${config.concurrency ?? `the default (${DEFAULT_MAX_CONCURRENT_CHATS})`}.` : "";
+      question = `Set how many runs this project handles at once, 1 to 50; leave it empty for the default (${DEFAULT_MAX_CONCURRENT_CHATS}).${now} Save keeps active runs on the old limit until the next reload. Save and reload restarts this project connection now and stops its active work. ${impact}`; break;
+    }
     case "remove": question = `Remove this local registration and stop its connection and active work? ${impact} Private files are retained. The remote project is not deleted. Pending registration changes may also reconcile.`; break;
     case "cancel": question = `Cancel run ${action.row?.run?.runId} in thread ${action.row?.thread.threadId}? All clients observe this cancellation.`; break;
     case "stop": question = "Stop this shared service? All project connections and active work stop for every attached client. Files and saved logs remain."; break;

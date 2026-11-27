@@ -211,6 +211,13 @@ export async function runService(
       try { return { registered: false, applied: await reconcile() }; }
       catch { return { registered: false, applied: false }; }
     }
+    if (request.op === "project.configure") {
+      if (!request.profile || request.concurrency === undefined || !management.configure) throw new Error("Missing concurrency or project profile.");
+      // An alias shares its worker, which reads the first key's settings; only that key may change them.
+      if (![...workers.values()].some((worker) => worker.state.profile === request.profile)) throw new Error("Unknown service profile. Use the project key that service status lists.");
+      await management.configure(request.profile, request.concurrency);
+      return { applied: await reconcile(request.interrupt ? request.profile : undefined) };
+    }
     if (request.profile && request.interrupt && ![...workers.values()].some((worker) => worker.state.profile === request.profile)) {
       throw new Error("No isolated service connection with that profile key. Inspect service status.");
     }

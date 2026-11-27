@@ -112,6 +112,17 @@ it.each(["pause", "remove"] as const)("describes %s impact with a known count an
   expect(confirmationLines({ ...state, observations: [{ health: "connected", profiles: [] }] }, "Local", 120).join("\n")).toContain("Unknown observed active runs");
 });
 
+it("states the concurrency a project runs with, or the default when none is set (OS-2612)", async () => {
+  const { confirmationLines } = await import("./actions/formatters.js");
+  const observation = (concurrency?: number) => ({ health: "connected" as const, profiles: [{ profile: "a", status: "online" as const, attempts: 1 }],
+    inspection: { nodeVersion: "v22", profiles: [{ profile: "a", projectId: "p", endpoint: "x", concurrency }] } });
+  const state = { scope: { connection: 0, profile: "a", details: false }, observations: [observation(8)], rows: [], loading: false, stale: false, pageNumber: 1,
+    action: { kind: "concurrency" as const, profile: "a", pending: true } };
+  expect(confirmationLines(state, "Local", 120).join("\n")).toContain("Now 8.");
+  expect(confirmationLines({ ...state, observations: [observation()] }, "Local", 120).join("\n")).toContain("Now the default (5).");
+  expect(confirmationLines({ ...state, observations: [{ health: "connected", profiles: [] }] }, "Local", 120).join("\n")).not.toContain("Now");
+});
+
 it.each(["status", "logs"] as const)("does not label %s as a service start even in a pending state", async kind => {
   const { confirmationLines } = await import("./actions/formatters.js");
   const state = { scope: { connection: 0, details: true }, observations: [{ health: "connected" as const, profiles: [] }], rows: [], loading: false, stale: false, pageNumber: 1,

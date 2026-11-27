@@ -221,6 +221,18 @@ active-run count. Even zero observed runs requires interruption permission becau
 new work can arrive. A and B continue. An independently opened project shell or
 foreground connection must be stopped in its own terminal.
 
+To change how many runs C handles at once (1 to 50; `default` restores five):
+
+```bash
+convoy project set c --concurrency 8
+convoy project set c --concurrency 8 --interrupt
+```
+
+Without `--interrupt`, C's active runs keep the old limit and C shows `pending`
+until you reload it. With `--interrupt`, C restarts now with the new value. With
+no service running, the value applies when C next connects. In `convoy tui`, the
+project's Actions offer the same as [l] Set concurrency.
+
 The service checks configuration every two seconds. Invalid configuration leaves
 existing workers running. Changed or externally removed live connections show
 `pending` until you explicitly apply their changes:

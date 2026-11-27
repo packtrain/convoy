@@ -21,6 +21,8 @@ export type ProjectEnvironment = z.infer<typeof projectEnvironmentSchema>;
 export const loginRuntimeSchema = keyRuntimeSchema;
 export type LoginRuntime = z.infer<typeof loginRuntimeSchema>;
 export const loginRuntimeLabels: Record<LoginRuntime, string> = MANAGED_RUNTIME_LABELS;
+/** Typed `profiles.<key>.concurrency`: a whole number from 1 to 50, else undefined. */
+export const parseConcurrency = (value: string) => /^\d{1,2}$/.test(value) && +value >= 1 && +value <= 50 ? +value : undefined;
 /** Each runtime's own login, run as this account in a shared environment. */
 export const LOGIN_COMMANDS: Record<LoginRuntime, string> = {
   codex: "codex login --device-auth", "claude-code": "claude auth login", cursor: "NO_OPEN_BROWSER=1 cursor-agent login", opencode: "opencode auth login",

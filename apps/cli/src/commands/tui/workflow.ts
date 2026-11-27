@@ -38,7 +38,8 @@ export class Browser {
       rows: [], loading: false, stale: false, pageNumber: 1 };
     this.actions = new ActionWorkflow({ targets, state: () => this.state, client: () => this.client,
       generation: () => this.generation, revision: () => this.revision, disposed: () => this.disposed,
-      set: patch => this.set(patch), event: event => this.event(event), connect: () => this.connect(), reconcileSelection: () => this.reconcileSelection(), shell });
+      set: patch => this.set(patch), event: event => this.event(event), connect: () => this.connect(), reconcileSelection: () => this.reconcileSelection(),
+      inspected: inspection => this.observe({ inspection }), shell });
   }
   getSnapshot = () => this.state;
   subscribe = (listener: () => void) => { this.listeners.add(listener); return () => { this.listeners.delete(listener); }; };
@@ -264,7 +265,7 @@ export class Browser {
   unavailable = (kind: Action, row?: Row) => this.actions.unavailable(kind, row);
   beginAction = (kind: Action, row?: Row) => this.actions.beginAction(kind, row);
   dismissAction = () => this.actions.dismissAction();
-  confirmAction = () => this.actions.confirmAction();
+  confirmAction = (choice?: Parameters<ActionWorkflow["confirmAction"]>[0]) => this.actions.confirmAction(choice);
   moreOperationalLogs = () => this.actions.moreOperationalLogs();
   readLogs(row: Row, args: Pick<ServiceRequest, "chunkAfter" | "chunkBefore" | "eventOrder" | "eventOffset">) {
     if (!this.client || this.client.isClosed) return Promise.reject(new ServiceUnavailableError("Service disconnected"));

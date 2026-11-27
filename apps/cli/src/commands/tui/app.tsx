@@ -104,7 +104,7 @@ export function App({ browser, onboardingLoad }: { browser: Browser; onboardingL
   const small = size.width < 45 || size.height < 10;
   const narrow = size.width < 76;
   const workflow = Boolean(state.environment || state.onboarding);
-  const editing = state.credentials === "editing" || state.runtimes === "editing";
+  const editing = state.credentials === "editing" || state.runtimes === "editing" || Boolean(state.action?.pending && state.action.kind === "concurrency");
   // Below 100 columns the sidebar narrows so the panel keeps its values; names truncate.
   const sidebarWidth = narrow && (workflow || pane === "content") ? 0 : narrow ? size.width : size.width < 100 ? 22 : 30;
   const actionWidth = Math.max(1, size.width - sidebarWidth - 2);

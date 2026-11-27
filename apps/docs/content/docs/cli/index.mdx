@@ -117,7 +117,8 @@ available. An unreachable npm registry does not prevent connection.
 
 Streaming is on by default. `--buffered` sends complete events instead of
 partial text deltas. Concurrency defaults to five threads and can be set
-with `--concurrency` or the profile configuration.
+with `--concurrency` or the profile configuration. For a project the
+service runs, `convoy project set <profile> --concurrency <n>` saves it.
 
 Codex uses its app-server transport by default. `--codex-exec` selects the
 non-interactive transport, which has fewer capabilities. See the

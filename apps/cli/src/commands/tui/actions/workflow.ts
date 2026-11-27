@@ -1,13 +1,13 @@
 import { ServiceRejectedError } from "../../service/errors.js";
 import type { ServiceClient } from "../../service/client.js";
-import type { LogEntry, ServiceResponse } from "../../service/validators.js";
+import { serviceInspectionSchema, type LogEntry, type ServiceInspection, type ServiceResponse } from "../../service/validators.js";
 import type { Connection } from "../resolution.js";
 import type { BrowseState, Row } from "../validators.js";
-import { loginRuntime, type Action } from "./validators.js";
+import { loginRuntime, type Action, type ActionState } from "./validators.js";
 import { loginRuntimeLabels, type LoginRuntime } from "../../project/validators.js";
 import { checkLines } from "../../project/formatters.js";
 
-const PROJECT = ["pause", "reload", "shell", "login-codex", "login-claude-code", "login-antigravity", "remove"];
+const PROJECT = ["pause", "reload", "shell", "login-codex", "login-claude-code", "login-antigravity", "remove", "concurrency"];
 
 interface Host {
   targets: Connection[];
@@ -20,6 +20,7 @@ interface Host {
   event(event: ServiceResponse): void;
   connect(): Promise<void>;
   reconcileSelection(): void;
+  inspected(inspection: ServiceInspection): void;
   shell(operation: (signal: AbortSignal) => Promise<void>): Promise<void>;
 }
 
@@ -57,6 +58,7 @@ export class ActionWorkflow {
       const project = state.observations[state.scope.connection].profiles.find(p => p.profile === state.scope.profile);
       if (!project) return "Project is no longer registered. Select another project.";
       if (!client?.hello?.capabilities?.includes("host-cli-v1")) return "Update the service for project maintenance.";
+      if (kind === "concurrency" && !client.hello.capabilities.includes("project-configure-v1")) return "Update the service to change concurrency.";
       if ((kind === "shell" || loginRuntime(kind)) && !target.shell) return "Private shell requires a configured Linux project environment or managed Docker target.";
       if (login && project.runtimes && !project.runtimes.includes(login)) {
         return `${loginRuntimeLabels[login]} was not detected on this target when ${project.profile} last started. Install it ${target.mode === "shared" ? "for this account" : "root-owned, for example under /usr/local/bin"}, then [u] Reload project.`;
@@ -89,8 +91,11 @@ export class ActionWorkflow {
     this.host.set({ action: undefined });
     this.host.reconcileSelection();
   }
-  confirmAction() {
-    if (this.host.state().action?.pending) void this.executeAction();
+  confirmAction(choice?: Pick<ActionState, "concurrency" | "interrupt">) {
+    const action = this.host.state().action;
+    if (!action?.pending) return;
+    if (choice) this.host.set({ action: { ...action, ...choice } });
+    void this.executeAction();
   }
   moreOperationalLogs() {
     const action = this.host.state().action;
@@ -159,13 +164,18 @@ export class ActionWorkflow {
           sent = true;
           const response = await client!.request(kind === "remove"
             ? { op: "project.remove", profile: action.profile, interrupt: true }
-            : { op: "reconcile", profile: action.profile, interrupt: true, ...(kind === "pause" ? { pause: true } : {}) });
+            : kind === "concurrency" ? { op: "project.configure", profile: action.profile, concurrency: action.concurrency ?? null, interrupt: Boolean(action.interrupt) }
+              : { op: "reconcile", profile: action.profile, interrupt: true, ...(kind === "pause" ? { pause: true } : {}) });
           message = kind === "pause" ? "Project paused for all clients. Private shell is available. Reload resumes the connection; service restart also resumes it."
             : kind === "remove" ? "Local registration removed. Private files retained; remote project unchanged."
-              : "Project reload requested. Its connection resumes for all clients.";
-          if (response.applied === false) message += " Some registration changes remain pending. Inspect service status.";
+              : kind === "concurrency" ? action.interrupt ? "Concurrency saved. The project reloaded with it; its connection resumes for all clients."
+                : response.applied ? "Concurrency saved and applied." : "Concurrency saved. Active runs keep the old limit; the project shows pending config until [u] Reload project."
+                : "Project reload requested. Its connection resumes for all clients.";
+          if (response.applied === false && !(kind === "concurrency" && !action.interrupt)) message += " Some registration changes remain pending. Inspect service status.";
         }
         if (!await this.refreshStatus()) message += " Status refresh failed. Inspect status before another action.";
+        // Inspect reports each worker's applied settings; a restart may have changed them.
+        if (kind === "reload" || kind === "concurrency" || login) await this.refreshInspection();
       } else if (kind === "check") {
         message = checkLines(await target.check!(action.profile!)).join("\n");
       } else if (kind === "start") {
@@ -225,6 +235,12 @@ export class ActionWorkflow {
       await new Promise(resolve => setTimeout(resolve, 1000));
     }
     return `Logged in to ${label}. ${profile} is still starting; watch its status.`;
+  }
+  private async refreshInspection() {
+    const client = this.host.client();
+    if (!client || client.isClosed || this.host.disposed() || !client.hello?.capabilities?.includes("inspect-v1")) return;
+    try { this.host.inspected(serviceInspectionSchema.parse((await client.request({ op: "inspect" })).result)); }
+    catch { /* Optional metadata; Details keeps the last inspection. */ }
   }
   private async refreshStatus() {
     const client = this.host.client();

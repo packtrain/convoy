@@ -1839,3 +1839,71 @@ each frame there as text, for review. `credentials.tsx cursor` and `environments
 type, move the cursor back and insert mid-word. The PTY drivers read output
 through a small screen model (`__tests__/test_helpers.py`): with incremental
 rendering a label need not reach the stream in one piece.
+
+## Project concurrency, CLI 0.184.0, OS-2612
+
+A project's concurrency, `profiles.<key>.concurrency` in `config.toml`, can be
+changed from the CLI and the TUI. Before this, the TUI showed it read-only in
+Details, and the only ways to change it were editing `config.toml`,
+`convoy connect -c <n>` for one run, or the desktop app. On a Docker target
+`config.toml` lives in the container with the service, so the change goes through
+the service socket, like registration and credentials.
+
+**Service op.** `project.configure { profile, concurrency, interrupt }` is a
+mutation. `concurrency` is 1–50, or null to clear the key so the default (5)
+applies. The key must be one a service worker runs under. Aliases of one project
+share a worker, which reads the first key's settings in sorted order, so another
+alias fails with `Unknown service profile` rather than saving a value that never
+applies. The service writes `config.toml` under the config lock, then runs
+`reconcile`. Without `interrupt`, a running worker keeps its limit and shows
+`pending config` (`applied: false`) until a targeted reload. With `interrupt`,
+only that project restarts, the way `reconcile --profile <key> --interrupt` does,
+and a paused project resumes. The service advertises `project-configure-v1`; the
+CLI and the TUI refuse to send the op to a service without it, since an older
+service rejects the frame and closes the connection.
+
+**CLI.** `convoy project set <profile> --concurrency <n|default> [--interrupt]`
+sends the op to the target's service. Values outside 1–50 or not a whole number are
+refused before any request. With no service running locally, it writes
+`config.toml` directly and says the value applies at the next connect. On a remote
+target it never falls back to a local write.
+
+**TUI.** Project Actions adds [l] Set concurrency (`w` opens warnings, so it is
+not used). It opens one dialog: the pending confirmation text with the observed
+active-run count and the value the connection runs with ("Now 8." or "Now the
+default (5).", from inspection), then a numeric field prefilled with that value
+(empty for the default). The field has no key hint line; the buttons follow it. Typing `q` in the field does not quit. The field keeps up to
+eight characters, so `100` or `12abc` reaches validation whole and is never cut
+down to a valid limit. Input other than empty or 1–50 shows an inline error and
+sends nothing. Buttons:
+
+- **Save** (also Enter in the field): writes the value. Active runs keep the old
+  limit; the project shows `pending config` until [u] Reload project.
+- **Save and reload**: writes and restarts this project's connection now.
+
+Both use the same status preflight and identity check as Pause and Reload, then
+one request, one status refresh and one `inspect` refresh. Inspection reports each
+connection's applied settings, so after a plain Save, Details and the dialog's
+prefill keep the running value. [u] Reload project and the login reloads also
+refresh inspection, so the saved value shows once a reload applies it. A reload made
+from another client still leaves this TUI's inspection stale until it reconnects. The control is
+unavailable without `project-configure-v1` ("Update the service to change
+concurrency.").
+
+### Request cost
+
+No Convex changes: no backend function, schema, subscription or polling. Each save
+sends one status, one `project.configure`, one status and one `inspect` request
+over the local or Docker socket. Reload and the login actions now also send one
+`inspect` after their status refresh. A reload restarts one worker, which registers its
+session once, as any targeted reload does.
+
+### Verification
+
+`service/workflow.test.ts` covers the op: a deferred save, an interrupting save, a
+clear, an out-of-range value, a missing value and an alias key. `project/workflow.test.ts` covers
+the offline write, the clear, the remote target without fallback and the pending
+message. `project/command.test.ts` covers argument parsing. `tui/actions/workflow.test.ts`
+covers the preflight, both buttons and the inspection refresh after Save and a later
+Reload. `__tests__/concurrency.tsx` types `100`, `500` and `12abc` into the dialog and
+checks that none is saved.

@@ -2,7 +2,8 @@ import { projectAccounts, sharedRuntimeStates, sharedShell } from "./launcher.js
 import { createHash } from "node:crypto";
 import * as path from "node:path";
 import { confirm } from "@inquirer/prompts";
-import { serviceRequest } from "../service/client.js";
+import { serviceEndpoint, serviceRequest } from "../service/client.js";
+import { DEFAULT_MAX_CONCURRENT_CHATS } from "../../agent/app/runtime-config.js";
 import { leasePath, lockHolder, servicePaths } from "../service/paths.js";
 import { ServiceUnavailableError } from "../service/errors.js";
 import { serviceSnapshot, sharedServiceSnapshot } from "../service/resolution.js";
@@ -354,6 +355,28 @@ export function unregisterProject(key: string, expectedIdentity?: string): void 
     delete config.profiles[key];
     if (config.settings?.default_profile === key) delete config.settings.default_profile;
   });
+}
+
+/** Writes `profiles.<key>.concurrency`; null clears it, so the default applies. */
+export function configureProject(key: string, concurrency: number | null): void {
+  mutateConfig((config) => {
+    const profile = config.profiles[key];
+    if (!profile) throw new Error("Unknown service profile. Inspect project list.");
+    if (concurrency === null) delete profile.concurrency; else profile.concurrency = concurrency;
+  });
+}
+
+/** Saves through the service; without one, a local config is written directly. Spec: docs/specs/cli-tui.md#project-concurrency-cli-01840-os-2612 */
+export async function setProjectConcurrency(key: string, concurrency: number | null, interrupt: boolean, local = true): Promise<string> {
+  const response = await serviceRequest(serviceEndpoint(), { op: "project.configure", profile: key, concurrency, interrupt }).catch((error) => {
+    if (!local || !(error instanceof ServiceUnavailableError)) throw error;
+    configureProject(key, concurrency);
+    return undefined;
+  });
+  const saved = `Saved concurrency ${concurrency ?? `default (${DEFAULT_MAX_CONCURRENT_CHATS})`} for ${key}.`;
+  if (!response) return `${saved} It applies when the project next connects.`;
+  if (!response.applied) return `${saved} Active runs keep the old limit until convoy service reload --profile ${key} --interrupt.`;
+  return interrupt ? `${saved} The project reloaded with it.` : saved;
 }
 
 export async function readProjectAccounts(key: string, expectedIdentity: string): Promise<ProjectAccounts> {

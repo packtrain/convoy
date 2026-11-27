@@ -39,6 +39,11 @@ it("handles contextual actions with a real socket and two independent clients", 
   expect(result.stdout).toContain("Action confirmation, two-client state, saved logs, restart, resize and detach checks passed");
 });
 
+it("refuses out-of-range concurrency instead of truncating it (OS-2612)", async () => {
+  const result = await tsx("concurrency.tsx");
+  expect(result.stdout).toContain("Concurrency dialog checks passed");
+});
+
 it.each(["menu", "busy", "duplicate", "outcome", "small", "success", "rejection"])("renders review regression %s", async scenario => {
   const result = await tsx("action-review.tsx", [scenario]);
   expect(result.stdout).toContain("Review renderer checks passed");

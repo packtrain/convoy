@@ -500,6 +500,28 @@ it("defers live config changes until targeted interruption and leaves other work
   expect(launches).toEqual(["a", "b", "a"]);
 });
 
+it("saves a project's concurrency and applies it to a running worker only on interrupt (OS-2612)", async () => {
+  const p = paths(); const { config, environment } = snapshot(); const a = serviceSnapshot(config, environment)[0];
+  let desired = [a]; const launches: (number | undefined)[] = []; const saved: [string, number | null][] = [];
+  const service = await runService(p, desired, (entry) => {
+    launches.push(entry.config.concurrency);
+    return spawn(process.execPath, ["-e", "process.stdin.resume();process.stdin.on('end',()=>process.exit(0))"]);
+  }, 1000, 35000, { snapshot: () => desired, configure: (profile, concurrency) => {
+    saved.push([profile, concurrency]); desired = [{ ...a, config: { ...a.config, concurrency: concurrency ?? undefined } }];
+  } }); services.push(service);
+  expect((await serviceRequest(p.socket, { op: "project.configure", profile: "a", concurrency: 7 })).applied).toBe(false);
+  expect((await serviceRequest(p.socket, { op: "status" })).profiles?.[0].pending).toBe(true);
+  expect((await serviceRequest(p.socket, { op: "project.configure", profile: "a", concurrency: 9, interrupt: true })).applied).toBe(true);
+  expect((await serviceRequest(p.socket, { op: "project.configure", profile: "a", concurrency: null, interrupt: true })).applied).toBe(true);
+  expect(saved).toEqual([["a", 7], ["a", 9], ["a", null]]);
+  expect(launches).toEqual([undefined, 9, undefined]);
+  await expect(serviceRequest(p.socket, { op: "project.configure", profile: "a", concurrency: 51 })).rejects.toThrow("Invalid version 1");
+  await expect(serviceRequest(p.socket, { op: "project.configure", profile: "a" })).rejects.toThrow("Missing concurrency");
+  // An alias collapses into the worker's profile key, so its own value would never apply.
+  await expect(serviceRequest(p.socket, { op: "project.configure", profile: "b", concurrency: 8, interrupt: true })).rejects.toThrow("Unknown service profile");
+  expect(saved).toHaveLength(3);
+});
+
 it("keeps status responsive while a registration snapshot is waiting", async () => {
   const p = paths(); let release!: (entries: ReturnType<typeof serviceSnapshot>) => void;
   const pending = new Promise<ReturnType<typeof serviceSnapshot>>((resolve) => { release = resolve; });

@@ -28,7 +28,9 @@ generic execution layer reserved for future non-Claude runtimes (e.g. Codex).
 - No implicit fallback to fixture streaming.
 - Chat processing concurrency is bounded to `1-50`. Resolution order is the
   explicit `-c, --concurrency <n>` flag, the resolved profile's optional
-  `concurrency` value, then the default `5`.
+  `concurrency` value, then the default `5`. `convoy project set <profile>
+  --concurrency <n|default>` writes or clears that value
+  ([Project concurrency](cli-tui.md#project-concurrency-cli-01840-os-2612)).
 - The same concurrency behavior applies in real Claude mode and fixture `--stream` mode.
 - Before registering, `convoy connect` prints the resolved profile config it will use for that session: profile key, display name, resolution source when applicable, Convex URL, project ID, masked API key, and configured paths.
 - After registering, `convoy connect` prints detected CLI runtimes. For Claude Code, the line must include provider metadata and an explicit `Bedrock: yes` or `Bedrock: no` indicator based on the same provider detection stored in session `availableClis`.

@@ -124,10 +124,13 @@ export class ServiceClient {
 export async function serviceRequest(socketPath: string | Duplex, operation: Operation): Promise<ServiceResponse> {
   const client = await ServiceClient.open(socketPath);
   try {
+    if (operation.op === "project.configure" && !client.hello?.capabilities?.includes("project-configure-v1")) {
+      throw new ServiceCompatibilityError("This service cannot change project settings. Stop it, then start it with this CLI using convoy service start -b.");
+    }
     const response = await client.request(operation);
     if ((operation.op === "status" && (!response.profiles || !response.pid || response.stopping === undefined)) ||
         (operation.op === "logs" && (!response.entries || response.cursor === undefined || response.gap === undefined)) ||
-        (["project.add", "project.remove", "reconcile", "credentials.mutate"].includes(operation.op) && response.applied === undefined)) {
+        (["project.add", "project.remove", "project.configure", "reconcile", "credentials.mutate"].includes(operation.op) && response.applied === undefined)) {
       throw new Error("Invalid service response. Check that client and service versions match.");
     }
     return response;
