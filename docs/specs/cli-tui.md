@@ -1907,3 +1907,16 @@ message. `project/command.test.ts` covers argument parsing. `tui/actions/workflo
 covers the preflight, both buttons and the inspection refresh after Save and a later
 Reload. `__tests__/concurrency.tsx` types `100`, `500` and `12abc` into the dialog and
 checks that none is saved.
+
+## Outdated service version, CLI 0.185.0, OS-2629
+
+The Version row in Details compares the service's version with the client's. The
+service version is the one the connected service reports, or, with the container
+stopped, the version the environment selected. When that version is older than the
+client, the row appends `older than client, update from Actions` and its value draws
+in the warning colour. A version equal to or newer than the client's draws as before.
+Update CLI in the environment's Actions installs the client's version.
+
+No Convex or socket requests: the row uses the observation Details already has.
+`tui/formatters.test.ts` covers an older selected version, an older connected
+service and a matching one.

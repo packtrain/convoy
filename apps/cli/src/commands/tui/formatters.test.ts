@@ -224,3 +224,14 @@ it("gives a line to each hidden side of a scrolled list and keeps the focus in v
   // Too short for markers: a plain window.
   expect(scrollWindow(20, 2, 0, 5)).toEqual({ start: 4, end: 6, above: 0, below: 0 });
 });
+
+it.each([
+  [{ environmentStatus: { state: "stopped", selectedVersion: "0.120.0" } }, "client 0.184.0 · selected 0.120.0 · older than client, update from Actions", "warning"],
+  [{ version: "0.120.0" }, "client 0.184.0 · service 0.120.0 · older than client, update from Actions", "warning"],
+  [{ version: "0.184.0" }, "client 0.184.0 · service 0.184.0", undefined],
+])("flags a service older than the client in Details", (observed, value, tone) => {
+  const state: BrowseState = { scope: { connection: 0, details: true }, rows: [], loading: false, stale: true, pageNumber: 1, observations: [{ health: "reconnecting", profiles: [], ...observed }] };
+  const line = detailLines(state, "/socket", "0.184.0").find(item => item.text.includes("Version"));
+  expect(line?.text).toMatch(new RegExp(`Version +${value}$`));
+  expect(line?.tone).toBe(tone);
+});

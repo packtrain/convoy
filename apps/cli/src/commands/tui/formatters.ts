@@ -7,6 +7,7 @@ import { guidance } from "../project/formatters.js";
 import { LOGIN_LABELS, runtimeRows, type RuntimeRow } from "../service/formatters.js";
 import { loginRuntimeLabels, loginRuntimeSchema, type LoginRuntime } from "../project/validators.js";
 import type { EnvironmentMode } from "../environment/validators.js";
+import { compareVersions } from "../../agent/sdk/versioning/provider-version.js";
 
 export const plain = (value: unknown) => stripVTControlCharacters(String(value ?? "unknown")).replace(/[\p{Cc}\p{Bidi_Control}]/gu, " ");
 /** Text input without C0/C1 control characters. */
@@ -89,7 +90,7 @@ const MODE_LABELS: Record<EnvironmentMode, string> = { shared: "shared · one ac
 /** A selectable runtime row in Details: one project's runtime. */
 export type DetailRow = RuntimeRow & { id: string; profile: string };
 /** `label`: how many leading columns draw muted; `kind`: a section heading, a table header or a muted note. */
-export type DetailLine = { text: string; row?: DetailRow; label?: number; kind?: "heading" | "header" | "note" };
+export type DetailLine = { text: string; row?: DetailRow; label?: number; kind?: "heading" | "header" | "note"; tone?: "warning" };
 
 /** Pads cells into columns two spaces apart. */
 export function alignColumns(rows: string[][]): string[] {
@@ -100,9 +101,9 @@ export function alignColumns(rows: string[][]): string[] {
 const heading = (text: string): DetailLine => ({ text, kind: "heading" });
 const note = (text: string): DetailLine => ({ text: plain(text), kind: "note" });
 /** Label and value pairs with the labels in one muted column. */
-function fields(pairs: [string, string][], indent: string): DetailLine[] {
+function fields(pairs: ([string, string] | [string, string, "warning" | undefined])[], indent: string): DetailLine[] {
   const width = Math.max(...pairs.map(([label]) => label.length));
-  return pairs.map(([label, value]) => ({ text: plain(`${indent}${label.padEnd(width)}  ${value}`), label: indent.length + width }));
+  return pairs.map(([label, value, tone]) => ({ text: plain(`${indent}${label.padEnd(width)}  ${value}`), label: indent.length + width, ...tone ? { tone } : {} }));
 }
 
 /** One table: a row per runtime and project. Columns left of PROJECT hold for the whole environment and repeat only on a runtime's first row. Spec: docs/specs/cli-tui.md#runtimes-in-details-cli-01690-os-2502 */
@@ -133,11 +134,14 @@ export function detailLines(state: BrowseState, endpoint: string, clientVersion:
   const service = snapshot ? [snapshot.stopping ? "stopping" : "running", `PID ${snapshot.pid}`, ...node].join(" · ")
     : typeof status?.serviceRunning === "boolean" ? [`${status.serviceRunning ? "running" : "stopped"} at last environment check`, ...node].join(" · ")
       : "Service state has not been observed. Retry connection or inspect Actions.";
-  const version = observation.version ? ` · service ${observation.version}` : typeof status?.selectedVersion === "string" ? ` · selected ${status.selectedVersion}` : "";
+  const [source, target] = observation.version ? ["service", observation.version] : typeof status?.selectedVersion === "string" ? ["selected", status.selectedVersion] : [];
+  // Spec: docs/specs/cli-tui.md#outdated-service-version-cli-01850-os-2629
+  const older = target !== undefined && compareVersions(target, clientVersion) < 0;
+  const version = target ? ` · ${source} ${target}${older ? " · older than client, update from Actions" : ""}` : "";
   const environment = fields([
     ["Connection", `${observation.health}${state.stale ? " (stale)" : ""}`],
     ...shown ? [["Mode", MODE_LABELS[shown]] as [string, string]] : [],
-    ["Version", `client ${clientVersion}${version}`],
+    ["Version", `client ${clientVersion}${version}`, older ? "warning" : undefined],
     ["Service", service],
     ...typeof status?.state === "string" ? [["Container", status.state] as [string, string]] : [],
     ...status?.recoveryPending === true ? [["Recovery", "pending"] as [string, string]] : [],

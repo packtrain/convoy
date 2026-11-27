@@ -72,6 +72,6 @@ export function Details({ browser, state, lines, focused, locked, width, height,
     }
     if (line.kind) return <Text key={start + index} wrap="truncate" bold={line.kind === "heading"} color={line.kind === "heading" ? palette.text : palette.muted}>{line.text}</Text>;
     if (!line.text) return <Box key={start + index} height={1} />;
-    return <Text key={start + index} wrap="truncate" color={palette.text}><Text color={palette.muted}>{line.text.slice(0, line.label ?? 0)}</Text>{line.text.slice(line.label ?? 0)}</Text>;
+    return <Text key={start + index} wrap="truncate" color={line.tone ? palette[line.tone] : palette.text}><Text color={palette.muted}>{line.text.slice(0, line.label ?? 0)}</Text>{line.text.slice(line.label ?? 0)}</Text>;
   })}{view.below > 0 && <Text color={palette.muted}>↓ {view.below} more · PgDn</Text>}</>;
 }
