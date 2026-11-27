@@ -10,10 +10,11 @@ import { ThreadConnectedClisSection } from "./thread-connected-clis-section";
 const useQueryMock = vi.fn();
 const useCliProfilesMock = vi.fn();
 const toastSuccessMock = vi.fn();
+const removeProfileMock = vi.fn();
 
 vi.mock("convex/react", () => ({
   useQuery: (...args: unknown[]) => useQueryMock(...args),
-  useMutation: () => vi.fn(),
+  useMutation: () => removeProfileMock,
 }));
 
 vi.mock("sonner", () => ({
@@ -56,14 +57,28 @@ function session(overrides: Record<string, unknown>) {
   };
 }
 
-function renderSection() {
+function profile(overrides: Record<string, unknown>) {
+  return { _id: "profile_1", name: "Profile", profileKey: "key", isOnline: false, paths: [], availableClis: [], lastConnectedAt: Date.now() - 3 * 3600000, ...overrides };
+}
+
+/** Sessions for `listByProject`, the signed-in user for `users.core.current` (no args). */
+function sessionsOr(sessions: unknown[]) {
+  return (_ref: unknown, args?: unknown) =>
+    typeof args === "object" && args !== null && "projectId" in args ? sessions : { name: "Gecko Zero", avatarUrl: undefined };
+}
+
+function openActions(profileName: string) {
+  fireEvent.pointerDown(screen.getByRole("button", { name: `Actions for ${profileName}` }), { button: 0, ctrlKey: false });
+}
+
+function renderSection({ compactLayout = false }: { compactLayout?: boolean } = {}) {
   return render(
     <ThreadConnectedClisSection
       projectId={"project_1" as Id<"projects">}
       projectName="Project Alpha"
       organizationSlug="org"
       projectAlias="ABC"
-      compactLayout={false}
+      compactLayout={compactLayout}
     />
   );
 }
@@ -141,23 +156,87 @@ describe("ThreadConnectedClisSection", () => {
     expect(window.localStorage.getItem(CONNECTED_CLIS_SECTION_STORAGE_KEY)).toBe("0");
   });
 
-  test("offers the connect command when profiles exist but none are online", async () => {
+  test("lists offline profiles that copy their own connect command when none are online", async () => {
     const writeText = vi.fn().mockResolvedValue(undefined);
     Object.defineProperty(navigator, "clipboard", { configurable: true, value: { writeText } });
-    useQueryMock.mockReturnValue([session({ isOnline: false })]);
+    useQueryMock.mockImplementation(sessionsOr([session({ isOnline: false })]));
+    useCliProfilesMock.mockReturnValue({
+      profiles: [
+        profile({ _id: "p_mac", name: "MacBook Pro", profileKey: "mac" }),
+        profile({ _id: "p_dev", name: "devbox", profileKey: "dev" }),
+      ],
+    });
 
     renderSection();
-    expect(screen.getByText(/No connected CLIs/)).toBeDefined();
-    fireEvent.click(screen.getByRole("button", { name: "Copy connect command" }));
+    const rows = [screen.getByText("devbox"), screen.getByText("MacBook Pro")];
+    expect(rows[0].compareDocumentPosition(rows[1]) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+    expect(screen.getAllByText("Offline")).toHaveLength(2);
+    expect(screen.queryByText(/No connected CLIs/)).toBeNull();
 
-    await vi.waitFor(() => expect(writeText).toHaveBeenCalledWith("npx @useconvoy/cli connect"));
+    openActions("MacBook Pro");
+    fireEvent.click(screen.getByRole("menuitem", { name: "Copy connect command" }));
+
+    await vi.waitFor(() => expect(writeText).toHaveBeenCalledWith("npx @useconvoy/cli connect --profile mac"));
     expect(toastSuccessMock).toHaveBeenCalledWith("Connect command copied to clipboard");
+  });
+
+  test("lists offline profiles below the online CLIs", () => {
+    useQueryMock.mockImplementation(sessionsOr([session({ profileId: "profile_online", name: "Online Agent" })]));
+    useCliProfilesMock.mockReturnValue({
+      profiles: [profile({ _id: "profile_online", name: "Online profile", isOnline: true }), profile({ _id: "p_sandbox", name: "Sandbox" })],
+    });
+
+    renderSection();
+
+    const online = screen.getByText("Online Agent");
+    const offline = screen.getByRole("group", { name: "Sandbox" });
+    expect(online.compareDocumentPosition(offline) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+    expect(screen.queryByRole("group", { name: "Online profile" })).toBeNull();
+  });
+
+  test("offline row keeps the online row's layout: actions on the title line, time under them", () => {
+    useQueryMock.mockImplementation(sessionsOr([]));
+    useCliProfilesMock.mockReturnValue({ profiles: [profile({ name: "MacBook Pro" })] });
+
+    renderSection();
+
+    const titleLine = screen.getByText("MacBook Pro").parentElement!;
+    expect(titleLine.contains(screen.getByRole("button", { name: "Actions for MacBook Pro" }))).toBe(true);
+    expect(screen.getByText("3h ago").parentElement?.textContent).toBe("Offline3h ago");
+  });
+
+  test("Delete profile in the actions menu confirms, then removes the profile", async () => {
+    removeProfileMock.mockResolvedValue(null);
+    useQueryMock.mockImplementation(sessionsOr([]));
+    useCliProfilesMock.mockReturnValue({ profiles: [profile({ _id: "p_mac", name: "MacBook Pro" })] });
+
+    renderSection();
+    openActions("MacBook Pro");
+    fireEvent.click(screen.getByRole("menuitem", { name: "Delete profile" }));
+    fireEvent.click(screen.getByRole("button", { name: "Delete profile" }));
+
+    await vi.waitFor(() => expect(removeProfileMock).toHaveBeenCalledWith({ profileId: "p_mac" }));
+  });
+
+  test.each([
+    { compactLayout: false, rounded: true },
+    { compactLayout: true, rounded: false },
+  ])("offline rows are rounded only outside compact layout (compact=$compactLayout)", ({ compactLayout, rounded }) => {
+    useQueryMock.mockImplementation(sessionsOr([]));
+    useCliProfilesMock.mockReturnValue({ profiles: [profile({ name: "MacBook Pro" })] });
+
+    renderSection({ compactLayout });
+
+    // The row owns hover and rounding, like the online CLI row in WorktreeList.
+    const row = screen.getByRole("group", { name: "MacBook Pro" });
+    expect(row.className.includes("rounded-lg")).toBe(rounded);
+    expect(row.parentElement?.className.includes("px-2")).toBe(rounded);
   });
 
   test("offers the setup command when the project has no profiles", async () => {
     const writeText = vi.fn().mockResolvedValue(undefined);
     Object.defineProperty(navigator, "clipboard", { configurable: true, value: { writeText } });
-    useQueryMock.mockReturnValue([]);
+    useQueryMock.mockImplementation(sessionsOr([]));
     useCliProfilesMock.mockReturnValue({ profiles: [] });
 
     renderSection();

@@ -454,8 +454,13 @@ freshness** below for the rule that guarantees it.
   re-sync, and if its changes view was open the page goes to the threads
   page. A refusal toasts the CLI's error with a "View changes" action. See
   [cli-worktrees.md](cli-worktrees.md#remove).
-- With no connected CLIs it shows a copyable command: `connect` when the
-  project has profiles, the interactive `setup` command when it has none.
+- Below the online CLIs it lists your profiles with no online CLI as
+  offline rows whose "..." menu copies their `connect --profile` command or
+  deletes the profile. A project with no profiles and nothing online gets
+  one setup row instead (see
+  [cli-no-profiles-onboarding.md](cli-no-profiles-onboarding.md)). These rows
+  take the online rows' shape: `rounded-lg` inside `px-2` in the regular
+  layout, square and full width in compact.
 - Collapsible like Pinned, collapsed by default, persisted in localStorage
   (`convoy.thread-connected-clis-section-collapsed`). Hidden while sessions
   load and in the shared-threads view.

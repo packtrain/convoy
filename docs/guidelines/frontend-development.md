@@ -549,6 +549,13 @@ Conventions:
 - Hide category or filter navigation when there are no real categories or filters to show.
 - Default list views should show all items unless the user has selected a specific filter.
 - Put the primary create action in the page header or toolbar when the list has items. Do not add a large plus card to the list grid.
+- Thread sidebar rows (threads, CLIs, checkouts, empty-state rows) are
+  `rounded-lg` inside `px-2` in the regular layout. In compact layout they are
+  square and run edge to edge.
+- An empty state inside a sidebar section of rows is itself a row, with the
+  same height, avatar slot and two lines as the rows it stands in for. Do not
+  use a sentence over a boxed command. Reference: the Connected CLIs section
+  (`thread-connected-clis-section.tsx`).
 - Row state that has a value to show (a version, a count) is a compact badge on
   the trailing edge of the row, colored to carry the state: `outline` when
   normal, `destructive` when it needs attention. State with no value (sync

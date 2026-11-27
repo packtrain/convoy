@@ -62,10 +62,11 @@ interactive command and the URL.
 
 The thread sidebar's Connected CLIs section (see
 [cli-thread-list.md](cli-thread-list.md#connected-clis-os-1993)) lists only the
-user's own CLIs. It shows a compact empty state when none of them are online:
+user's own CLIs. Profiles that aren't online, and a project with no profiles, get rows
+the size of a CLI row:
 
-- If the authenticated user has no saved CLI profiles for the project, show the same no-API-key setup command from block 2 with a copy button.
-- If the authenticated user has saved CLI profiles but none are online, show `npx convoy connect` with a copy button.
+- If the authenticated user has no saved CLI profiles for the project and nothing is online, one "No CLI set up" row with a dashed placeholder avatar and the no-API-key setup command from block 2 as its second line. Clicking the row copies the command. Copy and `?` (connect docs) icons show on hover at the end of the title line.
+- Each saved CLI profile with no online CLI gets one dimmed row below the online CLIs (sorted like them), showing "Offline" and when it last connected. A "..." button on the title line, shown on hover, opens a menu with **Copy connect command** (`npx @useconvoy/cli connect --profile <key>`) and **Delete profile**. Delete opens the same confirm dialog as user settings (`DeleteProfileDialog`, `cli.profiles.remove`), for a machine that will never come back. Online rows have no delete; that stays in settings. The row itself has no click action and no tooltip.
 
 ## Prefill Rules
 

@@ -8,6 +8,11 @@ interface PlaygroundLink {
 
 const ACTIVE_PLAYGROUNDS: PlaygroundLink[] = [
   {
+    href: "/playground/connected-clis-empty",
+    title: "Connected CLIs empty state",
+    description: "The thread sidebar's Connected CLIs section with no CLI online: today's boxed command next to an empty row, offline profiles, a plain command, and a header-only version.",
+  },
+  {
     href: "/playground/workspace-recovered",
     title: "Worktree changes",
     description: "Worktree creation and working directory recovery as one (old) → (new) divider that expands to full details (OS-2609).",
