@@ -367,7 +367,9 @@ async function applyThreadMetadataEvents(
   if (backgroundTasks && !thread.isDeleted && thread.processingState === "streaming" &&
       thread.activeAssistantMessageId === message._id) {
     const snapshot = { ...backgroundTasks, messageId: message._id };
-    if (!equalMetadata(snapshot, thread.metadata?.backgroundTasks)) {
+    const stored = thread.metadata?.backgroundTasks;
+    // Run init sends an empty snapshot; with nothing stored it changes nothing (OS-2623).
+    if ((stored || snapshot.totalCount > 0) && !equalMetadata(snapshot, stored)) {
       patch.backgroundTasks = snapshot;
     }
   }

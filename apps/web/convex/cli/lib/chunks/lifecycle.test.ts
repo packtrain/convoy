@@ -147,6 +147,19 @@ test("does not write identical snapshots after Convex canonicalizes object keys"
   });
 });
 
+test.each(["claude-code", "codex"] as const)("%s run init does not patch a thread with no stored snapshot", async cliType => {
+  const { t, message } = await setup(cliType);
+  const init = cliType === "codex"
+    ? { type: "thread/started", data: JSON.stringify({ thread: { id: "codex-root" } }) }
+    : system("init");
+  await t.run(async c => {
+    const patch = vi.spyOn(c.db, "patch");
+    await appendAssistantChunks(c, (await c.db.get("cliMessages", message._id))!, [init], Date.now());
+    expect(patch.mock.calls.filter(call => call[0] === "cliThreads")).toEqual([]);
+    patch.mockRestore();
+  });
+});
+
 test.each(["claude-code", "codex"] as const)("projects large %s snapshots after the real upload scrubber", async cliType => {
   const { append, read } = await setup(cliType);
   const tasks = Array.from({ length: 240 }, (_, i) => ({ ...task(`job-${i}`), description: "prompt words ".repeat(1700) }));

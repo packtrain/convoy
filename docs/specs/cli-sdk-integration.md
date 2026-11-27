@@ -479,7 +479,10 @@ snapshots do not replace the root process's membership.
 provider session ID when supplied, total task count, and task descriptions.
 The chunk-ingestion fold replaces it with the last valid snapshot in arrival
 order, including when several changes share a batch. Identical snapshots do
-not write the thread. This uses the existing metadata subscription and adds
+not write the thread, and neither does an empty snapshot when none is stored:
+the run-start reset has already cleared it, so the empty snapshot from a root
+`system/init` or Codex `thread/started` would only re-run every thread
+subscription (OS-2623). This uses the existing metadata subscription and adds
 no chunk scans or query endpoints. Codex uses a synthetic snapshot chunk. Only the active
 Claude or Codex assistant message on a streaming thread can update this projection.
 
