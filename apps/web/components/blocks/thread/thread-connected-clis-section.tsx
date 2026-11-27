@@ -13,7 +13,7 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
-import { formatAbsoluteTime, formatRelativeTime } from "@/lib/format-relative-time";
+import { formatAbsoluteTime, formatCompactRelativeTime } from "@/lib/format-relative-time";
 import { externalRoutes } from "@/lib/navigation";
 import { useCliProfiles } from "@/lib/threads/hooks/use-cli-profiles";
 import { buildNoProfileSetupCommands, INTERACTIVE_CONNECT_COMMAND } from "@/lib/threads/setup-commands";
@@ -187,7 +187,7 @@ function OfflineProfileRows({ profiles, compactLayout }: { profiles: CliProfile[
                 <span>Offline</span>
                 {profile.lastConnectedAt !== undefined && (
                   <span className="shrink-0 text-[11px]" title={`Last connected ${formatAbsoluteTime(profile.lastConnectedAt)}`}>
-                    {formatRelativeTime(profile.lastConnectedAt)}
+                    {formatCompactRelativeTime(profile.lastConnectedAt)}
                   </span>
                 )}
               </div>

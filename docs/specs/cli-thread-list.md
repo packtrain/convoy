@@ -457,7 +457,9 @@ freshness** below for the rule that guarantees it.
   page. A refusal toasts the CLI's error with a "View changes" action. See
   [cli-worktrees.md](cli-worktrees.md#remove).
 - Below the online CLIs it lists your profiles with no online CLI as
-  offline rows whose "..." menu copies their `connect --profile` command or
+  offline rows, each showing Offline and how long ago it last connected
+  (`3h`, `29d`; the full date is in the hover title). Its "..." menu copies
+  its `connect --profile` command or
   deletes the profile. A project with no profiles and nothing online gets
   one setup row instead (see
   [cli-no-profiles-onboarding.md](cli-no-profiles-onboarding.md)). These rows

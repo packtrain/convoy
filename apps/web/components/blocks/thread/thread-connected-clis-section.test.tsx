@@ -5,6 +5,7 @@ import { afterEach, beforeEach, describe, expect, test, vi } from "vitest";
 import { cleanup, fireEvent, render, screen } from "@testing-library/react";
 import type { Id } from "@/convex/_generated/dataModel";
 import { CONNECTED_CLIS_SECTION_STORAGE_KEY } from "@/lib/threads/section-collapsed";
+import { formatAbsoluteTime } from "@/lib/format-relative-time";
 import { ThreadConnectedClisSection } from "./thread-connected-clis-section";
 
 const useQueryMock = vi.fn();
@@ -202,7 +203,17 @@ describe("ThreadConnectedClisSection", () => {
 
     const titleLine = screen.getByText("MacBook Pro").parentElement!;
     expect(titleLine.contains(screen.getByRole("button", { name: "Actions for MacBook Pro" }))).toBe(true);
-    expect(screen.getByText("3h ago").parentElement?.textContent).toBe("Offline3h ago");
+    expect(screen.getByText("3h").parentElement?.textContent).toBe("Offline3h");
+  });
+
+  test("offline row shows an old last connection as days, with the date in its title", () => {
+    const lastConnectedAt = Date.now() - 29 * 86400000;
+    useQueryMock.mockImplementation(sessionsOr([]));
+    useCliProfilesMock.mockReturnValue({ profiles: [profile({ name: "MacBook Pro", lastConnectedAt })] });
+
+    renderSection();
+
+    expect(screen.getByText("29d").getAttribute("title")).toBe(`Last connected ${formatAbsoluteTime(lastConnectedAt)}`);
   });
 
   test("Delete profile in the actions menu confirms, then removes the profile", async () => {
