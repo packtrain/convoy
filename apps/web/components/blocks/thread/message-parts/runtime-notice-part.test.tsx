@@ -138,6 +138,17 @@ describe("worktree change notices (OS-2609)", () => {
     expect(trigger.textContent).toContain("worktree moved");
   });
 
+  test("shows an agent's move without striking the old checkout, which is still there (OS-2622)", () => {
+    render(<RuntimeNoticePart part={worktreeNotice("workspace-moved", {
+      change: "agent", previousPath: "/repo", path: "/repo-worktrees/feat-captions", branch: "feat/captions",
+    })} />);
+
+    expect(screen.getByRole("button").textContent).toContain("moved by agent");
+    expect(screen.getByText("repo").className).not.toContain("line-through");
+    fireEvent.click(screen.getByRole("button"));
+    expect(screen.getByText(/convoy threads move-worktree/)).toBeDefined();
+  });
+
   test("shows a created worktree, and the pending create before it finishes", () => {
     const { unmount } = render(<RuntimeNoticePart part={worktreeNotice("worktree-created", {
       change: "created", previousPath: "/repo", path: "/repo-worktrees/feat-captions", branch: "feat/captions", baseRef: "main",

@@ -2353,7 +2353,7 @@ export const complete = mutation({
         } : {}),
         ...(args.workspaceNotice?.previousPath === chat.git?.previousWorkingDirectory &&
           args.workspaceNotice?.path === chat.path
-          ? { previousWorkingDirectory: undefined } : {}),
+          ? { previousWorkingDirectory: undefined, movedByAgent: undefined } : {}),
       },
     });
 

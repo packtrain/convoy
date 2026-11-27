@@ -891,7 +891,9 @@ export async function repointThreadPath(
     pathId: string;
     path: string;
     worktree: ThreadGit["worktree"];
-    previousWorkingDirectory?: string;
+    /** Absent leaves the stored notice; null clears it. */
+    previousWorkingDirectory?: string | null;
+    movedByAgent?: true;
     legacyCheckpointsUnsafe?: boolean;
     executionBranch?: string | null;
   }
@@ -902,7 +904,10 @@ export async function repointThreadPath(
     git: {
       worktree: patch.worktree,
       ...(patch.legacyCheckpointsUnsafe ? { legacyCheckpointsUnsafe: true } : {}),
-      ...(patch.previousWorkingDirectory ? { previousWorkingDirectory: patch.previousWorkingDirectory } : {}),
+      ...(patch.previousWorkingDirectory !== undefined ? {
+        previousWorkingDirectory: patch.previousWorkingDirectory ?? undefined,
+        movedByAgent: patch.previousWorkingDirectory ? patch.movedByAgent : undefined,
+      } : {}),
       ...(patch.executionBranch !== undefined ? { executionBranch: patch.executionBranch ?? undefined } : {}),
     },
   });

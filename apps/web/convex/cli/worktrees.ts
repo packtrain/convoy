@@ -84,6 +84,64 @@ export const resolveExecutionWorkspace = mutation({
   },
 });
 
+/** Agent-driven move into a worktree, effective from the next run. Spec: cli-worktrees.md#agent-driven-worktree-move. */
+export const moveThread = mutation({
+  args: {
+    threadId: v.id("cliThreads"),
+    path: v.string(),
+    repositoryId: v.string(),
+    worktreeId: v.string(),
+    branch: v.string(),
+    apiKey: v.optional(v.string()),
+  },
+  returns: v.null(),
+  handler: async (ctx, args) => {
+    const { user, principal } = await getAuthenticatedAccess(ctx, args.apiKey);
+    const thread = await ensure(getThreadById(ctx, args.threadId)).notDeleted(errors.THREAD_NOT_FOUND);
+    ensure(thread.userId).eq(user._id, errors.NOT_AUTHORIZED);
+    ensure(isContainerThread(thread)).isFalse(errors.CLI_ON_CONTAINER);
+    await requireAuthorizedProject(ctx, principal, thread.projectId, ProjectPermission.CLI_THREAD);
+    const profile = await ensure(getCliProfileById(ctx, thread.profileId)).notDeleted(errors.PROFILE_NOT_FOUND);
+
+    const workspace = toExecutionWorkspace(thread, profile);
+    if (args.path === workspace.path) return null;
+    const current = workspace.worktree;
+    ensure(current?.status).notEq("pending", errors.MOVE_WORKTREE_PENDING);
+    if (current?.repositoryId) {
+      ensure(args.repositoryId).eq(current.repositoryId, errors.WORKSPACE_REPOSITORY_CHANGED);
+    }
+    const parent = await ensure(
+      profile.paths.find((path) => path.id === (current?.parentPathId ?? thread.pathId) && path.kind !== "worktree")
+    ).notNull(errors.WORKSPACE_PARENT_MISSING);
+    const target = upsertWorktreePathEntry(profile.paths, { parentPathId: parent.id, path: args.path, branch: args.branch });
+    ensure(target.paths.find((path) => path.id === target.entryId))
+      .satisfies((entry) => entry?.kind === "worktree" && entry.parentPathId === parent.id, errors.MOVE_TARGET_NOT_WORKTREE);
+
+    const ranIn = (thread.git?.movedByAgent && thread.git.previousWorkingDirectory) || workspace.path;
+    await setProfilePathsIfChanged(ctx, profile, target.paths);
+    await repointThreadPath(ctx, thread._id, {
+      pathId: target.entryId,
+      path: args.path,
+      worktree: {
+        parentPathId: parent.id,
+        parentPath: parent.path,
+        parentGitRemoteUrl: parent.gitRemoteUrl,
+        repositoryId: args.repositoryId,
+        worktreeId: args.worktreeId,
+        branch: args.branch,
+        status: "created",
+      },
+      // A run may still be executing in the directory before an earlier pending move.
+      previousWorkingDirectory: ranIn === args.path ? null : ranIn,
+      movedByAgent: true,
+      // Old checkpoints lack the checkout identity; Undo must not apply them here.
+      legacyCheckpointsUnsafe: true,
+      executionBranch: args.branch,
+    });
+    return null;
+  },
+});
+
 /**
  * CLI: sync scanned worktrees into the profile's path entries. Called after
  * registration, after fulfilling a rescan op, and after creating/removing a

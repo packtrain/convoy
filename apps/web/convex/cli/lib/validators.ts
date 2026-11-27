@@ -43,6 +43,7 @@ export const cliExecutionWorkspaceValidator = v.object({
   path: v.string(),
   worktree: v.optional(cliThreadWorktreeValidator),
   previousPath: v.optional(v.string()),
+  movedByAgent: v.optional(v.literal(true)),
 });
 export type CliExecutionWorkspace = Infer<typeof cliExecutionWorkspaceValidator>;
 
@@ -65,6 +66,7 @@ export function toExecutionWorkspace(
       parentGitRemoteUrl: worktree.parentGitRemoteUrl ?? parent?.gitRemoteUrl,
     } : undefined,
     previousPath: thread.git?.previousWorkingDirectory,
+    movedByAgent: thread.git?.movedByAgent,
   };
 }
 

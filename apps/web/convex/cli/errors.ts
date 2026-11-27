@@ -7,6 +7,8 @@ export const errors = {
   WORKSPACE_CHANGED: "Thread working directory changed. Retry to use its current checkout",
   WORKSPACE_REPOSITORY_CHANGED: "The parent checkout no longer matches this thread's repository",
   WORKSPACE_PARENT_MISSING: "The original parent checkout is no longer registered",
+  MOVE_TARGET_NOT_WORKTREE: "Not a linked worktree of this thread's repository",
+  MOVE_WORKTREE_PENDING: "The thread's worktree is still being created",
   PROPOSED_PLAN_NOT_PENDING: "This plan is no longer awaiting approval",
   PROPOSED_PLAN_APPROVAL_INVALID: "Choose an implementation mode to approve the plan",
   TOO_MANY_BOOTSTRAP_MESSAGES: "Too many assistant messages requested for bootstrap",

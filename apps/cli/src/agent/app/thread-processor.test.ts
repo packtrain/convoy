@@ -22,7 +22,7 @@ import type {
 import { RunnerExecutionError } from "../runtimes/contracts.js";
 import { runGit } from "../../lib/git/exec.js";
 import { getCurrentBranch } from "../../lib/git/index.js";
-import { resolveExecutionWorkspace } from "../../lib/git/worktrees.js";
+import { inspectWorktreeMoveTarget, resolveExecutionWorkspace } from "../../lib/git/worktrees.js";
 import type { ConvoyClient } from "../../lib/config/convex-client.js";
 
 const TEST_ROOT = mkdtempSync(join(tmpdir(), "convoy-thread-tests-"));
@@ -320,6 +320,46 @@ describe("message-handler", () => {
         .filter((chunk) => chunk.type === "convoy_notice").map((chunk) => JSON.parse(chunk.data))
         .find((data) => data.code === "workspace-recovered");
       expect(notice).toMatchObject({ change: "moved", previousPath: checkout, path: moved, branch: "feat/test" });
+    } finally {
+      await handler.shutdown();
+    }
+  });
+
+  it("shows an agent's worktree move once, on the run that starts there (OS-2622)", async () => {
+    const parent = mkdtempSync(join(tmpdir(), "convoy-agent-move-"));
+    attachmentCacheDirs.push(parent);
+    await runGit(parent, ["init", "-b", "main"]);
+    await runGit(parent, ["-c", "user.name=Test", "-c", "user.email=test@example.com", "commit", "--allow-empty", "-m", "initial"]);
+    const checkout = join(parent, "checkout");
+    await runGit(parent, ["worktree", "add", "-b", "feat/test", checkout]);
+    const target = await inspectWorktreeMoveTarget(parent, checkout);
+    const worktree = { parentPathId: "parent", parentPath: parent, repositoryId: target.repositoryId, worktreeId: target.worktreeId, branch: "feat/test", status: "created" as const };
+    const chat = makePendingChat({ workingDirectory: checkout, worktree, previousWorkingDirectory: parent });
+    setQueryResponses({ pendingRuns: [[makeUserMessage()], []], continuationIds: ["session"] });
+    const mutate = mockMutation.getMockImplementation()!;
+    mockMutation.mockImplementation(async (fn, args) => {
+      const result = await Reflect.apply(mutate, undefined, [fn, args]);
+      return getFunctionName(fn) === "cli/messages:startRunResponse"
+        ? { ...result, workspace: { pathId: chat.pathId, path: checkout, worktree, previousPath: parent, movedByAgent: true } }
+        : result;
+    });
+    const handler = createMessageHandler(() => mockRunner, mockClient, sessionId);
+    handler.enqueueChat(chat);
+    try {
+      await vi.waitFor(() => expect(handler.isProcessing()).toBe(false), { timeout: 5000 });
+      expect(mockRunner.execute).toHaveBeenCalledWith(checkout, expect.any(String), expect.objectContaining({
+        workspaceNotice: expect.stringContaining(`previously ran in ${parent}`),
+      }));
+      const notices = mockMutation.mock.calls
+        .filter(([fn]) => getFunctionName(fn) === "cli/messages:appendRunContent")
+        .flatMap(([, args]) => args.chunks as ContentChunk[])
+        .filter((chunk) => chunk.type === "convoy_notice").map((chunk) => JSON.parse(chunk.data));
+      expect(notices).toEqual([expect.objectContaining({
+        code: "workspace-moved", change: "agent", previousPath: parent, path: checkout, branch: "feat/test",
+      })]);
+      expect(mockMutation.mock.calls.some(([fn]) => getFunctionName(fn) === "cli/worktrees:resolveExecutionWorkspace")).toBe(false);
+      expect(mockMutation.mock.calls.find(([fn]) => getFunctionName(fn) === "cli/threads/runControl:reportExecutionBranch")?.[1])
+        .toMatchObject({ path: checkout });
     } finally {
       await handler.shutdown();
     }

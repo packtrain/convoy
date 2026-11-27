@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, type ReactNode } from "react";
-import { ArrowRight, FolderGit2, FolderInput, GitBranch, type LucideIcon } from "lucide-react";
+import { ArrowRight, Bot, FolderGit2, FolderInput, GitBranch, type LucideIcon } from "lucide-react";
 import { z } from "zod";
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
 import { Marker } from "@/components/ui/marker";
@@ -11,7 +11,7 @@ import { ToolSurface } from "./components/tool-surface";
 
 /** Fields the CLI sends on worktree notices (docs/specs/cli-worktrees.md#worktree-change-notices). */
 const changeSchema = z.object({
-  change: z.enum(["created", "moved", "parent"]),
+  change: z.enum(["created", "moved", "parent", "agent"]),
   previousPath: z.string().min(1),
   path: z.string().min(1),
   branch: z.string().min(1).optional(),
@@ -29,6 +29,7 @@ const NOTICE_SCHEMAS: Record<string, (fields: unknown) => Notice | null> = {
   },
   "worktree-created": parseChange,
   "workspace-recovered": parseChange,
+  "workspace-moved": parseChange,
 };
 
 function parseChange(fields: unknown): Notice | null {
@@ -71,6 +72,17 @@ const COPY: Record<WorktreeChange["change"], { icon: LucideIcon; label: string; 
     oldGone: true,
     explain: () =>
       "The worktree no longer exists, so the thread fell back to its parent checkout, on whatever branch is checked out there. Nothing was copied from the old worktree.",
+  },
+  agent: {
+    icon: Bot,
+    label: "moved by agent",
+    oldGone: false,
+    explain: () => (
+      <>
+        The agent moved its work here and ran <Code>convoy threads move-worktree</Code>. Every later run happens here.
+        The old checkout was left as it is.
+      </>
+    ),
   },
 };
 
@@ -155,7 +167,7 @@ export function WorktreeChangeNotice({ notice }: { notice: Notice }) {
           </button>
         </CollapsibleTrigger>
       </Marker>
-      <CollapsibleContent className="mx-auto mt-2 max-w-xl">
+      <CollapsibleContent className="mt-2">
         <Details c={c} />
       </CollapsibleContent>
     </Collapsible>

@@ -253,6 +253,11 @@ export const heartbeatClaim = mutation({
   },
 });
 
+/** A run still finishing in the checkout the agent moved the thread away from (OS-2622). */
+function isFromMovedAwayCheckout(chat: Doc<"cliThreads">, path: string | undefined): boolean {
+  return path !== undefined && chat.git?.movedByAgent === true && path === chat.git.previousWorkingDirectory;
+}
+
 /**
  * Record the branch actually checked out when a run starts (OS-1247).
  * Called by the CLI on every execution start; an absent branch clears the
@@ -264,6 +269,8 @@ export const reportExecutionBranch = mutation({
     threadId: v.id("cliThreads"),
     sessionId: v.id("cliSessions"),
     branch: v.optional(v.string()),
+    // The checkout the report was read from (OS-2622).
+    path: v.optional(v.string()),
     apiKey: v.optional(v.string()),
   },
   returns: v.null(),
@@ -276,7 +283,7 @@ export const reportExecutionBranch = mutation({
 
     await requireAuthorizedProject(ctx, principal, chat.projectId, ProjectPermission.CLI_THREAD);
 
-    if (chat.claimedBySessionId !== args.sessionId) {
+    if (chat.claimedBySessionId !== args.sessionId || isFromMovedAwayCheckout(chat, args.path)) {
       return null;
     }
 
@@ -297,6 +304,8 @@ export const reportPullRequest = mutation({
     threadId: v.id("cliThreads"),
     sessionId: v.id("cliSessions"),
     pullRequest: v.optional(cliThreadPullRequestValidator),
+    // The checkout the report was read from (OS-2622).
+    path: v.optional(v.string()),
     apiKey: v.optional(v.string()),
   },
   returns: v.null(),
@@ -309,7 +318,7 @@ export const reportPullRequest = mutation({
 
     await requireAuthorizedProject(ctx, principal, chat.projectId, ProjectPermission.CLI_THREAD);
 
-    if (chat.claimedBySessionId !== args.sessionId) {
+    if (chat.claimedBySessionId !== args.sessionId || isFromMovedAwayCheckout(chat, args.path)) {
       return null;
     }
 

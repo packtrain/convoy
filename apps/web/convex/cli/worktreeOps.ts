@@ -79,15 +79,16 @@ function toWorktreeOpItem(doc: Doc<"cliWorktreeOps">) {
   };
 }
 
-/** Whether any active session currently holds a claim on a thread in this path. */
+/** Whether any active session holds a claim on a thread in this path, or still running in it after an agent move (OS-2622). */
 async function isPathInUse(
   ctx: Parameters<typeof listOnlineSessionsByProfile>[0],
   profile: Doc<"cliProfiles">,
-  pathId: string
+  entry: { id: string; path: string }
 ): Promise<boolean> {
   const sessions = await listOnlineSessionsByProfile(ctx, profile._id);
   const claimedPerSession = await Promise.all(sessions.map((session) => listThreadsClaimedBySession(ctx, session._id)));
-  return claimedPerSession.flat().some((thread) => !thread.isDeleted && thread.pathId === pathId);
+  return claimedPerSession.flat().some((thread) => !thread.isDeleted && (thread.pathId === entry.id ||
+    (thread.git?.movedByAgent === true && thread.git.previousWorkingDirectory === entry.path)));
 }
 
 /**
@@ -150,7 +151,7 @@ export const enqueue = mutation({
       ensure(count >= 1 && count <= MAX_REVERT_ALL_FILES).isTrue(errors.REVERT_ALL_FILE_PATHS_INVALID);
     }
     if (args.kind === "revertWorkingFile" || args.kind === "revertWorkingTree") {
-      const inUse = await isPathInUse(ctx, profile, args.pathId);
+      const inUse = await isPathInUse(ctx, profile, entry);
       ensure(inUse).isFalse(errors.REVERT_RUN_IN_USE);
     }
     if (args.kind === "searchFiles") {
@@ -179,7 +180,7 @@ export const enqueue = mutation({
       if (args.kind === "revertFile") {
         ensure(args.filePath).notNull(errors.FILE_OP_ARGS_MISSING);
       }
-      const inUse = await isPathInUse(ctx, profile, args.pathId);
+      const inUse = await isPathInUse(ctx, profile, entry);
       ensure(inUse).isFalse(errors.REVERT_RUN_IN_USE);
       const thread = await getThreadByCheckpointRef(ctx, args.preRef!);
       allowLegacyCheckpoint = !!thread && !thread.isDeleted &&
@@ -193,7 +194,7 @@ export const enqueue = mutation({
       const parent = await ensure(profile.paths.find((path) => path.id === entry.parentPathId)).notNull(errors.PATH_NOT_FOUND_IN_PROFILE);
       parentPath = parent.path;
 
-      const inUse = await isPathInUse(ctx, profile, args.pathId);
+      const inUse = await isPathInUse(ctx, profile, entry);
       ensure(inUse).isFalse(errors.WORKTREE_REMOVE_IN_USE);
     }
 

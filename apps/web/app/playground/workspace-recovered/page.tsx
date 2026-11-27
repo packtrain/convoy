@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, type ReactNode } from "react";
-import { AlertTriangle, ArrowLeft, ArrowRight, FolderGit2, FolderInput, GitBranch, Terminal, type LucideIcon } from "lucide-react";
+import { AlertTriangle, ArrowLeft, ArrowRight, Bot, FolderGit2, FolderInput, GitBranch, Terminal, type LucideIcon } from "lucide-react";
 import { Shimmer } from "@/components/ai-elements/shimmer";
 import { CollapsibleToolPart } from "@/components/blocks/thread/message-parts/components/collapsible-tool-part";
 import { ToolSurface } from "@/components/blocks/thread/message-parts/components/tool-surface";
@@ -10,8 +10,8 @@ import { Marker } from "@/components/ui/marker";
 import { AppLink, routeTarget } from "@/lib/navigation";
 import { cn } from "@/lib/utils";
 
-/** Every way a thread's working directory changes: worktree creation and the two recovery outcomes. */
-type Change = "created" | "moved" | "parent";
+/** Every way a thread's working directory changes: worktree creation, the two recovery outcomes, and an agent's move. */
+type Change = "created" | "moved" | "parent" | "agent";
 type Width = "wide" | "narrow";
 
 interface WorktreeChange {
@@ -30,6 +30,7 @@ const CHANGES: Record<Change, WorktreeChange> = {
   created: { change: "created", previousPath: PARENT, path: WORKTREE, branch: BRANCH, baseRef: "main" },
   moved: { change: "moved", previousPath: WORKTREE, path: "/workspace-worktrees/archive/feat-os-2587-add-captions-to-image", branch: BRANCH },
   parent: { change: "parent", previousPath: WORKTREE, path: PARENT, branch: "main" },
+  agent: { change: "agent", previousPath: PARENT, path: WORKTREE, branch: BRANCH },
 };
 
 interface ChangeCopy {
@@ -68,6 +69,18 @@ const COPY: Record<Change, ChangeCopy> = {
     oldGone: true,
     explain: () =>
       "The worktree no longer exists, so the thread fell back to its parent checkout, on whatever branch is checked out there. Nothing was copied from the old worktree.",
+  },
+  agent: {
+    icon: Bot,
+    label: "moved by agent",
+    pending: "Moving to",
+    oldGone: false,
+    explain: () => (
+      <>
+        The agent moved its work here and ran <Code>convoy threads move-worktree</Code>. Every later run happens here.
+        The old checkout was left as it is.
+      </>
+    ),
   },
 };
 
@@ -197,7 +210,7 @@ function WorktreeMilestone({ c, pending = false }: { c: WorktreeChange; pending?
           </button>
         </CollapsibleTrigger>
       </Marker>
-      <CollapsibleContent className="mx-auto mt-2 max-w-xl">
+      <CollapsibleContent className="mt-2">
         <Details c={c} />
       </CollapsibleContent>
     </Collapsible>
@@ -238,7 +251,7 @@ export default function WorkspaceRecoveredPlaygroundPage() {
             All three become one divider: (old) → (new) and the cause. Click it for the full paths, branch and explanation.
           </p>
           <div className="flex flex-wrap gap-4 rounded-lg border border-border bg-muted/20 px-3 py-2">
-            <Toggle label="change" value={change} options={["created", "moved", "parent"] as const} onChange={setChange} />
+            <Toggle label="change" value={change} options={["created", "moved", "parent", "agent"] as const} onChange={setChange} />
             <Toggle label="state" value={pending} options={["done", "pending"] as const} onChange={setPending} />
             <Toggle label="thread width" value={width} options={["wide", "narrow"] as const} onChange={setWidth} />
           </div>

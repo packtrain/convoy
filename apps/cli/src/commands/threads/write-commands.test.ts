@@ -3,7 +3,8 @@ import chalk from "chalk";
 import type { Command } from "commander";
 import { getFunctionName, type FunctionReference } from "convex/server";
 
-const { oraMock, readFileMock, runOneShotCommandMock, statMock } = vi.hoisted(() => ({
+const { inspectWorktreeMoveTargetMock, oraMock, readFileMock, runOneShotCommandMock, statMock } = vi.hoisted(() => ({
+  inspectWorktreeMoveTargetMock: vi.fn(),
   oraMock: vi.fn(),
   readFileMock: vi.fn(),
   runOneShotCommandMock: vi.fn(),
@@ -16,6 +17,8 @@ vi.mock("node:fs/promises", () => ({
 }));
 
 vi.mock("ora", () => ({ default: oraMock }));
+
+vi.mock("../../lib/git/worktrees.js", () => ({ inspectWorktreeMoveTarget: inspectWorktreeMoveTargetMock }));
 
 vi.mock("../../lib/one-shot-command.js", () => ({
   runOneShotCommand: runOneShotCommandMock,
@@ -43,6 +46,7 @@ import { unwatchPullRequestCommand } from "./unwatch-pr.js";
 import { listThreadChecksCommand } from "./checks.js";
 import { submitGuideCommand } from "./submit-guide.js";
 import { readGuideCommand } from "./read-guide.js";
+import { moveWorktreeCommand } from "./move-worktree.js";
 
 const threadRow = {
   threadId: "thr_1",
@@ -772,6 +776,28 @@ describe("threads write commands", () => {
       await invoke(unwatchPullRequestCommand, ["thr_1"]);
       expect(mutation).toHaveBeenCalledWith(api.integrations.github.pullRequestWatches.unwatch, { threadId: "thr_1" });
       expect(console.log).toHaveBeenCalledWith(chalk.green("✓") + " Stopped watching the pull request");
+    });
+  });
+
+  describe("threads move-worktree (OS-2622)", () => {
+    const target = { path: "/repo-worktrees/feat-x", repositoryId: "repo-1", worktreeId: "wt-1", branch: "feat/x" };
+
+    it("verifies the worktree against the thread's checkout, then repoints the thread", async () => {
+      query.mockResolvedValueOnce({ ...threadRow, path: "/repo" });
+      inspectWorktreeMoveTargetMock.mockResolvedValueOnce(target);
+      mutation.mockResolvedValueOnce(null);
+      await invoke(moveWorktreeCommand, ["thr_1", "/repo-worktrees/feat-x/src"]);
+      expect(inspectWorktreeMoveTargetMock).toHaveBeenCalledWith("/repo", "/repo-worktrees/feat-x/src");
+      expect(mutation).toHaveBeenCalledWith(api.cli.worktrees.moveThread, { threadId: "thr_1", ...target });
+      expect(console.log).toHaveBeenCalledWith(chalk.green("✓") + " The thread's next run starts in /repo-worktrees/feat-x on feat/x");
+    });
+
+    it("rejects a group before touching Git", async () => {
+      query.mockResolvedValueOnce(containerRow);
+      await expect(invoke(moveWorktreeCommand, ["thr_group", "/repo-worktrees/feat-x"]))
+        .rejects.toThrow("Groups and workflow runs have no working directory.");
+      expect(inspectWorktreeMoveTargetMock).not.toHaveBeenCalled();
+      expect(mutation).not.toHaveBeenCalled();
     });
   });
 

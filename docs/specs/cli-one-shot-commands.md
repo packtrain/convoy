@@ -66,6 +66,7 @@ Commands covered:
 - `convoy threads submit-guide <threadId> <file|->` or `--failed --note <why>`
 - `convoy threads read-guide <threadId> [--base]`
 - `convoy threads checks <threadId>`
+- `convoy threads move-worktree <threadId> <path>`
 - `convoy profiles list`
 
 This feature intentionally does **not** add `convoy mcp ...` command surface.
@@ -868,6 +869,16 @@ nonzero, so the agent can fix and resubmit. JSON output is
 --failed --note <why>` takes no file: it sends `failure` and the Guide shows
 as Failed with the note. `--failed` without a note, or neither a file nor
 `--failed`, fails before calling Convoy. Rules: `github-integration.md` → Guides.
+
+### `threads move-worktree`
+
+`convoy threads move-worktree <threadId> <path> [--json]` points the thread's
+next run at a worktree the agent moved its work into. It reads the thread's
+checkout with `getSummary`, checks on this machine that `<path>` is a linked
+worktree of that checkout's repository on a branch, then calls
+`api.cli.worktrees.moveThread`. JSON output is `{ threadId, path, branch }`,
+where `path` is the worktree root as Git lists it. Rules: `cli-worktrees.md` →
+Agent-driven worktree move.
 
 ### `threads read-guide`
 

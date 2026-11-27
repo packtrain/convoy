@@ -390,6 +390,56 @@ checkout and that thread has never fallen back to its parent. The permanent
 checkpoints carry their own identity and remain usable after parent recovery.
 See `cli-thread-run-diffs.md`.
 
+### Agent-driven worktree move
+
+A thread's working directory changes after creation only through recovery or
+through its agent (OS-2622). When the user asks the agent to move its changes
+off the local checkout, the agent creates the worktree, moves the files, and
+runs `convoy threads move-worktree <threadId> <path>`. There is no UI switch:
+only the agent knows the changes are in the new folder, and a user-facing
+switch could start the next run in a folder without them.
+
+- The command reads the thread's checkout (`getSummary`) and, on this machine,
+  looks for `<path>`'s checkout identity among `git worktree list` of that
+  checkout (`inspectWorktreeMoveTarget` in `lib/git/worktrees.ts`). This
+  proves the repository matches, and records the worktree root exactly as Git
+  lists it, so a later discovery sync keeps the entry. The main checkout,
+  another repository, and a detached HEAD are refused. A worktree made with
+  plain `git worktree add` works.
+- `worktrees.moveThread` authenticates the user (no session or claim: the
+  agent's shell has neither) and checks thread ownership, project access, and
+  that the thread is not a container and its worktree is not pending. A stored
+  `repositoryId` must match. The parent is the current worktree's parent, or
+  the thread's own path entry for a local thread. It upserts the worktree path
+  entry and repoints the thread like recovery does: path id, path snapshot, a
+  `created` worktree spec with both identities, `previousWorkingDirectory`, and
+  the branch, plus `git.movedByAgent`. Moving to the current path is a no-op.
+  It also sets `legacyCheckpointsUnsafe`: checkpoints without a checkout
+  identity came from the old checkout and must not be undone in the new one.
+- The move takes effect on the next run. The current run finishes in the old
+  checkout. Its branch and PR reports carry the path they were read from, and
+  the server drops a report from the checkout the agent moved away from, so it
+  cannot overwrite the new branch. The completion of the current run does not
+  acknowledge the move, since its notice names other directories.
+- While a move is pending, `previousWorkingDirectory` is the directory the
+  thread last ran in. A second move during the same run keeps it, and moving
+  back to it clears the pending move. A claimed thread with a pending move also
+  counts as running in that directory, so discards, Undo, and worktree removal
+  there stay refused until the run ends.
+- Run start returns `movedByAgent` with the workspace. The first run in the
+  new path shows a `workspace-moved` divider and the runtime gets the usual
+  directory-change context. The completed run acknowledges both
+  `previousWorkingDirectory` and `movedByAgent`. A run that fails before
+  completing leaves them pending, so the next run shows the divider again.
+- Claude Code resumes a session from another directory by session ID, so the
+  conversation continues in the worktree. Codex, Cursor, OpenCode, and
+  Antigravity are not verified yet; a runtime that cannot resume fails the run
+  explicitly, as on recovery.
+
+Cost: one profile read and one thread write (plus a profile write for a new
+worktree entry) per move. Branch and PR reports and the in-use check read
+nothing extra. No new query or subscription.
+
 ### Worktree change notices
 
 Each change of a thread's working directory renders as one transcript divider
@@ -406,6 +456,7 @@ sentence on what happened. The mockup is `/playground/workspace-recovered`.
 | `worktree-created` | `created` | After `resolveCreated`; replaces the `worktree-create` part in place | new worktree |
 | `workspace-recovered` | `moved` | Git found the same worktree at a new path | worktree moved |
 | `workspace-recovered` | `parent` | Fell back to the parent checkout | worktree removed |
+| `workspace-moved` | `agent` | First run after `convoy threads move-worktree` | moved by agent |
 
 The `convoy_notice` chunk carries `previousPath`, `path`, `change`, and
 `branch` next to `code`, `title`, and `message`; creation adds `baseRef`, and
@@ -532,7 +583,9 @@ The first CLI execution report replaces the snapshot, or clears it when no
 branch is reported. Follow-ups do not fall back to browser scan data after
 that report. If no branch was known at creation, omit the branch chip until
 one is reported. No extra scans run for follow-ups. Non-Git paths still show
-only the environment chip. Workspace controls remain locked after creation.
+only the environment chip. Workspace controls remain locked after creation;
+only the agent can move a thread (see
+[Agent-driven worktree move](#agent-driven-worktree-move)).
 
 **Named-branch dialog** ("Create branch in new worktree",
 `create-worktree-branch-dialog.tsx`): opened by the bottom button (the

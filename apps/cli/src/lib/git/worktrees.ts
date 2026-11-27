@@ -70,6 +70,27 @@ export async function resolveExecutionWorkspace(path: string, worktree?: Executi
   return { path: parent, repositoryId, branch: await getCurrentBranch(parent) };
 }
 
+/** Identify `target` as a linked worktree of `current`'s repository. Spec: cli-worktrees.md#agent-driven-worktree-move. */
+export async function inspectWorktreeMoveTarget(current: string, target: string): Promise<{
+  path: string;
+  repositoryId: string;
+  worktreeId: string;
+  branch: string;
+}> {
+  if (!(await workingDirectoryExists(current))) throw new Error(`The thread's checkout ${current} is not on this machine.`);
+  if (!(await workingDirectoryExists(target))) throw new Error(`Not a directory: ${target}`);
+  const notWorktree = new Error(`${target} is not a linked worktree of the thread's repository.`);
+  if ((await runGit(target, ["rev-parse", "--is-inside-work-tree"], { allowNonZeroExit: true })).exitCode !== 0) throw notWorktree;
+  const worktreeId = await getCheckoutIdentity(target);
+  // Git's own listing gives the path discovery will report, and proves the repository matches.
+  for (const candidate of await listWorktrees(current)) {
+    if (candidate.isMain || await getCheckoutIdentity(candidate.path) !== worktreeId) continue;
+    if (!candidate.branch) throw new Error(`${candidate.path} has a detached HEAD. Check out a branch there first.`);
+    return { path: candidate.path, repositoryId: await repositoryIdentity(candidate.path), worktreeId, branch: candidate.branch };
+  }
+  throw notWorktree;
+}
+
 export interface WorktreeInfo {
   path: string;
   /** Checked-out branch (short name), or null when detached/bare. */

@@ -1043,6 +1043,8 @@ export default defineSchema({
         // `cli/worktrees.resolveCreated`.
         worktree: v.optional(cliThreadWorktreeValidator),
         previousWorkingDirectory: v.optional(v.string()),
+        // `previousWorkingDirectory` came from `cli/worktrees.moveThread` (OS-2622).
+        movedByAgent: v.optional(v.literal(true)),
         legacyCheckpointsUnsafe: v.optional(v.boolean()),
         // Branch actually checked out when the CLI last started executing this
         // thread (OS-1247). Overwritten on every run start; absent for

@@ -966,6 +966,19 @@ the thread is marked Done or deleted, the repository is disconnected, or after
 Stops the watch. The pull request stays attached. JSON output is
 `{ "threadId": "..." }`.
 
+### `convoy threads move-worktree <threadId> <path>`
+
+```bash
+convoy threads move-worktree "$CONVOY_THREAD_ID" ../repo-worktrees/feat-login
+```
+
+For an agent that moved its thread's work into a Git worktree. The thread's
+next run starts in that worktree, and the thread shows it as its working
+directory and branch. The current run finishes where it is. `<path>` must be a
+linked worktree of the thread's repository on this machine, on a branch; a
+worktree made with plain `git worktree add` works. JSON output is
+`{ "threadId": "...", "path": "...", "branch": "..." }`.
+
 ### `convoy threads submit-guide <threadId> [file]`
 
 ```bash

@@ -13,6 +13,7 @@ import { unwatchPullRequestCommand } from "./unwatch-pr.js";
 import { listThreadChecksCommand } from "./checks.js";
 import { readGuideCommand } from "./read-guide.js";
 import { submitGuideCommand } from "./submit-guide.js";
+import { moveWorktreeCommand } from "./move-worktree.js";
 
 export const threadsCommand = new Command("threads")
   .description("CLI thread commands")
@@ -29,4 +30,5 @@ export const threadsCommand = new Command("threads")
   .addCommand(attachToResponseCommand)
   .addCommand(listThreadChecksCommand)
   .addCommand(submitGuideCommand)
-  .addCommand(readGuideCommand);
+  .addCommand(readGuideCommand)
+  .addCommand(moveWorktreeCommand);

@@ -3,7 +3,7 @@ import { mkdtemp, rm, writeFile, readFile, realpath, mkdir, cp, rename } from "n
 import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
 import { runGit } from "./exec.js";
-import { buildDefaultWorktreePath, createWorktree, listWorktrees, parseWorktreeList, removeWorktree, resolveExecutionWorkspace } from "./worktrees.js";
+import { buildDefaultWorktreePath, createWorktree, inspectWorktreeMoveTarget, listWorktrees, parseWorktreeList, removeWorktree, resolveExecutionWorkspace } from "./worktrees.js";
 import { dedupeBranchRefs } from "../../agent/app/worktree-op-processor.js";
 
 vi.mock("./exec.js", async (importOriginal) => {
@@ -136,6 +136,43 @@ describe("execution workspace recovery (real git)", () => {
     const saved = await savedWorktree();
     await expect(resolveExecutionWorkspace(checkout, { ...saved, parentPath: join(parent, "missing") })).rejects.toThrow("parent checkout is unavailable");
     await expect(resolveExecutionWorkspace(checkout, { ...saved, repositoryId: undefined, parentGitRemoteUrl: "https://example.com/original.git" })).rejects.toThrow("Git remote no longer matches");
+  });
+});
+
+describe("inspectWorktreeMoveTarget (real git)", () => {
+  let repo: string;
+  let worktree: string;
+  beforeEach(async () => {
+    repo = await realpath(await mkdtemp(join(tmpdir(), "convoy-move-test-")));
+    worktree = `${repo}-feat`;
+    await runGit(repo, ["init", "-b", "main"]);
+    await runGit(repo, ["-c", "user.name=Test", "-c", "user.email=test@example.com", "commit", "--allow-empty", "-m", "initial"]);
+    await runGit(repo, ["worktree", "add", "-b", "feat/x", worktree]);
+  });
+  afterEach(async () => {
+    await rm(worktree, { recursive: true, force: true });
+    await rm(repo, { recursive: true, force: true });
+  });
+
+  it("returns the worktree root with the identities the next run verifies", async () => {
+    await mkdir(join(worktree, "src"));
+    const target = await inspectWorktreeMoveTarget(repo, join(worktree, "src"));
+    expect(target).toMatchObject({ path: worktree, branch: "feat/x" });
+    const nextRun = await resolveExecutionWorkspace(target.path, { parentPath: repo, ...target });
+    expect(nextRun).toEqual({ path: worktree, repositoryId: target.repositoryId, worktreeId: target.worktreeId, branch: "feat/x" });
+  });
+
+  it("rejects the main checkout, another repository, and a detached HEAD", async () => {
+    await expect(inspectWorktreeMoveTarget(worktree, repo)).rejects.toThrow("not a linked worktree of the thread's repository");
+    const other = await mkdtemp(join(tmpdir(), "convoy-move-other-"));
+    try {
+      await runGit(other, ["init", "-b", "main"]);
+      await expect(inspectWorktreeMoveTarget(repo, other)).rejects.toThrow("not a linked worktree of the thread's repository");
+    } finally {
+      await rm(other, { recursive: true, force: true });
+    }
+    await runGit(worktree, ["checkout", "--detach"]);
+    await expect(inspectWorktreeMoveTarget(repo, worktree)).rejects.toThrow("detached HEAD");
   });
 });
 

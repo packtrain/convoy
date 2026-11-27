@@ -329,6 +329,7 @@ export function createMessageHandler(
           threadId: chat._id,
           sessionId: typedSessionId,
           branch: branch ?? undefined,
+          path: workingDirectory,
         });
       } catch {
         // ignore: branch display must never interfere with execution
@@ -343,6 +344,7 @@ export function createMessageHandler(
             threadId: chat._id,
             sessionId: typedSessionId,
             pullRequest: lookup.pullRequest ?? undefined,
+            path: workingDirectory,
           });
         }
       } catch {
@@ -645,15 +647,18 @@ export function createMessageHandler(
             const resolved = await resolveRunWorkspace(client, chat._id, typedSessionId, {
               workingDirectory, executionWorktree, workspaceNotice,
             }, snapshot);
-            if (resolved.workingDirectory !== workingDirectory && resolved.workspaceNotice) {
+            // The first run after `convoy threads move-worktree` shows the move (cli-worktrees.md#agent-driven-worktree-move).
+            const movedByAgent = snapshot?.movedByAgent === true && resolved.workingDirectory === snapshot.path;
+            if ((movedByAgent || resolved.workingDirectory !== workingDirectory) && resolved.workspaceNotice) {
               await client.mutation(api.cli.messages.appendRunContent, {
                 messageId: started.assistantMessageId,
                 sessionId: typedSessionId,
                 chunks: [{ type: "convoy_notice", data: JSON.stringify({
-                  code: "workspace-recovered", title: "Working directory recovered",
+                  code: movedByAgent ? "workspace-moved" : "workspace-recovered",
+                  title: movedByAgent ? "Working directory moved" : "Working directory recovered",
                   message: formatWorkspaceNotice(resolved.workspaceNotice),
                   // Recovery keeps the worktree only when Git found it at a new path.
-                  change: resolved.executionWorktree ? "moved" : "parent",
+                  change: movedByAgent ? "agent" : resolved.executionWorktree ? "moved" : "parent",
                   ...resolved.workspaceNotice,
                   branch: await getCurrentBranch(resolved.workingDirectory).catch(() => null) ?? undefined,
                 }) }],
@@ -671,6 +676,7 @@ export function createMessageHandler(
                 threadId: chat._id,
                 sessionId: typedSessionId,
                 branch: branch ?? undefined,
+                path,
               });
             } catch {
               // ignore: branch display must never interfere with execution
