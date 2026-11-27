@@ -63,9 +63,18 @@ export function ThreadWorkspaceHost({
   // the created thread renders without placeholders, so the composer — text and
   // all — stays until then (OS-1665).
   const { awaitCreatedThread } = useCreatedThreadHold();
+  // The created thread's composer takes the focus the sending one lost, unless
+  // something else took it meanwhile. Spec: docs/specs/cli-thread-drafts.md.
+  const [focusComposerOf, setFocusComposerOf] = useState<Id<"cliThreads"> | null>(null);
+  if (focusComposerOf && threadId && threadId !== focusComposerOf) {
+    setFocusComposerOf(null);
+  }
   const handleCreated = useCallback(
     async (newThreadId: Id<"cliThreads">) => {
       await awaitCreatedThread({ threadId: newThreadId });
+      if (document.activeElement === null || document.activeElement === document.body) {
+        setFocusComposerOf(newThreadId);
+      }
       // Keeps an open sidebar task open; read live, since the hold may have outlasted a task switch.
       const live = new URLSearchParams(window.location.search);
       const query = new URLSearchParams();
@@ -126,6 +135,7 @@ export function ThreadWorkspaceHost({
         openTaskInSidebar={openTaskInSidebar}
         renderTaskPane={renderTaskPane}
         onSidebarHighlightChange={onSidebarHighlightChange}
+        autoFocusComposer={focusComposerOf === threadId}
       />
     );
   }

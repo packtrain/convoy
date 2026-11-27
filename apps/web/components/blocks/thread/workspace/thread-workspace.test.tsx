@@ -604,8 +604,10 @@ function setMobileViewport() {
 function ThreadWorkspaceHarness({
   threadId,
   handedOverPanel,
+  autoFocusComposer,
 }: {
   threadId?: Id<"cliThreads">;
+  autoFocusComposer?: boolean;
   /** A panel pick inherited from the new-thread pane, as a send hands it over. */
   handedOverPanel?: ThreadWorkspaceTab;
 }) {
@@ -653,6 +655,7 @@ function ThreadWorkspaceHarness({
         />
       )}
       onSidebarHighlightChange={sidebarHighlightMock}
+      autoFocusComposer={autoFocusComposer}
     />
   );
 }
@@ -1035,6 +1038,29 @@ describe("ThreadWorkspace", () => {
 
     deferred.resolve(undefined);
     await deferred.promise;
+  });
+
+  // A just-created thread's composer takes the focus the sending one lost.
+  test.each([true, false])("passes autoFocusComposer=%s to the thread composer", (autoFocusComposer) => {
+    render(<ThreadWorkspaceHarness autoFocusComposer={autoFocusComposer} />);
+    expect(detailThreadComposerRenderMock).toHaveBeenLastCalledWith(expect.objectContaining({ autoFocus: autoFocusComposer }));
+  });
+
+  // Later sends follow the composer's own refocus rule, which respects a click elsewhere.
+  test("drops autoFocusComposer once the created thread sends again", async () => {
+    const deferred = createDeferred<void>();
+    sendMessageMock.mockReturnValue(deferred.promise);
+    render(<ThreadWorkspaceHarness autoFocusComposer />);
+
+    fireEvent.click(screen.getByRole("button", { name: "Composer submit" }));
+    await vi.waitFor(() => expect(screen.getByTestId("textarea-disabled").textContent).toBe("true"));
+    expect(detailThreadComposerRenderMock).toHaveBeenLastCalledWith(expect.objectContaining({ autoFocus: false }));
+
+    await act(async () => {
+      deferred.resolve(undefined);
+      await deferred.promise;
+    });
+    expect(detailThreadComposerRenderMock).toHaveBeenLastCalledWith(expect.objectContaining({ autoFocus: false }));
   });
 
   test("scrolls to a successfully sent user message (OS-1339)", async () => {

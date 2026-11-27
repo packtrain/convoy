@@ -165,6 +165,16 @@ When submitting from `/threads/[threadId]`:
 - Outside that submitting state, an empty thread composer remains visually enabled and interactive; only the submit control is disabled until the user has queued text, attachments, or an attached task.
 - If the send succeeds, the existing-thread draft text is cleared after the mutation resolves.
 - If the send fails, the composer exits submitting state and keeps the existing draft text and uploaded attachments intact for retry.
+- Focus returns to the editor once the send settles, so the next message can be
+  typed right away. The disabled editor drops the browser's focus. It comes
+  back only if focus was in the composer when the user sent (Enter or the Send
+  button) and nothing else has focus by the time the send settles. A click
+  elsewhere during the send keeps its focus.
+- The same holds across a new thread's first send: the created thread's
+  composer takes focus when it opens, unless something else took focus during
+  the wait. `ThreadWorkspaceHost` remembers the created thread id, since the
+  new-thread composer has unmounted by then. Opening a thread any other way
+  leaves focus where it was.
 
 ## Out of Scope (v1)
 

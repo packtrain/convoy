@@ -176,6 +176,8 @@ interface ThreadWorkspaceProps {
     route: Id<"cliThreads">;
     threadId: Id<"cliThreads">;
   }) => void;
+  /** Focus the composer on mount: the thread was just created from a focused composer. */
+  autoFocusComposer?: boolean;
 }
 
 /** A tab of a plain group shares through its container (OS-1579); a workflow run's children share nothing (OS-1366). */
@@ -202,6 +204,7 @@ export function ThreadWorkspace({
   openTaskInSidebar,
   renderTaskPane,
   onSidebarHighlightChange,
+  autoFocusComposer = false,
 }: ThreadWorkspaceProps) {
   const params = useRouteParams<ThreadDetailRouteParams>();
   const navigation = useNavigation();
@@ -379,6 +382,7 @@ export function ThreadWorkspace({
       navigateToThreadTab={navigateToThreadTab}
       onAdoptCreatedGroupScope={adoptCreatedGroupScope}
       redirectedFrom={lastContainer && lastContainer._id === containerId ? lastContainer : undefined}
+      autoFocusComposer={autoFocusComposer}
     />
   );
 }
@@ -456,6 +460,7 @@ function ThreadWorkspaceBody({
   navigateToThreadTab,
   onAdoptCreatedGroupScope,
   redirectedFrom,
+  autoFocusComposer,
 }: {
   chat: CliThreadDetailItem | null;
   threadId: Id<"cliThreads">;
@@ -479,6 +484,7 @@ function ThreadWorkspaceBody({
     containerId: Id<"cliThreads">;
     threadId: Id<"cliThreads">;
   }) => void;
+  autoFocusComposer: boolean;
 }) {
   // The header's action buttons are toggles, which need a whole thread row — the group's child
   // row is not one. Keeping the outgoing tab's row for the round trip holds them in place
@@ -2161,6 +2167,7 @@ function ThreadWorkspaceBody({
                     onBranchedIntoTab={groupAtCap ? undefined : handleBranchedIntoTab}
                     onHandoffToNewThread={handoffToNewThread}
                     onHandoffToNewTab={handoffToNewTab}
+                    autoFocusComposer={autoFocusComposer}
                   />
                 ) : (
                   <ThreadTranscriptSkeleton />

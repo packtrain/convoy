@@ -6,6 +6,7 @@ import {
   useEffect,
   useMemo,
   useRef,
+  useState,
   type ComponentProps,
   type ReactNode,
   type RefObject,
@@ -120,6 +121,8 @@ export interface ThreadViewProps {
   onHandoffToNewTab?: (messageId: Id<"cliMessages">) => void;
   composerContainerClassName?: string;
   composerContentClassName?: string;
+  /** Focus the composer once it is editable (a just-created thread, docs/specs/cli-thread-drafts.md). */
+  autoFocusComposer?: boolean;
 }
 
 /**
@@ -152,6 +155,7 @@ export function ThreadView({
   onHandoffToNewTab,
   composerContainerClassName,
   composerContentClassName,
+  autoFocusComposer = false,
 }: ThreadViewProps) {
   const threadId = chat._id;
   const {
@@ -389,6 +393,12 @@ export function ThreadView({
     onMessageSent: handleMessageSent,
     focusComposer,
   });
+  // One-shot: later sends use the composer's own refocus rule.
+  const [hasSentHere, setHasSentHere] = useState(false);
+  if (isSubmitting && !hasSentHere) {
+    setHasSentHere(true);
+  }
+  const composerAutoFocus = autoFocusComposer && !hasSentHere;
 
   const submitHandler = useMemo(
     () => (wrapSubmit ? wrapSubmit(handleSubmit) : handleSubmit),
@@ -781,6 +791,7 @@ export function ThreadView({
         submitDisabled: isSubmitting || isForkCopying,
         containerClassName: composerContainerClassName,
         contentClassName: composerContentClassName,
+        autoFocus: composerAutoFocus,
         selectorsProps: {
           profiles: lockedProfiles,
           profileId: chatProfileId,
@@ -807,6 +818,7 @@ export function ThreadView({
       composerContainerClassName,
       composerContentClassName,
       composerControllerRef,
+      composerAutoFocus,
       draft?.text,
       draft?.composerContent,
       draftFileParts,

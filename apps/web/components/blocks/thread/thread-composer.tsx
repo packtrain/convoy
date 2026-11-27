@@ -1120,7 +1120,20 @@ function ThreadComposerContent({
   const hasBlockingAttachmentState = pendingAttachments.some(
     (attachment) => attachment.status === "uploading" || attachment.status === "error"
   );
+  // Sending disables the editor, which drops its focus; hand it back if nothing
+  // else took it meanwhile. Spec: docs/specs/cli-thread-drafts.md.
+  const refocusAfterSendRef = useRef(false);
+  useEffect(() => {
+    if (isSubmitting || !refocusAfterSendRef.current) {
+      return;
+    }
+    refocusAfterSendRef.current = false;
+    if (document.activeElement === null || document.activeElement === document.body) {
+      mentionApiRef.current?.focus();
+    }
+  }, [isSubmitting]);
   const handleSubmit = async (message: { text: string; files: FileUIPart[] }) => {
+    refocusAfterSendRef.current = containerRef.current?.contains(document.activeElement) ?? false;
     // Runtime command = whole message is "/name args" with a known agent
     // command and nothing attached; it is forwarded to the runtime raw.
     const runtimeCommand = message.files.length === 0 && isRuntimeCommandMessage(message.text, runtimeSlashCommands ?? []);

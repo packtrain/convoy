@@ -1,7 +1,7 @@
 /**
  * @vitest-environment jsdom
  */
-import { cleanup, fireEvent, render, screen } from "@testing-library/react";
+import { act, cleanup, fireEvent, render, screen } from "@testing-library/react";
 import { afterEach, describe, expect, test, vi } from "vitest";
 import type { ComponentProps, ReactNode } from "react";
 import type { Id } from "@/convex/_generated/dataModel";
@@ -255,6 +255,32 @@ describe("ThreadComposer", () => {
       />
     );
     expect(uiTooltipDelays).toEqual([]);
+  });
+
+  // Sending makes the editor non-editable, so the browser drops its focus.
+  test.each([
+    ["the editor still has nothing else focused", false, true],
+    ["the user moved focus elsewhere meanwhile", true, false],
+  ])("hands focus back to the editor after a send when %s", async (_label, focusElsewhere, refocused) => {
+    const props = {
+      onSubmit: vi.fn(),
+      textareaPlaceholder: "Ask",
+      selectorsProps: { profiles: [], profileId: "", pathId: "", cliType: "claude-code" as const, mode: "agent", cliModel: undefined, onModeChange: vi.fn(), hideWorkingDirectory: true },
+    };
+    const { rerender } = render(<><ThreadComposer {...props} /><button type="button">Elsewhere</button></>);
+    const editor = await screen.findByRole("textbox", { name: "Message" });
+    act(() => editor.focus());
+    expect(document.activeElement).toBe(editor);
+
+    fireEvent.click(screen.getByRole("button", { name: "Submit" }));
+    rerender(<><ThreadComposer {...props} isSubmitting /><button type="button">Elsewhere</button></>);
+    act(() => editor.blur());
+    if (focusElsewhere) act(() => screen.getByRole("button", { name: "Elsewhere" }).focus());
+    rerender(<><ThreadComposer {...props} isSubmitting={false} /><button type="button">Elsewhere</button></>);
+
+    await new Promise((resolve) => requestAnimationFrame(resolve));
+    await new Promise((resolve) => requestAnimationFrame(resolve));
+    expect(document.activeElement === editor).toBe(refocused);
   });
 
   // A relative `?task=` on a thread page points at the thread (OS-2326).
