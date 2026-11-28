@@ -118,12 +118,14 @@ validation, the session mutation, key usage); the mutation costs one.
   and stamps `apiKeys.lastUsedAt` at most every 5 min, in one transaction. It
   returns a status instead of throwing: `ok`, `session_not_found` (deleted or
   not the key owner's) or `unauthorized` (unknown, expired or MCP-only key).
-- **CLI.** `ok` reports `online`. `session_not_found` exits with
-  `EXIT_SESSION_REPLACED`. `unauthorized` is fatal with reason
+- **CLI.** `ok` reports `online`. `session_not_found` registers again
+  without force (the sweep deletes a session offline for 5 min, e.g. a
+  sleeping laptop). It exits with `EXIT_SESSION_REPLACED` only when the
+  profile is gone or another CLI holds it. `unauthorized` is fatal with reason
   `auth-rejected`. A thrown call reports `retrying` with the error text, and
   so does an unknown status. A call with no reply in 5 s reports `retrying`,
   but its reply still counts when it lands, so a late `session_not_found`
-  still exits. A reply after shutdown is ignored.
+  is still acted on. A reply after shutdown is ignored.
 - **One in flight.** The Convex client queues a mutation while its WebSocket
   reconnects and resends every queued one on reconnect. A tick skips the call
   while the last heartbeat is unsettled, so an outage queues one heartbeat,

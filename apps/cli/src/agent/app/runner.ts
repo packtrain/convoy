@@ -162,6 +162,7 @@ export async function createAgentRunner(options: AgentRunnerOptions): Promise<Ag
   let sessionId: string | null = null;
   let profileId: string | null = null;
   let messageHandler: MessageHandler | null = null;
+  let stopSession: () => void = () => {};
   let stopPromise: Promise<void> | null = null;
   // Settled during registration, once codex's version is known: the requested
   // transport, downgraded to exec when the installed codex is too old.
@@ -173,7 +174,7 @@ export async function createAgentRunner(options: AgentRunnerOptions): Promise<Ag
   /**
    * Register the agent with the backend
    */
-  async function registerAgent(): Promise<void> {
+  async function registerAgent(takeOver = force): Promise<void> {
     httpBaseUrl = await resolveConvexSiteUrl(convexUrl);
     const availableClis: DetectedCli[] = await detectAvailableClis({ codexProvider: options.codexProvider, claudeAuth: options.claudeAuth,
       antigravityAuth: options.antigravityAuth, opencodeAuth: options.opencodeAuth });
@@ -227,7 +228,7 @@ export async function createAgentRunner(options: AgentRunnerOptions): Promise<Ag
         steeringCliTypes: effectiveCodexAppServer
           ? ["claude-code", "codex", "antigravity"]
           : ["claude-code", "antigravity"],
-        force,
+        force: takeOver,
       },
       5000
     ).catch(() => {
@@ -276,7 +277,38 @@ export async function createAgentRunner(options: AgentRunnerOptions): Promise<Ag
     console.log(chalk.dim(`[Heartbeat] ${message}, will retry...`));
   }
 
-  function handleHeartbeatResult(result: string): void {
+  function exitReplaced(): void {
+    // Exit code 3 tells supervisors not to respawn (another CLI took over).
+    emitConnectEvent({
+      event: "status",
+      status: "failed",
+      message: "Session was replaced or its profile deleted",
+    });
+    console.log(chalk.yellow("\nSession was replaced or its profile deleted."));
+    console.log(chalk.dim("Exiting..."));
+    running = false;
+    exitAfterFlush(EXIT_SESSION_REPLACED);
+  }
+
+  /** The sweep deleted a session that slept past VISIBLE_THRESHOLD_MS: register again unless the profile is gone or taken. */
+  async function recoverLostSession(): Promise<void> {
+    const profiles = await client!.query(api.cli.profiles.listByProject, { projectId: projectId as Id<"projects"> });
+    if (!running) return;
+    if (!profiles.some((profile: { _id: string }) => profile._id === profileId)) return exitReplaced();
+    reportHeartbeatRetry("Session expired while offline, registering again");
+    try {
+      await registerAgent(false);
+    } catch (error) {
+      if (error instanceof SessionConflictError) return exitReplaced();
+      throw error;
+    }
+    if (!running) return;
+    stopSession();
+    await messageHandler?.shutdown();
+    stopSession = startSession();
+  }
+
+  async function handleHeartbeatResult(result: string): Promise<void> {
     if (!running) return;
     if (result === "ok") {
       emitConnectEvent({ event: "status", status: "online", sessionId: sessionId ?? undefined });
@@ -285,18 +317,7 @@ export async function createAgentRunner(options: AgentRunnerOptions): Promise<Ag
       parts.push(`Endpoint: ${convexUrl}`);
       console.log(chalk.dim(parts.join(" | ")));
     } else if (result === "session_not_found") {
-      // Session was deleted - either kicked by another CLI or expired.
-      // Don't try to re-register, just exit. User can restart if needed.
-      // Exit code 3 tells supervisors not to respawn (another CLI took over).
-      emitConnectEvent({
-        event: "status",
-        status: "failed",
-        message: "Session was terminated (kicked or expired)",
-      });
-      console.log(chalk.yellow("\nSession was terminated (kicked or expired)."));
-      console.log(chalk.dim("Exiting..."));
-      running = false;
-      exitAfterFlush(EXIT_SESSION_REPLACED);
+      await recoverLostSession();
     } else if (result === "unauthorized") {
       // Auth is broken (revoked API key): fatal, but a supervisor may respawn.
       emitConnectEvent({
@@ -326,7 +347,8 @@ export async function createAgentRunner(options: AgentRunnerOptions): Promise<Ag
     heartbeatInFlight = true;
     client
       .mutation(api.cli.sessions.heartbeatByKey, { sessionId: sessionId as Id<"cliSessions"> })
-      .then(handleHeartbeatResult, (error: unknown) => {
+      .then(handleHeartbeatResult)
+      .catch((error: unknown) => {
         // Transient trouble (network, server error, older backend): keep the session.
         reportHeartbeatRetry(`Heartbeat failed: ${error instanceof Error ? error.message : String(error)}`);
       })
@@ -378,6 +400,79 @@ export async function createAgentRunner(options: AgentRunnerOptions): Promise<Ag
     );
   }
 
+  /** Wire the subscriptions and message handler to the current session; returns their teardown. */
+  function startSession(): () => void {
+    // Fulfill web-requested worktree ops (rescan/remove) and push the
+    // initial worktree scan so synced entries appear in the selector.
+    const worktreeOps = createWorktreeOpProcessor(client!, sessionId!, profileId!);
+    void worktreeOps.scanAndSync(paths).catch((error) => {
+      console.error(chalk.red(`[Worktree] Initial scan failed: ${error instanceof Error ? error.message : String(error)}`));
+    });
+    const unsubscribeWorktreeOps = client!.subscribe(
+      api.cli.worktreeOps.listPending,
+      { profileId: profileId! as Id<"cliProfiles"> },
+      {
+        onUpdate: (ops) => {
+          worktreeOps.enqueue(ops);
+        },
+        onError: (error) => {
+          console.error(chalk.red(`[Worktree] ${error.message}`));
+        },
+      }
+    );
+
+    // Route answered approval requests back to parked provider callbacks.
+    const interactionRouter = createInteractionRouter();
+    const unsubscribeInteractions = client!.subscribe(
+      api.cli.interactionRequests.listAnsweredBySession,
+      { sessionId: sessionId! as Id<"cliSessions"> },
+      {
+        onUpdate: (answered) => {
+          interactionRouter.dispatch(
+            answered.map((item: { requestId: string; responseJson?: string }) => ({
+              requestId: item.requestId,
+              responseJson: item.responseJson ?? "{}",
+            }))
+          );
+        },
+        onError: (error) => {
+          console.error(chalk.red(`[Approvals] ${error.message}`));
+        },
+      }
+    );
+
+    // Create message handler (needs sessionId from registration)
+    messageHandler = createMessageHandler(
+      (cliType) =>
+        createRunnerForCliType(cliType, {
+          streamFile,
+          streamDelayMs,
+          partialStreaming,
+          codexAppServer: effectiveCodexAppServer,
+          codexAuth: options.codexAuth,
+          codexProvider: options.codexProvider,
+          claudeAuth: options.claudeAuth,
+          cursorAuth: options.cursorAuth,
+          antigravityAuth: options.antigravityAuth,
+          opencodeAuth: options.opencodeAuth,
+          sandbox,
+        }),
+      client!,
+      sessionId!,
+      {
+        maxConcurrentChats,
+        interactionRouter,
+      }
+    );
+
+    const unsubscribe = subscribeToPendingChats();
+    return () => {
+      unsubscribe();
+      unsubscribeInteractions();
+      unsubscribeWorktreeOps();
+    };
+  }
+
   return {
     async run(): Promise<void> {
       running = true;
@@ -399,83 +494,17 @@ export async function createAgentRunner(options: AgentRunnerOptions): Promise<Ag
       // Register agent
       await registerAgent();
 
-      // Fulfill web-requested worktree ops (rescan/remove) and push the
-      // initial worktree scan so synced entries appear in the selector.
-      const worktreeOps = createWorktreeOpProcessor(client, sessionId!, profileId!);
-      void worktreeOps.scanAndSync(paths).catch((error) => {
-        console.error(chalk.red(`[Worktree] Initial scan failed: ${error instanceof Error ? error.message : String(error)}`));
-      });
-      const unsubscribeWorktreeOps = client.subscribe(
-        api.cli.worktreeOps.listPending,
-        { profileId: profileId! as Id<"cliProfiles"> },
-        {
-          onUpdate: (ops) => {
-            worktreeOps.enqueue(ops);
-          },
-          onError: (error) => {
-            console.error(chalk.red(`[Worktree] ${error.message}`));
-          },
-        }
-      );
-
-      // Route answered approval requests back to parked provider callbacks.
-      const interactionRouter = createInteractionRouter();
-      const unsubscribeInteractions = client.subscribe(
-        api.cli.interactionRequests.listAnsweredBySession,
-        { sessionId: sessionId! as Id<"cliSessions"> },
-        {
-          onUpdate: (answered) => {
-            interactionRouter.dispatch(
-              answered.map((item: { requestId: string; responseJson?: string }) => ({
-                requestId: item.requestId,
-                responseJson: item.responseJson ?? "{}",
-              }))
-            );
-          },
-          onError: (error) => {
-            console.error(chalk.red(`[Approvals] ${error.message}`));
-          },
-        }
-      );
-
-      // Create message handler (needs sessionId from registration)
-      messageHandler = createMessageHandler(
-        (cliType) =>
-          createRunnerForCliType(cliType, {
-            streamFile,
-            streamDelayMs,
-            partialStreaming,
-            codexAppServer: effectiveCodexAppServer,
-            codexAuth: options.codexAuth,
-            codexProvider: options.codexProvider,
-            claudeAuth: options.claudeAuth,
-            cursorAuth: options.cursorAuth,
-            antigravityAuth: options.antigravityAuth,
-            opencodeAuth: options.opencodeAuth,
-            sandbox,
-          }),
-        client,
-        sessionId!,
-        {
-          maxConcurrentChats,
-          interactionRouter,
-        }
-      );
+      stopSession = startSession();
 
       // Start heartbeat (every 30 seconds)
       heartbeatInterval = setInterval(sendHeartbeat, 30000);
-
-      // Subscribe to pending threads
-      const unsubscribe = subscribeToPendingChats();
 
       // Keep running until stopped
       await new Promise<void>((resolve) => {
         const checkRunning = setInterval(() => {
           if (!running) {
             clearInterval(checkRunning);
-            unsubscribe();
-            unsubscribeInteractions();
-            unsubscribeWorktreeOps();
+            stopSession();
             resolve();
           }
         }, 100);

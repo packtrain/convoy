@@ -64,7 +64,7 @@ in later without a schema break:
 | `online`     | Registered, heartbeat healthy (`sessionId` included)                     |
 | `retrying`   | Heartbeat failed or took over 5 s; will retry on the next 30s interval   |
 | `blocked`    | Session conflict — another CLI session is active (auto-force follows)    |
-| `failed`     | Fatal: registration error, session kicked/expired, or unhandled error (`message` included) |
+| `failed`     | Fatal: registration error, session replaced or profile deleted, or unhandled error (`message` included) |
 
 An isolated worker's `failed` event may carry a fixed `reason` code instead of
 text. The service keeps only known codes and runtime keys, logs its own guidance
@@ -123,13 +123,18 @@ emit).
 | ---- | ------------------------------------------- | ------------------------ |
 | `0`  | Clean shutdown (SIGINT/SIGTERM/SIGHUP)      | Do not respawn           |
 | `1`  | Fatal error (config, registration, crash)   | Respawn with backoff     |
-| `3`  | Session kicked/expired server-side          | Do not respawn — another CLI deliberately took over |
+| `3`  | Session replaced or profile deleted         | Do not respawn — another CLI deliberately took over |
 
 Constants live in `apps/cli/src/lib/connect-events.ts`. Note: pre-OS-1236,
 a kicked session exited `0`; supervisors must rely on code `3` now.
 
 Heartbeat results are classified, not lumped: `session_not_found` (the
-server's positive "replaced/expired" signal) → `failed` + exit `3`;
+session row is gone) → the CLI checks why. If `listByProject` no longer has
+its profile, or registering again without `--force` hits `SESSION_CONFLICT`
+(another CLI is live), it reports `failed` and exits `3`. Otherwise the sweep
+expired it after a long sleep or outage: the CLI reports `retrying`, registers
+a new session and rewires its subscriptions, then reports `online`. A failed
+re-registration retries on the next heartbeat;
 `unauthorized` (auth broken, e.g. revoked API key) → `failed` + exit `1`;
 a thrown call, an unknown status, or no reply within 5 s → `retrying`, keep
 the session and try again next interval. A late reply is still acted on. See

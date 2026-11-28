@@ -13,6 +13,7 @@ const {
   closeMock,
   unsubscribeMock,
   mutationMock,
+  queryMock,
 } = vi.hoisted(() => {
   const runnerAbort = vi.fn();
   const runnerShutdown = vi.fn().mockResolvedValue(undefined);
@@ -37,9 +38,10 @@ const {
   const subscribe = vi.fn(() => unsubscribe);
   const close = vi.fn().mockResolvedValue(undefined);
   const mutation = vi.fn();
+  const query = vi.fn();
 
   const createConvexClient = vi.fn(() => ({
-    query: vi.fn(),
+    query,
     mutation,
     subscribe,
     close,
@@ -69,6 +71,7 @@ const {
     closeMock: close,
     unsubscribeMock: unsubscribe,
     mutationMock: mutation,
+    queryMock: query,
   };
 });
 
@@ -129,6 +132,7 @@ describe("agent-runner shutdown lifecycle", () => {
   beforeEach(() => {
     vi.clearAllMocks();
     mutationMock.mockResolvedValue("ok");
+    queryMock.mockResolvedValue([{ _id: "profile_123" }]);
     vi.stubGlobal("fetch", fetchMock);
     fetchMock.mockImplementation(async (input: unknown) => {
       const url =
@@ -509,11 +513,47 @@ describe("agent-runner shutdown lifecycle", () => {
     expect(exitAfterFlush).not.toHaveBeenCalled();
   });
 
-  it("exits as replaced when the backend no longer has the session", async () => {
-    mutationMock.mockResolvedValue("session_not_found");
+  // A sleeping laptop misses heartbeats until the sweep deletes its session.
+  function expireOnce(registerAgain: () => Response) {
+    mutationMock.mockResolvedValueOnce("session_not_found");
+    const register = vi.fn<(body: Record<string, unknown>) => Response>()
+      .mockReturnValueOnce(okResponse({ sessionId: "session_123", profileId: "profile_123" }))
+      .mockImplementation(registerAgain);
+    fetchMock.mockImplementation(async (input: unknown, init?: RequestInit) =>
+      String(input).endsWith("/api/agent/register") ? register(JSON.parse(String(init?.body)) as Record<string, unknown>) : okResponse({}));
+    return register;
+  }
+
+  it("re-registers without force when the sweep expired the session", async () => {
+    const register = expireOnce(() => okResponse({ sessionId: "session_456", profileId: "profile_123" }));
     const { events } = await runHeartbeat();
-    expect(events).toContainEqual(expect.objectContaining({ status: "failed", message: "Session was terminated (kicked or expired)" }));
+    expect(register).toHaveBeenCalledTimes(2);
+    expect(register.mock.calls[1][0]).toMatchObject({ force: false });
+    expect(createMessageHandlerMock.mock.calls.map((call: unknown[]) => call[2])).toEqual(["session_123", "session_456"]);
+    expect(events).toContainEqual(expect.objectContaining({ status: "online", sessionId: "session_456" }));
+    expect(exitAfterFlush).not.toHaveBeenCalled();
+  });
+
+  it("exits as replaced when another CLI holds the profile", async () => {
+    expireOnce(() => ({ ok: false, status: 409, json: async () => ({ code: "SESSION_CONFLICT", error: "taken" }) }) as Response);
+    const { events } = await runHeartbeat();
+    expect(events).toContainEqual(expect.objectContaining({ status: "failed", message: "Session was replaced or its profile deleted" }));
     expect(exitAfterFlush).toHaveBeenCalledWith(EXIT_SESSION_REPLACED);
+  });
+
+  it("exits as replaced without re-registering when the profile was deleted", async () => {
+    const register = expireOnce(() => okResponse({ sessionId: "session_456", profileId: "profile_new" }));
+    queryMock.mockResolvedValue([]);
+    await runHeartbeat();
+    expect(register).toHaveBeenCalledTimes(1);
+    expect(exitAfterFlush).toHaveBeenCalledWith(EXIT_SESSION_REPLACED);
+  });
+
+  it("keeps the session lost and retries when re-registration cannot reach Convoy", async () => {
+    expireOnce(() => { throw new TypeError("fetch failed"); });
+    const { events } = await runHeartbeat();
+    expect(events).toContainEqual(expect.objectContaining({ status: "retrying" }));
+    expect(exitAfterFlush).not.toHaveBeenCalled();
   });
 
   it("reports a rejected key on heartbeat as auth-rejected", async () => {
@@ -545,6 +585,7 @@ describe("agent-runner shutdown lifecycle", () => {
 
   it("acts on a terminal reply that arrives after the timeout", async () => {
     const settle = deferHeartbeat();
+    queryMock.mockResolvedValue([]);
     const { events } = await runHeartbeat(36_000, async () => {
       settle("session_not_found");
       await vi.advanceTimersByTimeAsync(0);
