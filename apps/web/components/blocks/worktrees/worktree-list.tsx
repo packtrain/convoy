@@ -180,7 +180,8 @@ function CheckoutRows({
             <Laptop className="size-4 shrink-0 text-muted-foreground" />
           )}
           <span className="truncate">{name}</span>
-          {entry.kind !== "repo" && (
+          {/* A repo and its worktrees are named by their row; the path is in the title. */}
+          {entry.kind !== "repo" && !paths.some((path) => path.id === entry.parentPathId && path.kind === "repo") && (
             <span className="truncate text-xs font-normal text-muted-foreground/70">{truncateRepoPath(entry.path)}</span>
           )}
         </AppLink>

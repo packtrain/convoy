@@ -1,5 +1,5 @@
 import { format, formatDistanceToNow } from "date-fns";
-import { Bot, CalendarDays, Clock3, FolderGit2, KeyRound, Monitor, SquareTerminal } from "lucide-react";
+import { Bot, CalendarDays, Clock3, FolderGit2, GitBranch, KeyRound, Monitor, SquareTerminal } from "lucide-react";
 import { folderRepos, isConfiguredPath, toRuntimeSummaries, type CliProfilePathEntry, type CliRuntimeSummary } from "@/convex/lib/contracts/validators";
 import { isCliType } from "@/lib/cli-runtime-ui/registry";
 import { CLI_TYPE_MAP, type AvailableCliInfo } from "@/lib/threads/types";
@@ -101,15 +101,33 @@ function DetailLine({ icon: Icon, label, value }: { icon: typeof Monitor; label:
   );
 }
 
-/** A folder's repos, indented under it by relative path (cli-multi-repo-projects.md#web). */
+/** A folder's repos, indented under it by relative path, each with its worktrees (cli-multi-repo-projects.md#picking-a-repo). */
 function FolderRepoList({ paths, folder }: { paths: ProfileDetailsData["paths"]; folder: { id: string; label: string } }) {
   const repos = folderRepos(paths, folder.id);
   if (repos.length === 0) return null;
   return (
     <ul aria-label={`Repos in ${folder.label}`} className="mt-1 space-y-0.5 border-l border-border pl-2">
-      {repos.map((repo) => (
-        <li key={repo.id} className="truncate font-mono text-[11px] text-foreground" title={repo.path}>{repo.label}</li>
-      ))}
+      {repos.map((repo) => {
+        const worktrees = paths.filter((path) => path.kind === "worktree" && path.parentPathId === repo.id);
+        return (
+          <li key={repo.id} className="min-w-0 text-xs text-foreground">
+            <span className="flex min-w-0 items-center gap-1.5" title={repo.path}>
+              <FolderGit2 className="size-3 shrink-0 text-muted-foreground" aria-hidden />
+              <span className="truncate">{repo.label}</span>
+            </span>
+            {worktrees.length > 0 && (
+              <ul aria-label={`Worktrees of ${repo.label}`} className="ml-[18px] space-y-0.5">
+                {worktrees.map((worktree) => (
+                  <li key={worktree.id} className="flex min-w-0 items-center gap-1.5 text-muted-foreground" title={worktree.path}>
+                    <GitBranch className="size-3 shrink-0" aria-hidden />
+                    <span className="truncate">{worktree.label}</span>
+                  </li>
+                ))}
+              </ul>
+            )}
+          </li>
+        );
+      })}
     </ul>
   );
 }
@@ -157,7 +175,7 @@ export function ProfileDetails({ profile, className }: { profile: ProfileDetails
       <div className="border-t border-border pt-2.5">
         <div className="mb-1.5 flex items-center justify-between gap-2 text-[11px] font-medium uppercase tracking-wide text-muted-foreground">
           <span className="flex items-center gap-2"><FolderGit2 className="size-3.5" />Working directories</span>
-          <span>{regularPaths.length}{worktreeCount > 0 ? ` + ${worktreeCount} worktrees` : ""}</span>
+          <span>{regularPaths.length}{worktreeCount > 0 ? ` + ${worktreeCount} ${worktreeCount === 1 ? "worktree" : "worktrees"}` : ""}</span>
         </div>
         {regularPaths.length > 0 ? (
           <div className="max-h-48 space-y-1.5 overflow-y-auto pr-1">

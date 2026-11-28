@@ -285,7 +285,16 @@ script is its repo's (keyed by the repo entry's `gitRemoteUrl`).
   desktop; review found it unreachable by touch and keyboard and unbounded for
   big folders, so the list itself carries the repos (decided 2026-11-28). The
   trigger reads `acme / new-app`, so two folders' `api` repos don't read the
-  same.
+  same, and a repo's worktree `acme / new-app / feat/x`. A narrow composer bar
+  has room for one segment and shows the repo instead of the profile name
+  (the branch chip next to it names a worktree); the full path is the
+  trigger's accessible name. The menu opens on the side of the trigger with
+  more room and stays there while a search shrinks the list. It opens with
+  search focused (not on touch, where it would raise the keyboard). While
+  searching, a repo row shows its folder (`acme / new-app`), since the folder
+  row may be filtered out. After the menu closes, the profile hover card stays
+  shut until the pointer leaves the trigger or focus moves on, so it doesn't
+  cover the next control. On a phone it opens below its trigger.
 - **Base-ref / worktree selector.** Hidden for a folder with repos, unchanged
   for a repo.
 - **Server.** Thread creation, workflow runs, MCP `create_thread` and `convoy
@@ -299,14 +308,20 @@ script is its repo's (keyed by the repo entry's `gitRemoteUrl`).
   gets the [repo switcher](#repo-switcher) with the thread's own checkout first
   and selected by default (`threadChangesRepos`), then the folder's other
   repos, so a card file in `old-app` opens in its repo. On the own checkout the
-  toolbar shows the thread's single-repo PR and review comments stay on.
+  toolbar shows the thread's single-repo PR and review comments stay on. A
+  worktree reads as its branch in the switcher, with its path in the folder as
+  the title. Its repo's main checkout, listed after it, reads "This thread
+  works in the feat/x worktree, so its runs don't track the new-app checkout."
+  when empty. The switcher has no repo icon, so a name like `new-app` fits in
+  a narrow sidebar; a worktree keeps the branch icon.
   Mentions name files from the agent's checkout: `../old-app/a.ts` from
   `new-app`, on the card (`checkoutLabel`, from the profile) and in the tab. A
   run from a CLI older than 0.189.0 has no `repos` and shows under the own
   checkout only. The per-run Changes
   card shows every repo the run changed (below).
 - **Connected CLIs and the profile hover card** list a folder's repos as rows
-  under it, each with its worktrees nested.
+  under it, each with its worktrees nested. A worktree under a repo shows its
+  branch only; the path is the row's title.
 
 ### Folder access
 

@@ -4,7 +4,7 @@ import { folderRepos, isConfiguredPath, type CliProfilePathEntry } from "@/conve
 import { useCallback, useEffect, useRef, useState } from "react";
 import { useMutation } from "convex/react";
 import { createPortal } from "react-dom";
-import { MoreHorizontal, ChevronDown, Pencil, Trash2 } from "lucide-react";
+import { MoreHorizontal, ChevronDown, FolderGit2, Pencil, Trash2 } from "lucide-react";
 import { POPOVER_SURFACE_CLASS } from "@/components/ui/popover";
 import { Button } from "@/components/ui/button";
 import { MiddleTruncate } from "@/components/ui/middle-truncate";
@@ -101,20 +101,41 @@ export function WorkingDirectorySelector({
   const [profileToDelete, setProfileToDelete] = useState<WorkingDirectorySelectorProfile | null>(null);
   const [optionsMenu, setOptionsMenu] = useState<OptionsMenuState | null>(null);
   const renameMenuItemRef = useRef<HTMLButtonElement | null>(null);
-  const closedDropdownRef = useRef(false);
+  const triggerRef = useRef<HTMLButtonElement | null>(null);
+  // Picked on open: Radix would flip the menu as a search shrinks and regrows the list.
+  const [menuSide, setMenuSide] = useState<"top" | "bottom">("bottom");
+  // After the menu closes, the details card waits for the pointer to move off the trigger or focus to move on.
+  const [cardSuppressed, setCardSuppressed] = useState(false);
+  useEffect(() => {
+    if (!cardSuppressed) return;
+    // pointermove, not pointerleave: the relabelled trigger re-lays out under a still pointer, firing leave and enter.
+    const handlePointerMove = (event: PointerEvent) => {
+      if (!(event.target instanceof Node && triggerRef.current?.contains(event.target))) setCardSuppressed(false);
+    };
+    document.addEventListener("pointermove", handlePointerMove);
+    return () => document.removeEventListener("pointermove", handlePointerMove);
+  }, [cardSuppressed]);
   const renameProfile = useMutation(api.cli.profiles.rename);
 
   const currentProfile = profiles.find((p) => p._id === profileId);
   const currentPath = currentProfile?.paths.find((p) => p.id === pathId);
-  // A repo reads `acme / new-app`, so two folders' `api` repos stay apart.
-  const currentFolder = currentPath?.kind === "repo" ? currentProfile?.paths.find((p) => p.id === currentPath.parentPathId) : undefined;
-  const currentPathLabel = currentPath && (currentFolder ? `${currentFolder.label} / ${currentPath.label}` : currentPath.label);
+  // A repo reads `acme / new-app`, its worktree `acme / new-app / feat/x`, so two folders' `api` repos stay apart.
+  const currentRepo = currentPath?.kind === "repo"
+    ? currentPath
+    : currentPath?.kind === "worktree" ? currentProfile?.paths.find((p) => p.id === currentPath.parentPathId && p.kind === "repo") : undefined;
+  const currentFolder = currentRepo && currentProfile?.paths.find((p) => p.id === currentRepo.parentPathId);
+  const currentPathLabel = currentPath && [currentFolder?.label, currentRepo !== currentPath ? currentRepo?.label : undefined, currentPath.label]
+    .filter(Boolean).join(" / ");
+  const triggerTitle = currentProfile ? `${currentProfile.name}${currentPathLabel ? ` / ${currentPathLabel}` : ""}` : "Select working directory";
+  // Inside a folder, a narrow bar shows the repo, not the profile name; the branch chip names a worktree.
+  const narrowLabel = currentFolder ? currentRepo?.label : undefined;
 
   const shouldShowPathInTrigger = !!currentPath && !compact;
 
   const handleSelect = (selectedProfileId: string, selectedPathId: string) => {
     if (disabled) return;
     onChange(selectedProfileId, selectedPathId);
+    setCardSuppressed(true);
     setOpen(false);
     setSearch("");
     setOptionsMenu(null);
@@ -213,6 +234,7 @@ export function WorkingDirectorySelector({
   const selectorTrigger = (
     <ModelSelectorDropdownTrigger asChild>
       <Button
+        ref={triggerRef}
         variant="ghost"
         size="sm"
         className={cn(
@@ -225,24 +247,19 @@ export function WorkingDirectorySelector({
           disabled && "cursor-default text-muted-foreground/80"
         )}
         aria-disabled={disabled}
-        // Focus returning from a closed dropdown must not pop the details card.
-        onFocus={(event) => {
-          if (closedDropdownRef.current) {
-            closedDropdownRef.current = false;
-            event.preventDefault();
-          }
-        }}
-        onPointerEnter={() => {
-          closedDropdownRef.current = false;
-        }}
-        title={currentProfile ? `${currentProfile.name}${currentPathLabel ? ` / ${currentPathLabel}` : ""}` : "Select working directory"}
+        onBlur={() => setCardSuppressed(false)}
+        title={triggerTitle}
+        aria-label={triggerTitle}
       >
         <StatusDot isOnline={currentProfile?.isOnline ?? false} />
         <span className="flex min-w-0">
-          <span className="min-w-0 truncate">{currentProfile?.name ?? "Select working directory"}</span>
+          <span className={cn("min-w-0 truncate", narrowLabel && "@max-lg/composer-bar:hidden")}>{currentProfile?.name ?? "Select working directory"}</span>
+          {narrowLabel && (
+            <span data-narrow-label className="hidden min-w-0 truncate @max-lg/composer-bar:inline">{narrowLabel}</span>
+          )}
           {shouldShowPathInTrigger && (
             // Capped and middle-truncated: long worktree labels share their prefix, the end tells them apart.
-            <span className="flex min-w-0 max-w-56 text-muted-foreground/60 @max-lg/composer-bar:hidden">
+            <span className={cn("flex min-w-0 max-w-56 @max-lg/composer-bar:hidden", !disabled && "text-muted-foreground")}>
               <span className="shrink-0 whitespace-pre">{" / "}</span>
               <MiddleTruncate text={currentPathLabel ?? currentPath.label} />
             </span>
@@ -260,26 +277,31 @@ export function WorkingDirectorySelector({
         open={open}
         onOpenChange={(nextOpen) => {
           if (disabled) return;
+          if (nextOpen && triggerRef.current) {
+            const rect = triggerRef.current.getBoundingClientRect();
+            setMenuSide(rect.top > window.innerHeight - rect.bottom ? "top" : "bottom");
+          }
           setOpen(nextOpen);
           if (!nextOpen) {
-            closedDropdownRef.current = true;
+            setCardSuppressed(true);
             setOptionsMenu(null);
             setSearch("");
           }
         }}
       >
         {currentProfile ? (
-          <ProfileHoverCard profile={toProfileDetails(currentProfile)} disabled={open} triggerAsChild>
+          <ProfileHoverCard profile={toProfileDetails(currentProfile)} disabled={open || cardSuppressed} triggerAsChild>
             {selectorTrigger}
           </ProfileHoverCard>
         ) : (
           selectorTrigger
         )}
         <ModelSelectorDropdownContent
+          side={menuSide}
           defaultHighlight={
             !currentProfile || !currentPath
               ? undefined
-              : currentFolder
+              : currentFolder && currentRepo === currentPath
                 ? `${currentProfile.name} ${currentFolder.label} ${currentPath.label} ${currentPath.path}`
                 : `${currentProfile.name} ${currentPath.label} ${currentPath.path}`
           }
@@ -294,7 +316,13 @@ export function WorkingDirectorySelector({
             }
           }}
         >
-          <ModelSelectorDropdownInput placeholder="Search working directories..." value={search} onValueChange={setSearch} />
+          {/* Focused on open so typing and arrows work at once; not on touch, where it would raise the keyboard. */}
+          <ModelSelectorDropdownInput
+            placeholder="Search working directories..."
+            value={search}
+            onValueChange={setSearch}
+            autoFocus={typeof window !== "undefined" && !window.matchMedia?.("(pointer: coarse)").matches}
+          />
           <ModelSelectorDropdownList>
             <ModelSelectorDropdownEmpty>No working directories found.</ModelSelectorDropdownEmpty>
             {profiles.map((profile) => (
@@ -356,6 +384,7 @@ export function WorkingDirectorySelector({
                     folder={path}
                     repos={folderRepos(profile.paths, path.id)}
                     selectedId={profile._id === profileId ? pathId : undefined}
+                    searching={search !== ""}
                     onPick={(entryId) => handleSelect(profile._id, entryId)}
                   />
                 ))}
@@ -439,12 +468,14 @@ function FolderRows({
   folder,
   repos,
   selectedId,
+  searching,
   onPick,
 }: {
   profileName: string;
   folder: CliProfilePathEntry;
   repos: CliProfilePathEntry[];
   selectedId: string | undefined;
+  searching: boolean;
   onPick: (entryId: string) => void;
 }) {
   return (
@@ -472,8 +503,10 @@ function FolderRows({
           onSelect={() => onPick(repo.id)}
           data-checked={repo.id === selectedId ? true : undefined}
         >
+          <FolderGit2 className="size-3.5 shrink-0 text-muted-foreground" aria-hidden />
           <ModelSelectorDropdownName>
-            <span className="sr-only">{folder.label} / </span>
+            {/* Search can filter the folder row out, so the repo names its folder then. */}
+            <span className={searching ? "text-muted-foreground" : "sr-only"}>{folder.label} / </span>
             {repo.label}
           </ModelSelectorDropdownName>
         </ModelSelectorDropdownItem>

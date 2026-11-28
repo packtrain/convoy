@@ -2,7 +2,7 @@
  * @vitest-environment jsdom
  */
 import { afterEach, describe, expect, test, vi } from "vitest";
-import { cleanup, fireEvent, render, screen } from "@testing-library/react";
+import { act, cleanup, fireEvent, render, screen } from "@testing-library/react";
 import { Slot } from "radix-ui";
 import type { ComponentPropsWithoutRef, ReactNode } from "react";
 import type { Id } from "@/convex/_generated/dataModel";
@@ -11,6 +11,8 @@ import { POPOVER_SURFACE_CLASS } from "@/components/ui/popover";
 import { WorkingDirectorySelector } from "./working-directory-selector";
 
 type ModelSelectorContentHandlers = {
+  side?: string;
+  onOpenChange?: (open: boolean) => void;
   onFocusOutside?: (event: {
     target: EventTarget | null;
     preventDefault: () => void;
@@ -31,6 +33,7 @@ const modelSelectorContentHandlers = vi.hoisted(
       current: null as ModelSelectorContentHandlers | null,
     }) satisfies { current: ModelSelectorContentHandlers | null }
 );
+const modelSelectorRoot = vi.hoisted(() => ({ onOpenChange: undefined as ((open: boolean) => void) | undefined }));
 const renameProfileMock = vi.fn();
 const deleteProfileMock = vi.fn();
 
@@ -57,7 +60,10 @@ vi.mock("sonner", () => ({
 }));
 
 vi.mock("@/components/ai-elements/model-selector-dropdown", () => ({
-  ModelSelectorDropdown: ({ children }: { children: ReactNode }) => <div>{children}</div>,
+  ModelSelectorDropdown: ({ children, onOpenChange }: { children: ReactNode; onOpenChange?: (open: boolean) => void }) => {
+    modelSelectorRoot.onOpenChange = onOpenChange;
+    return <div>{children}</div>;
+  },
   ModelSelectorDropdownTrigger: ({
     children,
     asChild = false,
@@ -72,19 +78,22 @@ vi.mock("@/components/ai-elements/model-selector-dropdown", () => ({
     children,
     onFocusOutside,
     onInteractOutside,
+    side,
   }: {
     children: ReactNode;
+    side?: string;
     onFocusOutside?: ModelSelectorContentHandlers["onFocusOutside"];
     onInteractOutside?: ModelSelectorContentHandlers["onInteractOutside"];
   }) => {
     modelSelectorContentHandlers.current = {
+      side,
       onFocusOutside,
       onInteractOutside,
     };
     return <div>{children}</div>;
   },
-  ModelSelectorDropdownInput: ({ value, onValueChange }: { value?: string; onValueChange?: (value: string) => void }) => (
-    <input aria-label="Search working directories" value={value} onChange={(event) => onValueChange?.(event.target.value)} />
+  ModelSelectorDropdownInput: ({ value, onValueChange, autoFocus }: { value?: string; onValueChange?: (value: string) => void; autoFocus?: boolean }) => (
+    <input aria-label="Search working directories" value={value} autoFocus={autoFocus} onChange={(event) => onValueChange?.(event.target.value)} />
   ),
   ModelSelectorDropdownList: ({ children }: { children: ReactNode }) => (
     <div>{children}</div>
@@ -225,12 +234,109 @@ describe("WorkingDirectorySelector repos of a folder (OS-2647)", () => {
     expect(screen.queryByRole("menuitemradio")).toBeNull();
   });
 
-  test("searching keeps the matching repo row", () => {
+  test("searching keeps the matching repo row and shows its folder, since the folder row may be filtered out", () => {
     const onChange = vi.fn();
     render(<WorkingDirectorySelector profiles={folderProfiles} profileId="profile_1" pathId="acme" onChange={onChange} />);
+    expect(screen.getAllByText("acme /", { exact: false, selector: ".sr-only" })).toHaveLength(2);
     fireEvent.change(screen.getByLabelText("Search working directories"), { target: { value: "old" } });
+    expect(screen.queryAllByText("acme /", { exact: false, selector: ".sr-only" })).toHaveLength(0);
     fireEvent.click(screen.getByRole("button", { name: /^acme \/\s*old-app$/ }));
     expect(onChange).toHaveBeenLastCalledWith("profile_1", "old-app");
+  });
+
+  test("a worktree of a repo reads folder / repo / worktree", () => {
+    const profiles = [{
+      ...folderProfiles[0],
+      paths: [...folderProfiles[0].paths, { id: "wt", path: "/code/acme/new-app-worktrees/feat-x", label: "feat/x", kind: "worktree" as const, parentPathId: "new-app" }],
+    }];
+    render(<WorkingDirectorySelector profiles={profiles} profileId="profile_1" pathId="wt" onChange={vi.fn()} />);
+    expect(screen.getByTitle("Default profile / acme / new-app / feat/x")).toBeDefined();
+  });
+
+  test("names the whole path in the trigger's accessible name, and shows the repo when only one segment fits", () => {
+    render(<WorkingDirectorySelector profiles={folderProfiles} profileId="profile_1" pathId="new-app" onChange={vi.fn()} />);
+    const trigger = screen.getByRole("button", { name: "Default profile / acme / new-app" });
+    // The narrow composer bar shows the repo instead of the profile name.
+    expect(trigger.querySelector("[data-narrow-label]")?.textContent).toBe("new-app");
+  });
+
+  test("opening the menu focuses search, so typing and arrows work at once", () => {
+    vi.stubGlobal("matchMedia", vi.fn().mockReturnValue({ matches: false, addEventListener: vi.fn(), removeEventListener: vi.fn() }));
+    try {
+      render(<WorkingDirectorySelector profiles={folderProfiles} profileId="profile_1" pathId="acme" onChange={vi.fn()} />);
+      expect(document.activeElement).toBe(screen.getByLabelText("Search working directories"));
+    } finally {
+      vi.unstubAllGlobals();
+    }
+  });
+
+  test("picking a row does not pop the profile card when focus returns to the trigger", () => {
+    vi.useFakeTimers();
+    try {
+      render(<WorkingDirectorySelector profiles={folderProfiles} profileId="profile_1" pathId="acme" onChange={vi.fn()} />);
+      const trigger = screen.getByTitle("Default profile / acme");
+      fireEvent.click(screen.getByRole("button", { name: /^acme \/\s*old-app$/ }));
+      act(() => {
+        fireEvent.focus(trigger);
+        vi.advanceTimersByTime(1000);
+      });
+      expect(screen.queryByText("CLI profile")).toBeNull();
+      // A later, deliberate focus still opens it.
+      act(() => {
+        fireEvent.blur(trigger);
+      });
+      act(() => {
+        fireEvent.focus(trigger);
+        vi.advanceTimersByTime(1000);
+      });
+      expect(screen.getByText("CLI profile")).toBeDefined();
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  test("keeps the menu on the side it opened on, so a search that shrinks the list doesn't flip it", () => {
+    render(<WorkingDirectorySelector profiles={folderProfiles} profileId="profile_1" pathId="acme" onChange={vi.fn()} />);
+    const trigger = screen.getByTitle("Default profile / acme");
+    // A composer near the bottom of the window: more room above.
+    trigger.getBoundingClientRect = () => ({ top: window.innerHeight - 40, bottom: window.innerHeight - 10 }) as DOMRect;
+    act(() => modelSelectorRoot.onOpenChange?.(true));
+    expect(modelSelectorContentHandlers.current?.side).toBe("top");
+    trigger.getBoundingClientRect = () => ({ top: 10, bottom: 40 }) as DOMRect;
+    act(() => modelSelectorRoot.onOpenChange?.(false));
+    act(() => modelSelectorRoot.onOpenChange?.(true));
+    expect(modelSelectorContentHandlers.current?.side).toBe("bottom");
+  });
+
+  test("a pointer resting on the trigger through a pick does not pop the card; moving away and back does", () => {
+    vi.useFakeTimers();
+    try {
+      render(<WorkingDirectorySelector profiles={folderProfiles} profileId="profile_1" pathId="acme" onChange={vi.fn()} />);
+      const trigger = screen.getByTitle("Default profile / acme");
+      fireEvent.click(screen.getByRole("button", { name: /^acme \/\s*old-app$/ }));
+      // The relabelled trigger re-lays out under a still pointer: Chromium fires leave, then enter.
+      act(() => {
+        fireEvent.pointerLeave(trigger, { pointerType: "mouse" });
+      });
+      act(() => {
+        fireEvent.pointerEnter(trigger, { pointerType: "mouse" });
+        fireEvent.focus(trigger);
+        vi.advanceTimersByTime(1000);
+      });
+      expect(screen.queryByText("CLI profile")).toBeNull();
+      act(() => {
+        fireEvent.pointerLeave(trigger, { pointerType: "mouse" });
+        fireEvent.pointerMove(document.body, { pointerType: "mouse" });
+        vi.advanceTimersByTime(1000);
+      });
+      act(() => {
+        fireEvent.pointerEnter(trigger, { pointerType: "mouse" });
+        vi.advanceTimersByTime(1000);
+      });
+      expect(screen.getByText("CLI profile")).toBeDefined();
+    } finally {
+      vi.useRealTimers();
+    }
   });
 });
 
