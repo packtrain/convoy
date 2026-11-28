@@ -21,6 +21,7 @@ interface CliProfilePath {
   id: string;
   path: string;
   label: string;
+  kind?: "worktree" | "repo";
 }
 
 interface CliProfile {
@@ -82,7 +83,9 @@ export const listCliProfilesCommand = addGlobalOptions(
         console.log(`  ${formatProfile(profile)}`);
         // Paths are the other half of a spawn target, so they belong in the row.
         for (const path of profile.paths) {
-          console.log(`    ${chalk.dim(path.id)} ${path.path}${path.label ? chalk.dim(` (${path.label})`) : ""}`);
+          // A repo or worktree entry names its kind, so a repo's pathId reads as one.
+          const note = [path.label, path.kind].filter(Boolean).join(", ");
+          console.log(`    ${chalk.dim(path.id)} ${path.path}${note ? chalk.dim(` (${note})`) : ""}`);
         }
       }
       console.log();

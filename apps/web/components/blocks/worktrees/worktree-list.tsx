@@ -1,16 +1,15 @@
 "use client";
 
 import { useState, type ReactNode } from "react";
-import { ChevronRight, GitBranch, Laptop, Loader2, Trash2 } from "lucide-react";
+import { ChevronRight, FolderGit2, GitBranch, Laptop, Loader2, Trash2 } from "lucide-react";
 import type { Id } from "@/convex/_generated/dataModel";
-import { isConfiguredPath, type CliProfilePathEntry } from "@/convex/lib/contracts/validators";
+import { folderRepos, isConfiguredPath, type CliProfilePathEntry } from "@/convex/lib/contracts/validators";
 import { Button } from "@/components/ui/button";
 import { truncateRepoPath } from "@/components/blocks/project/agent-list-item";
 import { AppLink, appRoute, href, parseWorktreeChangesTarget, useNavigation } from "@/lib/navigation";
 import { readExpandedProfileIds, writeExpandedProfileIds } from "@/lib/worktrees/storage";
 import { useWorktreeRemoval } from "@/lib/worktrees/hooks/use-worktree-removal";
 import { cn } from "@/lib/utils";
-import { RepoCount } from "@/components/blocks/cli/profiles/repo-count";
 import { RemoveWorktreeDialog } from "./worktree-remove-dialog";
 
 interface WorktreeListProps {
@@ -44,7 +43,8 @@ export function WorktreeList({ profileId, paths, organizationSlug, projectAlias,
   // The checkout whose changes view is open.
   const { location, push } = useNavigation();
   const target = parseWorktreeChangesTarget(location.search);
-  const selectedPathId = target?.profileId === String(profileId) ? target.pathId : null;
+  // A repo opens in its folder's switcher (`pathId=<folder>&repo=<repo>`), so the repo row is the open one.
+  const selectedPathId = target?.profileId === String(profileId) ? (target.repo ?? target.pathId) : null;
   // Lives here, not in the rows, so collapsing mid-op still reports the outcome.
   const [confirmWorktree, setConfirmWorktree] = useState<CliProfilePathEntry | null>(null);
   const removal = useWorktreeRemoval(profileId, {
@@ -111,6 +111,10 @@ export function WorktreeList({ profileId, paths, organizationSlug, projectAlias,
   );
 }
 
+// Content sits under the CLI name: toggle margin (8/12) + 24px toggle + the row's 6px lead-in;
+// each nesting level indents one icon column further.
+const INDENT = { compact: ["pl-[38px]", "pl-[62px]", "pl-[86px]"], regular: ["pl-[42px]", "pl-[66px]", "pl-[90px]"] };
+
 function CheckoutRows({
   profileId,
   paths,
@@ -128,15 +132,20 @@ function CheckoutRows({
   // Alphabetical (OS-2038): checkouts by label, worktrees by branch.
   const byName = (a: CliProfilePathEntry, b: CliProfilePathEntry) =>
     (a.kind === "worktree" ? (a.branch ?? a.label) : a.label).localeCompare(b.kind === "worktree" ? (b.branch ?? b.label) : b.label);
-  // Detected repos show as a count on their folder's row (cli-multi-repo-projects.md#web).
+  // A folder's repos nest under it in stored order, each with its worktrees (cli-multi-repo-projects.md#web).
   const checkouts = paths.filter(isConfiguredPath).sort(byName);
   const worktreesOf = (parentId: string) =>
     paths.filter((entry) => entry.kind === "worktree" && entry.parentPathId === parentId).sort(byName);
+  const parentIds = new Set(paths.filter((entry) => entry.kind !== "worktree").map((entry) => entry.id));
   const orphans = paths
-    .filter((entry) => entry.kind === "worktree" && !checkouts.some((checkout) => checkout.id === entry.parentPathId))
+    .filter((entry) => entry.kind === "worktree" && !parentIds.has(entry.parentPathId ?? ""))
     .sort(byName);
+  const withWorktrees = (entry: CliProfilePathEntry, depth: number) => [
+    renderRow(entry, depth),
+    ...worktreesOf(entry.id).map((wt) => renderRow(wt, depth + 1)),
+  ];
 
-  const renderRow = (entry: CliProfilePathEntry, nested: boolean) => {
+  function renderRow(entry: CliProfilePathEntry, depth: number) {
     const selected = entry.id === selectedPathId;
     const removing = entry.id === removingPathId;
     const removable = entry.kind === "worktree";
@@ -148,7 +157,7 @@ function CheckoutRows({
           href={href(
             appRoute.projectThreadsWithPreselection(organizationSlug, projectAlias, {
               profileId: String(profileId),
-              pathId: entry.id,
+              ...(entry.kind === "repo" && entry.parentPathId ? { pathId: entry.parentPathId, repo: entry.id } : { pathId: entry.id }),
               view: "changes",
             })
           )}
@@ -156,9 +165,7 @@ function CheckoutRows({
           className={cn(
             "flex items-center gap-2 py-2 pr-3 text-sm font-medium leading-5 transition-colors group-hover/checkout:bg-accent",
             !compactLayout && "rounded-lg",
-            // Content sits under the CLI name: toggle margin (8/12) + 24px toggle +
-            // the row's 6px lead-in; worktrees indent one icon column further.
-            compactLayout ? (nested ? "pl-[62px]" : "pl-[38px]") : nested ? "pl-[66px]" : "pl-[42px]",
+            INDENT[compactLayout ? "compact" : "regular"][Math.min(depth, 2)],
             // Room for the remove button while it shows.
             removable && (selected || removing ? "pr-9" : "group-hover/checkout:pr-9 group-focus-within/checkout:pr-9"),
             selected && "bg-primary/10 group-hover/checkout:bg-primary/10"
@@ -167,12 +174,15 @@ function CheckoutRows({
         >
           {entry.kind === "worktree" ? (
             <GitBranch className="size-4 shrink-0 text-muted-foreground" />
+          ) : entry.kind === "repo" ? (
+            <FolderGit2 className="size-4 shrink-0 text-muted-foreground" />
           ) : (
             <Laptop className="size-4 shrink-0 text-muted-foreground" />
           )}
           <span className="truncate">{name}</span>
-          <span className="truncate text-xs font-normal text-muted-foreground/70">{truncateRepoPath(entry.path)}</span>
-          <RepoCount paths={paths} parentId={entry.id} className="ml-auto text-xs font-normal" />
+          {entry.kind !== "repo" && (
+            <span className="truncate text-xs font-normal text-muted-foreground/70">{truncateRepoPath(entry.path)}</span>
+          )}
         </AppLink>
         {removable && (
           <Button
@@ -194,12 +204,15 @@ function CheckoutRows({
         )}
       </div>
     );
-  };
+  }
 
   return (
     <div className="grid grid-cols-[minmax(0,1fr)] gap-0.5 pb-1">
-      {checkouts.map((checkout) => [renderRow(checkout, false), ...worktreesOf(checkout.id).map((wt) => renderRow(wt, true))])}
-      {orphans.map((entry) => renderRow(entry, false))}
+      {checkouts.map((checkout) => [
+        ...withWorktrees(checkout, 0),
+        ...folderRepos(paths, checkout.id).flatMap((repo) => withWorktrees(repo, 1)),
+      ])}
+      {orphans.map((entry) => renderRow(entry, 0))}
     </div>
   );
 }

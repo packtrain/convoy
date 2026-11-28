@@ -41,4 +41,20 @@ describe("useChangesRepo", () => {
     rerender({ envelopes: [run("m1", "old-app", "r-old")], ready: true });
     expect(result.current.repo?.id).toBe("r-old");
   });
+
+  test("a repo thread defaults to its own checkout, listed first, whatever the runs changed (OS-2647)", () => {
+    localStorage.clear();
+    const { result } = renderHook(() => useChangesRepo("thread_1", repos, [run("m1", "old-app", "r-old")], true, { ownFirst: true }));
+    expect(result.current.repo?.id).toBe("r-new");
+  });
+
+  test("an older CLI's run without repos belongs to a repo thread's own checkout only", () => {
+    localStorage.clear();
+    const legacy = { _id: "m1", role: "assistant", diffSummary: { preRef: "pre", postRef: "post", files: [{ path: "a.ts" }] } };
+    const { result } = renderHook(() => useChangesRepo("thread_1", repos, [legacy], true, { ownFirst: true }));
+    expect(result.current.envelopes[0].diffSummary?.postRef).toBe("post");
+
+    act(() => result.current.select("r-old"));
+    expect(result.current.envelopes[0].diffSummary).toBeUndefined();
+  });
 });

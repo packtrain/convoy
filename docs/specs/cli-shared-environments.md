@@ -464,7 +464,9 @@ With a parent mounted they are inside the mount and visible on the host. With
 only the repo mounted they would fall outside every mount and volume, and a
 rebuild would delete them. A mount root that isn't a repo is accepted as a
 [multi-repo folder](cli-multi-repo-projects.md): its repos' worktrees go to
-`<mount>/<repo>-worktrees/`, inside the mount.
+`<mount>/<repo>-worktrees/`, inside the mount. A thread in one of its repos can
+write the whole mounted folder, isolated or not
+([folder access](cli-multi-repo-projects.md#folder-access)).
 
 ### Git
 

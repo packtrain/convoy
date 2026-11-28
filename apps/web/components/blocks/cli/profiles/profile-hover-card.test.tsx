@@ -65,4 +65,26 @@ describe("ProfileHoverCard", () => {
     );
     expect(rootProps.current?.open).toBe(false);
   });
+
+  test("lists a folder's repos under it (OS-2647)", () => {
+    render(
+      <ProfileHoverCard
+        profile={{
+          name: "Local Dev",
+          isOnline: true,
+          runtimes: [],
+          paths: [
+            { id: "acme", label: "acme", path: "/code/acme" },
+            { id: "r1", label: "new-app", path: "/code/acme/new-app", kind: "repo", parentPathId: "acme" },
+            { id: "r2", label: "packages/api", path: "/code/acme/packages/api", kind: "repo", parentPathId: "acme" },
+          ],
+        }}
+      >
+        <span>Local Dev</span>
+      </ProfileHoverCard>
+    );
+
+    expect(screen.getByRole("list", { name: "Repos in acme" }).textContent).toBe("new-apppackages/api");
+    expect(screen.queryByText("2 repos")).toBeNull();
+  });
 });

@@ -11,7 +11,7 @@ import { getAuthenticatedAccess, getOptionalAuthenticatedAccess } from "../../li
 import { authorizeProjectAccess, requireAuthorizedProject } from "../../lib/access/permissions";
 import { composerContentValidator } from "../../lib/contracts/composerContent";
 import { parseAttachedPullRequest } from "../../lib/contracts/github";
-import { cliThreadWorktreeSpecValidator } from "../../lib/contracts/validators";
+import { cliThreadWorktreeSpecValidator, isWorktreeParent } from "../../lib/contracts/validators";
 import { ensure } from "../../lib/shared/ensure";
 import { errors as cliErrors } from "../../cli/errors";
 import { getCliProfileById } from "../../cli/lib/cliProfilesRepo";
@@ -107,10 +107,10 @@ export const start = mutation({
     ensure(profile.userId).eq(user._id, cliErrors.THREAD_PROFILE_NOT_OWNED);
     ensure(profile.projectId).eq(workflow.projectId, errors.WORKFLOW_RUN_PROFILE_DIFFERENT_PROJECT);
     const pathEntry = await ensure(profile.paths.find((p) => p.id === args.pathId)).notNull(cliErrors.PATH_NOT_FOUND_IN_PROFILE);
-    ensure(pathEntry.kind).notEq("repo", cliErrors.PATH_IS_DETECTED_REPO);
     if (args.worktree) {
       ensure(args.worktree.parentPathId).eq(args.pathId, cliErrors.WORKTREE_PARENT_PATH_MISMATCH);
       ensure(pathEntry.kind).notEq("worktree", cliErrors.WORKTREE_PARENT_NOT_REPO_PATH);
+      ensure(isWorktreeParent(profile.paths, pathEntry)).isTrue(cliErrors.WORKTREE_PARENT_IS_FOLDER);
       ensure(isValidWorktreeBranchName(args.worktree.branch)).isTrue(cliErrors.WORKTREE_BRANCH_INVALID);
       if (args.worktree.baseRef !== undefined) {
         ensure(isValidWorktreeBranchName(args.worktree.baseRef)).isTrue(cliErrors.WORKTREE_BRANCH_INVALID);

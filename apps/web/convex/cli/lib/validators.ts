@@ -11,7 +11,11 @@ import {
   cliThreadKindValidator,
   cliThreadAggregateStatusValidator,
   cliCatalogModelValidator,
+  configuredPathOf,
+  folderRepos,
   isConfiguredPath,
+  isWorktreeParent,
+  relativePathInside,
 } from "../../lib/contracts/validators";
 import { resolvePathInfo } from "./paths";
 import { attachedPullRequestValidator } from "../../lib/contracts/github";
@@ -45,6 +49,10 @@ export const cliExecutionWorkspaceValidator = v.object({
   worktree: v.optional(cliThreadWorktreeValidator),
   previousPath: v.optional(v.string()),
   movedByAgent: v.optional(v.literal(true)),
+  /** The thread's repo left its folder, so the run moves to the folder. */
+  repoRemoved: v.optional(v.literal(true)),
+  /** The multi-repo folder a repo or repo-worktree thread can reach (cli-multi-repo-projects.md#folder-access). */
+  projectFolder: v.optional(v.string()),
 });
 export type CliExecutionWorkspace = Infer<typeof cliExecutionWorkspaceValidator>;
 
@@ -57,7 +65,17 @@ export function toExecutionWorkspace(
   const worktree = thread.git?.worktree ?? (entry?.kind === "worktree" && entry.parentPathId && entry.branch
     ? { parentPathId: entry.parentPathId, branch: entry.branch, status: "created" as const }
     : undefined);
-  const parent = profile.paths.find((path) => path.id === worktree?.parentPathId && isConfiguredPath(path));
+  if (!entry && !worktree) {
+    // Spec: docs/specs/cli-multi-repo-projects.md#vanished-repo
+    // The nearest configured path holding it: the longest.
+    const folder = profile.paths
+      .filter((path) => isConfiguredPath(path) && relativePathInside(path.path, thread.path) !== undefined)
+      .reduce<(typeof profile.paths)[number] | undefined>((best, path) => (best && best.path.length >= path.path.length ? best : path), undefined);
+    if (folder) return { pathId: folder.id, path: folder.path, previousPath: thread.path, repoRemoved: true };
+  }
+  const parent = profile.paths.find((path) => path.id === worktree?.parentPathId && isWorktreeParent(profile.paths, path));
+  const folder = configuredPathOf(profile.paths, thread.pathId);
+  const projectFolder = folder && folder !== entry && folderRepos(profile.paths, folder.id).length > 0 ? folder.path : undefined;
   return {
     pathId: thread.pathId,
     path: entry?.path ?? thread.path,
@@ -68,6 +86,7 @@ export function toExecutionWorkspace(
     } : undefined,
     previousPath: thread.git?.previousWorkingDirectory,
     movedByAgent: thread.git?.movedByAgent,
+    ...(projectFolder ? { projectFolder } : {}),
   };
 }
 

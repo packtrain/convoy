@@ -1,4 +1,4 @@
-import type { CliProfilePathEntry } from "@/convex/lib/contracts/validators";
+import { isWorktreeParent, type CliProfilePathEntry } from "@/convex/lib/contracts/validators";
 import { isRecord } from "@/lib/type-guards";
 import {
   deriveTaskWorktreeBranchName,
@@ -129,6 +129,11 @@ export function resolveThreadTarget({
 
   if (selection.type === "worktree") {
     return isBaseRefSelectionValid(selection, pathId, paths) ? { pathId: selection.pathId } : { pathId };
+  }
+
+  const parent = paths.find((path) => path.id === pathId);
+  if (parent && !isWorktreeParent(paths, parent)) {
+    return { pathId };
   }
 
   const override = selection.branch?.trim();

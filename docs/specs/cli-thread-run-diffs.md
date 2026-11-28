@@ -333,7 +333,10 @@ When the working directory holds repos and isn't one itself
 ([Multi-repo projects](cli-multi-repo-projects.md#discovery)), each repo is
 checkpointed on its own, with the same ref names. This holds even when the
 folder sits inside another checkout, whose tree wouldn't see the child repos'
-files; a folder with no child repos falls back to the single-repo capture. `captureRunBaseline` and
+files; a folder with no child repos falls back to the single-repo capture. A
+thread in one repo of the folder, or in its worktree, checkpoints its own
+checkout plus the folder's other repos, with paths relative to the folder
+([picking a repo](cli-multi-repo-projects.md#checkpoints)). `captureRunBaseline` and
 `captureRunChanges` in `checkpoint.ts` do it; the cost controls are t3code's
 (`CheckpointCaptureService.ts`):
 

@@ -138,6 +138,17 @@ describe("worktree change notices (OS-2609)", () => {
     expect(trigger.textContent).toContain("worktree moved");
   });
 
+  test("shows a removed repo's thread moving to its folder (OS-2647)", () => {
+    render(<RuntimeNoticePart part={worktreeNotice("workspace-recovered", {
+      change: "folder", previousPath: "/code/acme/new-app", path: "/code/acme",
+    })} />);
+
+    expect(screen.getByRole("button").textContent).toContain("repo removed");
+    expect(screen.getByText("new-app").className).toContain("line-through");
+    fireEvent.click(screen.getByRole("button"));
+    expect(screen.getByText(/no longer in the project folder/)).toBeDefined();
+  });
+
   test("shows an agent's move without striking the old checkout, which is still there (OS-2622)", () => {
     render(<RuntimeNoticePart part={worktreeNotice("workspace-moved", {
       change: "agent", previousPath: "/repo", path: "/repo-worktrees/feat-captions", branch: "feat/captions",

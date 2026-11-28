@@ -160,6 +160,42 @@ describe("RunChangesCard in a multi-repo folder", () => {
     expect(screen.queryByRole("button", { name: /undo/i })).toBeNull();
   });
 
+  test("on a repo thread, mentions a file from the thread's own checkout (OS-2647)", () => {
+    const onMentionFile = vi.fn();
+    render(<RunChangesCard diffSummary={multiRepo} checkoutLabel="new-app" onMentionFile={onMentionFile} />);
+
+    fireEvent.click(screen.getByRole("button", { name: "Mention new-app/src/a.ts in reply" }));
+    fireEvent.click(screen.getByRole("button", { name: "Mention old-app/src/b.ts in reply" }));
+    expect(onMentionFile.mock.calls).toEqual([["src/a.ts"], ["../old-app/src/b.ts"]]);
+  });
+
+  test("keeps an older CLI's single-repo paths as they are on a repo thread", () => {
+    const onMentionFile = vi.fn();
+    const legacy = { ...multiRepo, files: [{ ...multiRepo.files[0], repo: undefined }], fileCount: 1, additions: 1, repos: undefined };
+    render(<RunChangesCard diffSummary={legacy} checkoutLabel="new-app" onMentionFile={onMentionFile} />);
+
+    fireEvent.click(screen.getByRole("button", { name: "Mention src/a.ts in reply" }));
+    expect(onMentionFile).toHaveBeenCalledWith("src/a.ts");
+  });
+
+  test("names a sibling-only run's file from a worktree thread's checkout", () => {
+    const onMentionFile = vi.fn();
+    const siblingOnly = { ...multiRepo, files: [multiRepo.files[1]], fileCount: 1, additions: 2, repos: [multiRepo.repos[1]] };
+    render(<RunChangesCard diffSummary={siblingOnly} checkoutLabel="new-app-worktrees/x" onMentionFile={onMentionFile} />);
+
+    fireEvent.click(screen.getByRole("button", { name: "Mention old-app/src/b.ts in reply" }));
+    expect(onMentionFile).toHaveBeenCalledWith("../../old-app/src/b.ts");
+  });
+
+  test("offers Undo on a repo thread when the run changed only its own checkout", () => {
+    const ownOnly = { ...multiRepo, files: [multiRepo.files[0]], fileCount: 1, additions: 1, repos: [multiRepo.repos[0]] };
+    const { rerender } = render(<RunChangesCard diffSummary={ownOnly} checkoutLabel="new-app" onUndo={vi.fn()} />);
+    expect(screen.getByRole("button", { name: /undo/i })).toBeDefined();
+
+    rerender(<RunChangesCard diffSummary={multiRepo} checkoutLabel="new-app" onUndo={vi.fn()} />);
+    expect(screen.queryByRole("button", { name: /undo/i })).toBeNull();
+  });
+
   test("mentions a file by its path in the folder, and offers ops only for a known repo entry", () => {
     const onMentionFile = vi.fn();
     const onRevertFile = vi.fn();

@@ -370,6 +370,36 @@ describe("multi-repo checkpoints (real git)", () => {
     expect(baseline?.kind === "folder" && baseline.repos.map((repo) => repo.relativePath)).toEqual(["new-app", "untouched"]);
   });
 
+  it("checkpoints a repo thread's whole folder, grouped by repo", async () => {
+    const baseline = await captureRunBaseline(join(folder, "new-app"), "thread1", "run1", { folder });
+    expect(baseline?.kind === "folder" && baseline.repos.map((repo) => repo.relativePath)).toEqual(["new-app", "old-app", "untouched"]);
+    await writeFile(join(folder, "new-app", "readme.md"), "edited\n");
+    await writeFile(join(folder, "old-app", "readme.md"), "edited\n");
+    const summary = await captureRunChanges(join(folder, "new-app"), baseline!, "thread1", "run1");
+    expect(summary?.files.map((file) => [file.repo, file.path])).toEqual([["new-app", "readme.md"], ["old-app", "readme.md"]]);
+  });
+
+  it("never drops a repo thread's own checkout for the folder's short baseline budget", async () => {
+    await writeFile(join(folder, "new-app", "dirty.txt"), "dirty\n");
+    await writeFile(join(folder, "new-app", ".git", "hooks", "reference-transaction"), "#!/bin/sh\nsleep 0.5\n", { mode: 0o755 });
+    for (const runId of ["run1", "run2", "run3"]) {
+      const baseline = await captureRunBaseline(join(folder, "new-app"), "thread1", runId, { folder, baselineTimeoutMs: 200 });
+      expect(baseline?.kind === "folder" && baseline.repos.map((repo) => repo.relativePath)).toContain("new-app");
+    }
+  });
+
+  it("checkpoints a worktree thread's worktree and the folder's other repos, not its repo's main checkout", async () => {
+    await git("new-app", ["worktree", "add", "-b", "x", join(folder, "new-app-worktrees", "x")]);
+    const cwd = join(folder, "new-app-worktrees", "x");
+    const baseline = await captureRunBaseline(cwd, "thread1", "run1", { folder });
+    // The main checkout shares the worktree's refs, so one run can't checkpoint both.
+    expect(baseline?.kind === "folder" && baseline.repos.map((repo) => repo.relativePath)).toEqual(["new-app-worktrees/x", "old-app", "untouched"]);
+    await writeFile(join(cwd, "readme.md"), "edited\n");
+    await writeFile(join(folder, "old-app", "readme.md"), "edited\n");
+    const summary = await captureRunChanges(cwd, baseline!, "thread1", "run1");
+    expect(summary?.repos).toEqual([{ path: "new-app-worktrees/x" }, { path: "old-app" }]);
+  });
+
   it("uses the single-repo capture when the folder is a repo, and nothing for a folder without repos", async () => {
     expect(await captureRunBaseline(join(folder, "old-app"), "thread1", "run1")).toEqual({ kind: "repo" });
     const empty = await mkdtemp(join(tmpdir(), "convoy-no-repos-"));

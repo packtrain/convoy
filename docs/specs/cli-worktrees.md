@@ -23,7 +23,10 @@ A worktree is a regular `cliProfiles.paths[]` entry with metadata:
 
 A repo detected inside a multi-repo folder is the same shape with
 `kind: "repo"` and the folder as `parentPathId`
-([multi-repo projects](cli-multi-repo-projects.md#server)).
+([multi-repo projects](cli-multi-repo-projects.md#server)). A repo entry is a
+worktree parent like a configured path, so its worktrees sit at
+`<folder>/<repo>-worktrees/<name>`. A configured folder that holds repos is not
+one ([picking a repo](cli-multi-repo-projects.md#picking-a-repo)).
 
 The existing `pathId → workingDirectory → spawn cwd` pipeline is unchanged.
 Worktree entries are managed by the CLI's worktree sync, never by the user's

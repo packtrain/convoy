@@ -2,7 +2,7 @@ import type { Doc, Id } from "../../_generated/dataModel";
 import type { MutationCtx, QueryCtx } from "../../_generated/server";
 import { sameStoredValue } from "../../lib/shared/patch";
 import { getBasename } from "./paths";
-import { isConfiguredPath, isInsideRelativePath } from "../../lib/contracts/validators";
+import { isConfiguredPath, isInsideRelativePath, isWorktreeParent } from "../../lib/contracts/validators";
 
 type Ctx = QueryCtx | MutationCtx;
 
@@ -216,15 +216,18 @@ export function mergeProfilePaths(existingPaths: ProfilePathEntry[], incomingPat
 
   const survivingParentIds = new Set(mergedRegular.map((entry) => entry.id));
   const regularPathStrings = new Set(mergedRegular.map((entry) => entry.path));
-  const keptChildren = existingPaths.filter(
-    (entry) =>
-      !isConfiguredPath(entry) &&
-      entry.parentPathId !== undefined &&
-      survivingParentIds.has(entry.parentPathId) &&
-      // A path promoted to a regular configured entry wins over its old
-      // worktree or repo entry.
-      !regularPathStrings.has(entry.path)
-  );
+  const survives = (entry: ProfilePathEntry) =>
+    !isConfiguredPath(entry) &&
+    entry.parentPathId !== undefined &&
+    survivingParentIds.has(entry.parentPathId) &&
+    // A path promoted to a regular configured entry wins over its old
+    // worktree or repo entry.
+    !regularPathStrings.has(entry.path);
+  // Repos first: a repo's worktrees survive with it.
+  for (const repo of existingPaths.filter((entry) => entry.kind === "repo" && survives(entry))) {
+    survivingParentIds.add(repo.id);
+  }
+  const keptChildren = existingPaths.filter(survives);
 
   return [...mergedRegular, ...keptChildren];
 }
@@ -271,7 +274,10 @@ export function mergeRepoEntries(
   const configured = existingPaths.filter(isConfiguredPath);
   const reposOf = (folder: ProfilePathEntry) =>
     folder.id === parent.id ? repos : existingPaths.filter((entry) => entry.kind === "repo" && entry.parentPathId === folder.id);
-  return [...configured, ...configured.flatMap(reposOf), ...existingPaths.filter(isWorktreeEntry)];
+  const merged = [...configured, ...configured.flatMap(reposOf)];
+  // A removed repo takes its worktree entries with it.
+  const parentIds = new Set(merged.map((entry) => entry.id));
+  return [...merged, ...existingPaths.filter((entry) => isWorktreeEntry(entry) && entry.parentPathId !== undefined && parentIds.has(entry.parentPathId))];
 }
 
 /**
@@ -341,9 +347,9 @@ export function mergeWorktreeEntries(
   existingPaths: ProfilePathEntry[],
   input: { scannedParentPaths: string[]; worktrees: IncomingWorktree[] }
 ): ProfilePathEntry[] {
-  // Repo entries pass through; only configured paths are worktree parents in slice 0.
+  // Configured paths and detected repos are worktree parents (cli-multi-repo-projects.md#picking-a-repo).
   const regularPaths = existingPaths.filter((entry) => !isWorktreeEntry(entry));
-  const parents = existingPaths.filter(isConfiguredPath);
+  const parents = regularPaths.filter((entry) => isWorktreeParent(existingPaths, entry));
   const parentByPath = new Map(parents.map((entry) => [entry.path, entry]));
   const regularIds = new Set(parents.map((entry) => entry.id));
   const regularPathStrings = new Set(regularPaths.map((entry) => entry.path));
@@ -401,7 +407,7 @@ export function upsertWorktreePathEntry(
     return { paths: existingPaths, entryId: existing.id };
   }
 
-  const parent = existingPaths.find((entry) => entry.id === input.parentPathId && isConfiguredPath(entry));
+  const parent = existingPaths.find((entry) => entry.id === input.parentPathId && isWorktreeParent(existingPaths, entry));
   const entry: ProfilePathEntry = {
     id: crypto.randomUUID(),
     path: input.path,

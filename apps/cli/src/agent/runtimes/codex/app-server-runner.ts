@@ -34,6 +34,7 @@ import { detectCodex } from "./detect.js";
 import { satisfiesVersionRange } from "../../sdk/versioning/provider-version.js";
 import {
   buildCodexSubprocessEnv,
+  codexAdditionalRootsConfigArgs,
   codexWritableRootsConfigArgs,
   killCodexProcess,
   resolveCodexExecutablePath,
@@ -363,13 +364,13 @@ export function createCodexAppServerRunner(factoryOptions?: {
       const executable = await resolveCodexExecutablePath();
       debugLog("spawn", `${executable.command} app-server`);
 
-      // Writable roots are profile-scoped (isolation, OS-1242), so a
-      // process-level `-c` override is correct even with parallel threads —
-      // unlike per-thread personas, which must go through the RPC.
+      // Writable roots are profile-scoped (isolation, OS-1242), or the run's
+      // project folder; the process serves this one run, so a `-c` override is
+      // correct — unlike per-thread personas, which must go through the RPC.
       const child = spawn(
         executable.command,
         [
-          ...(sandbox ? codexWritableRootsConfigArgs(sandbox) : []),
+          ...(sandbox ? codexWritableRootsConfigArgs(sandbox) : codexAdditionalRootsConfigArgs(options.additionalDirectories)),
           ...managedAuthArgs(codexAuth),
           ...codexProviderArgs(codexProvider),
           "app-server",

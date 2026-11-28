@@ -11,7 +11,7 @@ import { ToolSurface } from "./components/tool-surface";
 
 /** Fields the CLI sends on worktree notices (docs/specs/cli-worktrees.md#worktree-change-notices). */
 const changeSchema = z.object({
-  change: z.enum(["created", "moved", "parent", "agent"]),
+  change: z.enum(["created", "moved", "parent", "folder", "agent"]),
   previousPath: z.string().min(1),
   path: z.string().min(1),
   branch: z.string().min(1).optional(),
@@ -72,6 +72,13 @@ const COPY: Record<WorktreeChange["change"], { icon: LucideIcon; label: string; 
     oldGone: true,
     explain: () =>
       "The worktree no longer exists, so the thread fell back to its parent checkout, on whatever branch is checked out there. Nothing was copied from the old worktree.",
+  },
+  folder: {
+    icon: FolderInput,
+    label: "repo removed",
+    oldGone: true,
+    explain: () =>
+      "The repo is no longer in the project folder, so the thread moved to the folder itself. Nothing was copied from the old repo.",
   },
   agent: {
     icon: Bot,

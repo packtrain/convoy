@@ -72,6 +72,8 @@ export interface AssistantCliMessageProps {
   onRevertRun?: (diffSummary: CliRunDiffSummaryPreview) => void;
   /** Inserts an `@path` mention into the composer (OS-1159). */
   onMentionFile?: (path: string) => void;
+  /** A repo thread's own checkout relative to its folder, for run-card mentions (OS-2647). */
+  checkoutLabel?: string;
   /** Asks to revert one file to its pre-run state (OS-1156). */
   onRevertFile?: (file: CliRunDiffFile, diffSummary: CliRunDiffSummaryPreview) => void;
   renderState: ComposerMessageState | undefined;
@@ -188,6 +190,7 @@ export const AssistantCliMessage = memo(function AssistantCliMessage({
   onOpenDiffFile,
   onRevertRun,
   onMentionFile,
+  checkoutLabel,
   onRevertFile,
   renderState: renderStateProp,
   onSubmitAskUserQuestion,
@@ -438,6 +441,7 @@ export const AssistantCliMessage = memo(function AssistantCliMessage({
           onSelectFile={onOpenDiffFile ? (file) => onOpenDiffFile(file, diffSummary) : undefined}
           onUndo={onRevertRun ? () => onRevertRun(diffSummary) : undefined}
           onMentionFile={onMentionFile}
+          checkoutLabel={checkoutLabel}
           onRevertFile={onRevertFile ? (file) => onRevertFile(file, diffSummary) : undefined}
         />
       )}

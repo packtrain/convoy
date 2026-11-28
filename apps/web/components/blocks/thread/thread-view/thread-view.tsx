@@ -33,6 +33,7 @@ import {
 import type { UseCliMessagesResult } from "@/lib/threads/hooks/use-cli-messages";
 import type { useCliThread } from "@/lib/threads/hooks/use-cli-thread";
 import type { ThreadWorkspaceTaskTarget } from "@/lib/threads/hooks/use-open-thread-workspace-task";
+import { threadChangesRepos } from "@/lib/threads/run-diff-repos";
 import { useThreadMessageAttachmentUpload } from "@/lib/threads/hooks/use-thread-message-attachment-upload";
 import { buildHandleThreadComposerAttachmentsChange } from "@/lib/threads/message-attachments";
 import { deriveUserMessageResponseMap, findLatestRowMessage, findLatestRowUserMessage, forkDividerAnchor } from "@/lib/threads/message-rows";
@@ -686,6 +687,11 @@ export function ThreadView({
   const chatPathId = chat.pathId;
   const chatPathLabel = chat.pathLabel;
   const chatPathString = chat.pathString;
+  // A repo thread's own checkout, relative to its folder: run-card mentions name files from there.
+  const checkoutLabel = useMemo(() => {
+    const [own] = threadChangesRepos(activeProfile?.paths ?? [], chatPathId);
+    return own?.id === chatPathId ? own.label : undefined;
+  }, [activeProfile?.paths, chatPathId]);
   const chatWorkspaceKind = chat.worktree || activeProfile?.paths.some((path) => path.id === chatPathId && path.kind === "worktree")
     ? "worktree" : "local";
   const lockedProfiles = useMemo<WorkingDirectorySelectorProfile[]>(() => {
@@ -950,6 +956,7 @@ export function ThreadView({
     <>
       <ThreadMessageList
         threadId={chat._id}
+        checkoutLabel={checkoutLabel}
         taskId={chat.associatedTask?._id}
         projectId={chat.projectId}
         editComposerProps={conversationComposerProps ?? undefined}

@@ -62,10 +62,10 @@ describe("resolveAgentContextPreselection", () => {
   });
 });
 
-describe("detected repos (OS-2521)", () => {
-  test("a repo entry is not a preselectable working directory", () => {
+describe("detected repos (OS-2647)", () => {
+  test("a repo entry is a preselectable working directory", () => {
     expect(
       resolveAgentContextPreselection([{ _id: "p", paths: [{ id: "top" }, { id: "repo", kind: "repo" }] }], { profileId: "p", pathId: "repo" })
-    ).toBeNull();
+    ).toEqual({ profileId: "p", pathId: "repo" });
   });
 });

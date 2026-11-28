@@ -83,7 +83,7 @@ describe("WorktreeList", () => {
     expect(links[1].getAttribute("href")).toContain("profileId=profile_1&pathId=wt&view=changes");
   });
 
-  test("a multi-repo folder shows its repo count, not a row per repo", () => {
+  test("a multi-repo folder lists its repos under it, each repo its worktrees (OS-2647)", () => {
     window.localStorage.setItem("convoy.worktree-list-expanded-profiles", JSON.stringify(["profile_1"]));
     render(
       <WorktreeList
@@ -92,6 +92,7 @@ describe("WorktreeList", () => {
           { id: "acme", path: "/code/acme", label: "acme" },
           { id: "r1", path: "/code/acme/new-app", label: "new-app", kind: "repo", parentPathId: "acme" },
           { id: "r2", path: "/code/acme/packages/api", label: "packages/api", kind: "repo", parentPathId: "acme" },
+          { id: "w1", path: "/code/acme/new-app-worktrees/x", label: "x", kind: "worktree", parentPathId: "r1", branch: "feat/x" },
         ]}
         organizationSlug="org"
         projectAlias="ABC"
@@ -103,8 +104,36 @@ describe("WorktreeList", () => {
     );
 
     const links = screen.getAllByRole("link").filter((link) => link.getAttribute("href")?.includes("view=changes"));
-    expect(links.map((link) => link.getAttribute("title"))).toEqual(["/code/acme"]);
-    expect(screen.getByText("2 repos").getAttribute("title")).toBe("new-app\npackages/api");
+    expect(links.map((link) => link.getAttribute("title"))).toEqual([
+      "/code/acme", "/code/acme/new-app", "/code/acme/new-app-worktrees/x", "/code/acme/packages/api",
+    ]);
+    // A repo opens in its folder's switcher: one URL per view.
+    expect(links[1].getAttribute("href")).toContain("pathId=acme&repo=r1&view=changes");
+    expect(links[2].getAttribute("href")).toContain("pathId=w1&view=changes");
+    expect(screen.queryByText("2 repos")).toBeNull();
+  });
+
+  test("marks the repo row open in its folder's switcher, not the folder row", () => {
+    window.localStorage.setItem("convoy.worktree-list-expanded-profiles", JSON.stringify(["profile_1"]));
+    navigationState.search = "?view=changes&profileId=profile_1&pathId=acme&repo=r1";
+    render(
+      <WorktreeList
+        profileId={"profile_1" as Id<"cliProfiles">}
+        paths={[
+          { id: "acme", path: "/code/acme", label: "acme" },
+          { id: "r1", path: "/code/acme/new-app", label: "new-app", kind: "repo", parentPathId: "acme" },
+        ]}
+        organizationSlug="org"
+        projectAlias="ABC"
+        compactLayout={false}
+        avatar={<span>avatar</span>}
+      >
+        {() => <span>row</span>}
+      </WorktreeList>
+    );
+    const current = screen.getAllByRole("link").filter((link) => link.getAttribute("aria-current") === "page");
+    expect(current.map((link) => link.getAttribute("title"))).toEqual(["/code/acme/new-app"]);
+    navigationState.search = "";
   });
 
   test("the row toggles the checkouts like the chevron", () => {

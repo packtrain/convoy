@@ -413,14 +413,14 @@ describe("cliProfiles", () => {
         profileId: s.profile._id, sessionId: s.session._id, apiKey: s.apiKey.key,
         scannedParentPaths: ["/code/acme", "/code/acme/app"],
         worktrees: [
+          // A folder that holds repos is no worktree parent; its repo is.
           { parentPath: "/code/acme", path: "/code/acme-worktrees/x", branch: "x" },
-          // A repo entry is not a worktree parent in this slice.
           { parentPath: "/code/acme/app", path: "/code/acme/app-worktrees/y", branch: "y" },
         ],
       });
       const before = await s.paths();
       expect(before.map((p) => [p.path, p.kind])).toEqual([
-        ["/code/acme", undefined], ["/code/other", undefined], ["/code/acme/app", "repo"], ["/code/acme-worktrees/x", "worktree"],
+        ["/code/acme", undefined], ["/code/other", undefined], ["/code/acme/app", "repo"], ["/code/acme/app-worktrees/y", "worktree"],
       ]);
       await s.sync("/code/acme", [{ path: "/code/acme/app" }]);
       expect(await s.paths()).toEqual(before);
@@ -459,13 +459,63 @@ describe("cliProfiles", () => {
       expect((await s.paths()).map((p) => [p.path, p.kind])).toEqual([["/code/acme", undefined], ["/code/acme/app", "repo"]]);
     });
 
-    test("a repo entry is not a working directory", async () => {
+    test("a thread starts on a repo entry, with or without a worktree; a folder with repos has no worktrees", async () => {
       const s = await setup();
       await s.sync("/code/acme", [{ path: "/code/acme/app" }]);
       const repo = (await s.paths()).find((p) => p.kind === "repo")!;
-      await expect(
-        s.asUser.mutation(api.cli.threads.core.create, { profileId: s.profile._id, pathId: repo.id, cliType: "claude-code", content: "hi" })
-      ).rejects.toThrow(/repository inside a project folder.*parentPathId/);
+      const create = (pathId: string, worktree?: { parentPathId: string; branch: string }) =>
+        s.asUser.mutation(api.cli.threads.core.create, { profileId: s.profile._id, pathId, cliType: "claude-code", content: "hi", ...(worktree ? { worktree } : {}) });
+      const plain = await create(repo.id);
+      const branched = await create(repo.id, { parentPathId: repo.id, branch: "feat/x" });
+      const threads = await s.t.run(async (runCtx) => Promise.all([plain, branched].map((id) => runCtx.db.get("cliThreads", id))));
+      expect(threads.map((thread) => [thread?.pathId, thread?.path, thread?.git?.worktree?.parentPathId])).toEqual([
+        [repo.id, "/code/acme/app", undefined], [repo.id, "/code/acme/app", repo.id],
+      ]);
+      await expect(create(s.top.id, { parentPathId: s.top.id, branch: "feat/y" })).rejects.toThrow(/holds several git repositories/);
+    });
+
+    test("worktrees under a repo entry sync, survive register and are pruned with their repo", async () => {
+      const s = await setup();
+      await s.sync("/code/acme", [{ path: "/code/acme/app" }]);
+      const syncWorktrees = (worktrees: { parentPath: string; path: string; branch: string }[]) =>
+        s.t.mutation(api.cli.worktrees.sync, {
+          profileId: s.profile._id, sessionId: s.session._id, apiKey: s.apiKey.key, scannedParentPaths: ["/code/acme/app"], worktrees,
+        });
+      await syncWorktrees([{ parentPath: "/code/acme/app", path: "/code/acme/app-worktrees/y", branch: "y" }]);
+      const repo = (await s.paths()).find((p) => p.kind === "repo")!;
+      expect((await s.paths()).map((p) => [p.path, p.kind, p.parentPathId])).toEqual([
+        ["/code/acme", undefined, undefined], ["/code/other", undefined, undefined], ["/code/acme/app", "repo", s.top.id],
+        ["/code/acme/app-worktrees/y", "worktree", repo.id],
+      ]);
+      await s.t.run(async (runCtx) => {
+        const { findOrCreateProfile } = await import("./lib/cliProfilesRepo");
+        await findOrCreateProfile(runCtx, { userId: s.user._id, projectId: s.project._id, profileKey: s.profile.profileKey, incomingPaths: [{ path: "/code/acme" }] });
+      });
+      expect((await s.paths()).map((p) => p.path)).toEqual(["/code/acme", "/code/acme/app", "/code/acme/app-worktrees/y"]);
+      await s.sync("/code/acme", []);
+      expect((await s.paths()).map((p) => p.path)).toEqual(["/code/acme"]);
+    });
+
+    test("a thread on a vanished repo moves to its folder at the next run", async () => {
+      const s = await setup();
+      await s.sync("/code/acme", [{ path: "/code/acme/app" }]);
+      const repo = (await s.paths()).find((p) => p.kind === "repo")!;
+      const threadId = await s.asUser.mutation(api.cli.threads.core.create, { profileId: s.profile._id, pathId: repo.id, cliType: "claude-code", content: "hi" });
+      const [onRepo] = await s.t.query(api.cli.threads.lists.listPendingThreads, { profileId: s.profile._id, apiKey: s.apiKey.key });
+      // The server names a repo thread's folder, so the CLI never guesses it from paths.
+      expect(onRepo.projectFolder).toBe("/code/acme");
+      await s.sync("/code/acme", []);
+      const [pending] = await s.t.query(api.cli.threads.lists.listPendingThreads, { profileId: s.profile._id, apiKey: s.apiKey.key });
+      expect([pending.pathId, pending.workingDirectory, pending.projectFolder]).toEqual([s.top.id, "/code/acme", undefined]);
+
+      const userMessages = await s.t.run((runCtx) => runCtx.db.query("cliMessages").withIndex("by_thread_and_createdAt", (q) => q.eq("threadId", threadId)).collect());
+      await s.t.mutation(api.cli.threads.runControl.claimThread, { threadId, sessionId: s.session._id, leaseMs: 60_000, apiKey: s.apiKey.key });
+      const started = await s.t.mutation(api.cli.messages.startRunResponse, {
+        threadId, sessionId: s.session._id, userMessageIds: userMessages.map((message) => message._id), apiKey: s.apiKey.key,
+      });
+      expect(started.workspace).toMatchObject({ pathId: s.top.id, path: "/code/acme", previousPath: "/code/acme/app" });
+      const thread = await s.t.run((runCtx) => runCtx.db.get("cliThreads", threadId));
+      expect([thread?.pathId, thread?.path, thread?.git?.previousWorkingDirectory]).toEqual([s.top.id, "/code/acme", "/code/acme/app"]);
     });
 
     test("rejects a session of another profile", async () => {

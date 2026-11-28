@@ -96,7 +96,7 @@ import {
   writeChangesDiffStyle,
   writeChangesWordWrap,
 } from "@/lib/threads/changes-view-prefs";
-import { folderPathOf, repoPathIdOf, scopeRunToRepo } from "@/lib/threads/run-diff-repos";
+import { checkoutPathOf, folderPathOf, repoPathIdOf, scopeRunToRepo, threadChangesRepos } from "@/lib/threads/run-diff-repos";
 import { useChangesRepo } from "@/lib/threads/hooks/use-changes-repo";
 import { RepoSwitcher } from "@/components/blocks/cli/profiles/repo-switcher";
 import { emptyRunsMessage } from "@/components/blocks/thread/run-timeline-panel";
@@ -110,7 +110,6 @@ import {
 } from "@/lib/tasks/hooks/use-task-artifacts";
 import { TaskRefWithType, TaskType } from "@/components/blocks/tasks/task-ref-with-type";
 import {
-  folderRepos,
   type CliRunDiffFile,
   type CliRunDiffSummary,
   type CliRunDiffSummaryPreview,
@@ -675,9 +674,12 @@ function ThreadWorkspaceBody({
     [closeThreadArtifact]
   );
 
-  // Multi-repo folder: the Changes tab shows one repo at a time (docs/specs/cli-thread-run-diffs.md#multi-repo-folders).
-  const threadRepos = useMemo(() => folderRepos(activeProfile?.paths ?? [], chat?.pathId), [activeProfile?.paths, chat?.pathId]);
-  const { repo: changesRepo, select: selectChangesRepo, envelopes: changesEnvelopes } = useChangesRepo(threadId, threadRepos, envelopes, !messagesLoading);
+  // Multi-repo folder, or a repo of one: the Changes tab shows one repo at a time (docs/specs/cli-thread-run-diffs.md#multi-repo-folders).
+  const threadRepos = useMemo(() => threadChangesRepos(activeProfile?.paths ?? [], chat?.pathId), [activeProfile?.paths, chat?.pathId]);
+  const ownCheckoutFirst = threadRepos.length > 0 && threadRepos[0].id === chat?.pathId;
+  const { repo: changesRepo, select: selectChangesRepo, envelopes: changesEnvelopes } = useChangesRepo(threadId, threadRepos, envelopes, !messagesLoading, { ownFirst: ownCheckoutFirst });
+  // The own checkout's paths are the working directory's, so review comments still apply there.
+  const foreignRepo = changesRepo !== undefined && !(ownCheckoutFirst && changesRepo.id === chat?.pathId);
   // A run or range belongs to the repo it was opened in; History closes its commit on a switch.
   const [viewRepoId, setViewRepoId] = useState(changesRepo?.id);
   if (viewRepoId !== changesRepo?.id) {
@@ -1118,10 +1120,15 @@ function ThreadWorkspaceBody({
     composerControllerRef.current?.insertFileMention(path);
   }, []);
   // Changes-tab paths are relative to the chosen repo; a mention names the file from the folder.
+  // A repo thread's agent runs in its own checkout, so a mention names the file from there.
   const changesRepoLabel = changesRepo?.label;
+  const ownCheckoutLabel = ownCheckoutFirst ? threadRepos[0].label : undefined;
   const handleChangesMentionFile = useCallback(
-    (path: string) => handleMentionFile(folderPathOf({ path, repo: changesRepoLabel })),
-    [changesRepoLabel, handleMentionFile]
+    (path: string) => {
+      const file = { path, repo: changesRepoLabel };
+      handleMentionFile(ownCheckoutLabel ? checkoutPathOf(file, ownCheckoutLabel) : folderPathOf(file));
+    },
+    [changesRepoLabel, handleMentionFile, ownCheckoutLabel]
   );
   const handleRevertRun = useCallback(
     (diffSummary: CliRunDiffSummaryPreview) => setRevertTarget({ diffSummary }),
@@ -1796,7 +1803,7 @@ function ThreadWorkspaceBody({
           selectedPath: changesView.kind === "run" ? changesView.file.path : undefined,
           changesTabLabel: changesView.kind === "latest" ? "Latest run" : undefined,
           // Review comments name files from the working directory; a repo-scoped view doesn't, yet.
-          review: changesRepo ? undefined : viewerReview,
+          review: foreignRepo ? undefined : viewerReview,
           onRevertFile: handleRevertViewerFile,
         }
       : changesView.kind === "range" && rangeDiffSummary
@@ -1804,14 +1811,14 @@ function ThreadWorkspaceBody({
             diffSummary: rangeDiffSummary,
             deriveFilesFromPatch: true,
             changesTabLabel: changesView.label,
-            review: changesRepo ? undefined : rangeReview,
+            review: foreignRepo ? undefined : rangeReview,
           }
         : cumulativeDiffSummary
           ? {
               diffSummary: cumulativeDiffSummary,
               deriveFilesFromPatch: true,
               changesTabLabel: "All changes",
-              review: changesRepo ? undefined : cumulativeReview,
+              review: foreignRepo ? undefined : cumulativeReview,
             }
           : null;
 
@@ -1904,7 +1911,10 @@ function ThreadWorkspaceBody({
     ) : (
       <div className="flex h-full min-h-0 flex-col">
         <ThreadChangesToolbar
-          pullRequests={chat ? repoScopedPullRequests(threadPullRequests(chat), changesRepo?.label) : []}
+          pullRequests={
+            // A repo thread's own PR carries no repo; its folder's other repos have none here.
+            !chat ? [] : ownCheckoutFirst ? (changesRepo?.id === chat.pathId ? threadPullRequests(chat) : []) : repoScopedPullRequests(threadPullRequests(chat), changesRepo?.label)
+          }
           label={changesViewLabel}
           changesViewKind={changesView.kind}
           runs={timelineRuns}

@@ -4,7 +4,7 @@ import type { MutationCtx } from "../../../_generated/server";
 import { ConvexError, type ObjectType } from "convex/values";
 import type { Doc, Id } from "../../../_generated/dataModel";
 import { requireAuthorizedProject, type AuthenticatedAccess } from "../../../lib/access/permissions";
-import type { CliScriptRequest } from "../../../lib/contracts/validators";
+import { isWorktreeParent, type CliScriptRequest } from "../../../lib/contracts/validators";
 import { ensure } from "../../../lib/shared/ensure";
 import { resolveSlashCommandComposerContent } from "../../../lib/slashCommands/composer";
 import { ProjectPermission } from "../../../../lib/authz/permissions";
@@ -71,13 +71,13 @@ async function resolveThreadSelection(
 
   // Validate pathId exists in the profile's paths
   const pathEntry = await ensure(profile.paths.find((p) => p.id === args.pathId)).notNull(errors.PATH_NOT_FOUND_IN_PROFILE);
-    ensure(pathEntry.kind).notEq("repo", errors.PATH_IS_DETECTED_REPO);
 
   // A pending worktree spec targets the selected path as its parent repo;
   // the CLI creates the worktree on claim and repoints the thread.
   if (args.worktree) {
     ensure(args.worktree.parentPathId).eq(args.pathId, errors.WORKTREE_PARENT_PATH_MISMATCH);
     ensure(pathEntry.kind).notEq("worktree", errors.WORKTREE_PARENT_NOT_REPO_PATH);
+    ensure(isWorktreeParent(profile.paths, pathEntry)).isTrue(errors.WORKTREE_PARENT_IS_FOLDER);
     ensure(isValidWorktreeBranchName(args.worktree.branch)).isTrue(errors.WORKTREE_BRANCH_INVALID);
     if (args.worktree.baseRef !== undefined) {
       ensure(isValidWorktreeBranchName(args.worktree.baseRef)).isTrue(errors.WORKTREE_BRANCH_INVALID);

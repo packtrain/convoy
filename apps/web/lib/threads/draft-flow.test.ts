@@ -101,8 +101,8 @@ describe("resolveNewThreadDraftState Codex on AWS (OS-2105)", () => {
   });
 });
 
-describe("resolveNewThreadDraftState detected repos (OS-2521)", () => {
-  test("a draft on a repo entry falls back to the profile's folder", () => {
+describe("resolveNewThreadDraftState detected repos (OS-2647)", () => {
+  test("a draft on a repo entry keeps the repo", () => {
     const state = resolveNewThreadDraftState({
       profiles: [{ _id: "profile-1", isOnline: true, availableClis: [{ type: "codex", version: "0.156.1" }],
         paths: [{ id: "top" }, { id: "repo", kind: "repo", parentPathId: "top" }] }],
@@ -113,6 +113,6 @@ describe("resolveNewThreadDraftState detected repos (OS-2521)", () => {
       fallbackPathId: "top",
       rememberedCliModels: {},
     });
-    expect(state.pathId).toBe("top");
+    expect(state.pathId).toBe("repo");
   });
 });

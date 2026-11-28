@@ -36,7 +36,7 @@ export function resolveAgentContextPreselection(
   }
 
   const matchingPath = matchingProfile.paths.find(
-    (path) => path.id === query.pathId && path.kind !== "repo"
+    (path) => path.id === query.pathId
   );
   if (!matchingPath) {
     return null;

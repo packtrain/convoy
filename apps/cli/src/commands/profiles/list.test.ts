@@ -115,6 +115,8 @@ describe("profiles list command", () => {
     expect(output).toContain("0.46.0");
     expect(output).toContain("path_1");
     expect(output).toContain("~/src/app");
+    // A repo entry says so: it is the pathId that starts a thread in one repo of a folder.
+    expect(output).toContain("(app, repo)");
     expect(output).toContain("desktop");
     expect(output).toContain("offline");
     // `hostname` is optional; the second profile omits it.

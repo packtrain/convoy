@@ -55,7 +55,10 @@ import {
   cliRunDiffSummaryValidator,
   cliScriptRequestValidator,
   cliScriptResultValidator,
+  configuredPathOf,
   hydrateAvailableClis,
+  isConfiguredPath,
+  relativePathInside,
   SCRIPT_OUTPUT_TAIL_MAX_CHARS,
   type CliMessageAttachmentInput,
   type CliMessageAttachmentMetadata,
@@ -140,6 +143,7 @@ import {
   setThreadCodexUsageCursor,
   setThreadLastUsedCliSelection,
   setThreadPendingUserMessages,
+  repointThreadPath,
 } from "./threads/lib/cliThreadsRepo";
 import {
   deletePendingUpload,
@@ -422,11 +426,15 @@ async function withRepoPathIds(ctx: MutationCtx, thread: Doc<"cliThreads">, summ
   if (!summary.repos) {
     return summary;
   }
-  const profile = await getCliProfileById(ctx, thread.profileId);
-  // Joined on the entry's label, which `mergeRepoEntries` sets to the repo's relative path.
-  const idByLabel = new Map(
-    (profile?.paths ?? []).filter((entry) => entry.kind === "repo" && entry.parentPathId === thread.pathId).map((entry) => [entry.label, entry.id])
-  );
+  const paths = (await getCliProfileById(ctx, thread.profileId))?.paths ?? [];
+  // A repo or worktree thread checkpoints its folder too (cli-multi-repo-projects.md#checkpoints): every repo
+  // and worktree under the folder, by its path in the folder, as the CLI names them.
+  const folder = configuredPathOf(paths, thread.pathId);
+  const idByLabel = new Map(folder ? paths.flatMap((entry) => {
+    const inFolder = !isConfiguredPath(entry) && configuredPathOf(paths, entry.id)?.id === folder.id;
+    const relative = inFolder ? relativePathInside(folder.path, entry.path) : undefined;
+    return relative ? [[relative, entry.id] as const] : [];
+  }) : []);
   const repos = summary.repos.slice(0, MAX_PROFILE_REPOS).map(({ path }) => {
     const pathId = idByLabel.get(path);
     return pathId ? { path, pathId } : { path };
@@ -2077,6 +2085,11 @@ async function startRunResponseHandler(ctx: MutationCtx, args: StartRunResponseA
     });
 
     const workspace = toExecutionWorkspace(chat, profile);
+    if (workspace.repoRemoved) {
+      await repointThreadPath(ctx, chat._id, {
+        pathId: workspace.pathId, path: workspace.path, worktree: undefined, previousWorkingDirectory: chat.path, legacyCheckpointsUnsafe: true,
+      });
+    }
     const worktreeSetup = await resolveWorktreeSetupForRun(ctx, chat.projectId, principal.userId, workspace);
     return {
       assistantMessageId,

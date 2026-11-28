@@ -1,3 +1,4 @@
+import { getFunctionName } from "convex/server";
 import { mkdir, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
@@ -230,13 +231,126 @@ describe("syncRepos (OS-2521)", () => {
     const mutation = vi.fn().mockRejectedValueOnce(new Error("offline")).mockResolvedValue(null);
     const processor = createWorktreeOpProcessor({ mutation } as never, "session_1", "profile_1");
 
+    const publishes = () => mutation.mock.calls.filter(([fn]) => getFunctionName(fn) === "cli/profiles:syncRepos");
     await processor.syncRepos(root);
-    await vi.waitFor(() => expect(mutation).toHaveBeenCalledTimes(1));
+    await vi.waitFor(() => expect(publishes()).toHaveLength(1));
     await processor.syncRepos(root);
-    await vi.waitFor(() => expect(mutation).toHaveBeenCalledTimes(2));
+    await vi.waitFor(() => expect(publishes()).toHaveLength(2));
     await processor.syncRepos(root);
     await new Promise((resolve) => setTimeout(resolve, 50));
-    expect(mutation).toHaveBeenCalledTimes(2);
+    expect(publishes()).toHaveLength(2);
+  });
+
+  it("with published, resolves once the server has the list", async () => {
+    let publish!: () => void;
+    const mutation = vi.fn((fn: unknown) => getFunctionName(fn as never) === "cli/profiles:syncRepos"
+      ? new Promise<null>((resolve) => { publish = () => resolve(null); })
+      : Promise.resolve(null));
+    const processor = createWorktreeOpProcessor({ mutation } as never, "session_1", "profile_1");
+
+    let done = false;
+    const synced = processor.syncRepos(root, { published: true }).then(() => { done = true; });
+    await vi.waitFor(() => expect(mutation).toHaveBeenCalledTimes(1));
+    expect(done).toBe(false);
+    publish();
+    await synced;
+  });
+
+  it("scans each repo's worktrees after publishing a changed list, and retries a failed scan", async () => {
+    let failScan = true;
+    const mutation = vi.fn(async (fn: unknown, _args?: unknown) => {
+      if (getFunctionName(fn as never) === "cli/worktrees:sync" && failScan) {
+        failScan = false;
+        throw new Error("offline");
+      }
+      return null;
+    });
+    const processor = createWorktreeOpProcessor({ mutation } as never, "session_1", "profile_1");
+    const names = () => mutation.mock.calls.map(([fn]) => getFunctionName(fn as never));
+
+    await processor.syncRepos(root, { published: true });
+    await vi.waitFor(() => expect(names()).toEqual(["cli/profiles:syncRepos", "cli/worktrees:sync"]));
+    expect(mutation.mock.calls[1][1]).toMatchObject({ scannedParentPaths: [join(root, "old-app"), join(root, "packages/api")] });
+    // The failed scan isn't remembered, so the next sync scans again (the list itself is already sent).
+    await processor.syncRepos(root, { published: true });
+    await vi.waitFor(() => expect(names()).toEqual(["cli/profiles:syncRepos", "cli/worktrees:sync", "cli/worktrees:sync"]));
+    await processor.syncRepos(root, { published: true });
+    await new Promise((resolve) => setTimeout(resolve, 50));
+    expect(names()).toHaveLength(3);
+  });
+
+  it("retries a repo whose local worktree scan failed", async () => {
+    const mutation = vi.fn().mockResolvedValue(null);
+    const processor = createWorktreeOpProcessor({ mutation } as never, "session_1", "profile_1");
+    const scans = () => mutation.mock.calls.filter(([fn]) => getFunctionName(fn) === "cli/worktrees:sync").map(([, args]) => args.scannedParentPaths);
+    // A missing .git dir makes `git worktree list` fail in packages/api, as a git timeout would.
+    await rm(join(root, "packages/api", ".git"), { recursive: true });
+    await mkdir(join(root, "packages/api", ".git"));
+
+    await processor.syncRepos(root, { published: true });
+    await vi.waitFor(() => expect(scans()).toEqual([[join(root, "old-app")]]));
+    await rm(join(root, "packages/api", ".git"), { recursive: true });
+    await runGit(join(root, "packages/api"), ["init", "--initial-branch=main"]);
+    await processor.syncRepos(root, { published: true });
+    await vi.waitFor(() => expect(scans()).toHaveLength(2));
+    expect(scans()[1]).toEqual([join(root, "old-app"), join(root, "packages/api")]);
+  });
+
+  it("a scan of a list published before an A → empty → A round trip doesn't stand in for the new one", async () => {
+    const pendingScans: Array<() => void> = [];
+    const mutation = vi.fn((fn: unknown, _args?: unknown) => getFunctionName(fn as never) === "cli/worktrees:sync"
+      ? new Promise<null>((resolve) => pendingScans.push(() => resolve(null)))
+      : Promise.resolve(null));
+    const processor = createWorktreeOpProcessor({ mutation } as never, "session_1", "profile_1");
+
+    await processor.syncRepos(root, { published: true });
+    await vi.waitFor(() => expect(pendingScans).toHaveLength(1));
+    await rm(join(root, "old-app"), { recursive: true });
+    await rm(join(root, "packages"), { recursive: true });
+    await processor.syncRepos(root, { published: true });
+    for (const name of ["old-app", "packages/api"]) {
+      await mkdir(join(root, name), { recursive: true });
+      await runGit(join(root, name), ["init", "--initial-branch=main"]);
+    }
+    // The restored list is published while the first scan is still out.
+    await processor.syncRepos(root, { published: true });
+    pendingScans[0]();
+    await vi.waitFor(() => expect(pendingScans).toHaveLength(2));
+  });
+
+  it("a late scan of an older list never marks it sent", async () => {
+    const pendingScans: Array<() => void> = [];
+    const mutation = vi.fn((fn: unknown, _args?: unknown) => getFunctionName(fn as never) === "cli/worktrees:sync"
+      ? new Promise<null>((resolve) => pendingScans.push(() => resolve(null)))
+      : Promise.resolve(null));
+    const processor = createWorktreeOpProcessor({ mutation } as never, "session_1", "profile_1");
+    const published = () => mutation.mock.calls
+      .filter(([fn]) => getFunctionName(fn as never) === "cli/profiles:syncRepos")
+      .map(([, args]) => (args as { repos: unknown[] }).repos.length);
+
+    await processor.syncRepos(root, { published: true });
+    await vi.waitFor(() => expect(pendingScans).toHaveLength(1));
+    // Both repos leave the folder while the first scan is still out, then come back.
+    await rm(join(root, "old-app"), { recursive: true });
+    await rm(join(root, "packages"), { recursive: true });
+    await processor.syncRepos(root, { published: true });
+    pendingScans[0]();
+    for (const name of ["old-app", "packages/api"]) {
+      await mkdir(join(root, name), { recursive: true });
+      await runGit(join(root, name), ["init", "--initial-branch=main"]);
+    }
+    await processor.syncRepos(root, { published: true });
+    expect(published()).toEqual([2, 0, 2]);
+    // The returning list's worktrees are listed again: the empty publish dropped them on the server.
+    await vi.waitFor(() => expect(pendingScans).toHaveLength(2));
+  });
+
+  it("a published sync doesn't wait for the worktree scan", async () => {
+    const mutation = vi.fn((fn: unknown) => getFunctionName(fn as never) === "cli/worktrees:sync" ? new Promise(() => {}) : Promise.resolve(null));
+    const processor = createWorktreeOpProcessor({ mutation } as never, "session_1", "profile_1");
+
+    await processor.syncRepos(root, { published: true });
+    await vi.waitFor(() => expect(mutation).toHaveBeenCalledTimes(2));
   });
 
   it("a folder it can't scan publishes nothing", async () => {
