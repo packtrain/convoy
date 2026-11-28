@@ -18,6 +18,8 @@ const context = { profileId: "profile_1", pathId: "path_1", isProfileOnline: tru
 function completedDiffOp(preRef: string, postRef: string) {
   return {
     _id: "op_1",
+    profileId: context.profileId,
+    pathId: context.pathId,
     status: "completed",
     kind: "diffFile",
     preRef,
@@ -57,6 +59,24 @@ test("a range and a run sharing a postRef each fetch their own patch", async () 
   );
 });
 
+// OS-2522: repos of one folder share checkpoint ref names, so the checkout is part of the cache key.
+test("two repos with the same refs each fetch their own patch", async () => {
+  enqueueMock.mockReset();
+  enqueueMock.mockResolvedValue("op_1");
+  const summary = { preRef: "refs/convoy/pre", postRef: "refs/convoy/post", files: [] };
+  opDoc = { ...completedDiffOp(summary.preRef, summary.postRef), pathId: "repo_old" };
+  const { unmount } = render(
+    <RunFileViewerPanel diffSummary={summary} deriveFilesFromPatch context={{ ...context, pathId: "repo_old" }} />
+  );
+  await screen.findByText("No changes between these checkpoints.");
+  unmount();
+
+  opDoc = undefined;
+  render(<RunFileViewerPanel diffSummary={summary} deriveFilesFromPatch context={{ ...context, pathId: "repo_new" }} />);
+  expect(enqueueMock).toHaveBeenCalledTimes(2);
+  expect(enqueueMock).toHaveBeenLastCalledWith(expect.objectContaining({ pathId: "repo_new" }));
+  expect(screen.queryByText("No changes between these checkpoints.")).toBeNull();
+});
 
 vi.mock("@pierre/diffs/react", () => ({
   PatchDiff: () => <div>Rendered patch</div>,

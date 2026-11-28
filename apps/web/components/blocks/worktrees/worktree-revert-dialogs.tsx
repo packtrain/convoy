@@ -19,13 +19,19 @@ import type { WorktreeChanges } from "@/lib/worktrees/hooks/use-worktree-changes
 const REVERT_ALL_CONFIRMATION = "revert";
 
 /** Confirms discarding one file's uncommitted changes (OS-2043). */
+/** The repo of a multi-repo folder the dialog acts on, so its copy says which one (OS-2522). */
+function repoLabel(state: WorktreeChanges): string | undefined {
+  return state.entry?.kind === "repo" ? state.entry.label : undefined;
+}
+
 export function RevertFileDialog({ state }: { state: WorktreeChanges }) {
   const target = state.revertTarget;
+  const repo = repoLabel(state);
   return (
     <AlertDialog open={target !== null} onOpenChange={(open) => !open && state.setRevertTarget(null)}>
       <AlertDialogContent>
         <AlertDialogHeader>
-          <AlertDialogTitle>Revert {target?.path}?</AlertDialogTitle>
+          <AlertDialogTitle>Revert {repo ? `${repo}/` : ""}{target?.path}?</AlertDialogTitle>
           <AlertDialogDescription>
             {target?.kind === "added"
               ? "The file will be deleted from the working tree."
@@ -62,6 +68,7 @@ function summarize(files: CliRunDiffFile[]): string {
 export function RevertAllDialog({ state }: { state: WorktreeChanges }) {
   const [typed, setTyped] = useState("");
   const confirmed = typed.trim().toLowerCase() === REVERT_ALL_CONFIRMATION;
+  const repo = repoLabel(state);
   const close = () => {
     setTyped("");
     state.setRevertAllOpen(false);
@@ -70,7 +77,7 @@ export function RevertAllDialog({ state }: { state: WorktreeChanges }) {
     <AlertDialog open={state.revertAllOpen} onOpenChange={(open) => !open && close()}>
       <AlertDialogContent>
         <AlertDialogHeader>
-          <AlertDialogTitle>Revert all uncommitted changes?</AlertDialogTitle>
+          <AlertDialogTitle>Revert all uncommitted changes{repo ? ` in ${repo}` : ""}?</AlertDialogTitle>
           <AlertDialogDescription>
             {summarize(state.files)} This cannot be undone.
           </AlertDialogDescription>
@@ -97,7 +104,7 @@ export function RevertAllDialog({ state }: { state: WorktreeChanges }) {
               state.confirmRevertAll();
             }}
           >
-            Revert all
+            {repo ? `Revert all in ${repo}` : "Revert all"}
           </AlertDialogAction>
         </AlertDialogFooter>
       </AlertDialogContent>

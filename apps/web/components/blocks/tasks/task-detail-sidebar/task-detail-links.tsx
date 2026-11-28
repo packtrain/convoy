@@ -13,7 +13,7 @@ import { cn } from "@/lib/utils";
 function getTaskDetailLinkLabel(link: TaskExternalLinkInput): string {
   const label = getExternalLinkLabel(link);
 
-  if (link.kind !== "pull_request" || label.startsWith("PR:")) {
+  if (link.kind !== "pull_request" || label.startsWith("PR:") || label.startsWith(link.identifier ?? "\0")) {
     return label;
   }
 

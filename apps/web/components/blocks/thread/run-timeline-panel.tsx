@@ -11,6 +11,8 @@ import { cn } from "@/lib/utils";
 export interface RunTimelinePanelProps {
   /** Oldest-first, as built by `buildTimelineRuns`. */
   runs: TimelineRun[];
+  /** The repo a multi-repo folder's timeline is scoped to, for the empty state. */
+  repoLabel?: string;
   /**
    * Open the diff viewer on the committed run range. `span` is the 1-based
    * run interval over the loaded runs, oldest = 1 (used for tab labels).
@@ -32,7 +34,12 @@ export interface RunTimelinePanelProps {
  * resets the selection. Clicking the same run twice opens that single run's
  * diff.
  */
-export function RunTimelinePanel({ runs, onOpenRange, onRevertRun }: RunTimelinePanelProps) {
+/** Empty timeline or Changes view; a repo-scoped one names the repo, since other repos may have runs. */
+export function emptyRunsMessage(repoLabel?: string): string {
+  return repoLabel ? `No run has changed ${repoLabel} yet.` : "No runs yet.";
+}
+
+export function RunTimelinePanel({ runs, repoLabel, onOpenRange, onRevertRun }: RunTimelinePanelProps) {
   const [anchorIndex, setAnchorIndex] = useState<number | null>(null);
   const [hoverIndex, setHoverIndex] = useState<number | null>(null);
 
@@ -61,7 +68,7 @@ export function RunTimelinePanel({ runs, onOpenRange, onRevertRun }: RunTimeline
     anchorIndex === null ? 0 : Math.abs((hoverIndex ?? anchorIndex) - anchorIndex) + 1;
 
   if (runs.length === 0) {
-    return <p className="p-4 text-sm text-muted-foreground">No runs yet.</p>;
+    return <p className="p-4 text-sm text-muted-foreground">{emptyRunsMessage(repoLabel)}</p>;
   }
 
   return (

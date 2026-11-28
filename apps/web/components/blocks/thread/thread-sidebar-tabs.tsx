@@ -334,6 +334,8 @@ interface ThreadChangesToolbarProps {
   pullRequests?: ThreadPullRequest[];
   /** Before the view selector: the repo switcher of a multi-repo folder. */
   leading?: ReactNode;
+  /** The repo `leading` selected, for the timeline's empty state. */
+  repoLabel?: string;
 }
 
 /** Selector items above the run timeline, in menu order. */
@@ -368,22 +370,24 @@ export function ThreadChangesToolbar({
   onToggleFileTree,
   pullRequests = [],
   leading,
+  repoLabel,
 }: ThreadChangesToolbarProps) {
   const [menuOpen, setMenuOpen] = useState(false);
 
   return (
     // ponytail: 41px, not h-10 — lines up with the sidebar's "New thread" row
     // (py-3 + 20px content + border).
-    <div className="flex h-[41px] shrink-0 items-center border-b border-border bg-card px-2">
+    <div className="flex h-[41px] min-w-0 shrink-0 items-center border-b border-border bg-card px-2">
       {leading}
+      {/* The view label never shrinks (short labels like "Run 3"); the repo switcher gives way instead. */}
       <Popover open={menuOpen} onOpenChange={setMenuOpen}>
         <PopoverTrigger asChild>
           <button
             type="button"
-            className="flex cursor-pointer items-center gap-1 rounded-md px-2 py-1 text-sm font-medium hover:bg-muted"
+            className="flex shrink-0 cursor-pointer items-center gap-1 whitespace-nowrap rounded-md px-2 py-1 text-sm font-medium hover:bg-muted"
           >
             {label}
-            <ChevronDown className="size-3.5 text-muted-foreground" />
+            <ChevronDown className="size-3.5 shrink-0 text-muted-foreground" />
           </button>
         </PopoverTrigger>
         <PopoverContent align="start" className="w-80 gap-0 overflow-hidden p-0">
@@ -409,6 +413,7 @@ export function ThreadChangesToolbar({
           <div className="flex max-h-80 flex-col overflow-hidden border-t border-border">
             <RunTimelinePanel
               runs={runs}
+              repoLabel={repoLabel}
               onOpenRange={(diffSummary, span) => {
                 setMenuOpen(false);
                 onOpenRange(diffSummary, span);
@@ -425,7 +430,7 @@ export function ThreadChangesToolbar({
           </div>
         </PopoverContent>
       </Popover>
-      <div className="ml-auto flex items-center gap-1">
+      <div className="ml-auto flex shrink-0 items-center gap-1">
         <ThreadPrBadges pullRequests={pullRequests} className="mr-1" />
         {diffToggles && (
           <ChangesViewToggles

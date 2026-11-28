@@ -147,7 +147,8 @@ export function RunChangesCard({
           const canRevert = onRevertFile !== undefined && addressable;
           const hasRowActions = onMentionFile !== undefined || canRevert;
           const repoHeader = multiRepo && file.repo !== visibleFiles[index - 1]?.repo ? (
-            <li className="bg-muted/40 px-3 py-1.5 text-xs font-medium text-muted-foreground">{file.repo}</li>
+            // Hidden from the list's a11y tree: each file's name already carries its repo.
+            <li aria-hidden className="bg-muted/40 px-3 py-1.5 text-xs font-medium text-muted-foreground">{file.repo}</li>
           ) : null;
           const path = (
             <span className="min-w-0 flex-1 truncate" title={shownPath}>
@@ -165,6 +166,7 @@ export function RunChangesCard({
                 <button
                   type="button"
                   className="flex min-w-0 flex-1 cursor-pointer items-center gap-2 px-3 py-2 text-left"
+                  aria-label={multiRepo ? shownPath : undefined}
                   onClick={() => onSelectFile?.(file)}
                 >
                   {path}
@@ -176,14 +178,15 @@ export function RunChangesCard({
                 <span
                   className={cn(
                     "flex items-center gap-1.5 text-xs tabular-nums",
-                    hasRowActions && "group-hover/file-row:hidden"
+                    hasRowActions && "group-focus-within/file-row:hidden group-hover/file-row:hidden"
                   )}
                 >
                   <LineCounts file={file} />
                 </span>
                 {hasRowActions && (
                   // Hover actions swap in over the counts (OS-1159 / OS-1156).
-                  <span className="hidden items-center gap-0.5 group-hover/file-row:flex">
+                  // Focus within the row reveals them too, so Tab reaches them.
+                  <span className="hidden items-center gap-0.5 group-focus-within/file-row:flex group-hover/file-row:flex">
                     {onMentionFile && (
                       <Button
                         type="button"

@@ -27,6 +27,11 @@ const runs = [run(1, "first run"), run(2, "second run"), run(3, "third run")];
 describe("RunTimelinePanel", () => {
   afterEach(cleanup);
 
+  test("an empty repo-scoped timeline says no run changed that repo (UX OS-2522 round 1)", () => {
+    render(<RunTimelinePanel runs={[]} onOpenRange={vi.fn()} repoLabel="packages/api" />);
+    expect(screen.getByText("No run has changed packages/api yet.")).toBeTruthy();
+  });
+
   test("click–hover–click commits the contiguous range and resets the selection", () => {
     const onOpenRange = vi.fn();
     render(

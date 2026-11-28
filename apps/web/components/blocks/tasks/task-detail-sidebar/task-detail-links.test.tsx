@@ -54,6 +54,24 @@ describe("TaskDetailLinks", () => {
     expect(screen.queryByText("PR: PR: Add retry button")).toBeNull();
   });
 
+  test("a repo PR of a multi-repo folder leads with its repo and number (UX OS-2523 round 1)", () => {
+    const links: TaskExternalLink[] = [
+      {
+        id: "pr:github:packages-api.13eb6eb8c178e72b:281",
+        kind: "pull_request",
+        url: "https://github.com/acme/api/pull/281",
+        title: "api: types",
+        identifier: "packages/api PR #281",
+        createdAt: 1,
+        updatedAt: 1,
+      },
+    ];
+
+    render(<TaskDetailLinks links={links} />);
+
+    expect(screen.getByRole("link", { name: /^packages\/api PR #281 · api: types/ })).toBeTruthy();
+  });
+
   test("uses the updated timestamp as the native title", () => {
     const updatedAt = Date.UTC(2026, 1, 16, 12, 30, 0);
     const links: TaskExternalLink[] = [

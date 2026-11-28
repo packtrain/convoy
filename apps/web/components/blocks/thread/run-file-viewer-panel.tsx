@@ -56,8 +56,15 @@ const resultCache = new Map<string, FileOpResult>();
 
 // The whole-run diff caches under filePath "".
 // preRef is part of the key: a range and a run can end at the same postRef (OS-1883).
-function cacheKey(preRef: string | undefined, postRef: string, filePath: string, kind: OpKind): string {
-  return `${preRef ?? ""}:${postRef}:${filePath}:${kind}`;
+// The checkout is too: repos of one folder share checkpoint ref names (OS-2522).
+function cacheKey(
+  checkout: { profileId: string; pathId: string },
+  preRef: string | undefined,
+  postRef: string,
+  filePath: string,
+  kind: OpKind
+): string {
+  return `${checkout.profileId}:${checkout.pathId}:${preRef ?? ""}:${postRef}:${filePath}:${kind}`;
 }
 
 /**
@@ -79,7 +86,7 @@ function useWorktreeFileOp(args: {
   const enqueueOp = useMutation(api.cli.worktreeOps.enqueue);
   const op = useQuery(api.cli.worktreeOps.get, opId ? { opId } : "skip");
 
-  const key = cacheKey(args.preRef, args.postRef, args.filePath ?? "", args.kind);
+  const key = cacheKey(args.context, args.preRef, args.postRef, args.filePath ?? "", args.kind);
   const cached = resultCache.get(key);
 
   useEffect(() => {
@@ -101,7 +108,7 @@ function useWorktreeFileOp(args: {
       setError("Received a malformed result");
       return;
     }
-    resultCache.set(cacheKey(op.preRef, op.postRef, op.filePath ?? "", opKind), parsed);
+    resultCache.set(cacheKey(op, op.preRef, op.postRef, op.filePath ?? "", opKind), parsed);
   }, [op]);
 
   useEffect(() => {

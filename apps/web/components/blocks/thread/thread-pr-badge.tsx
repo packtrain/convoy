@@ -23,11 +23,14 @@ export function ThreadPrBadge({
   pullRequest,
   className,
   iconClassName,
+  refClassName,
   nestedInLink = false,
 }: {
   pullRequest: ThreadPullRequest;
   className?: string;
   iconClassName?: string;
+  /** E.g. hides the `#123` in a narrow bar; the tooltip and accessible name keep it. */
+  refClassName?: string;
   nestedInLink?: boolean;
 }) {
   const presentation = getThreadPullRequestPresentation(pullRequest.state);
@@ -40,7 +43,7 @@ export function ThreadPrBadge({
   const content = (
     <>
       <Icon aria-hidden className={cn("size-3.5", presentation.colorClass, iconClassName)} />
-      <span className={cn("text-xs tabular-nums", presentation.colorClass)}>
+      <span className={cn("text-xs tabular-nums", presentation.colorClass, refClassName)}>
         {formatThreadPullRequestShortRef(pullRequest)}
       </span>
     </>
@@ -55,19 +58,26 @@ export function ThreadPrBadge({
 
 const MAX_SHOWN_PULL_REQUESTS = 3;
 
-/** A thread's Branch pull requests, one badge each: at most 3, then "+N" listing the rest on hover (OS-2523). */
+/** A thread's Branch pull requests, one badge each: at most `max` (3), then "+N" listing the rest on hover (OS-2523). */
 export function ThreadPrBadges({
   pullRequests,
+  max = MAX_SHOWN_PULL_REQUESTS,
   ...badge
-}: { pullRequests: ThreadPullRequest[] } & Omit<Parameters<typeof ThreadPrBadge>[0], "pullRequest">) {
-  const rest = pullRequests.slice(MAX_SHOWN_PULL_REQUESTS);
+}: { pullRequests: ThreadPullRequest[]; max?: number } & Omit<Parameters<typeof ThreadPrBadge>[0], "pullRequest">) {
+  const rest = pullRequests.slice(max);
+  const restTooltip = rest.map(formatThreadPullRequestTooltip);
   return (
     <>
-      {pullRequests.slice(0, MAX_SHOWN_PULL_REQUESTS).map((pullRequest) => (
+      {pullRequests.slice(0, max).map((pullRequest) => (
         <ThreadPrBadge key={pullRequest.url} pullRequest={pullRequest} {...badge} />
       ))}
       {rest.length > 0 ? (
-        <span className={cn("inline-flex shrink-0 items-center text-xs tabular-nums text-muted-foreground", badge.className)} title={rest.map(formatThreadPullRequestTooltip).join("\n")}>
+        <span
+          className={cn("inline-flex shrink-0 items-center text-xs tabular-nums text-muted-foreground", badge.className)}
+          title={restTooltip.join("\n")}
+          role="img"
+          aria-label={`${rest.length} more ${rest.length === 1 ? "pull request" : "pull requests"}: ${restTooltip.join(", ")}`}
+        >
           +{rest.length}
         </span>
       ) : null}

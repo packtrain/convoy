@@ -1,8 +1,9 @@
 "use client";
 
-import { useCallback, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { MoreHorizontal, RefreshCw, Trash2 } from "lucide-react";
 import { useQuery } from "convex/react";
+import { toast } from "sonner";
 import { api } from "@/convex/_generated/api";
 import type { Id } from "@/convex/_generated/dataModel";
 import { folderRepos, type CliProfilePathEntry } from "@/convex/lib/contracts/validators";
@@ -58,15 +59,24 @@ interface CheckoutFolder {
 export function WorktreeChangesView({ profileId, pathId }: WorktreeChangesViewProps) {
   // Same subscription `useWorktreeChanges` holds; the client shares it.
   const profile = useQuery(api.cli.profiles.get, { profileId });
-  const { location } = useNavigation();
+  const params = useRouteParams<{ organizationSlug: string; projectAlias: string }>();
+  const { location, replace } = useNavigation();
+  // A multi-repo folder shows one repo at a time: `&repo=`, else the first (docs/specs/cli-multi-repo-projects.md#repo-switcher).
+  const repos = folderRepos(profile?.paths ?? [], pathId);
+  const target = parseWorktreeChangesTarget(location.search);
+  const requested = target?.repo;
+  const repo = repos.find((entry) => entry.id === requested) ?? repos[0];
+  const folderLabel = profile?.paths.find((entry) => entry.id === pathId)?.label ?? "";
+  // The URL names the repo on screen, so a copied link opens it; a stale link says what replaced it.
+  useEffect(() => {
+    if (!repo || !target || requested === repo.id) return;
+    if (requested != null) toast.info(`That repo is no longer in ${folderLabel}. Showing ${repo.label}.`);
+    replace(appRoute.projectThreadsWithPreselection(params.organizationSlug, params.projectAlias, { ...target, repo: repo.id }));
+  }, [repo, requested, target, folderLabel, replace, params.organizationSlug, params.projectAlias]);
   if (profile === undefined) {
     return null;
   }
-  // A multi-repo folder shows one repo at a time: `&repo=`, else the first (docs/specs/cli-multi-repo-projects.md#repo-switcher).
-  const repos = folderRepos(profile?.paths ?? [], pathId);
-  const requested = parseWorktreeChangesTarget(location.search)?.repo;
-  const repo = repos.find((entry) => entry.id === requested) ?? repos[0];
-  const folder = repo ? { pathId, label: profile?.paths.find((entry) => entry.id === pathId)?.label ?? "", repos } : undefined;
+  const folder = repo ? { pathId, label: folderLabel, repos } : undefined;
   const checkoutId = repo?.id ?? pathId;
   // The host reuses this instance across checkouts; a new one must not inherit tabs or a history cursor.
   return <ChangesViewForCheckout key={`${profileId}:${checkoutId}`} profileId={profileId} pathId={checkoutId} folder={folder} />;
@@ -245,7 +255,8 @@ function ChangesViewForCheckout({ profileId, pathId, folder }: WorktreeChangesVi
         />
         {/* ponytail: 41px like ThreadChangesToolbar — lines up with the sidebar's "New thread" row. */}
         {entry && (
-          <div className="flex h-[41px] shrink-0 items-center gap-3 border-b border-border bg-card px-4 text-xs text-muted-foreground">
+          // Wraps on a phone rather than clipping its controls (UX OS-2522 round 2); one 41px row otherwise.
+          <div className="flex min-h-[41px] shrink-0 flex-wrap items-center gap-x-3 gap-y-1 border-b border-border bg-card px-4 py-1 text-xs text-muted-foreground">
             {folder && <RepoSwitcher repos={folder.repos} value={pathId} onChange={(repo) => replace(route(tab, null, repo))} />}
             <Tabs value={tab} onValueChange={(value) => openTab(value === "history" ? "history" : "changes")} className="shrink-0">
               <TabsList variant="underline" className="w-auto border-b-0" aria-label="Worktree view">
@@ -256,8 +267,8 @@ function ChangesViewForCheckout({ profileId, pathId, folder }: WorktreeChangesVi
                 <TabsTrigger value="history">History</TabsTrigger>
               </TabsList>
             </Tabs>
-            {/* A phone has room for a few characters only; the header names the checkout. */}
-            {!isMobile && (
+            {/* A phone has room for a few characters only; the header names the checkout, the switcher a folder's repo. */}
+            {!isMobile && !folder && (
               <span className="truncate font-mono" title={entry.path}>
                 {entry.path}
               </span>

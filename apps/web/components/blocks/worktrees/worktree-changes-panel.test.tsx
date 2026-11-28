@@ -111,6 +111,17 @@ describe("WorktreeChangesPanel", () => {
     expect(onMentionFile).toHaveBeenCalledWith("a.txt");
   });
 
+  test("a repo of a multi-repo folder names that repo in both revert dialogs (UX OS-2522 round 1)", () => {
+    state.paths = [{ id: "path_1", path: "/tmp/acme/new-app", kind: "repo", label: "new-app", parentPathId: "folder" } as never];
+    render(panel(undefined));
+
+    fireEvent.click(screen.getByRole("button", { name: "Revert all" }));
+    expect(screen.getByText("Revert all uncommitted changes in new-app?")).toBeTruthy();
+    fireEvent.click(screen.getByRole("button", { name: "Cancel" }));
+    fireEvent.click(screen.getByRole("button", { name: "Revert a.txt" }));
+    expect(screen.getByText("Revert new-app/a.txt?")).toBeTruthy();
+  });
+
   test("History lists the checkout's commits and refetches when a new run lands (OS-2535)", () => {
     const view = render(panel("refs/run-1/post", undefined, "history"));
     expect(state.kinds).toContain("gitLog");

@@ -377,12 +377,16 @@ On the web:
   every repo. A row's file diff and Revert file target its repo entry, and
   Mention in reply names `repo/path`. A repo with no `pathId` lists its files
   but offers no diff or revert. Undo is not offered: it restores one checkout,
-  and the run has several.
+  and the run has several. Each file's button is named by its `repo/path`, and
+  the repo headers stay out of the list's accessibility tree. Row actions show
+  on hover and on focus within the row, so Tab reaches them.
 - The sidebar's Changes tab shows one repo at a time, picked by the repo
   switcher in front of the view selector
   ([Multi-repo projects](cli-multi-repo-projects.md#repo-switcher)). Latest
   run, All changes, the run timeline and ranges keep only the runs that changed
-  that repo, with the repo's own counts. The default repo settles once the
+  that repo, with the repo's own counts. Fetched patches are cached per
+  checkout (`profileId`, `pathId`) as well as by refs: every repo of a run
+  uses the same checkpoint ref names. The default repo settles once the
   messages load, so a new run in another repo never moves an open view; a
   repo change from any source sends a run or range view back to Latest run. Working tree and History run their ops on the repo entry. Opening a file
   from a card switches to that file's repo. Review comments and the timeline's

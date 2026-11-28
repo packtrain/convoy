@@ -27,7 +27,7 @@ export function TooltipExt({ children, content, delayDuration }: { children: Rea
   return (
     <Tooltip delayDuration={delayDuration}>
       <TooltipTrigger ref={triggerRef} asChild>{children}</TooltipTrigger>
-      <TooltipContent>{content}</TooltipContent>
+      <TooltipContent className="whitespace-pre-line">{content}</TooltipContent>
     </Tooltip>
   );
 }
