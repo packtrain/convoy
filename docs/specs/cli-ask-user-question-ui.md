@@ -135,6 +135,32 @@ A question with `isOther: false` has no `Other…` row. Runtimes that cannot tak
 - DOM identifiers for question options and radio group names must be namespaced by prompt identity (`toolCallId` for the tool part, request id for the interaction card), not only by question index. Both go through `buildQuestionKey`.
 - Clicking a later prompt option must never target controls in an earlier prompt. This is not cosmetic: same-named radios in two prompts form one browser radio group, so answering the second prompt would silently unset the first.
 
+## Orphaned Questions
+
+A question asked mid-run renders as the interaction card while its run can
+still take the answer. If the run dies first (the CLI disconnects, restarts, or
+the user presses Stop), the server cancels the request and the card goes away.
+The tool part is left unsettled (`input-available`), which on its own renders
+as a collapsed tool row with nothing of the question in it.
+
+- The thread view treats the run as orphaned using the same check as an
+  orphaned plan gate: no pending interaction request, and the thread is
+  `waiting_input` or its profile is offline
+  (`docs/specs/cli-interactive-approvals.md#losing-the-run-while-parked`).
+- On an orphaned run, the **latest assistant message** hands its unsettled
+  `AskUserQuestion` parts back as the inline questionnaire. It reuses the
+  `output-error` shape the waiting-input path already uses, so grouping and
+  rendering match. Submitting sends the answers as a new message, and the
+  preserved continuation id resumes the session with the question in its
+  transcript.
+- Once answered, the question stays visible and locked on that message, even
+  after newer messages arrive, because a submitted response exists for its
+  `toolCallId`.
+- An unsettled question that was never answered stays a collapsed row once a
+  newer assistant message exists. The user moved on, and an interactive
+  questionnaire deep in history would be stale.
+- Read-only viewers see the questionnaire without a submit action.
+
 ## Validation and Submit
 
 - Submit is enabled only when every question has at least one answer source:

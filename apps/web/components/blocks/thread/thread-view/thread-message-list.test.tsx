@@ -10,8 +10,8 @@ import type { Id } from "@/convex/_generated/dataModel";
 import type { ComposerMessageState } from "@/lib/cli-stream-ui";
 
 vi.mock("@/components/blocks/thread/assistant-cli-thread-message", () => ({
-  AssistantCliMessage: ({ timestamp, cliModel, cliEffort, attachments, renderState }: { timestamp?: number; cliModel?: string; cliEffort?: string; attachments?: Array<{ fileName: string }>; renderState?: { parts: Array<{ type: string }> } }) => (
-    <div data-testid="assistant-message" data-timestamp={timestamp} data-model={cliModel} data-effort={cliEffort} data-attachments={attachments?.map((attachment) => attachment.fileName).join(",")} data-part-types={renderState?.parts.map((part) => part.type).join(",")} />
+  AssistantCliMessage: ({ timestamp, cliModel, cliEffort, attachments, renderState, orphanedParkedQuestion }: { timestamp?: number; cliModel?: string; cliEffort?: string; attachments?: Array<{ fileName: string }>; renderState?: { parts: Array<{ type: string }> }; orphanedParkedQuestion?: boolean }) => (
+    <div data-testid="assistant-message" data-orphaned-question={String(Boolean(orphanedParkedQuestion))} data-timestamp={timestamp} data-model={cliModel} data-effort={cliEffort} data-attachments={attachments?.map((attachment) => attachment.fileName).join(",")} data-part-types={renderState?.parts.map((part) => part.type).join(",")} />
   ),
 }));
 
@@ -448,6 +448,27 @@ describe("ThreadMessageList edit-last action (OS-1374)", () => {
     expect(onSubmitEditLast).not.toHaveBeenCalled();
     expect(screen.queryByRole("button", { name: "Send" })).toBeNull();
     expect(screen.getByLabelText("Edit message")).toBeDefined();
+  });
+});
+
+describe("ThreadMessageList orphaned parked question (OS-1463, OS-2646)", () => {
+  test("hands the question back on the latest assistant message only", () => {
+    renderList({
+      orphanedParkedQuestion: true,
+      renderStateByMessageId: new Map([
+        ["older-reply" as Id<"cliMessages">, createAssistantRenderState()],
+        [ASSISTANT_MESSAGE_ID, createAssistantRenderState()],
+      ]),
+      visibleMessages: [
+        createAssistantMessage({ _id: "older-reply" as Id<"cliMessages"> }),
+        createUserMessage(),
+        createAssistantMessage(),
+      ],
+    });
+    const flags = screen
+      .getAllByTestId("assistant-message")
+      .map((message) => message.getAttribute("data-orphaned-question"));
+    expect(flags).toEqual(["false", "true"]);
   });
 });
 

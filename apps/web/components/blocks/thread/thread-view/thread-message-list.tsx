@@ -300,6 +300,8 @@ interface ThreadMessageListProps {
   onPlanDecision?: (decision: PlanDecision) => Promise<void> | void;
   /** True while the thread has a plan awaiting the user's decision. */
   showPlanDecisions?: boolean;
+  /** The run died parked on a question; the latest reply hands it back (OS-1463). */
+  orphanedParkedQuestion?: boolean;
   pendingProposedPlan?: PlanDecision["proposedPlan"];
   onContinueFailedSession?: (
     messageId: Id<"cliMessages">
@@ -372,6 +374,7 @@ export const ThreadMessageList = memo(function ThreadMessageList({
   onSubmitAskUserQuestion,
   onPlanDecision,
   showPlanDecisions = false,
+  orphanedParkedQuestion = false,
   pendingProposedPlan,
   onContinueFailedSession,
   onRetry,
@@ -560,6 +563,10 @@ export const ThreadMessageList = memo(function ThreadMessageList({
                         pendingProposedPlan={pendingProposedPlan}
                         showPlanDecisions={
                           showPlanDecisions &&
+                          message._id === latestAssistantMessageId
+                        }
+                        orphanedParkedQuestion={
+                          orphanedParkedQuestion &&
                           message._id === latestAssistantMessageId
                         }
                         getUserMessageAttachments={getUserMessageAttachments}

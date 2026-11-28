@@ -37,6 +37,7 @@ import { useThreadMessageAttachmentUpload } from "@/lib/threads/hooks/use-thread
 import { buildHandleThreadComposerAttachmentsChange } from "@/lib/threads/message-attachments";
 import { deriveUserMessageResponseMap, findLatestRowMessage, findLatestRowUserMessage, forkDividerAnchor } from "@/lib/threads/message-rows";
 import { hasParkedExitPlanMode } from "@/lib/threads/plan-decision";
+import { isParkedAskUserQuestion } from "@/lib/ai-tools/ask-user-question";
 import { CLI_TYPE_MAP } from "@/lib/threads/types";
 import { InteractionRequestCards } from "@/components/blocks/thread/interaction-request-cards";
 import { WorkflowWaitCard } from "@/components/blocks/workflows/workflow-wait-card";
@@ -305,21 +306,22 @@ export function ThreadView({
       ? chat.metadata.proposedPlan
       : undefined;
 
-  // Orphaned gate (OS-1463): the run died while parked on ExitPlanMode, so the gate is
-  // unsettled with no live request to answer. This keeps the plan panel's approve buttons AND
-  // gates the hook's send fallback — both must agree, or a stale click could send into a live
-  // run.
+  // Orphaned run (OS-1463): the run died while parked, leaving its gate or question unsettled
+  // with no live request to answer. This keeps the plan panel's approve buttons and the inline
+  // questionnaire AND gates the hook's send fallback — both must agree, or a stale click could
+  // send into a live run.
   //
   // `waiting_input` is what a clean wind-down leaves; a hard-killed CLI leaves `streaming`
   // until the watchdog fires, so an offline profile counts too — otherwise the buttons vanish
   // for minutes on exactly the thread that needs them.
-  const orphanedParkedPlan = useMemo(() => {
+  const { orphanedParkedPlan, orphanedParkedQuestion } = useMemo(() => {
+    const none = { orphanedParkedPlan: false, orphanedParkedQuestion: false };
     // `undefined` is still loading and `null` is a missing profile — neither
     // is evidence the CLI is gone, so only a loaded offline profile counts.
     const windDownPending =
       chat.status === "waiting_input" || activeProfile?.isOnline === false;
     if (!windDownPending || hasPendingInteraction) {
-      return false;
+      return none;
     }
     for (let index = envelopes.length - 1; index >= 0; index -= 1) {
       const message = envelopes[index];
@@ -327,9 +329,15 @@ export function ThreadView({
         continue;
       }
       const parts = renderStateByMessageId.get(message._id)?.parts;
-      return parts !== undefined && hasParkedExitPlanMode(parts);
+      if (parts === undefined) {
+        return none;
+      }
+      return {
+        orphanedParkedPlan: hasParkedExitPlanMode(parts),
+        orphanedParkedQuestion: parts.some(isParkedAskUserQuestion),
+      };
     }
-    return false;
+    return none;
   }, [
     chat.status,
     activeProfile,
@@ -974,6 +982,7 @@ export function ThreadView({
         getUserMessageAttachments={getUserMessageAttachments}
         onShowOlderMessages={handleShowOlderMessages}
         showPlanDecisions={showPlanDecisions}
+        orphanedParkedQuestion={orphanedParkedQuestion}
         pendingProposedPlan={pendingProposedPlan}
         transcriptHeader={forkHistory}
         transcriptDivider={forkDivider}

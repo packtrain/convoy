@@ -1102,6 +1102,86 @@ describe("AssistantCliMessage", () => {
     ).toBeNull();
   });
 
+  const parkedQuestionPart: CliUiPart = {
+    type: "dynamic-tool",
+    toolName: "AskUserQuestion",
+    toolCallId: "toolu_ask_parked",
+    state: "input-available",
+    input: {
+      questions: [
+        {
+          question: "Which database should we use?",
+          header: "Database",
+          multiSelect: false,
+          options: [{ label: "Postgres" }, { label: "SQLite" }],
+        },
+      ],
+    },
+  };
+
+  test("hands an orphaned parked question back as the inline questionnaire (OS-1463, OS-2646)", () => {
+    const onSubmitAskUserQuestion = vi.fn();
+    render(
+      <AssistantCliMessage
+        messageId="msg_assistant_1"
+        status="completed"
+        renderState={createRenderState({ parts: [parkedQuestionPart] })}
+        orphanedParkedQuestion
+        onSubmitAskUserQuestion={onSubmitAskUserQuestion}
+      />
+    );
+
+    expect(screen.getByText("Which database should we use?")).toBeDefined();
+    fireEvent.click(screen.getByText("Postgres"));
+    fireEvent.click(screen.getByRole("button", { name: "Submit answers" }));
+    expect(onSubmitAskUserQuestion).toHaveBeenCalledWith(
+      expect.objectContaining({ toolCallId: "toolu_ask_parked" })
+    );
+  });
+
+  test("keeps a parked question collapsed while its run may still answer it", () => {
+    render(
+      <AssistantCliMessage
+        messageId="msg_assistant_1"
+        status="streaming"
+        renderState={createRenderState({ parts: [parkedQuestionPart] })}
+        onSubmitAskUserQuestion={vi.fn()}
+      />
+    );
+
+    expect(screen.queryByText("Which database should we use?")).toBeNull();
+  });
+
+  test("shows an answered orphaned question locked on an older message", () => {
+    const submittedResponse: AskUserQuestionResponsePayload = {
+      toolName: "AskUserQuestion",
+      toolCallId: "toolu_ask_parked",
+      submittedAt: 1739299200000,
+      answers: [
+        {
+          questionIndex: 0,
+          header: "Database",
+          question: "Which database should we use?",
+          multiSelect: false,
+          selectedOptionLabels: ["SQLite"],
+        },
+      ],
+    };
+
+    render(
+      <AssistantCliMessage
+        messageId="msg_assistant_1"
+        status="completed"
+        renderState={createRenderState({ parts: [parkedQuestionPart] })}
+        submittedAskUserQuestionResponses={{ toolu_ask_parked: submittedResponse }}
+        onSubmitAskUserQuestion={vi.fn()}
+      />
+    );
+
+    expect(screen.getByText("Which database should we use?")).toBeDefined();
+    expect(screen.queryByRole("button", { name: "Submit answers" })).toBeNull();
+  });
+
   test("passes the plan decision callback through to the plan panel", () => {
     const onPlanDecision = vi.fn().mockResolvedValue(undefined);
     const renderState = createRenderState({

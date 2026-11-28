@@ -1,4 +1,5 @@
 import type { UIMessage } from "ai";
+import type { CliUiPart } from "@/lib/cli-stream-ui";
 import { isDynamicToolUIPart } from "@/lib/ai-tools/ai-parts";
 import { getBoolean, getString } from "@/lib/ai-tools/parse-utils";
 import { isRecord } from "@/lib/type-guards";
@@ -124,6 +125,17 @@ function toQuestionArray(value: unknown): AskUserQuestionQuestion[] | null {
   }
 
   return questions;
+}
+
+/** Asked and never answered: the live card owns it until its run dies (OS-1463). */
+export function isParkedAskUserQuestion(
+  part: CliUiPart
+): part is Extract<CliUiPart, { type: "dynamic-tool"; state: "input-available" }> {
+  return (
+    part.type === "dynamic-tool" &&
+    isAskUserQuestionToolName(part.toolName) &&
+    part.state === "input-available"
+  );
 }
 
 export function parseAskUserQuestionToolPart(

@@ -401,9 +401,12 @@ failure (OS-1463):
   "Implement the approved plan." in the approved mode; the preserved
   continuation id resumes the runtime session with the plan in its
   transcript. This does not reopen the OS-1467 misfire: the signal is the
-  unsettled gate on a waiting thread, never the composer's mode. An
-  unanswered question needs no equivalent — typing in the composer is the
-  fallback.
+  unsettled gate on a waiting thread, never the composer's mode.
+- **A question survives the same way.** An unanswered `AskUserQuestion` on
+  the same orphaned run comes back as the inline questionnaire, answered with
+  a new message. Without it the card vanishes, and the user is left with a
+  collapsed tool row and no copy of what was asked. See
+  `docs/specs/cli-ask-user-question-ui.md#orphaned-questions`.
 
 ## Session capability
 

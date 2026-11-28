@@ -24,9 +24,10 @@ import {
   DropdownMenuSubTrigger,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
-import type {
-  AskUserQuestionResponseMap,
-  AskUserQuestionResponsePayload,
+import {
+  isParkedAskUserQuestion,
+  type AskUserQuestionResponseMap,
+  type AskUserQuestionResponsePayload,
 } from "@/lib/ai-tools/ask-user-question";
 import type {
   CliRunDiffFile,
@@ -78,6 +79,8 @@ export interface AssistantCliMessageProps {
     payload: AskUserQuestionResponsePayload
   ) => Promise<void> | void;
   submittedAskUserQuestionResponses?: AskUserQuestionResponseMap;
+  /** The run died parked on a question with no live request left (OS-1463). */
+  orphanedParkedQuestion?: boolean;
   onPlanDecision?: (decision: PlanDecision) => Promise<void> | void;
   showPlanDecisions?: boolean;
   pendingProposedPlan?: PlanDecision["proposedPlan"];
@@ -151,6 +154,26 @@ function settleInterruptedToolParts(parts: CliUiPart[], failed: boolean): CliUiP
   return didSettle ? settled : parts;
 }
 
+/**
+ * A parked `AskUserQuestion` whose run died goes back to the user as the inline
+ * questionnaire, answered by a new message (docs/specs/cli-ask-user-question-ui.md).
+ */
+function handBackParkedQuestions(
+  parts: CliUiPart[],
+  orphaned: boolean,
+  submitted: AskUserQuestionResponseMap | undefined
+): CliUiPart[] {
+  let didHandBack = false;
+  const handedBack = parts.map((part): CliUiPart => {
+    if (!isParkedAskUserQuestion(part) || !(orphaned || submitted?.[part.toolCallId])) {
+      return part;
+    }
+    didHandBack = true;
+    return { ...part, state: "output-error", errorText: "Run ended" };
+  });
+  return didHandBack ? handedBack : parts;
+}
+
 export const AssistantCliMessage = memo(function AssistantCliMessage({
   messageId,
   status,
@@ -169,6 +192,7 @@ export const AssistantCliMessage = memo(function AssistantCliMessage({
   renderState: renderStateProp,
   onSubmitAskUserQuestion,
   submittedAskUserQuestionResponses,
+  orphanedParkedQuestion = false,
   onPlanDecision,
   showPlanDecisions = false,
   pendingProposedPlan,
@@ -213,7 +237,11 @@ export const AssistantCliMessage = memo(function AssistantCliMessage({
 
   const renderMessage = useMemo(
     (): CliRenderMessage => {
-      const parts = renderState?.parts ?? [];
+      const parts = handBackParkedQuestions(
+        renderState?.parts ?? [],
+        orphanedParkedQuestion,
+        submittedAskUserQuestionResponses
+      );
       return {
         id: messageId,
         role: "assistant",
@@ -221,7 +249,15 @@ export const AssistantCliMessage = memo(function AssistantCliMessage({
         metadata: renderState?.metadata,
       };
     },
-    [messageId, renderState?.parts, renderState?.metadata, isSettled, status]
+    [
+      messageId,
+      renderState?.parts,
+      renderState?.metadata,
+      isSettled,
+      status,
+      orphanedParkedQuestion,
+      submittedAskUserQuestionResponses,
+    ]
   );
 
   // Grouping and the per-group liveness/duration answers all walk the message's
