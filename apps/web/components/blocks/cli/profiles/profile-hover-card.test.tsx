@@ -8,6 +8,7 @@ import { ProfileHoverCard } from "./profile-hover-card";
 
 type RootProps = { open?: boolean; onOpenChange?: (open: boolean) => void; openDelay?: number; closeDelay?: number };
 const rootProps = vi.hoisted(() => ({ current: null as RootProps | null }));
+const contentProps = vi.hoisted(() => ({ current: null as { side?: string } | null }));
 
 vi.mock("@/components/ui/hover-card", () => ({
   HoverCard: ({ children, ...props }: RootProps & { children: ReactNode }) => {
@@ -15,7 +16,10 @@ vi.mock("@/components/ui/hover-card", () => ({
     return <div>{children}</div>;
   },
   HoverCardTrigger: ({ children }: { children: ReactNode }) => <div>{children}</div>,
-  HoverCardContent: ({ children }: { children: ReactNode }) => <div>{children}</div>,
+  HoverCardContent: ({ children, side }: { children: ReactNode; side?: string }) => {
+    contentProps.current = { side };
+    return <div>{children}</div>;
+  },
 }));
 
 describe("ProfileHoverCard", () => {
@@ -86,5 +90,42 @@ describe("ProfileHoverCard", () => {
 
     expect(screen.getByRole("list", { name: "Repos in acme" }).textContent).toBe("new-apppackages/api");
     expect(screen.queryByText("2 repos")).toBeNull();
+  });
+
+  test("opens below its trigger on a phone, where there is no room beside it", () => {
+    const width = window.innerWidth;
+    window.innerWidth = 390;
+    try {
+      render(
+        <ProfileHoverCard profile={{ name: "Local Dev", isOnline: true, runtimes: [], paths: [] }}>
+          <span>Local Dev</span>
+        </ProfileHoverCard>
+      );
+      expect(contentProps.current?.side).toBe("bottom");
+    } finally {
+      window.innerWidth = width;
+    }
+  });
+
+  test("nests a repo's worktrees under it and counts one worktree in the singular", () => {
+    render(
+      <ProfileHoverCard
+        profile={{
+          name: "Local Dev",
+          isOnline: true,
+          runtimes: [],
+          paths: [
+            { id: "acme", label: "acme", path: "/code/acme" },
+            { id: "r1", label: "new-app", path: "/code/acme/new-app", kind: "repo", parentPathId: "acme" },
+            { id: "w1", label: "feat/x", path: "/code/acme/new-app-worktrees/feat-x", kind: "worktree", parentPathId: "r1" },
+          ],
+        }}
+      >
+        <span>Local Dev</span>
+      </ProfileHoverCard>
+    );
+
+    expect(screen.getByRole("list", { name: "Worktrees of new-app" }).textContent).toBe("feat/x");
+    expect(screen.getByText("1 + 1 worktree")).toBeDefined();
   });
 });

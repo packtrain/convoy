@@ -110,6 +110,8 @@ describe("WorktreeList", () => {
     // A repo opens in its folder's switcher: one URL per view.
     expect(links[1].getAttribute("href")).toContain("pathId=acme&repo=r1&view=changes");
     expect(links[2].getAttribute("href")).toContain("pathId=w1&view=changes");
+    // Under its repo, a worktree's branch takes the row; the path stays in the title.
+    expect(links[2].textContent).toBe("feat/x");
     expect(screen.queryByText("2 repos")).toBeNull();
   });
 

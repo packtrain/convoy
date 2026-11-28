@@ -3,7 +3,7 @@
  */
 import { afterEach, describe, expect, test, vi } from "vitest";
 import { cleanup, fireEvent, render, screen } from "@testing-library/react";
-import { RunTimelinePanel } from "./run-timeline-panel";
+import { emptyRunsMessage, RunTimelinePanel } from "./run-timeline-panel";
 import type { TimelineRun } from "@/lib/threads/run-timeline";
 
 const run = (n: number, prompt: string): TimelineRun => ({
@@ -30,6 +30,10 @@ describe("RunTimelinePanel", () => {
   test("an empty repo-scoped timeline says no run changed that repo (UX OS-2522 round 1)", () => {
     render(<RunTimelinePanel runs={[]} onOpenRange={vi.fn()} repoLabel="packages/api" />);
     expect(screen.getByText("No run has changed packages/api yet.")).toBeTruthy();
+  });
+
+  test("a worktree thread's empty main checkout says why its runs skip it (UX OS-2647 round 1)", () => {
+    expect(emptyRunsMessage("new-app", "feat/x")).toBe("This thread works in the feat/x worktree, so its runs don't track the new-app checkout.");
   });
 
   test("click–hover–click commits the contiguous range and resets the selection", () => {

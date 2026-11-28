@@ -3,6 +3,7 @@
 import { useState, type ReactNode } from "react";
 import { HoverCard, HoverCardContent, HoverCardTrigger } from "@/components/ui/hover-card";
 import { ProfileDetails, type ProfileDetailsData } from "./profile-details";
+import { useIsMobile } from "@/hooks/browser/use-mobile";
 import { cn } from "@/lib/utils";
 
 export function ProfileHoverCard({
@@ -17,6 +18,8 @@ export function ProfileHoverCard({
   children: ReactNode;
 }) {
   const [open, setOpen] = useState(false);
+  // A phone has no room beside the trigger, so the card opens below it.
+  const isMobile = useIsMobile();
   // Disabling drops a pending open, so re-enabling never resurrects a stale card.
   if (disabled && open) setOpen(false);
 
@@ -45,7 +48,7 @@ export function ProfileHoverCard({
           </span>
         )}
       </HoverCardTrigger>
-      <HoverCardContent side="right" align="start" sideOffset={8} className="z-[70] w-80 p-3">
+      <HoverCardContent side={isMobile ? "bottom" : "right"} align="start" sideOffset={8} collisionPadding={8} className="z-[70] w-80 max-w-[calc(100vw-16px)] p-3">
         <div className="mb-3 flex items-start justify-between gap-3">
           <div className="min-w-0">
             <p className="truncate font-semibold text-foreground">{profile.name}</p>

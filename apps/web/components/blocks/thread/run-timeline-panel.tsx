@@ -34,8 +34,12 @@ export interface RunTimelinePanelProps {
  * resets the selection. Clicking the same run twice opens that single run's
  * diff.
  */
-/** Empty timeline or Changes view; a repo-scoped one names the repo, since other repos may have runs. */
-export function emptyRunsMessage(repoLabel?: string): string {
+/**
+ * Empty timeline or Changes view; a repo-scoped one names the repo, since other repos may have runs.
+ * A worktree thread's runs skip its repo's main checkout (cli-multi-repo-projects.md#picking-a-repo).
+ */
+export function emptyRunsMessage(repoLabel?: string, threadWorktree?: string): string {
+  if (repoLabel && threadWorktree) return `This thread works in the ${threadWorktree} worktree, so its runs don't track the ${repoLabel} checkout.`;
   return repoLabel ? `No run has changed ${repoLabel} yet.` : "No runs yet.";
 }
 

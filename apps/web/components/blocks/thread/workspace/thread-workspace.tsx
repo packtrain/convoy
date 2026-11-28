@@ -678,6 +678,8 @@ function ThreadWorkspaceBody({
   const threadRepos = useMemo(() => threadChangesRepos(activeProfile?.paths ?? [], chat?.pathId), [activeProfile?.paths, chat?.pathId]);
   const ownCheckoutFirst = threadRepos.length > 0 && threadRepos[0].id === chat?.pathId;
   const { repo: changesRepo, select: selectChangesRepo, envelopes: changesEnvelopes } = useChangesRepo(threadId, threadRepos, envelopes, !messagesLoading, { ownFirst: ownCheckoutFirst });
+  // A worktree thread's runs skip its repo's main checkout, listed right after it.
+  const skippedMainCheckout = ownCheckoutFirst && threadRepos[0].kind === "worktree" && changesRepo?.id === threadRepos[0].parentPathId;
   // The own checkout's paths are the working directory's, so review comments still apply there.
   const foreignRepo = changesRepo !== undefined && !(ownCheckoutFirst && changesRepo.id === chat?.pathId);
   // A run or range belongs to the repo it was opened in; History closes its commit on a switch.
@@ -1987,7 +1989,9 @@ function ThreadWorkspaceBody({
               onMentionFile={handleChangesMentionFile}
             />
           ) : (
-            <p className="p-4 text-sm text-muted-foreground">{changesRepo ? emptyRunsMessage(changesRepo.label) : "No changes yet."}</p>
+            <p className="p-4 text-sm text-muted-foreground">
+              {changesRepo ? emptyRunsMessage(changesRepo.label, skippedMainCheckout ? (threadRepos[0].branch ?? threadRepos[0].label) : undefined) : "No changes yet."}
+            </p>
           )}
         </div>
       </div>
