@@ -41,7 +41,7 @@ Add the following environment variables in Vercel (Settings → Environment Vari
 
 | Variable | Required | Description |
 | --- | --- | --- |
-| `CONVEX_DEPLOY_KEY` | Yes | Deploy key from Convex dashboard (Settings → General → Deploy Keys). Only needed if using the integrated build command above |
+| `CONVEX_DEPLOY_KEY` | Yes | Deploy key from Convex dashboard (Settings → General → Deploy Keys). Only needed if using the integrated build command above. The key needs permission to run internal functions, because the build starts data migrations after the deploy |
 | `NEXT_PUBLIC_AUTH_MODE` | No | `convex` (default when unset) or `clerk` |
 | `NEXT_PUBLIC_APP_URL` | Convex Auth | The app's URL, the same as on the Convex deployment |
 | `NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY` | Clerk | Production Clerk publishable key |

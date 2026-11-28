@@ -52,6 +52,9 @@ in `apps/web` calls it.
   `npx convex run --component migrations lib:getStatus`, with `--prod` when the
   deploy went to production through a login or a project key.
 - `--dry-run` pushes nothing, so it starts nothing.
+- `runAll` is an internal mutation, so a deploy key needs the
+  `deployment:functions:runInternalMutations` permission. A key without it
+  deploys, then fails at `convex run`.
 
 The script has to pick the target for `convex run` itself, because
 `convex deploy` defaults to production and `convex run` defaults to dev:
