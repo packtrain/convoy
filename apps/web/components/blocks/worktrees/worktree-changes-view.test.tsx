@@ -417,6 +417,21 @@ describe("WorktreeChangesView", () => {
     expect(split.contains(screen.getByRole("button", { name: "Close files" }))).toBe(true);
   });
 
+  test("the tabs row is one 41px row on desktop and wraps only on a phone", () => {
+    onlineWithOneFile();
+    mobile.value = false;
+    const view = render(<WorktreeChangesView profileId={"profile_1" as Id<"cliProfiles">} pathId="path_1" />);
+    const row = () => screen.getByRole("tablist", { name: "Worktree view" }).closest("div.border-b")!;
+    expect(row().classList).toContain("h-[41px]");
+    expect(row().classList).not.toContain("py-1");
+    expect(row().classList).not.toContain("flex-wrap");
+
+    view.unmount();
+    mobile.value = true;
+    render(<WorktreeChangesView profileId={"profile_1" as Id<"cliProfiles">} pathId="path_1" />);
+    expect(row().classList).toContain("flex-wrap");
+  });
+
   test("the Files row matches the first file header's height and has no background under the tabs row", () => {
     onlineWithOneFile();
     mobile.value = false;

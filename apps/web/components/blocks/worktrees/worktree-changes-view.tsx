@@ -256,7 +256,12 @@ function ChangesViewForCheckout({ profileId, pathId, folder }: WorktreeChangesVi
         {/* ponytail: 41px like ThreadChangesToolbar — lines up with the sidebar's "New thread" row. */}
         {entry && (
           // Wraps on a phone rather than clipping its controls (UX OS-2522 round 2); one 41px row otherwise.
-          <div className="flex min-h-[41px] shrink-0 flex-wrap items-center gap-x-3 gap-y-1 border-b border-border bg-card px-4 py-1 text-xs text-muted-foreground">
+          <div
+            className={cn(
+              "flex shrink-0 items-center gap-x-3 gap-y-1 border-b border-border bg-card px-4 text-xs text-muted-foreground",
+              isMobile ? "min-h-[41px] flex-wrap py-1" : "h-[41px]"
+            )}
+          >
             {folder && <RepoSwitcher repos={folder.repos} value={pathId} onChange={(repo) => replace(route(tab, null, repo))} />}
             <Tabs value={tab} onValueChange={(value) => openTab(value === "history" ? "history" : "changes")} className="shrink-0">
               <TabsList variant="underline" className="w-auto border-b-0" aria-label="Worktree view">
