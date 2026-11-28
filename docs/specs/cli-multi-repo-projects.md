@@ -134,7 +134,10 @@ Repo entries never appear as their own rows. The working-directory selector,
 the Connected CLIs checkout list and the profile hover card show a folder with
 repos as `N repos` next to it, and hovering the count lists the repos by
 relative path (`RepoCount`, `components/blocks/cli/profiles/repo-count.tsx`, a
-native `title`: the count sits inside a link or menu item that owns focus).
+native `title`: the count sits inside a link or menu item that owns focus). The
+names also join that row's accessible name through visually hidden text. The
+Connected CLIs row's `+N more` counts configured paths only, never repo or
+worktree entries.
 The data comes from the profile queries the views already subscribe to.
 
 ## Repo switcher
@@ -158,8 +161,14 @@ picks the repo, listing the folder's repo entries in stored order:
 - **Worktree page** (`/threads?profileId&pathId&repo=<id>&view=changes|history`,
   built with `appRoute.projectThreadsWithPreselection`). `pathId` stays the
   folder, `repo` names the repo entry, and a missing or unknown `repo` shows the
-  first. The title is the folder's label; the path in the toolbar is the
-  repo's. Switching replaces the URL and starts the page fresh for that repo.
+  first and writes it to the URL. An unknown one also says so in a toast
+  ("That repo is no longer in acme. Showing new-app."). The title is the
+  folder's label; the toolbar drops the checkout path, since the switcher
+  names the repo. Switching replaces the URL and starts the page fresh for
+  that repo.
+- **Revert dialogs** on a repo entry name the repo: "Revert new-app/readme.md?",
+  "Revert all uncommitted changes in new-app?". An empty run timeline or Latest
+  run for a repo the runs skipped reads "No run has changed packages/api yet."
 - A revert on a repo entry is refused while a thread runs in its folder
   (`isPathInUse` in `convex/cli/worktreeOps.ts`).
 
@@ -187,10 +196,14 @@ thread on an older CLI behave as before.
   characters, the same rule as `syncRepos`.
 - **Display.** Where the thread shows its branch (the full row, the compact
   row's hover card, the composer's branch chip, Watch Tower rows and cards),
-  it shows `N repos` while the repos differ, and each repo as
-  `old-app · main` on hover (`threadBranchLabel`,
-  `lib/threads/repo-branches.ts`). A repo on a detached HEAD reads
-  `no branch`. The `N repos` chip in the composer copies nothing.
+  it shows `N branches` while the repos differ (the distinct branches, a
+  detached HEAD counting as one), and each repo as `old-app · main` on hover
+  (`threadBranchLabel`, `lib/threads/repo-branches.ts`). It counts branches
+  because `N repos` already means a folder's repos. A repo on a detached HEAD
+  reads `no branch`. The composer's `N branches` chip copies nothing; it is
+  focusable and lists the repos in a tooltip, as does the full row's label.
+  In a composer bar below its md container width the chip shows the count
+  alone, as the environment pill drops its label.
 - **Pull requests.** After a run and on a mid-run VCS signal, the CLI runs the
   [PR lookup](cli-thread-pr-badge.md#capture-cli) in each repo with that
   repo's branch and remote, 4 repos at a time (`lookupRepoPullRequests`), with
@@ -211,14 +224,20 @@ thread on an older CLI behave as before.
   `git.pullRequest` is for single-repo threads only.
 - **Badges.** Every surface with the PR badge (both row layouts, the composer
   bar, the Changes toolbar, Watch Tower) shows one badge per repo's PR, at most
-  3, then `+N` with the rest in a native tooltip (`ThreadPrBadges`). A fourth
+  3, then `+N` with the rest in a native tooltip and its accessible name
+  (`ThreadPrBadges`). Narrow surfaces show 1 and `+N`: a compact row, a
+  composer bar below its 2xl container width, and a Watch Tower list row
+  below `sm`, so the title, the meters and the task chip keep their room. A fourth
   PR is reachable from the compact row's hover card only, which lists every
   PR; folders with 4+ open PRs in one thread are expected to be rare. A badge's tooltip and
   the hover card's PR rows start with the repo: `new-app · PR #12 · Open — …`.
   The Attached pull request's muted `#N` is hidden when it is any of them.
+  The sidebar Changes toolbar shows only the selected repo's PR, since the tab
+  shows one repo (`repoScopedPullRequests`).
 - **Task links.** A repo's PR mirrors onto the task as
   `pr:<provider>:<repo>:<number>` with identifier `new-app PR #12`, so two
-  repos' PR #12 are two links. In the id, the repo is its path with each run
+  repos' PR #12 are two links. The link reads `new-app PR #12 · <title>`, the
+  identifier first so repos stay apart. In the id, the repo is its path with each run
   of characters outside `[A-Za-z0-9_-]` turned into `-`, cut at 80, then `.`
   and the first 16 hex digits of the full path's SHA-256
   (`packages/api` → `packages-api.<hash>`), so two paths never share a link

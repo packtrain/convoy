@@ -172,4 +172,11 @@ describe("RunChangesCard in a multi-repo folder", () => {
     // old-app has no repo entry yet, so nothing can address it.
     expect(screen.queryByRole("button", { name: "Revert old-app/src/b.ts" })).toBeNull();
   });
+
+  test("names each file by its repo path and keeps repo headers out of the file list (UX OS-2522 round 1)", () => {
+    render(<RunChangesCard diffSummary={multiRepo} onSelectFile={vi.fn()} />);
+
+    expect(screen.getByRole("button", { name: "new-app/src/a.ts" })).toBeDefined();
+    expect(screen.getAllByRole("listitem")).toHaveLength(2);
+  });
 });

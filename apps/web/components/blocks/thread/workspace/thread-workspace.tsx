@@ -99,6 +99,7 @@ import {
 import { folderPathOf, repoPathIdOf, scopeRunToRepo } from "@/lib/threads/run-diff-repos";
 import { useChangesRepo } from "@/lib/threads/hooks/use-changes-repo";
 import { RepoSwitcher } from "@/components/blocks/cli/profiles/repo-switcher";
+import { emptyRunsMessage } from "@/components/blocks/thread/run-timeline-panel";
 import { useThreadRunReviewComments } from "@/lib/threads/hooks/use-thread-run-review-comments";
 import { composeReviewFeedbackMessage } from "@/lib/threads/run-review-comments";
 import { TaskArtifactPanel } from "@/components/blocks/tasks/task-artifact-panel";
@@ -116,7 +117,7 @@ import {
 } from "@/convex/lib/contracts/validators";
 import { ThreadTaskRefLink } from "@/components/blocks/thread/thread-task-link";
 import { ThreadAttachedPrRefLink } from "@/components/blocks/thread/thread-pr-badge";
-import { threadPullRequests } from "@/lib/threads/pull-request";
+import { repoScopedPullRequests, threadPullRequests } from "@/lib/threads/pull-request";
 import { ThreadStatusIndicator } from "@/components/blocks/thread/thread-status-indicator";
 import {
   getThreadDisplayStatus,
@@ -1903,7 +1904,7 @@ function ThreadWorkspaceBody({
     ) : (
       <div className="flex h-full min-h-0 flex-col">
         <ThreadChangesToolbar
-          pullRequests={chat ? threadPullRequests(chat) : []}
+          pullRequests={chat ? repoScopedPullRequests(threadPullRequests(chat), changesRepo?.label) : []}
           label={changesViewLabel}
           changesViewKind={changesView.kind}
           runs={timelineRuns}
@@ -1916,6 +1917,7 @@ function ThreadWorkspaceBody({
           // A multi-repo run has no one checkout to restore (no Undo on its card either).
           onRevertRun={runFileOpContext && !changesRepo ? handleRevertRun : undefined}
           leading={changesRepo && <RepoSwitcher repos={threadRepos} value={changesRepo.id} onChange={selectChangesRepo} />}
+          repoLabel={changesRepo?.label}
           allCollapsed={changesAllCollapsed}
           onToggleCollapseAll={() => setChangesAllCollapsed((value) => !value)}
           diffStyle={changesDiffStyle}
@@ -1975,7 +1977,7 @@ function ThreadWorkspaceBody({
               onMentionFile={handleChangesMentionFile}
             />
           ) : (
-            <p className="p-4 text-sm text-muted-foreground">No changes yet.</p>
+            <p className="p-4 text-sm text-muted-foreground">{changesRepo ? emptyRunsMessage(changesRepo.label) : "No changes yet."}</p>
           )}
         </div>
       </div>

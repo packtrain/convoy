@@ -568,6 +568,23 @@ describe("ThreadListItem", () => {
     expect(screen.getAllByLabelText("PR #7 · Open — Add PR badge").length).toBeGreaterThan(0);
   });
 
+  test("the full row's multi-repo branch label is focusable and names each repo's branch (CR OS-2520 round 1 #1)", () => {
+    const chat = {
+      _id: "thread_1" as Id<"cliThreads">,
+      title: "Branch two repos",
+      repoBranches: [{ repo: "new-app", branch: "feat/login" }, { repo: "old-app", branch: "main" }],
+      status: "completed" as const,
+      cliType: "codex" as const,
+      hasUnread: false,
+      requiresAttention: false,
+      pullRequestChecksRunning: false,
+      lastActivityAt: Date.now(),
+    };
+    render(<ThreadListItem chat={chat} isActive={false} compactLayout={false} organizationSlug="contoso" projectAlias="OS" showActions={false} />);
+    const label = screen.getByRole("img", { name: "2 branches: new-app · feat/login, old-app · main" });
+    expect(label.getAttribute("tabindex")).toBe("0");
+  });
+
   test("run rows link a tinted, name-titled workflow badge to the workflow editor in both layouts", () => {
     const chat = {
       _id: "thread_1" as Id<"cliThreads">,

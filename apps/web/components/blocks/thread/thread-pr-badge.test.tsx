@@ -78,4 +78,12 @@ describe("ThreadPrBadges (OS-2523)", () => {
     const more = screen.getByText("+2");
     expect(more.getAttribute("title")).toBe("d · PR #4 · Open — Add PR badge\ne · PR #5 · Open — Add PR badge");
   });
+
+  test("a compact row's max shows fewer badges, and +N names the rest (UX OS-2523 round 1)", () => {
+    const repos = ["a", "b"].map((repo, index) => ({ ...pullRequest, repo, number: index + 1, url: `https://github.com/acme/${repo}/pull/${index + 1}` }));
+    render(<ThreadPrBadges pullRequests={repos} max={1} />);
+
+    expect(screen.getAllByRole("link")).toHaveLength(1);
+    expect(screen.getByText("+1").getAttribute("aria-label")).toBe("1 more pull request: b · PR #2 · Open — Add PR badge");
+  });
 });

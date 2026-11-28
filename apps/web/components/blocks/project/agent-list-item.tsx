@@ -3,6 +3,7 @@
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { cn, getInitials } from "@/lib/utils";
 import type { Id } from "@/convex/_generated/dataModel";
+import { isConfiguredPath, type CliProfilePathKind } from "@/convex/lib/contracts/validators";
 import {
   renderCliIcon,
   type AvailableCliInfo,
@@ -13,6 +14,7 @@ import type { ProfileDetailsData } from "@/components/blocks/cli/profiles/profil
 interface AgentPath {
   id: string;
   path: string;
+  kind?: CliProfilePathKind;
   gitRemoteUrl?: string;
 }
 
@@ -103,7 +105,7 @@ export function AgentListItem({ agent, onClick, profileDetails, hideAvatar = fal
   const firstPath = agent.paths[0];
   const repoDisplay = firstPath ? truncateRepoPath(firstPath.path) : "No paths";
   const gitRemote = firstPath ? extractGitRemote(firstPath.gitRemoteUrl) : null;
-  const pathCount = agent.paths.length;
+  const pathCount = agent.paths.filter(isConfiguredPath).length;
 
   const row = (
     <button

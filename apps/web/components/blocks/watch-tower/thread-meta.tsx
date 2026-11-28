@@ -62,7 +62,7 @@ function WatchTowerTaskChip({
   );
 }
 
-/** Branch name, or "N repos" in a multi-repo folder, truncated with the full value in the tooltip (OS-1257, OS-2523). */
+/** Branch name, or "N branches" in a multi-repo folder, truncated with the full value in the tooltip (OS-1257, OS-2523). */
 export function WatchTowerBranchLabel({
   label,
   className,
@@ -104,13 +104,25 @@ export function WatchTowerThreadMeta({
         className
       )}
     >
-      <span className="shrink-0">{thread.location.projectName}</span>
+      <span className="min-w-8 truncate" title={thread.location.projectName}>{thread.location.projectName}</span>
       {thread.ownerName ? <span className="truncate" title={thread.ownerName}>{thread.ownerName}</span> : null}
       <WatchTowerChildCount thread={thread} />
       {pullRequests.length > 0 ? (
         <>
           <span aria-hidden>·</span>
-          <ThreadPrBadges pullRequests={pullRequests} />
+          {pullRequests.length > 1 ? (
+            // One badge and +N on a phone, so the task chip stays in the row (UX OS-2523 round 2).
+            <>
+              <span className="contents sm:hidden">
+                <ThreadPrBadges pullRequests={pullRequests} max={1} />
+              </span>
+              <span className="hidden sm:contents">
+                <ThreadPrBadges pullRequests={pullRequests} />
+              </span>
+            </>
+          ) : (
+            <ThreadPrBadges pullRequests={pullRequests} />
+          )}
         </>
       ) : null}
       {branchLabel ? (

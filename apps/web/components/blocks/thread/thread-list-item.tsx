@@ -76,6 +76,7 @@ import type { AttachedPullRequest } from "@/convex/lib/contracts/github";
 import type { CliThreadRepoBranch, CliThreadRepoPullRequest } from "@/convex/lib/contracts/validators";
 import { formatThreadPullRequestRef, formatThreadPullRequestTooltip, getThreadPullRequestPresentation, threadPullRequests, type ThreadPullRequest } from "@/lib/threads/pull-request";
 import { threadBranchLabel, type ThreadBranchLabel } from "@/lib/threads/repo-branches";
+import { TooltipExt } from "@/components/custom/tooltip-ext";
 
 export interface ThreadListItemData {
   _id: Id<"cliThreads">;
@@ -978,7 +979,8 @@ function ThreadListItemComponent({
                   />
                 ) : null}
                 {attachedPrBadge}
-                <ThreadPrBadges pullRequests={pullRequests} />
+                {/* One badge, then +N: the hover card lists every PR, and the title keeps its room. */}
+                <ThreadPrBadges pullRequests={pullRequests} max={1} />
                 {isShared ? <ThreadSharedRowBadge /> : null}
               </>
             ) : undefined
@@ -1173,7 +1175,20 @@ function ThreadListItemComponent({
               {chat.background ? <ThreadBackgroundRowBadge background={chat.background} /> : null}
               <ThreadPrBadges pullRequests={pullRequests} />
               {isShared ? <ThreadSharedRowBadge /> : null}
-              {branchLabel ? (
+              {branchLabel?.repoLines ? (
+                // Above the overlay link so hover reaches the repo list (OS-2523).
+                <TooltipExt content={branchLabel.title} delayDuration={300}>
+                  <span
+                    className="pointer-events-auto flex min-w-0 cursor-default items-center gap-1 rounded-sm text-xs text-muted-foreground/70 outline-none focus-visible:ring-2 focus-visible:ring-ring/50"
+                    role="img"
+                    tabIndex={0}
+                    aria-label={`${branchLabel.text}: ${branchLabel.repoLines.join(", ")}`}
+                  >
+                    <GitBranch className="size-3.5 shrink-0" />
+                    <span className="truncate">{branchLabel.text}</span>
+                  </span>
+                </TooltipExt>
+              ) : branchLabel ? (
                 <span className="flex min-w-0 items-center gap-1 text-xs text-muted-foreground/70" title={branchLabel.title}>
                   <GitBranch className="size-3.5 shrink-0" />
                   <span className={cn("truncate", branchLabel.branch && "font-mono")}>{branchLabel.text}</span>

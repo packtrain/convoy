@@ -655,7 +655,8 @@ function ThreadComposerWorkspaceSummary({
   const label = kind === "worktree" ? "Worktree" : "Work locally";
   const EnvironmentIcon = kind === "worktree" ? FolderGit2 : Laptop;
   const chipClassName =
-    "flex h-7 min-w-0 max-w-44 shrink items-center gap-1.5 rounded-[min(var(--radius-md),12px)] px-2 text-[0.8rem] leading-4 text-muted-foreground";
+    // px-1 in the narrowest bar: a thread with per-repo PRs needs the room for its meters (UX OS-2523 round 2).
+    "flex h-7 min-w-0 max-w-44 shrink items-center gap-1.5 rounded-[min(var(--radius-md),12px)] px-1 text-[0.8rem] leading-4 text-muted-foreground @sm/composer-bar:px-2";
   const summary = (
     <div
       className={cn(chipClassName, tooltip && "cursor-help")}
@@ -694,10 +695,14 @@ function ThreadComposerWorkspaceSummary({
           <MiddleTruncate text={branch} />
         </button>
       ) : branchLabel ? (
-        <span className={chipClassName} title={branchLabel.title}>
-          <GitBranch className="size-3.5 shrink-0 opacity-70" />
-          <span className="truncate">{branchLabel.text}</span>
-        </span>
+        <TooltipExt content={branchLabel.title} delayDuration={300}>
+          <span className={cn(chipClassName, "shrink-0 cursor-default")} role="img" tabIndex={0} aria-label={`${branchLabel.text}: ${branchLabel.repoLines?.join(", ")}`}>
+            <GitBranch className="size-3.5 shrink-0 opacity-70" />
+            {/* The count alone in a narrow bar, as the environment pill drops its label. */}
+            <span className="@md/composer-bar:hidden">{branchLabel.shortText}</span>
+            <span className="hidden truncate @md/composer-bar:inline">{branchLabel.text}</span>
+          </span>
+        </TooltipExt>
       ) : null}
     </>
   );
@@ -1245,7 +1250,19 @@ function ThreadComposerContent({
                 {showWorkspaceSummary && workspaceSummary ? (
                   <ThreadComposerWorkspaceSummary {...workspaceSummary} tooltip={workspaceSummaryTooltip} />
                 ) : null}
-                {pullRequests ? <ThreadPrBadges pullRequests={pullRequests} className="h-7 px-2" /> : null}
+                {pullRequests && pullRequests.length > 1 ? (
+                  // One badge and +N below 2xl, so the meters keep their room (UX OS-2523 round 2).
+                  <>
+                    <span className="contents @2xl/composer-bar:hidden">
+                      <ThreadPrBadges pullRequests={pullRequests} max={1} className="h-7 px-1 @sm/composer-bar:px-2" refClassName="hidden @sm/composer-bar:inline" />
+                    </span>
+                    <span className="hidden @2xl/composer-bar:contents">
+                      <ThreadPrBadges pullRequests={pullRequests} className="h-7 px-2" />
+                    </span>
+                  </>
+                ) : pullRequests ? (
+                  <ThreadPrBadges pullRequests={pullRequests} className="h-7 px-2" />
+                ) : null}
                 <ThreadPlanProgress plan={planProgress ?? null} />
                 {showTopBarAgentSelector && selectorsProps.onProjectAgentChange ? (
                   <ThreadAgentSelector

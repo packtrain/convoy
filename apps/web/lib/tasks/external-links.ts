@@ -63,6 +63,11 @@ export function isTaskExternalLinkKind(
   return (TASK_EXTERNAL_LINK_KINDS as readonly string[]).includes(value);
 }
 
+/** True for `<repo> PR #12`, false for the single-repo `PR #12` / `MR !7`. */
+function isRepoPullRequestIdentifier(identifier: string): boolean {
+  return /\S (PR #|MR !)\d+$/.test(identifier);
+}
+
 /** Compact one-line label used by the sidebar and CLI text output. */
 export function getExternalLinkLabel(link: TaskExternalLinkInput): string {
   switch (link.kind) {
@@ -73,6 +78,8 @@ export function getExternalLinkLabel(link: TaskExternalLinkInput): string {
     case "branch":
       return link.name;
     case "pull_request":
+      // A repo PR's identifier names its repo (`new-app PR #12`, OS-2523); it leads so repos stay apart.
+      if (link.identifier && link.title && isRepoPullRequestIdentifier(link.identifier)) return `${link.identifier} · ${link.title}`;
       return link.title ?? link.identifier ?? link.url;
     case "url":
       return link.title ?? link.url;

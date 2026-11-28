@@ -15,6 +15,11 @@ export function threadPullRequests(thread: { pullRequest?: CliThreadPullRequest;
   return thread.repoPullRequests ?? (thread.pullRequest ? [thread.pullRequest] : []);
 }
 
+/** The PRs of the repo a view is scoped to (the Changes tab's repo switcher), else all of them. */
+export function repoScopedPullRequests(pullRequests: ThreadPullRequest[], repo: string | undefined): ThreadPullRequest[] {
+  return repo === undefined ? pullRequests : pullRequests.filter((pullRequest) => pullRequest.repo === repo);
+}
+
 export interface ThreadPullRequestPresentation {
   icon: LucideIcon;
   colorClass: string;

@@ -14,7 +14,7 @@ const state = vi.hoisted(() => ({
   op: undefined as unknown,
   enqueue: vi.fn(),
   changes: { resultJson: null as string | null, loading: false, error: null as string | null, refresh: vi.fn() },
-  toast: { error: vi.fn(), success: vi.fn() },
+  toast: { error: vi.fn(), success: vi.fn(), info: vi.fn() },
   opCalls: [] as { kind: string; scope?: string; enabled: boolean }[],
 }));
 
@@ -190,6 +190,27 @@ describe("WorktreeChangesView", () => {
     fireEvent.click(screen.getByRole("menuitemradio", { name: "new-app" }));
     expect(url.search).toBe("?profileId=profile_1&pathId=folder&repo=r-new&view=changes");
     expect(opPaths().at(-1)).toBe("r-new");
+  });
+
+  test("a multi-repo folder writes the shown repo to the URL and says when a linked repo is gone (UX OS-2522 round 1)", () => {
+    state.profile = {
+      paths: [
+        { id: "folder", path: "/code/acme", label: "acme" },
+        { id: "r-new", path: "/code/acme/new-app", label: "new-app", kind: "repo", parentPathId: "folder" },
+      ],
+      isOnline: true,
+      appVersion: "0.187.0",
+    };
+    url.search = "?profileId=profile_1&pathId=folder&view=changes";
+    const view = render(<WorktreeChangesView profileId={"profile_1" as Id<"cliProfiles">} pathId="folder" />);
+    expect(url.search).toBe("?profileId=profile_1&pathId=folder&repo=r-new&view=changes");
+    expect(state.toast.info).not.toHaveBeenCalled();
+    view.unmount();
+
+    url.search = "?profileId=profile_1&pathId=folder&repo=r-gone&view=changes";
+    render(<WorktreeChangesView profileId={"profile_1" as Id<"cliProfiles">} pathId="folder" />);
+    expect(url.search).toBe("?profileId=profile_1&pathId=folder&repo=r-new&view=changes");
+    expect(state.toast.info).toHaveBeenCalledWith("That repo is no longer in acme. Showing new-app.");
   });
 
   test("the History tab is in the URL, so a reload reopens it (OS-2534 UX review)", () => {

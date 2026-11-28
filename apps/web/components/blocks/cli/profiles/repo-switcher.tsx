@@ -24,7 +24,7 @@ export function RepoSwitcher({
   return (
     <DropdownMenu>
       <DropdownMenuTrigger asChild>
-        <Button type="button" variant="ghost" size="sm" className="min-w-0 cursor-pointer gap-1 px-2 font-medium" aria-label={`Repository: ${current?.label ?? ""}`}>
+        <Button type="button" variant="ghost" size="sm" className="min-w-0 max-w-40 shrink cursor-pointer gap-1 px-2 font-medium" aria-label={`Repository: ${current?.label ?? ""}`} title={current?.label}>
           <FolderGit2 className="size-3.5 text-muted-foreground" />
           <span className="truncate">{current?.label}</span>
           <ChevronDown className="size-3.5 text-muted-foreground" />
