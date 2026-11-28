@@ -483,6 +483,18 @@ describe("createClaudeCodeRunner (agent SDK)", () => {
     expect(calls[0]?.options?.additionalDirectories).toEqual(["/repos/a", "/repos/b"]);
   });
 
+  it("adds a repo thread's project folder as an additional directory, isolated or not", async () => {
+    const { createQuery, calls } = createQueryMock({ messages: [SESSION_MESSAGE, SUCCESS_RESULT] });
+    const open = createClaudeCodeRunner({ createQuery });
+    await drain(open.execute("/acme/new-app", "prompt", { threadId: "thread_test", cliType: "claude-code", additionalDirectories: ["/acme"] }));
+    const isolated = createClaudeCodeRunner({ createQuery, sandbox: { writableRoots: ["/acme"] } });
+    await drain(isolated.execute("/acme/new-app", "prompt", { threadId: "thread_test", cliType: "claude-code", additionalDirectories: ["/acme"] }));
+
+    expect(calls[0]?.options?.additionalDirectories).toEqual(["/acme"]);
+    expect(calls[0]?.options?.sandbox).toBeUndefined();
+    expect(calls[1]?.options?.additionalDirectories).toEqual(["/acme"]);
+  });
+
   it("omits the file-tool guard hook when not isolated", async () => {
     const { createQuery, calls } = createQueryMock({
       messages: [SESSION_MESSAGE, SUCCESS_RESULT],

@@ -281,6 +281,8 @@ interface ThreadMessageListProps {
   onRevertRun?: (diffSummary: CliRunDiffSummaryPreview) => void;
   /** Inserts an `@path` mention into the composer (OS-1159). */
   onMentionFile?: (path: string) => void;
+  /** A repo thread's own checkout relative to its folder, for run-card mentions (OS-2647). */
+  checkoutLabel?: string;
   /** Asks to revert one file to its pre-run state (OS-1156). */
   onRevertFile?: (file: CliRunDiffFile, diffSummary: CliRunDiffSummaryPreview) => void;
   /** Resolves a user message's attachments (steered-message inline bubbles). */
@@ -368,6 +370,7 @@ export const ThreadMessageList = memo(function ThreadMessageList({
   onOpenDiffFile,
   onRevertRun,
   onMentionFile,
+  checkoutLabel,
   onRevertFile,
   getUserMessageAttachments,
   onShowOlderMessages,
@@ -553,6 +556,7 @@ export const ThreadMessageList = memo(function ThreadMessageList({
                         onOpenDiffFile={onOpenDiffFile}
                         onRevertRun={onRevertRun}
                         onMentionFile={onMentionFile}
+                        checkoutLabel={checkoutLabel}
                         onRevertFile={onRevertFile}
                         renderState={assistantRender}
                         onSubmitAskUserQuestion={onSubmitAskUserQuestion}

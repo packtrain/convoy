@@ -551,6 +551,8 @@ function buildQueryOptions(params: {
     .filter((part): part is string => typeof part === "string" && part.length > 0)
     .join("\n\n");
 
+  const additionalDirectories = [...new Set([...(params.sandbox?.writableRoots ?? []), ...(options.additionalDirectories ?? [])])];
+
   return {
     ...(params.includePartialMessages ? { includePartialMessages: true } : {}),
     cwd: params.workingDirectory,
@@ -582,7 +584,8 @@ function buildQueryOptions(params: {
     // Isolation (OS-1242): OS-level sandbox (Seatbelt/bubblewrap) with the profile paths as the
     // write boundary; the cwd is writable natively. failIfUnavailable stays at the SDK default —
     // the user opted in, so a machine that cannot sandbox fails loudly instead of running open.
-    // additionalDirectories lets file tools cross between profile paths.
+    // additionalDirectories lets file tools cross between profile paths, and reach a repo thread's folder.
+    ...(additionalDirectories.length > 0 ? { additionalDirectories } : {}),
     ...(params.sandbox
       ? {
           sandbox: {
@@ -594,7 +597,6 @@ function buildQueryOptions(params: {
             allowUnsandboxedCommands: false,
             filesystem: { allowWrite: params.sandbox.writableRoots },
           },
-          additionalDirectories: params.sandbox.writableRoots,
           hooks: {
             PreToolUse: [
               createSandboxFileGuard(params.sandbox.writableRoots, params.workingDirectory),

@@ -15,7 +15,7 @@ import {
 } from "../runtimes/contracts.js";
 import { createScriptRunner } from "./script-runner.js";
 import { prepareWorktree, unapprovedWorktreeSetupMessage, unapprovedWorktreeSetupNotice } from "./worktree-setup.js";
-import { repositoryContextInstruction, withPromptLine, withRunAttachmentInstructions } from "../runtimes/agent-instructions.js";
+import { projectFolderInstruction, repositoryContextInstruction, withPromptLine, withRunAttachmentInstructions } from "../runtimes/agent-instructions.js";
 import type { InteractionRouter } from "./interaction-router.js";
 import { getDebugLevel } from "../runtimes/debug.js";
 import { getChunkStreamPolicy, isInlineImageAttachment, normalizeCliRuntimeModel, prepareRunExecution, signalsVcsStateChange } from "../runtimes/registry.js";
@@ -59,8 +59,8 @@ export interface MessageHandlerOptions {
   attachmentCacheGcIntervalMs?: number;
   maxConcurrentChats?: number;
   interactionRouter?: InteractionRouter;
-  /** The working directory's repos by relative path, [] unless it is a multi-repo folder; syncs them in the background. */
-  syncRepos?: (folder: string) => Promise<string[]>;
+  /** The working directory's repos by relative path, [] unless it is a multi-repo folder; syncs them in the background, or before resolving with `published`. */
+  syncRepos?: (folder: string, options?: { published?: boolean }) => Promise<string[]>;
   /** One per script run (OS-1886), so abort stays scoped to its chat; defaults to the real `bash -c` runner. */
   createScriptRunner?: () => CliRuntimeRunner;
 }
@@ -320,6 +320,8 @@ export function createMessageHandler(
     let workingDirectory = chat.workingDirectory;
     let pendingWorktree = chat.worktree?.status === "pending" ? chat.worktree : null;
     let executionWorktree = chat.worktree;
+    // A repo or repo-worktree thread's folder, as the server resolves it (cli-multi-repo-projects.md#folder-access).
+    let projectFolder = chat.projectFolder;
     let workspaceNotice = chat.previousWorkingDirectory
       ? { previousPath: chat.previousWorkingDirectory, path: workingDirectory }
       : undefined;
@@ -458,6 +460,10 @@ export function createMessageHandler(
         const resume: ThreadResumeHandle = await client.query(api.cli.messages.getResumeHandleForThread, {
           threadId: chat._id,
         });
+        // A deleted repo leaves the server's list first, so the run starts in its folder (cli-multi-repo-projects.md#vanished-repo).
+        if (projectFolder && !executionWorktree && !(await workingDirectoryExists(workingDirectory))) {
+          await options.syncRepos?.(projectFolder, { published: true }).catch(() => []);
+        }
         let started: FunctionReturnType<typeof api.cli.messages.startRunResponse> | undefined;
         try {
           started = await client.mutation(api.cli.messages.startRunResponse, {
@@ -554,7 +560,18 @@ export function createMessageHandler(
           const workspace = started.workspace ?? (pendingWorktree
             ? await client.query(api.cli.worktrees.getExecutionWorkspace, { threadId: chat._id, sessionId: typedSessionId })
             : undefined);
+          if (workspace?.repoRemoved && workspace.previousPath) {
+            const moved = { previousPath: workspace.previousPath, path: workspace.path };
+            await client.mutation(api.cli.messages.appendRunContent, {
+              messageId: started.assistantMessageId,
+              sessionId: typedSessionId,
+              chunks: [{ type: "convoy_notice", data: JSON.stringify({
+                code: "workspace-recovered", title: "Working directory recovered", message: formatWorkspaceNotice(moved), change: "folder", ...moved,
+              }) }],
+            });
+          }
           if (workspace) {
+            projectFolder = workspace.projectFolder;
             workingDirectory = workspace.path;
             executionWorktree = workspace.worktree;
             pendingWorktree = workspace.worktree?.status === "pending" ? workspace.worktree : null;
@@ -692,7 +709,7 @@ export function createMessageHandler(
             // Pre-run git checkpoint (OS-1142), per repo in a multi-repo folder. Fail soft:
             // a checkpoint problem must never block the run; null also covers non-git directories.
             try {
-              return await captureRunBaseline(path, chat._id as string, runId);
+              return await captureRunBaseline(path, chat._id as string, runId, { folder: projectFolder });
             } catch (error) {
               console.warn(
                 chalk.yellow(
@@ -706,12 +723,18 @@ export function createMessageHandler(
             createdWorktreeThisRun ? undefined : workspace,
           ));
           let checkpointBaseline = await snapshotRunStart(workingDirectory, checkpointRunId);
+          let additionalDirectories: string[] | undefined;
           if (isPlainRun) {
-            const repos = await options.syncRepos?.(workingDirectory).catch((error: unknown) => {
+            const repos = await options.syncRepos?.(projectFolder ?? workingDirectory).catch((error: unknown) => {
               console.warn(chalk.yellow(`[Repos] chat ${shortId} scan failed: ${error instanceof Error ? error.message : String(error)}`));
               return [];
             }) ?? [];
-            if (repos.length > 0) runExecution = withPromptLine(runExecution, repositoryContextInstruction(repos));
+            if (repos.length > 0) {
+              runExecution = withPromptLine(runExecution, projectFolder
+                ? projectFolderInstruction(projectFolder, workingDirectory, repos)
+                : repositoryContextInstruction(repos));
+            }
+            additionalDirectories = projectFolder && repos.length > 0 ? [projectFolder] : undefined;
           }
 
           const interactionRouter = options.interactionRouter;
@@ -816,6 +839,7 @@ export function createMessageHandler(
               scriptRequest,
               interactionBridge,
               steerEnabled: steerRunner !== undefined,
+              additionalDirectories,
             });
           };
 

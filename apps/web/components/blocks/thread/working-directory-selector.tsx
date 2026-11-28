@@ -1,6 +1,6 @@
 "use client";
 
-import { isConfiguredPath, type CliProfilePathEntry } from "@/convex/lib/contracts/validators";
+import { folderRepos, isConfiguredPath, type CliProfilePathEntry } from "@/convex/lib/contracts/validators";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { useMutation } from "convex/react";
 import { createPortal } from "react-dom";
@@ -74,7 +74,8 @@ function isProfileOptionsTarget(target: EventTarget | null) {
     return false;
   }
 
-  return target.closest("[data-profile-options-menu]") !== null || target.closest("[data-profile-options-trigger]") !== null;
+  return target.closest("[data-profile-options-menu]") !== null || target.closest("[data-profile-options-trigger]") !== null
+    || target.closest("[data-folder-repos-menu]") !== null;
 }
 
 type OptionsMenuState = {
@@ -95,6 +96,7 @@ export function WorkingDirectorySelector({
   compact = false,
 }: WorkingDirectorySelectorProps) {
   const [open, setOpen] = useState(false);
+  const [search, setSearch] = useState("");
   const [profileToRename, setProfileToRename] = useState<WorkingDirectorySelectorProfile | null>(null);
   const [profileToDelete, setProfileToDelete] = useState<WorkingDirectorySelectorProfile | null>(null);
   const [optionsMenu, setOptionsMenu] = useState<OptionsMenuState | null>(null);
@@ -104,6 +106,9 @@ export function WorkingDirectorySelector({
 
   const currentProfile = profiles.find((p) => p._id === profileId);
   const currentPath = currentProfile?.paths.find((p) => p.id === pathId);
+  // A repo reads `acme / new-app`, so two folders' `api` repos stay apart.
+  const currentFolder = currentPath?.kind === "repo" ? currentProfile?.paths.find((p) => p.id === currentPath.parentPathId) : undefined;
+  const currentPathLabel = currentPath && (currentFolder ? `${currentFolder.label} / ${currentPath.label}` : currentPath.label);
 
   const shouldShowPathInTrigger = !!currentPath && !compact;
 
@@ -111,6 +116,7 @@ export function WorkingDirectorySelector({
     if (disabled) return;
     onChange(selectedProfileId, selectedPathId);
     setOpen(false);
+    setSearch("");
     setOptionsMenu(null);
   };
 
@@ -229,7 +235,7 @@ export function WorkingDirectorySelector({
         onPointerEnter={() => {
           closedDropdownRef.current = false;
         }}
-        title={currentProfile ? `${currentProfile.name}${currentPath ? ` / ${currentPath.label}` : ""}` : "Select working directory"}
+        title={currentProfile ? `${currentProfile.name}${currentPathLabel ? ` / ${currentPathLabel}` : ""}` : "Select working directory"}
       >
         <StatusDot isOnline={currentProfile?.isOnline ?? false} />
         <span className="flex min-w-0">
@@ -238,7 +244,7 @@ export function WorkingDirectorySelector({
             // Capped and middle-truncated: long worktree labels share their prefix, the end tells them apart.
             <span className="flex min-w-0 max-w-56 text-muted-foreground/60 @max-lg/composer-bar:hidden">
               <span className="shrink-0 whitespace-pre">{" / "}</span>
-              <MiddleTruncate text={currentPath.label} />
+              <MiddleTruncate text={currentPathLabel ?? currentPath.label} />
             </span>
           )}
         </span>
@@ -258,6 +264,7 @@ export function WorkingDirectorySelector({
           if (!nextOpen) {
             closedDropdownRef.current = true;
             setOptionsMenu(null);
+            setSearch("");
           }
         }}
       >
@@ -269,7 +276,13 @@ export function WorkingDirectorySelector({
           selectorTrigger
         )}
         <ModelSelectorDropdownContent
-          defaultHighlight={currentProfile && currentPath ? `${currentProfile.name} ${currentPath.label} ${currentPath.path}` : undefined}
+          defaultHighlight={
+            !currentProfile || !currentPath
+              ? undefined
+              : currentFolder
+                ? `${currentProfile.name} ${currentFolder.label} ${currentPath.label} ${currentPath.path}`
+                : `${currentProfile.name} ${currentPath.label} ${currentPath.path}`
+          }
           onFocusOutside={(event) => {
             if (isProfileOptionsTarget(event.target)) {
               event.preventDefault();
@@ -281,7 +294,7 @@ export function WorkingDirectorySelector({
             }
           }}
         >
-          <ModelSelectorDropdownInput placeholder="Search working directories..." />
+          <ModelSelectorDropdownInput placeholder="Search working directories..." value={search} onValueChange={setSearch} />
           <ModelSelectorDropdownList>
             <ModelSelectorDropdownEmpty>No working directories found.</ModelSelectorDropdownEmpty>
             {profiles.map((profile) => (
@@ -334,28 +347,18 @@ export function WorkingDirectorySelector({
                   </span>
                 }
               >
-                {/* Worktrees are selected via the base-ref selector; detected
-                    repos run in their folder, shown as its repo count. */}
-                {profile.paths
-                  .filter(isConfiguredPath)
-                  .map((path) => (
-                    <ModelSelectorDropdownItem
-                      key={path.id}
-                      value={`${profile.name} ${path.label} ${path.path}`}
-                      onSelect={() => handleSelect(profile._id, path.id)}
-                      data-checked={profile._id === profileId && path.id === pathId ? true : undefined}
-                    >
-                      <ModelSelectorDropdownName>
-                        <span className="flex flex-col gap-0.5">
-                          <span>{path.label}</span>
-                          <span className="flex gap-2 text-[10px] text-muted-foreground/60">
-                            <span className="truncate">{truncatePath(path.path)}</span>
-                            <RepoCount paths={profile.paths} parentId={path.id} />
-                          </span>
-                        </span>
-                      </ModelSelectorDropdownName>
-                    </ModelSelectorDropdownItem>
-                  ))}
+                {/* Worktrees are selected via the base-ref selector; a folder's repos list under it
+                    (cli-multi-repo-projects.md#picking-a-repo). */}
+                {profile.paths.filter(isConfiguredPath).map((path) => (
+                  <FolderRows
+                    key={path.id}
+                    profileName={profile.name}
+                    folder={path}
+                    repos={folderRepos(profile.paths, path.id)}
+                    selectedId={profile._id === profileId ? pathId : undefined}
+                    onPick={(entryId) => handleSelect(profile._id, entryId)}
+                  />
+                ))}
               </ModelSelectorDropdownGroup>
             ))}
           </ModelSelectorDropdownList>
@@ -426,6 +429,55 @@ export function WorkingDirectorySelector({
           if (!nextOpen) setProfileToDelete(null);
         }}
       />
+    </>
+  );
+}
+
+/** A configured path's row, then its repos indented under it. */
+function FolderRows({
+  profileName,
+  folder,
+  repos,
+  selectedId,
+  onPick,
+}: {
+  profileName: string;
+  folder: CliProfilePathEntry;
+  repos: CliProfilePathEntry[];
+  selectedId: string | undefined;
+  onPick: (entryId: string) => void;
+}) {
+  return (
+    <>
+      <ModelSelectorDropdownItem
+        value={`${profileName} ${folder.label} ${folder.path}`}
+        onSelect={() => onPick(folder.id)}
+        data-checked={folder.id === selectedId ? true : undefined}
+      >
+        <ModelSelectorDropdownName>
+          <span className="flex flex-col gap-0.5">
+            <span>{folder.label}</span>
+            <span className="flex gap-2 text-[10px] text-muted-foreground/60">
+              <span className="truncate">{truncatePath(folder.path)}</span>
+              <RepoCount paths={repos} parentId={folder.id} />
+            </span>
+          </span>
+        </ModelSelectorDropdownName>
+      </ModelSelectorDropdownItem>
+      {repos.map((repo) => (
+        <ModelSelectorDropdownItem
+          key={repo.id}
+          className="pl-6"
+          value={`${profileName} ${folder.label} ${repo.label} ${repo.path}`}
+          onSelect={() => onPick(repo.id)}
+          data-checked={repo.id === selectedId ? true : undefined}
+        >
+          <ModelSelectorDropdownName>
+            <span className="sr-only">{folder.label} / </span>
+            {repo.label}
+          </ModelSelectorDropdownName>
+        </ModelSelectorDropdownItem>
+      ))}
     </>
   );
 }

@@ -117,6 +117,19 @@ describe("resolveThreadTarget", () => {
     // False origin flag is omitted from the payload entirely.
     expect(derived.worktree?.startFromOrigin).toBeUndefined();
   });
+
+  it("branches from a repo of a folder, never from the folder itself (OS-2647)", () => {
+    const folderPaths: BaseRefPathEntry[] = [
+      { id: "acme", path: "/code/acme", label: "acme" },
+      { id: "new-app", path: "/code/acme/new-app", label: "new-app", kind: "repo", parentPathId: "acme" },
+    ];
+    const selection = { type: "branch", baseRef: "main", startFromOrigin: false, branch: "feat/x" } as const;
+    expect(resolveThreadTarget({ selection, pathId: "acme", paths: folderPaths, messageSeed: "x" })).toEqual({ pathId: "acme" });
+    expect(resolveThreadTarget({ selection, pathId: "new-app", paths: folderPaths, messageSeed: "x" })).toEqual({
+      pathId: "new-app",
+      worktree: { parentPathId: "new-app", branch: "feat/x", baseRef: "main" },
+    });
+  });
 });
 
 describe("withTaskBranchFallback", () => {

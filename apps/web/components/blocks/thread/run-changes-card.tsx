@@ -8,7 +8,7 @@ import type {
   CliRunDiffFile,
   CliRunDiffSummaryPreview,
 } from "@/convex/lib/contracts/validators";
-import { folderPathOf, repoPathIdOf } from "@/lib/threads/run-diff-repos";
+import { checkoutPathOf, folderPathOf, repoPathIdOf } from "@/lib/threads/run-diff-repos";
 import { cn } from "@/lib/utils";
 
 const COLLAPSED_FILE_COUNT = 3;
@@ -52,6 +52,8 @@ export interface RunChangesCardProps {
   onUndo?: () => void;
   /** Row hover action: insert an `@path` mention into the composer (OS-1159). */
   onMentionFile?: (path: string) => void;
+  /** A repo thread's own checkout, relative to its folder, so mentions name files from there (OS-2647). */
+  checkoutLabel?: string;
   /** Row hover action: revert this one file to its pre-run state (OS-1156). */
   onRevertFile?: (file: CliRunDiffFile) => void;
 }
@@ -65,6 +67,7 @@ export function RunChangesCard({
   onUndo,
   onMentionFile,
   onRevertFile,
+  checkoutLabel,
 }: RunChangesCardProps) {
   const [expanded, setExpanded] = useState(false);
   const { fileCount, additions: totalAdditions, deletions: totalDeletions, truncated } =
@@ -83,9 +86,11 @@ export function RunChangesCard({
   const previewIsComplete = diffSummary.files.length >= fileCount;
   const isLoadingMore = expanded && !previewIsComplete && allFiles === undefined;
   const hiddenCount = fileCount - visibleFiles.length;
-  // A multi-repo run lists files under their repo; Undo restores one checkout, so it's off.
+  // A multi-repo run lists files under their repo; Undo restores one checkout, so only a run that
+  // changed nothing but a repo thread's own checkout keeps it.
   const multiRepo = diffSummary.repos !== undefined;
-  const showUndo = onUndo !== undefined && !multiRepo;
+  const ownCheckoutOnly = diffSummary.repos?.length === 1 && diffSummary.repos[0].path === checkoutLabel;
+  const showUndo = onUndo !== undefined && (!multiRepo || ownCheckoutOnly);
 
   const handleToggleExpanded = () => {
     const next = !expanded;
@@ -195,7 +200,7 @@ export function RunChangesCard({
                         className="size-6 cursor-pointer text-muted-foreground hover:text-foreground"
                         aria-label={`Mention ${shownPath} in reply`}
                         title="Mention in reply"
-                        onClick={() => onMentionFile(shownPath)}
+                        onClick={() => onMentionFile(checkoutLabel ? checkoutPathOf(file, checkoutLabel) : shownPath)}
                       >
                         <AtSign className="size-3.5" />
                       </Button>

@@ -50,6 +50,14 @@ describe("buildCodexExecArgs", () => {
     }
   });
 
+  it("makes a repo thread's project folder writable in sandboxed modes", () => {
+    const args = buildCodexExecArgs({ cliMode: "auto", additionalDirectories: ["/acme"] });
+    expect(args).toEqual(expect.arrayContaining(["-c", 'sandbox_workspace_write.writable_roots=["/acme"]']));
+    // Isolation's writable roots are the profile paths, which already hold the folder.
+    const isolated = buildCodexExecArgs({ cliMode: "auto", additionalDirectories: ["/acme"], sandbox: { writableRoots: ["/acme"] } });
+    expect(isolated.filter((arg) => arg.startsWith("sandbox_workspace_write.writable_roots"))).toEqual(['sandbox_workspace_write.writable_roots=["/acme"]']);
+  });
+
   it("passes model, effort, and resume before the stdin prompt marker", () => {
     expect(
       buildCodexExecArgs({

@@ -11,7 +11,7 @@ import { ChevronDown, FolderGit2, GitBranch, Laptop, Paperclip, TriangleAlert, X
 import { toast } from "sonner";
 import { BackgroundTasksPill } from "@/components/blocks/background-tasks";
 import type { CliThreadBackgroundTasks, CliStopConfirmation, CliThreadGoal, CliThreadRepoBranch } from "@/convex/lib/contracts/validators";
-import { isConfiguredPath } from "@/convex/lib/contracts/validators";
+import { folderRepos, isWorktreeParent } from "@/convex/lib/contracts/validators";
 import {
   PromptInput,
   PromptInputFooter,
@@ -641,6 +641,8 @@ function ThreadComposerAttachmentTools({
   );
 }
 
+// A folder of repos has no one repo to branch from (cli-multi-repo-projects.md#picking-a-repo).
+const FOLDER_WORKTREE_TOOLTIP = "Pick a repo of this folder in the working directory menu to use a worktree.";
 const WORKTREE_UNAVAILABLE_TOOLTIP =
   "Worktree options are unavailable because no Git origin was detected for this directory. Add an origin remote, then reconnect the CLI.";
 
@@ -1076,7 +1078,7 @@ function ThreadComposerContent({
   const onBaseRefChange = selectorsProps.onBaseRefChange;
   const baseRefProfile = onBaseRefChange ? selectorsProps.profiles.find((profile) => profile._id === selectorsProps.profileId) : undefined;
   const showWorkspaceSelectors = Boolean(
-    baseRefProfile?.paths.some((path) => path.id === selectorsProps.pathId && isConfiguredPath(path) && path.gitRemoteUrl)
+    baseRefProfile?.paths.some((path) => path.id === selectorsProps.pathId && isWorktreeParent(baseRefProfile.paths, path) && path.gitRemoteUrl)
   );
   // A stored id with no active agents left (last agent deleted) must stay clearable.
   const showTopBarAgentSelector =
@@ -1089,8 +1091,11 @@ function ThreadComposerContent({
     branch: selectedPath.kind === "worktree" ? selectedPath.branch : undefined,
   } : undefined);
   const showWorkspaceSummary = !showWorkspaceSelectors && Boolean(workspaceSummary);
-  const workspaceSummaryTooltip =
-    onBaseRefChange && selectedPath?.kind !== "worktree" && !selectedPath?.gitRemoteUrl ? WORKTREE_UNAVAILABLE_TOOLTIP : undefined;
+  const workspaceSummaryTooltip = !onBaseRefChange || selectedPath?.kind === "worktree"
+    ? undefined
+    : selectedProfile && folderRepos(selectedProfile.paths, selectedPath?.id).length > 0
+      ? FOLDER_WORKTREE_TOOLTIP
+      : !selectedPath?.gitRemoteUrl ? WORKTREE_UNAVAILABLE_TOOLTIP : undefined;
   const showReadOnlyAgent = Boolean(readOnlyAgent);
   const showTopBarWorkingDirectory = !selectorsProps.hideWorkingDirectory;
   const showMeters =

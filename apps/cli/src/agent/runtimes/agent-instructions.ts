@@ -1,3 +1,4 @@
+import { relative, sep } from "node:path";
 import type { PreparedRuntimeExecution, RunnerExecutionOptions } from "./contracts.js";
 
 /**
@@ -68,6 +69,12 @@ export function withRunAttachmentInstructions(
 /** A multi-repo folder's repos, by relative path. Spec: docs/specs/cli-multi-repo-projects.md#agent-context */
 export function repositoryContextInstruction(relativePaths: string[]): string {
   return `This folder contains git repositories: ${relativePaths.join(", ")}.`;
+}
+
+/** Where a repo or worktree thread sits in its project folder. Spec: docs/specs/cli-multi-repo-projects.md#picking-a-repo */
+export function projectFolderInstruction(folder: string, workingDirectory: string, relativePaths: string[]): string {
+  const here = relative(folder, workingDirectory).split(sep).join("/");
+  return `You are working in ${here}, inside the project folder ${folder}, which contains git repositories: ${relativePaths.join(", ")}. You can read and edit all of them.`;
 }
 
 /** Append one line to a run's prompt, on every runtime's input format. */

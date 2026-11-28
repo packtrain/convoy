@@ -1,10 +1,9 @@
 import { format, formatDistanceToNow } from "date-fns";
 import { Bot, CalendarDays, Clock3, FolderGit2, KeyRound, Monitor, SquareTerminal } from "lucide-react";
-import { isConfiguredPath, toRuntimeSummaries, type CliProfilePathEntry, type CliRuntimeSummary } from "@/convex/lib/contracts/validators";
+import { folderRepos, isConfiguredPath, toRuntimeSummaries, type CliProfilePathEntry, type CliRuntimeSummary } from "@/convex/lib/contracts/validators";
 import { isCliType } from "@/lib/cli-runtime-ui/registry";
 import { CLI_TYPE_MAP, type AvailableCliInfo } from "@/lib/threads/types";
 import { cn } from "@/lib/utils";
-import { RepoCount } from "./repo-count";
 
 export type ProfileDetailsData = {
   name: string;
@@ -102,6 +101,19 @@ function DetailLine({ icon: Icon, label, value }: { icon: typeof Monitor; label:
   );
 }
 
+/** A folder's repos, indented under it by relative path (cli-multi-repo-projects.md#web). */
+function FolderRepoList({ paths, folder }: { paths: ProfileDetailsData["paths"]; folder: { id: string; label: string } }) {
+  const repos = folderRepos(paths, folder.id);
+  if (repos.length === 0) return null;
+  return (
+    <ul aria-label={`Repos in ${folder.label}`} className="mt-1 space-y-0.5 border-l border-border pl-2">
+      {repos.map((repo) => (
+        <li key={repo.id} className="truncate font-mono text-[11px] text-foreground" title={repo.path}>{repo.label}</li>
+      ))}
+    </ul>
+  );
+}
+
 export function ProfileDetails({ profile, className }: { profile: ProfileDetailsData; className?: string }) {
   const regularPaths = profile.paths.filter(isConfiguredPath);
   const worktreeCount = profile.paths.filter((path) => path.kind === "worktree").length;
@@ -148,14 +160,12 @@ export function ProfileDetails({ profile, className }: { profile: ProfileDetails
           <span>{regularPaths.length}{worktreeCount > 0 ? ` + ${worktreeCount} worktrees` : ""}</span>
         </div>
         {regularPaths.length > 0 ? (
-          <div className="max-h-32 space-y-1.5 overflow-y-auto pr-1">
+          <div className="max-h-48 space-y-1.5 overflow-y-auto pr-1">
             {regularPaths.map((path) => (
               <div key={path.id} className="min-w-0 text-xs">
-                <div className="flex min-w-0 items-baseline justify-between gap-2">
-                  <span className="truncate font-medium text-foreground">{path.label}</span>
-                  <RepoCount paths={profile.paths} parentId={path.id} className="text-[11px]" />
-                </div>
+                <div className="truncate font-medium text-foreground">{path.label}</div>
                 <div className="truncate font-mono text-[11px] text-muted-foreground" title={path.path}>{path.path}</div>
+                <FolderRepoList paths={profile.paths} folder={path} />
               </div>
             ))}
           </div>

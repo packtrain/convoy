@@ -418,6 +418,35 @@ describe("cli worktrees", () => {
       expect(workspace).not.toHaveProperty("movedByAgent");
     });
 
+    test("a folder thread can't move into a worktree; its repo thread can (OS-2647)", async () => {
+      const s = await setup();
+      const folder = buildPathEntry({ path: "/home/dev/acme" });
+      const repo = buildPathEntry({ path: "/home/dev/acme/new-app", label: "new-app", kind: "repo", parentPathId: folder.id });
+      await s.t.run(async (ctx) => {
+        await ctx.db.patch("cliProfiles", s.profile._id, { paths: [folder, repo] });
+      });
+      const onFolder = await s.ctx.cliThread(s.user._id, s.project._id, s.profile._id, { pathId: folder.id, path: folder.path });
+      const onRepo = await s.ctx.cliThread(s.user._id, s.project._id, s.profile._id, { pathId: repo.id, path: repo.path });
+      const worktree = { ...move, path: "/home/dev/acme/new-app-worktrees/feat-x" };
+
+      await expect(s.t.mutation(api.cli.worktrees.moveThread, { threadId: onFolder._id, apiKey: s.apiKey, ...worktree }))
+        .rejects.toThrow(/holds several git repositories/);
+      await s.t.mutation(api.cli.worktrees.moveThread, { threadId: onRepo._id, apiKey: s.apiKey, ...worktree });
+      const stored = await s.t.run((ctx) => ctx.db.get("cliThreads", onRepo._id));
+      expect(stored?.git?.worktree?.parentPathId).toBe(repo.id);
+      // A repo's worktree still belongs to the folder; a single repo's worktree has none.
+      const profile = await s.t.run((ctx) => ctx.db.get("cliProfiles", s.profile._id));
+      const { toExecutionWorkspace } = await import("./lib/validators");
+      expect(toExecutionWorkspace(stored!, profile!).projectFolder).toBe(folder.path);
+      expect(toExecutionWorkspace({ ...stored!, pathId: s.repoPath.id, git: undefined }, { ...profile!, paths: [s.repoPath] }).projectFolder).toBeUndefined();
+      // A vanished repo moves to the nearest configured path holding it, whatever the order.
+      const outer = buildPathEntry({ path: "/home/dev" });
+      const gone = { ...stored!, pathId: "gone", path: repo.path, git: undefined };
+      for (const paths of [[outer, folder], [folder, outer]]) {
+        expect(toExecutionWorkspace(gone, { ...profile!, paths }).pathId).toBe(folder.id);
+      }
+    });
+
     test("moves a worktree thread to another worktree of the same repository only", async () => {
       const s = await setup();
       const entry = buildPathEntry({ path: "/wt/old", kind: "worktree", parentPathId: s.repoPath.id, branch: "feat/old" });

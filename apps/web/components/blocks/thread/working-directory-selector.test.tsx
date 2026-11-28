@@ -83,7 +83,9 @@ vi.mock("@/components/ai-elements/model-selector-dropdown", () => ({
     };
     return <div>{children}</div>;
   },
-  ModelSelectorDropdownInput: () => <input aria-label="Search working directories" />,
+  ModelSelectorDropdownInput: ({ value, onValueChange }: { value?: string; onValueChange?: (value: string) => void }) => (
+    <input aria-label="Search working directories" value={value} onChange={(event) => onValueChange?.(event.target.value)} />
+  ),
   ModelSelectorDropdownList: ({ children }: { children: ReactNode }) => (
     <div>{children}</div>
   ),
@@ -188,6 +190,49 @@ const singleOptionProfiles = [
     paths: [{ id: "path_1", path: "/tmp/project", label: "project" }],
   },
 ];
+
+const folderProfiles = [
+  {
+    _id: "profile_1" as Id<"cliProfiles">,
+    name: "Default profile",
+    isOnline: true,
+    paths: [
+      { id: "acme", path: "/code/acme", label: "acme" },
+      { id: "new-app", path: "/code/acme/new-app", label: "new-app", kind: "repo" as const, parentPathId: "acme" },
+      { id: "old-app", path: "/code/acme/old-app", label: "old-app", kind: "repo" as const, parentPathId: "acme" },
+    ],
+  },
+];
+
+describe("WorkingDirectorySelector repos of a folder (OS-2647)", () => {
+  afterEach(() => {
+    cleanup();
+  });
+
+  test("reads a picked repo as folder / repo in the trigger", () => {
+    render(<WorkingDirectorySelector profiles={folderProfiles} profileId="profile_1" pathId="new-app" onChange={vi.fn()} />);
+    expect(screen.getByTitle("Default profile / acme / new-app")).toBeDefined();
+  });
+
+  test("clicking the folder picks it; its repos are rows under it on a wide screen too", () => {
+    const onChange = vi.fn();
+    render(<WorkingDirectorySelector profiles={folderProfiles} profileId="profile_1" pathId="acme" onChange={onChange} />);
+
+    fireEvent.click(screen.getByRole("button", { name: /^acme\// }));
+    expect(onChange).toHaveBeenLastCalledWith("profile_1", "acme");
+    fireEvent.click(screen.getByRole("button", { name: /^acme \/\s*old-app$/ }));
+    expect(onChange).toHaveBeenLastCalledWith("profile_1", "old-app");
+    expect(screen.queryByRole("menuitemradio")).toBeNull();
+  });
+
+  test("searching keeps the matching repo row", () => {
+    const onChange = vi.fn();
+    render(<WorkingDirectorySelector profiles={folderProfiles} profileId="profile_1" pathId="acme" onChange={onChange} />);
+    fireEvent.change(screen.getByLabelText("Search working directories"), { target: { value: "old" } });
+    fireEvent.click(screen.getByRole("button", { name: /^acme \/\s*old-app$/ }));
+    expect(onChange).toHaveBeenLastCalledWith("profile_1", "old-app");
+  });
+});
 
 describe("WorkingDirectorySelector", () => {
   afterEach(() => {

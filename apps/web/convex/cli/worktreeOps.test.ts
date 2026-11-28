@@ -525,6 +525,31 @@ describe("cli worktreeOps", () => {
     }
   });
 
+  test("reverts in a folder's repo are rejected while a sibling repo's worktree thread runs", async () => {
+    const s = await setup();
+    const folder = buildPathEntry({ path: "/home/dev/acme" });
+    const oldApp = buildPathEntry({ path: "/home/dev/acme/old-app", label: "old-app", kind: "repo", parentPathId: folder.id });
+    const newApp = buildPathEntry({ path: "/home/dev/acme/new-app", label: "new-app", kind: "repo", parentPathId: folder.id });
+    const worktree = buildPathEntry({ path: "/home/dev/acme/new-app-worktrees/x", label: "x", kind: "worktree", parentPathId: newApp.id, branch: "x" });
+    await s.t.run(async (runCtx) => {
+      await runCtx.db.patch("cliProfiles", s.profile._id, { paths: [folder, oldApp, newApp, worktree] });
+    });
+    await s.ctx.cliThread(s.user._id, s.project._id, s.profile._id, {
+      pathId: worktree.id, path: worktree.path, status: "streaming", processingState: "streaming",
+      claimedBySessionId: s.session._id, claimLeaseExpiresAt: Date.now() + 60_000,
+    });
+    // The worktree thread can edit old-app too.
+    await expect(
+      s.asUser.mutation(api.cli.worktreeOps.enqueue, { profileId: s.profile._id, pathId: oldApp.id, kind: "revertWorkingFile", filePath: "a.ts" })
+    ).rejects.toThrow("A thread is currently running in this working directory");
+    // Removing another, idle worktree of the folder is not a revert.
+    const idle = buildPathEntry({ path: "/home/dev/acme/old-app-worktrees/y", label: "y", kind: "worktree", parentPathId: oldApp.id, branch: "y" });
+    await s.t.run(async (runCtx) => {
+      await runCtx.db.patch("cliProfiles", s.profile._id, { paths: [folder, oldApp, newApp, worktree, idle] });
+    });
+    await s.asUser.mutation(api.cli.worktreeOps.enqueue, { profileId: s.profile._id, pathId: idle.id, kind: "remove" });
+  });
+
   test("revertFile requires preRef and filePath and persists the file path", async () => {
     const s = await setup();
 

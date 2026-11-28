@@ -38,6 +38,7 @@ export function buildCodexExecArgs(options: {
   runEffort?: string;
   continuationId?: string;
   sandbox?: RunnerSandboxOptions;
+  additionalDirectories?: string[];
 }): string[] {
   const args = ["exec", "--json", "--skip-git-repo-check"];
 
@@ -48,6 +49,7 @@ export function buildCodexExecArgs(options: {
     args.push("--dangerously-bypass-approvals-and-sandbox");
   } else {
     args.push("--sandbox", "workspace-write");
+    args.push(...codexAdditionalRootsConfigArgs(options.additionalDirectories));
   }
 
   if (options.runModel) {
@@ -88,6 +90,11 @@ export function codexWritableRootsConfigArgs(
     "-c",
     'approvals_reviewer="user"',
   ];
+}
+
+/** A repo thread's project folder as a writable root when not isolated; isolation's roots already hold it. */
+export function codexAdditionalRootsConfigArgs(additionalDirectories: string[] | undefined): string[] {
+  return additionalDirectories?.length ? ["-c", `sandbox_workspace_write.writable_roots=${JSON.stringify(additionalDirectories)}`] : [];
 }
 
 /** Thread id from a parsed `thread.started` event, if present. */
@@ -207,6 +214,7 @@ export function createCodexRunner(runnerOptions?: {
         runEffort: options.resolvedCliEffort,
         continuationId: options.continuationId,
         sandbox: runnerOptions?.sandbox,
+        additionalDirectories: options.additionalDirectories,
       });
       debugLog("spawn", `${executable.command} ${args.join(" ")}`);
 

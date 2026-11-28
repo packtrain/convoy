@@ -39,10 +39,10 @@ export interface WorktreeOpRef {
 export interface WorktreeOpProcessor {
   /** Fulfill newly observed pending ops (deduped per op id). */
   enqueue(ops: PendingWorktreeOp[]): void;
-  /** Scan the given repo paths and sync their worktrees to the profile. */
-  scanAndSync(parentPaths: string[]): Promise<void>;
-  /** A configured folder's repos by relative path ([] for a single-repo folder); syncs them in the background. Throws when the folder can't be scanned. */
-  syncRepos(folder: string): Promise<string[]>;
+  /** Scan the given repo paths and sync their worktrees to the profile; false when a path failed to scan. */
+  scanAndSync(parentPaths: string[]): Promise<boolean>;
+  /** A configured folder's repos by relative path ([] for a single-repo folder); syncs them in the background, or first with `published`. Throws when the folder can't be scanned. */
+  syncRepos(folder: string, options?: { published?: boolean }): Promise<string[]>;
 }
 
 /**
@@ -79,7 +79,7 @@ export function createWorktreeOpProcessor(client: ConvoyClient, sessionId: strin
   const typedProfileId = profileId as Id<"cliProfiles">;
   const inFlightOpIds = new Set<string>();
 
-  async function scanAndSync(parentPaths: string[]): Promise<void> {
+  async function scanAndSync(parentPaths: string[]): Promise<boolean> {
     const scans = await Promise.all(
       parentPaths.map(async (parentPath) => {
         try {
@@ -95,7 +95,7 @@ export function createWorktreeOpProcessor(client: ConvoyClient, sessionId: strin
 
     const successful = scans.filter((scan): scan is NonNullable<(typeof scans)[number]> => scan !== null);
     if (successful.length === 0) {
-      return;
+      return parentPaths.length === 0;
     }
 
     await client.mutation(api.cli.worktrees.sync, {
@@ -112,26 +112,49 @@ export function createWorktreeOpProcessor(client: ConvoyClient, sessionId: strin
           }))
       ),
     });
+    return successful.length === parentPaths.length;
   }
 
-  // Per folder: the list last sent, and the publish chain, so publishes never overlap.
+  // Per folder: the list last sent and the list whose worktrees were last fully scanned, each with its own
+  // chain, so publishes never overlap and scans land in order.
   const sentRepos = new Map<string, string>();
+  const scannedRepos = new Map<string, string>();
+  // Bumped per publish: a list sent again after a change is a new generation, though its content matches.
+  const sentGeneration = new Map<string, number>();
   const publishes = new Map<string, Promise<void>>();
+  const scans = new Map<string, Promise<void>>();
   async function publishRepos(folder: string, paths: string[]): Promise<void> {
     const repos = (await describeRepositories(folder, paths)).map(({ path, relativePath, gitRemoteUrl, branch }) => ({ path, relativePath, gitRemoteUrl, branch }));
     const key = JSON.stringify(repos);
-    if (sentRepos.get(folder) === key) return;
-    await client.mutation(api.cli.profiles.syncRepos, { profileId: typedProfileId, sessionId: typedSessionId, path: folder, repos });
-    sentRepos.set(folder, key);
+    if (sentRepos.get(folder) !== key) {
+      await client.mutation(api.cli.profiles.syncRepos, { profileId: typedProfileId, sessionId: typedSessionId, path: folder, repos });
+      sentRepos.set(folder, key);
+      sentGeneration.set(folder, (sentGeneration.get(folder) ?? 0) + 1);
+      // The server drops a removed repo's worktrees, so a list seen before is scanned again.
+      scannedRepos.delete(folder);
+    }
+    // Repos are worktree parents (cli-multi-repo-projects.md#picking-a-repo): a new list gets their worktrees
+    // listed, off the publish chain so a run waiting on the list doesn't wait on it; a failed scan retries.
+    if (paths.length === 0 || scannedRepos.get(folder) === key) return;
+    const generation = sentGeneration.get(folder);
+    const scan = (scans.get(folder) ?? Promise.resolve()).then(async () => {
+      if (scannedRepos.get(folder) === key || sentGeneration.get(folder) !== generation) return;
+      // A scan that finished after a newer publish marks nothing.
+      if (await scanAndSync(paths) && sentGeneration.get(folder) === generation) scannedRepos.set(folder, key);
+    }).catch((error: unknown) => {
+      console.error(chalk.yellow(`[Repos] Worktree scan failed for ${folder}: ${error instanceof Error ? error.message : String(error)}`));
+    });
+    scans.set(folder, scan);
   }
   /** Spec: docs/specs/cli-multi-repo-projects.md#when-it-runs. The local scan answers; git and the server run behind it. */
-  async function syncRepos(folder: string): Promise<string[]> {
+  async function syncRepos(folder: string, options?: { published?: boolean }): Promise<string[]> {
     const found = await listRepositoryPaths(folder);
     const paths = found.length === 1 && found[0] === folder ? [] : found;
     const next = (publishes.get(folder) ?? Promise.resolve()).then(() => publishRepos(folder, paths)).catch((error: unknown) => {
       console.error(chalk.yellow(`[Repos] Sync failed for ${folder}: ${error instanceof Error ? error.message : String(error)}`));
     });
     publishes.set(folder, next);
+    if (options?.published) await next;
     return paths.map((path) => repoRelativePath(folder, path));
   }
 

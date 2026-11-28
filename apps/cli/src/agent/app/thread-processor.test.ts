@@ -768,6 +768,58 @@ describe("message-handler", () => {
     }
   });
 
+  it("gives a repo thread its project folder: the folder's repos in the prompt and the folder as an extra directory", async () => {
+    setQueryResponses({ pendingRuns: [[makeUserMessage()], []], continuationIds: [null] });
+    const syncRepos = vi.fn(async () => ["old-app", "repo"]);
+    const chat = makePendingChat({ projectFolder: TEST_ROOT });
+    const handler = createMessageHandler(() => mockRunner, mockClient, sessionId, { syncRepos });
+    handler.enqueueChat(chat);
+    try {
+      await vi.waitFor(() => expect(handler.isProcessing()).toBe(false));
+      const [run] = vi.mocked(mockRunner.execute).mock.calls;
+      expect(run[1]).toContain(`You are working in repo, inside the project folder ${TEST_ROOT}, which contains git repositories: old-app, repo. You can read and edit all of them.`);
+      expect(run[2].additionalDirectories).toEqual([TEST_ROOT]);
+      expect(syncRepos).toHaveBeenCalledWith(TEST_ROOT);
+    } finally {
+      await handler.shutdown();
+    }
+  });
+
+  it("moves a thread whose repo is gone to its folder, with a notice", async () => {
+    const chat = makePendingChat({ workingDirectory: join(TEST_ROOT, "gone-app"), projectFolder: TEST_ROOT });
+    setQueryResponses({ pendingRuns: [[makeUserMessage()], []], continuationIds: [null] });
+    const order: string[] = [];
+    const syncRepos = vi.fn(async (_folder: string, options?: { published?: boolean }) => {
+      order.push(options?.published ? "sync-published" : "sync");
+      return ["old-app"];
+    });
+    const mutate = mockMutation.getMockImplementation()!;
+    mockMutation.mockImplementation(async (fn, args) => {
+      const result = await Reflect.apply(mutate, undefined, [fn, args]);
+      if (getFunctionName(fn) !== "cli/messages:startRunResponse") return result;
+      order.push("start");
+      return { ...result, workspace: { pathId: "folder", path: TEST_ROOT, previousPath: chat.workingDirectory, repoRemoved: true } };
+    });
+    const handler = createMessageHandler(() => mockRunner, mockClient, sessionId, { syncRepos });
+    handler.enqueueChat(chat);
+    try {
+      await vi.waitFor(() => expect(handler.isProcessing()).toBe(false));
+      // A deleted repo is synced away before the run starts, so the server can move the thread.
+      expect(order.slice(0, 2)).toEqual(["sync-published", "start"]);
+      expect(mockRunner.execute).toHaveBeenCalledWith(TEST_ROOT, expect.any(String), expect.anything());
+      const notices = mockMutation.mock.calls
+        .filter(([fn]) => getFunctionName(fn) === "cli/messages:appendRunContent")
+        .flatMap(([, args]) => args.chunks as { type: string; data: string }[])
+        .filter((chunk) => chunk.type === "convoy_notice")
+        .map((chunk) => JSON.parse(chunk.data));
+      expect(notices).toContainEqual(expect.objectContaining({
+        code: "workspace-recovered", change: "folder", previousPath: chat.workingDirectory, path: TEST_ROOT,
+      }));
+    } finally {
+      await handler.shutdown();
+    }
+  });
+
   it("reports a missing parent before attempting pending worktree creation", async () => {
     const chat = makePendingChat({ workingDirectory: join(TEST_ROOT, "missing"), worktree: {
       parentPathId: "parent", branch: "new-feature", status: "pending",

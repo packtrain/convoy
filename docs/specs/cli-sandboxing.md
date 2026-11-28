@@ -93,6 +93,11 @@ either way.
 | Codex (exec + app-server) | Never `--dangerously-bypass-approvals-and-sandbox` / `danger-full-access`, even in `agent` mode — isolated agent mode maps to `workspace-write` with `approvalPolicy: never`. Profile paths become `-c sandbox_workspace_write.writable_roots=[...]` (process-level config; correct for app-server too because writable roots are profile-scoped, not thread-scoped), plus `-c approvals_reviewer="user"` (see apply_patch guard below). Verified empirically on codex-cli 0.144.4 (macOS, both transports): shell and apply_patch /tmp+$HOME writes blocked, cwd + writable-root writes allowed. The overrides only take effect through the legacy `--sandbox` flag / RPC `sandbox` param path — explicitly selecting a codex permissions profile (`-P :workspace` or `default_permissions` in `~/.codex/config.toml` requirements) makes codex ignore `sandbox_workspace_write.*` entirely, so never migrate these args to the profile syntax without re-verifying. |
 | Cursor, OpenCode, Antigravity | No OS sandbox support. Antigravity stays here until someone checks that `agy acp --sandbox` honors the writable roots. Runs **fail fast** with a clear error instead of silently running unsandboxed — a security opt-in must not degrade quietly. |
 
+A thread in one repo of a multi-repo folder runs below a profile path, so the
+folder is already a writable root. Its runner also gets the folder as an
+additional directory, isolated or not ([multi-repo projects → folder
+access](cli-multi-repo-projects.md#folder-access)).
+
 ## Non-goals (tier 1)
 
 - Default-on (planned once the opt-in has soaked).

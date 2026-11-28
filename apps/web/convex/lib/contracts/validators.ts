@@ -1008,6 +1008,28 @@ export function folderRepos<T extends { kind?: CliProfilePathKind; parentPathId?
   return folderId === undefined ? [] : paths.filter((path) => path.kind === "repo" && path.parentPathId === folderId);
 }
 
+/** The configured path an entry belongs to: itself, a repo's folder, or the folder of a worktree's parent. */
+export function configuredPathOf<T extends { id: string; kind?: CliProfilePathKind; parentPathId?: string }>(paths: readonly T[], pathId: string): T | undefined {
+  let entry = paths.find((path) => path.id === pathId);
+  for (let hop = 0; entry && entry.kind !== undefined && hop < 2; hop++) {
+    const parentId = entry.parentPathId;
+    entry = paths.find((path) => path.id === parentId);
+  }
+  return entry?.kind === undefined ? entry : undefined;
+}
+
+/** `/`-separated path of `path` strictly inside `folder`; undefined outside it. Either separator. */
+export function relativePathInside(folder: string, path: string): string | undefined {
+  const base = folder.replace(/[\\/]+$/, "");
+  if (path.length <= base.length + 1 || !path.startsWith(base) || !/[\\/]/.test(path[base.length])) return undefined;
+  return path.slice(base.length + 1).replaceAll("\\", "/");
+}
+
+/** A worktree can branch from a detected repo or a configured path without repos (cli-multi-repo-projects.md#picking-a-repo). */
+export function isWorktreeParent<T extends { id: string; kind?: CliProfilePathKind; parentPathId?: string }>(paths: readonly T[], entry: T): boolean {
+  return entry.kind === "repo" || (entry.kind === undefined && folderRepos(paths, entry.id).length === 0);
+}
+
 // A profile path entry as returned to clients (regular path, synced worktree or detected repo)
 export const cliProfilePathEntryValidator = v.object({
   id: v.string(),

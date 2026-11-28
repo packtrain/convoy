@@ -1319,9 +1319,10 @@ entry per profile the caller owns in the project:
   tens of KB — OS-1721). Omitting `cliModel`/`cliEffort` runs the runtime's defaults
 - `paths` — `{ pathId, path, label, gitRemoteUrl?, kind?, parentPathId?,
   branch? }`; `pathId` is the `pathId` argument. `kind: "worktree"`
-  marks a worktree, and `kind: "repo"` a git repo detected inside a project
-  folder: not a spawn target, its `parentPathId` is
-  ([multi-repo projects](cli-multi-repo-projects.md#server))
+  marks a worktree, and `kind: "repo"` a git repo detected inside the project
+  folder its `parentPathId` names. A repo is a spawn target and a worktree
+  parent; a folder that holds repos is a spawn target only
+  ([multi-repo projects](cli-multi-repo-projects.md#picking-a-repo))
 
 Ids are renamed from the query's shape (`_id` → `profileId`, `paths[].id` →
 `pathId`) to match the argument names the write tools take, so an agent can

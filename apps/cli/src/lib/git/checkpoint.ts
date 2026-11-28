@@ -2,7 +2,7 @@ import { mkdtemp, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { GitCommandError, runGit } from "./exec.js";
-import { folderRepoPaths, getCheckoutIdentity, mapLimited, repoRelativePath } from "./repo.js";
+import { folderCheckoutPaths, folderRepoPaths, getCheckoutIdentity, mapLimited, repoRelativePath } from "./repo.js";
 
 /**
  * Hidden-ref git checkpoints around a thread run (OS-1142).
@@ -175,28 +175,34 @@ const baselineTimeouts = new Map<string, number>();
 
 /**
  * Pre-run capture for the working directory: its own repo, or each repo of a
- * multi-repo folder. Null when there is no repo to checkpoint.
+ * multi-repo folder. `folder` is the project folder of a repo or worktree
+ * thread, whose checkouts are all captured. Null when there is no repo to checkpoint.
  */
 export async function captureRunBaseline(
-  cwd: string, threadId: string, runId: string, options: { baselineTimeoutMs?: number } = {},
+  cwd: string, threadId: string, runId: string, options: { baselineTimeoutMs?: number; folder?: string } = {},
 ): Promise<RunBaseline | null> {
-  const paths = await folderRepoPaths(cwd);
+  // A folder that is a repo itself (a worktree nested in a single repo) falls back to the cwd's own capture.
+  const checkouts = options.folder ? await folderCheckoutPaths(options.folder, cwd) : null;
+  const root = checkouts && options.folder ? options.folder : cwd;
+  const paths = checkouts ?? await folderRepoPaths(cwd);
   if (!paths) {
     return (await capturePreRunCheckpoint(cwd, threadId, runId)) ? { kind: "repo" } : null;
   }
   const ref = checkpointRef(threadId, runId, "pre");
   const budget = options.baselineTimeoutMs ?? BASELINE_TIMEOUT_MS;
   const repos = await mapLimited(paths, async (path): Promise<RepoBaseline | null> => {
-    if ((baselineTimeouts.get(path) ?? 0) >= MAX_BASELINE_TIMEOUTS) return null;
+    // A repo thread's own checkout keeps the single-repo capture's timeouts and is never dropped.
+    const own = checkouts !== null && path === cwd;
+    if (!own && (baselineTimeouts.get(path) ?? 0) >= MAX_BASELINE_TIMEOUTS) return null;
     // One budget for the repo's status and snapshot.
-    const deadline = Date.now() + budget;
+    const deadline = own ? undefined : Date.now() + budget;
     try {
-      const state = await readRepoState(path, budget);
+      const state = await readRepoState(path, own ? undefined : budget);
       if (!state.clean) await captureCheckpoint(path, ref, deadline);
       baselineTimeouts.delete(path);
-      return { path, relativePath: repoRelativePath(cwd, path), ...state };
+      return { path, relativePath: repoRelativePath(root, path), ...state };
     } catch (error) {
-      if (error instanceof GitCommandError && error.timedOut) {
+      if (error instanceof GitCommandError && error.timedOut && !own) {
         const timeouts = (baselineTimeouts.get(path) ?? 0) + 1;
         baselineTimeouts.set(path, timeouts);
         if (timeouts === MAX_BASELINE_TIMEOUTS) console.warn(`[Checkpoint] ${path}: baseline timed out twice; its changes are no longer tracked`);

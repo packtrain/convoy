@@ -1,6 +1,6 @@
 import { randomUUID } from "node:crypto";
-import { link, readdir, readFile, rm, stat, writeFile } from "node:fs/promises";
-import { join, relative, sep } from "node:path";
+import { link, readdir, readFile, realpath, rm, stat, writeFile } from "node:fs/promises";
+import { basename, dirname, join, relative, sep } from "node:path";
 import { runGit } from "./exec.js";
 
 /** Persistent local identity survives moves and remounts. Spec: cli-worktrees.md. */
@@ -190,6 +190,25 @@ export async function folderRepoPaths(cwd: string): Promise<string[] | null> {
   // Child repos win over a checkout the folder sits inside: that one's tree doesn't see their files.
   const paths = await listRepositoryPaths(cwd).catch(() => []);
   return paths.length === 0 || paths[0] === cwd ? null : paths;
+}
+
+/**
+ * A repo or worktree thread's checkouts in its project folder: its own plus the folder's repos, minus the
+ * main checkout its worktree shares refs with (one ref name per run can't serve both). Spec: cli-thread-run-diffs.md#multi-repo-folders
+ */
+export async function folderCheckoutPaths(folder: string, cwd: string): Promise<string[] | null> {
+  const repos = await folderRepoPaths(folder);
+  if (!repos) return null;
+  const main = await sharedMainCheckout(cwd);
+  const mainRelative = main ? repoRelativePath(await realpath(folder), main) : undefined;
+  return [...repos.filter((path) => path !== cwd && repoRelativePath(folder, path) !== mainRelative), cwd].sort();
+}
+
+/** The main checkout of a linked worktree; undefined for a main checkout or a non-repo. */
+async function sharedMainCheckout(cwd: string): Promise<string | undefined> {
+  const result = await runGit(cwd, ["rev-parse", "--path-format=absolute", "--git-dir", "--git-common-dir"], { allowNonZeroExit: true });
+  const [gitDir, commonDir] = result.stdout.trim().split("\n");
+  return result.exitCode === 0 && commonDir && gitDir !== commonDir && basename(commonDir) === ".git" ? dirname(commonDir) : undefined;
 }
 
 /** Each repo's checked-out branch, by relative path; absent for detached HEAD. */

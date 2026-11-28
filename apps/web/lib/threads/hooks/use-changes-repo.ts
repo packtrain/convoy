@@ -17,14 +17,16 @@ export function useChangesRepo<R extends { id: string; label: string }, E extend
   threadId: string,
   repos: readonly R[],
   envelopes: readonly E[],
-  ready: boolean
+  ready: boolean,
+  /** A repo or worktree thread: the default is its own checkout, `repos[0]` (OS-2647). */
+  options: { ownFirst?: boolean } = {}
 ) {
   const [picked, setPicked] = useState<{ threadId: string; repoId: string } | null>(null);
   const settled = picked?.threadId === threadId ? repos.find((repo) => repo.id === picked.repoId) : undefined;
   const fallback =
     settled || repos.length === 0
       ? undefined
-      : pickChangesRepo(repos, readChangesRepo(threadId), envelopes.flatMap((message) => (message.role === "assistant" && message.diffSummary ? [message.diffSummary] : [])).reverse());
+      : pickChangesRepo(repos, readChangesRepo(threadId), options.ownFirst ? [] : envelopes.flatMap((message) => (message.role === "assistant" && message.diffSummary ? [message.diffSummary] : [])).reverse());
   if (fallback && ready) {
     setPicked({ threadId, repoId: fallback.id });
   }
@@ -37,16 +39,17 @@ export function useChangesRepo<R extends { id: string; label: string }, E extend
     },
     [threadId]
   );
+  const ownId = options.ownFirst ? repos[0]?.id : undefined;
   const scoped = useMemo(
     () =>
       repo
         ? envelopes.map((message) =>
             message.role === "assistant" && message.diffSummary
-              ? { ...message, diffSummary: scopeRunToRepo(message.diffSummary, repo) ?? undefined }
+              ? { ...message, diffSummary: scopeRunToRepo(message.diffSummary, repo, ownId) ?? undefined }
               : message
           )
         : envelopes,
-    [envelopes, repo]
+    [envelopes, repo, ownId]
   );
   return { repo, select, envelopes: scoped };
 }

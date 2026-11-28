@@ -2,13 +2,15 @@
 
 A project can be one folder with a git repo in each subfolder, e.g.
 `~/code/acme/{old-app,new-app,packages/api}`. The project keeps one path, the
-top folder, and threads run there. The CLI detects the repos inside it and
-reports each one to Convoy as its own path entry.
+top folder. The CLI detects the repos inside it and reports each one to Convoy
+as its own path entry. A thread runs in the folder, or in one repo of it
+([picking a repo](#picking-a-repo)).
 
 Epic: OS-2520. Slice 0: OS-2521 (detection). Slice 1: OS-2522 (Changes,
 History and revert per repo, [repo switcher](#repo-switcher)). Slice 2:
 OS-2523 ([branch and pull requests](#branch-and-pull-requests) per repo).
-Slice 3 points worktree features at repo entries.
+Slice 4: OS-2647 ([picking a repo](#picking-a-repo), with worktrees). OS-2524
+was canceled in its favor.
 
 ## Related specs
 
@@ -110,15 +112,14 @@ validator) is the one test for that, shared by web and Convex.
   configured order, worktrees. The repo
   merge and the worktree merge both keep it, so neither rewrites the row the
   other just wrote (OS-1721).
-- Only configured paths are worktree parents in this slice: the worktree sync
-  ignores a worktree under a repo entry, and passes repo entries through.
+- A repo entry is a worktree parent, and a configured folder that holds repos
+  is not (`isWorktreeParent`, next to the kind validator). The worktree sync
+  merges worktrees under a repo entry, and a repo leaving the folder takes its
+  worktree entries with it.
 - Register (`mergeProfilePaths`) keeps a folder's repo entries while the folder
-  stays configured, the same way it keeps worktrees.
-- A repo entry is not a working directory. Thread creation, workflow runs and
-  MCP `create_thread` refuse one with "That path is a git repository inside a
-  project folder. Start the thread on its parentPathId". The web's draft and
-  preselection checks skip one the same way. `list_cli_profiles` says so in its
-  description.
+  stays configured, and each kept repo's worktrees, the same way it keeps
+  worktrees.
+- A repo entry is a working directory ([picking a repo](#picking-a-repo)).
 - The repo key for worktree setup scripts comes from each entry's
   `gitRemoteUrl`, so Project settings → Worktrees lists every repo's key
   (OS-2572–2574).
@@ -130,15 +131,13 @@ only on a change: a repo added or removed, or a branch switched between runs.
 
 ## Web
 
-Repo entries never appear as their own rows. The working-directory selector,
-the Connected CLIs checkout list and the profile hover card show a folder with
-repos as `N repos` next to it, and hovering the count lists the repos by
-relative path (`RepoCount`, `components/blocks/cli/profiles/repo-count.tsx`, a
-native `title`: the count sits inside a link or menu item that owns focus). The
-names also join that row's accessible name through visually hidden text. The
-Connected CLIs row's `+N more` counts configured paths only, never repo or
-worktree entries.
-The data comes from the profile queries the views already subscribe to.
+The working-directory selector shows a folder with repos as `N repos` next to
+it (`RepoCount`, `components/blocks/cli/profiles/repo-count.tsx`) and lists
+its repos as [picking a repo](#picking-a-repo) says. The Connected CLIs
+checkout list and the profile hover card list the repos under the folder,
+indented, by relative path. The Connected CLIs row's `+N more` counts
+configured paths only, never repo or worktree entries. The data comes from the
+profile queries the views already subscribe to.
 
 ## Repo switcher
 
@@ -264,6 +263,142 @@ repo on its default branch adds one `rev-parse` and one `symbolic-ref`; any
 other repo adds two more of each plus a forge call. A post-run report
 schedules one task-link upsert per repo PR when the thread has a task.
 
+## Picking a repo
+
+Slice 4 (OS-2647, CLI 0.189.0). A thread starts in the folder or in one of its
+repos:
+
+| You pick | Thread starts in | Can reach | Worktree option |
+|---|---|---|---|
+| `acme` (the folder) | `acme/` | all of `acme/` | none: there's no telling which repo you mean |
+| `acme / new-app` (a repo) | `acme/new-app` | all of `acme/`, so `acme/old-app` too | the single-repo flow: `acme/new-app-worktrees/<name>` |
+
+The boundary is the folder, not the repo. Picking a repo sets where the agent
+starts and which repo the thread's git views follow; it doesn't fence the
+agent in. Another repo's worktree: pick that repo, then a worktree. The
+thread's working directory is the repo entry's absolute path, so the CLI's
+`pathId → workingDirectory` pipeline needs nothing new, and a worktree's setup
+script is its repo's (keyed by the repo entry's `gitRemoteUrl`).
+
+- **Picker.** A folder row selects the folder, and its repos are listed as
+  indented rows under it, on every screen. The plan had a hover sub-menu on
+  desktop; review found it unreachable by touch and keyboard and unbounded for
+  big folders, so the list itself carries the repos (decided 2026-11-28). The
+  trigger reads `acme / new-app`, so two folders' `api` repos don't read the
+  same.
+- **Base-ref / worktree selector.** Hidden for a folder with repos, unchanged
+  for a repo.
+- **Server.** Thread creation, workflow runs, MCP `create_thread` and `convoy
+  threads create --path-id` accept a repo entry, with or without a worktree. A
+  worktree on a folder that holds repos is refused: "That folder holds several
+  git repositories. Pick one of its repos (a kind "repo" path) to create a
+  worktree". An agent-driven `move-worktree` from a folder thread is refused
+  too, since the folder isn't the worktree's parent.
+- **Thread git views.** History, branch, PR badge and PR watch follow the
+  picked repo or its worktree, as for any single-repo thread. The Changes tab
+  gets the [repo switcher](#repo-switcher) with the thread's own checkout first
+  and selected by default (`threadChangesRepos`), then the folder's other
+  repos, so a card file in `old-app` opens in its repo. On the own checkout the
+  toolbar shows the thread's single-repo PR and review comments stay on.
+  Mentions name files from the agent's checkout: `../old-app/a.ts` from
+  `new-app`, on the card (`checkoutLabel`, from the profile) and in the tab. A
+  run from a CLI older than 0.189.0 has no `repos` and shows under the own
+  checkout only. The per-run Changes
+  card shows every repo the run changed (below).
+- **Connected CLIs and the profile hover card** list a folder's repos as rows
+  under it, each with its worktrees nested.
+
+### Folder access
+
+The server names a thread's folder: `toExecutionWorkspace` sets
+`projectFolder` when the thread is on a repo entry or a worktree of one and
+the folder holds repos. `listPendingThreads` and `startRunResponse` carry it,
+so the CLI never guesses from path containment (a repo registered on its own
+inside a registered folder stays a single repo). Each plain run with a
+`projectFolder` gets:
+
+- one prompt line instead of the folder's: `You are working in new-app, inside
+  the project folder /code/acme, which contains git repositories: new-app,
+  old-app. You can read and edit all of them.`
+- the folder as an additional directory (`RunnerExecutionOptions.additionalDirectories`):
+
+| Runtime | Mapping |
+|---|---|
+| Claude Code | `additionalDirectories`, merged with isolation's writable roots |
+| Codex (exec and app-server) | `-c sandbox_workspace_write.writable_roots=[folder]` in sandboxed modes; agent mode has full access already. Under isolation the writable roots are the profile paths, which hold the folder. A `-c` value replaces a `writable_roots` set in `~/.codex/config.toml` for that run, as isolation's already does (not verified on a Codex build) |
+| Cursor, OpenCode, Antigravity | No directory flag. Agent mode allows everything; other modes ask, as for any path outside the cwd. Isolation fails fast for them ([sandboxing](cli-sandboxing.md)) |
+
+Under isolation the profile's paths are already the writable roots, so the
+folder is writable there with no new rule.
+
+### Checkpoints
+
+A repo or worktree thread checkpoints its own checkout plus every repo in the
+folder, with slice 1's cost controls and grouping
+([thread run diffs](cli-thread-run-diffs.md#multi-repo-folders)). An edit the
+agent makes in `old-app` from a `new-app` thread shows on its card and can be
+reverted there.
+
+- Repo paths are relative to the folder: `new-app`, `old-app`, and
+  `new-app-worktrees/x` for a worktree thread's own checkout.
+- The own checkout keeps the single-repo capture's timeouts: the 5 s budget and
+  the two-timeout drop apply to the folder's other repos only.
+- A worktree thread skips the main checkout of its own repo (`acme/new-app`):
+  the two share one ref store, and a run uses one pre/post ref pair for every
+  repo, so the second capture would find the first's ref. An edit there doesn't
+  show on the card. Per-worktree refs (`refs/worktree/…`) don't help: `git gc`
+  in the main checkout prunes another worktree's.
+- `cli.messages.complete` resolves every repo and worktree entry under the
+  folder by its path in the folder, the thread's own checkout included.
+- Undo: the card offers it when the run changed only the thread's own
+  checkout. A run that also changed another repo has no Undo, as for folder
+  runs; the Changes tab toolbar offers none.
+- Known limit: a parallel thread editing `old-app` during this run shows up on
+  this card too, as it does for folder threads.
+- A revert in any repo of the folder is refused while a thread runs anywhere
+  in it (`isPathInUse(…, "folder")`). Removing a worktree is refused only while
+  a thread runs in that worktree.
+
+### Vanished repo
+
+When the picked repo's entry disappears (deleted, moved, past the 128 cap; a
+re-clone gets a new id), the thread moves to the folder:
+
+- `toExecutionWorkspace` returns the folder when the thread's entry is gone,
+  it has no worktree, and its stored path lies inside a configured path (the
+  nearest one, when configured paths nest), with
+  `repoRemoved: true` and the old path as `previousPath`.
+  `listPendingThreads` hands the CLI the folder, and `startRunResponse`
+  repoints the thread (`legacyCheckpointsUnsafe`, so Undo of an older run
+  can't restore a single-repo checkpoint into the folder).
+- A deleted repo is still listed until a sync runs, so before starting a run
+  the CLI checks that a repo thread's directory exists; if it doesn't, it
+  awaits the folder's repo publish (`syncRepos(folder, { published: true })`),
+  not the worktree scan behind it.
+- The run gets a `workspace-recovered` notice with `change: "folder"` (divider:
+  "repo removed") and the agent the usual workspace notice.
+- A worktree thread whose repo vanished keeps the worktree recovery rules
+  ([worktrees](cli-worktrees.md)).
+
+The repo sync that runs before each plain run uses the folder for a repo
+thread too, so a repo removed from disk leaves the list on the next run. A
+changed list also scans each repo's worktrees (`scanAndSync`), so worktrees
+under a repo appear after register and after a clone. The CLI keeps the list
+it sent and the list whose worktrees it last scanned apart. Scans run in order
+per folder, a scan counts only when every repo answered and no newer list went
+out meanwhile, and a new list is always scanned again, so a failed `git
+worktree list` or a failed sync is retried on the next run.
+
+`convoy profiles list` prints each path's kind (`(new-app, repo)`), so a repo's
+`pathId` for `convoy threads create --path-id` is easy to find.
+
+Cost: no new queries, subscriptions or tables. `startRunResponse` patches the
+thread once when its repo is gone. The CLI adds one `stat` per run for a repo
+thread, one `git rev-parse` for its main checkout and one `realpath` of the
+folder, and the folder's repos' status calls (slice 1's per-repo cost). A
+changed repo list adds one `git worktree list` per repo and one
+`cli.worktrees.sync` call.
+
 ## Verification
 
 Unit tests: `lib/git/repo.test.ts` (discovery rules, cap, missing folder),
@@ -281,7 +416,13 @@ per-repo branches, PR merge, pruning, task link ids),
 (`folderRepoPaths`, `readRepoBranches`), `lib/pull-requests.test.ts`
 (default branch skips the forge, a failed lookup is left out, the deadline),
 `thread-processor.test.ts` (per-repo reports), `thread-pr-badge.test.tsx`
-(`+N`), `repo-branches.test.ts`.
+(`+N`), `repo-branches.test.ts`. Slice 4: `convex/cli/profiles.test.ts` (repo threads, folder
+worktrees refused, repo worktrees, vanished repo), `messages.test.ts` (own
+checkout id), `worktreeOps.test.ts` (sibling repo in use),
+`checkpoint.test.ts` (repo and worktree threads), `thread-processor.test.ts`
+(folder line, extra directory, vanished repo), `worktree-op-processor.test.ts`
+(published sync, repo worktrees), Claude Code `sdk.test.ts` and Codex
+`runner.test.ts` (folder access).
 
 By hand: in a shared environment, mount `~/code/acme` holding `old-app`,
 `new-app` and `packages/api`, then add `~/code/acme` itself in the TUI with

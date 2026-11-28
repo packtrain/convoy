@@ -1,6 +1,6 @@
 "use client";
 
-import { isConfiguredPath } from "@/convex/lib/contracts/validators";
+import { isWorktreeParent } from "@/convex/lib/contracts/validators";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useMutation, useQuery } from "convex/react";
 import { Check, ChevronDown, ChevronLeft, Cloud, FolderGit2, GitBranch, Home, Laptop, Plus, Trash2 } from "lucide-react";
@@ -265,7 +265,7 @@ export function BaseRefSelector({
   const [branchDialogOpen, setBranchDialogOpen] = useState(false);
   const [startFromOrigin, setStartFromOrigin] = useState(value?.type === "branch" ? value.startFromOrigin : false);
 
-  const parentEntry = paths.find((path) => path.id === pathId && isConfiguredPath(path));
+  const parentEntry = paths.find((path) => path.id === pathId && isWorktreeParent(paths, path));
   const worktrees = useMemo(() => paths.filter((path) => path.kind === "worktree" && path.parentPathId === pathId), [paths, pathId]);
 
   const { refs, refsLoading, currentBranch } = useBaseRefScan({
@@ -519,7 +519,7 @@ export function WorkspaceSelectors({
   const [branchDialogOpen, setBranchDialogOpen] = useState(false);
   const showUnfinishedItems = useShowUnfinishedItems();
 
-  const parentEntry = paths.find((path) => path.id === pathId && isConfiguredPath(path));
+  const parentEntry = paths.find((path) => path.id === pathId && isWorktreeParent(paths, path));
   const worktrees = useMemo(() => paths.filter((path) => path.kind === "worktree" && path.parentPathId === pathId), [paths, pathId]);
 
   const { refs, refsLoading, currentBranch } = useBaseRefScan({

@@ -86,6 +86,8 @@ export interface RunnerExecutionOptions {
   agentName?: string;
   /** Current checkout after automatic worktree recovery; delivered on resumed runs too. */
   workspaceNotice?: string;
+  /** Directories besides the cwd the agent may edit: a repo thread's project folder (cli-multi-repo-projects.md#folder-access). */
+  additionalDirectories?: string[];
   cliModel?: string;
   resolvedCliModel?: string;
   /** Server-resolved reasoning effort; absent means the machine default. */
